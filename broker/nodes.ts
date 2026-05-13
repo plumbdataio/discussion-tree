@@ -6,13 +6,30 @@
 // what the user sees in their language).
 
 import type { NodeInput } from "../shared/types.ts";
-import { db, insertNode, insertThread, updateNodeStatus } from "./db.ts";
+import {
+  db,
+  insertNode,
+  insertThread,
+  recomputeBoardStatus,
+  updateNodeStatus,
+} from "./db.ts";
 import { broadcast } from "./ws.ts";
 import {
   DEFAULT_BOARD_LOCKED_ERROR,
   isDefaultBoard,
 } from "./default-board.ts";
 import { generateId, insertNodesRecursive, maxChildPos } from "./helpers.ts";
+
+// Helper: any node-structure / node-status mutation may flip the parent
+// board's auto-rollup status (discussing ↔ settled). Run after every such
+// mutation; the broadcast lets the sidebar refresh its per-board status
+// pill / per-session summary chips in real time.
+function syncBoardStatus(boardId: string) {
+  const next = recomputeBoardStatus(boardId);
+  if (next) {
+    broadcast(boardId, { type: "board-status-update", status: next });
+  }
+}
 
 export function handleAddConcern(body: any) {
   if (isDefaultBoard(body.board_id)) {
@@ -36,6 +53,7 @@ export function handleAddConcern(body: any) {
     insertNodesRecursive(body.board_id, id, "item", concern.items);
   }
   broadcast(body.board_id, { type: "structure-update" });
+  syncBoardStatus(body.board_id);
   return { node_id: id };
 }
 
@@ -65,6 +83,7 @@ export function handleAddItem(body: any) {
     new Date().toISOString(),
   );
   broadcast(body.board_id, { type: "structure-update" });
+  syncBoardStatus(body.board_id);
   return { node_id: id };
 }
 
@@ -143,6 +162,7 @@ export function handleSetNodeStatus(body: any) {
       source: "system",
     });
   }
+  syncBoardStatus(body.board_id);
   return { ok: true };
 }
 
@@ -192,6 +212,7 @@ export function handleDeleteNode(body: { board_id: string; node_id: string }) {
     type: "structure-update",
     deleted: Array.from(toDelete),
   });
+  syncBoardStatus(boardId);
   return { ok: true, deleted_count: toDelete.size };
 }
 

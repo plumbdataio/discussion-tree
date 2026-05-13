@@ -119,7 +119,8 @@
     "done": "Done"
   },
   "board_status": {
-    "active": "Active",
+    "discussing": "Discussing",
+    "settled": "Settled",
     "completed": "Completed",
     "withdrawn": "Withdrawn",
     "paused": "Paused"

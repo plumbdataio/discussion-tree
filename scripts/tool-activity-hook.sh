@@ -1,5 +1,5 @@
 #!/bin/bash
-# parallel-discussion PreToolUse hook.
+# discussion-tree PreToolUse hook.
 #
 # Pings the broker on every tool invocation so the UI can show a "working"
 # activity badge automatically — the user no longer has to rely on the LLM

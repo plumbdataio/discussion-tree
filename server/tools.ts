@@ -232,7 +232,7 @@ export const TOOLS = [
   {
     name: "set_session_name",
     description:
-      "Set a human-readable name for the current Claude Code session, visible in the UI sidebar so the user can distinguish multiple parallel CC sessions. Call this once near the start of a session, ideally with a short topic name (e.g. parallel-discussion development / wyndoc API design / etc). Without this the sidebar shows the session by its broker id, which is opaque.",
+      "Set a human-readable name for the current Claude Code session, visible in the UI sidebar so the user can distinguish multiple parallel CC sessions. Call this once near the start of a session, ideally with a short topic name (e.g. discussion-tree development / wyndoc API design / etc). Without this the sidebar shows the session by its broker id, which is opaque.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -335,7 +335,7 @@ export const TOOLS = [
   {
     name: "request_improvement",
     description:
-      "Submit a concrete friction point about parallel-discussion-mcp itself to the user's review queue (REQUESTS.md). Use this when you wanted to express something the current tools/UI did not support — a missing node kind, an unsupported workflow, a rendering gap. The user reviews accumulated requests and decides which to implement. Be specific about the actual situation; do not speculate.",
+      "Submit a concrete friction point about discussion-tree-mcp itself to the user's review queue (REQUESTS.md). Use this when you wanted to express something the current tools/UI did not support — a missing node kind, an unsupported workflow, a rendering gap. The user reviews accumulated requests and decides which to implement. Be specific about the actual situation; do not speculate.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -385,7 +385,7 @@ export async function dispatchToolCall(
         );
         if ("error" in res) return textResult(res.error, true);
         return textResult(
-          `Board created: ${res.board_id}\nURL: ${res.url}\n\nShare the URL with the user. They can answer each node individually; their answers arrive here as <channel source="parallel-discussion"> messages.`,
+          `Board created: ${res.board_id}\nURL: ${res.url}\n\nShare the URL with the user. They can answer each node individually; their answers arrive here as <channel source="discussion-tree"> messages.`,
         );
       }
 

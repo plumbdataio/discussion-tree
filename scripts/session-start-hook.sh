@@ -1,7 +1,7 @@
 #!/bin/bash
-# parallel-discussion SessionStart hook.
+# discussion-tree SessionStart hook.
 #
-# Writes a per-PID hint file so the parallel-discussion MCP server can auto-attach
+# Writes a per-PID hint file so the discussion-tree MCP server can auto-attach
 # to this Claude Code session at startup, surviving restarts without orphaning
 # the user's UI submissions. Inside this hook, $PPID equals Claude Code's PID;
 # the MCP server reads process.ppid (also CC's PID) and looks up the file.
@@ -18,9 +18,9 @@ sid=$(printf '%s' "$input" | jq -r '.session_id')
 cwd=$(printf '%s' "$input" | jq -r '.cwd')
 
 # Match broker / MCP server: PARALLEL_DISCUSSION_HOME is the umbrella state
-# dir (default $HOME/.parallel-discussion). All three components resolve it
+# dir (default $HOME/.discussion-tree). All three components resolve it
 # identically so a shell-level env override stays consistent.
-home="${PARALLEL_DISCUSSION_HOME:-$HOME/.parallel-discussion}"
+home="${PARALLEL_DISCUSSION_HOME:-$HOME/.discussion-tree}"
 dir="$home/cc-sessions"
 mkdir -p "$dir"
 

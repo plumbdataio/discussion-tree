@@ -64,7 +64,7 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
   if (!data) return <div className="empty">{t("sidebar.loading")}</div>;
 
   const boardStatusLabel = (status: string | undefined) =>
-    t([`board_status.${status ?? "active"}`, status ?? "active"]);
+    t([`board_status.${status ?? "discussing"}`, status ?? "discussing"]);
 
   return (
     <div className="app">
@@ -101,7 +101,7 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
             {data.boards.map((b) => (
               <div
                 key={b.id}
-                className={`board-card-wrap board-status-${b.status ?? "active"}`}
+                className={`board-card-wrap board-status-${b.status ?? "discussing"}`}
               >
                 <a href={"/board/" + b.id} className="board-card">
                   <div className="card-header">
@@ -177,7 +177,7 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
                   {data.archived_boards!.map((b) => (
                     <div
                       key={b.id}
-                      className={`board-card-wrap board-status-${b.status ?? "active"} archived-card`}
+                      className={`board-card-wrap board-status-${b.status ?? "discussing"} archived-card`}
                     >
                       <a href={"/board/" + b.id} className="board-card">
                         <div className="card-header">

@@ -11,7 +11,8 @@ import type { SupportedLanguage } from "../i18n.ts";
 // that status from the sidebar list. Default boards are exempt from this
 // filter (they're always visible since they're the conversation surface).
 export type BoardStatusFilter = {
-  active: boolean;
+  discussing: boolean;
+  settled: boolean;
   completed: boolean;
   withdrawn: boolean;
   paused: boolean;
@@ -40,7 +41,8 @@ const DEFAULTS: Settings = {
   // "system" follows prefers-color-scheme; explicit choices override.
   theme: "system",
   boardStatusFilter: {
-    active: true,
+    discussing: true,
+    settled: true,
     completed: true,
     withdrawn: true,
     paused: true,

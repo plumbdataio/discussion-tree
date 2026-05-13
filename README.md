@@ -1,12 +1,8 @@
-# discussion-tree
+# 🌳 discussion-tree
 
 **discussion-tree turns a single Claude Code session into a structured, parallel decision tree.**
 
 CLI is serial. The moment you have three things to figure out at once with Claude Code, the conversation has to interleave them — and somewhere along the way, context drifts. discussion-tree lays the questions out as a mind-map in the browser: each item gets its own card, you answer each one independently, and Claude Code receives every answer back through the MCP channel. The CLI side stays linear; the user side gets to see "which thread is this?" at a glance.
-
-> **Status**: alpha. Expect rough edges.
-
-[screenshot: TBD]
 
 ## Key features
 
@@ -209,24 +205,6 @@ When sharing board URLs, set `PARALLEL_DISCUSSION_PUBLIC_URL=https://<your-machi
 - **MCP server** (`server.ts` + `server/`): stdio MCP process spawned per CC session. Exposes tools, polls the broker for unread messages, forwards them to CC via `notifications/claude/channel`.
 - **Web UI** (`web/`): React SPA. Bundled by Bun.serve via the HTML import, live-updated over WebSocket.
 
-## MCP tools
-
-| Tool | Purpose |
-|---|---|
-| `create_board` | Create a board from a JSON tree of concerns + items. Returns a URL. |
-| `add_concern` / `add_item` | Extend an existing board mid-discussion. |
-| `update_node` | Edit a node's title / context / kind after creation. |
-| `move_node` / `reorder_node` / `delete_node` | Rearrange or soft-delete subtrees. Soft-delete preserves thread history. |
-| `post_to_node` | Mirror your CLI reply into a node's thread + set its status. |
-| `set_node_status` | Mark a node `pending` / `discussing` / `resolved` / `agreed` / `adopted` / `rejected` / `needs-reply` / `done`. |
-| `set_board_status` | Board-level status, distinct from node aggregation. |
-| `close_board` | Legacy alias for `set_board_status('completed')`. |
-| `attach_cc_session` | Bind to your CC session_id. Call once on startup; the SessionStart hook automates this. |
-| `attach_to_board` | Manual fallback for taking ownership of a single board. |
-| `set_session_name` | Human-readable session label shown in the sidebar. |
-| `set_activity` | Mark "blocked while waiting on user OK" — the only state worth setting manually now that PreToolUse covers the rest. |
-| `request_improvement` | Record a friction point in `REQUESTS.md` for the user to review. |
-
 ## Configuration
 
 | Env var | Default | Purpose |
@@ -245,23 +223,6 @@ The defaults need no setup. To relocate state, set `PARALLEL_DISCUSSION_HOME` so
 - **Persistent**: add `export PARALLEL_DISCUSSION_HOME=/path` to `~/.zshenv` (`.zshenv` covers interactive AND launcher-spawned shells; `.zshrc` covers only the former)
 - **Project-scoped**: drop a `.envrc` with the export and use [direnv](https://direnv.net/)
 - **GUI-launched CC** (Dock etc.): `launchctl setenv PARALLEL_DISCUSSION_HOME /path` (or persist via a `~/Library/LaunchAgents/*.plist`)
-
-## Development
-
-```bash
-# Restart the broker, dropping only the LISTEN socket (so unrelated
-# processes holding connections aren't dragged in):
-lsof -t -nP -iTCP:7898 -sTCP:LISTEN | xargs -r kill && bun broker.ts
-
-# Run the broker API test suite (bun:test):
-bun test tests/api/
-
-# Run the visual regression suite (Playwright):
-bun playwright test
-```
-
-- Edits to `web/` are reflected on broker restart + browser refresh (Bun.serve regenerates the bundle).
-- Edits to `server.ts` / `server/` only land on a CC restart — existing sessions keep running with the old tool list.
 
 ## Requirements
 

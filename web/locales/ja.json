@@ -119,7 +119,8 @@
     "done": "完了"
   },
   "board_status": {
-    "active": "進行中",
+    "discussing": "議論中",
+    "settled": "方針確定",
     "completed": "完了",
     "withdrawn": "破棄",
     "paused": "保留"

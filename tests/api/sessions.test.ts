@@ -110,6 +110,27 @@ describe("sessions", () => {
     expect(me?.name).toBe("my session");
   });
 
+  test("/api/sessions includes the live activity entry under each session", async () => {
+    const sid = await registerSession(broker.url);
+    const ccId = await attachCC(broker.url, sid);
+
+    // No activity yet — field should be null.
+    const before = await get<{ sessions: any[] }>(`${broker.url}/api/sessions`);
+    const me = before.json.sessions.find((s) => s.id === sid)!;
+    expect(me.activity).toBeNull();
+
+    // Drive a heartbeat-tool to lift the in-memory "working" state.
+    await post(`${broker.url}/heartbeat-tool`, {
+      cc_session_id: ccId,
+      tool: "Edit",
+    });
+
+    const after = await get<{ sessions: any[] }>(`${broker.url}/api/sessions`);
+    const me2 = after.json.sessions.find((s) => s.id === sid)!;
+    expect(me2.activity).toBeTruthy();
+    expect(me2.activity.state).toBe("working");
+  });
+
   test("/api/sessions splits alive vs inactive sessions", async () => {
     const sid = await registerSession(broker.url, "/tmp/inactive-cwd");
     const ccId = await attachCC(broker.url, sid);

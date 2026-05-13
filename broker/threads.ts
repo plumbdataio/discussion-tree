@@ -13,6 +13,7 @@ import {
   insertPending,
   insertThread,
   markDelivered,
+  recomputeBoardStatus,
   selectBoard,
   selectPending,
   updateNodeStatus,
@@ -20,6 +21,15 @@ import {
 import { broadcast, broadcastToAll } from "./ws.ts";
 import { SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
 import { buildNodePath } from "./helpers.ts";
+
+// Same helper as broker/nodes.ts — node status mutations may flip the
+// parent board's auto-rollup, broadcast lets the sidebar follow.
+function syncBoardStatus(boardId: string) {
+  const next = recomputeBoardStatus(boardId);
+  if (next) {
+    broadcast(boardId, { type: "board-status-update", status: next });
+  }
+}
 
 export function handlePostToNode(body: any) {
   // 1. CC message goes in first so it appears before any status_change in
@@ -68,6 +78,7 @@ export function handlePostToNode(body: any) {
       status: body.status,
     });
   }
+  syncBoardStatus(body.board_id);
   return { ok: true };
 }
 
@@ -126,6 +137,7 @@ export async function handleSubmitAnswer(body: any): Promise<
         node_id: body.node_id,
         source: "user",
       });
+      syncBoardStatus(body.board_id);
       return { ok: true };
     }
     await new Promise((r) => setTimeout(r, 100));

@@ -84,10 +84,10 @@ function SessionItem({
 
   // Default boards bypass the status filter — they're the conversation
   // surface and the user always wants visibility there. For non-default
-  // boards we filter by `status` (defaulting to "active" when unset).
+  // boards we filter by `status` (defaulting to "discussing" when unset).
   const visibleBoards = s.boards.filter((b) => {
     if (b.is_default) return true;
-    const status = (b.status ?? "active") as keyof BoardStatusFilter;
+    const status = (b.status ?? "discussing") as keyof BoardStatusFilter;
     return filter[status] !== false;
   });
 
@@ -179,10 +179,18 @@ function SessionItem({
       </div>
       {collapsed && visibleBoards.length > 0 && (
         <div className="session-summary">
-          {(["active", "completed", "withdrawn", "paused"] as const).map(
+          {(
+            [
+              "discussing",
+              "settled",
+              "completed",
+              "withdrawn",
+              "paused",
+            ] as const
+          ).map(
             (status) => {
               const n = visibleBoards.filter(
-                (b) => (b.status ?? "active") === status,
+                (b) => (b.status ?? "discussing") === status,
               ).length;
               if (n === 0) return null;
               return (
@@ -205,7 +213,7 @@ function SessionItem({
           <ul className="boards">
             {visibleBoards.map((b) => {
               const hasUnread = (b.unread_count ?? 0) > 0;
-              const status = b.status ?? "active";
+              const status = b.status ?? "discussing";
               // Coerce SQLite's 0/1 number into a real boolean before using
               // `&&` — `0 && <X />` evaluates to `0`, which React renders as
               // a literal "0" character.
