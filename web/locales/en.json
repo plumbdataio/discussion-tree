@@ -1,0 +1,157 @@
+{
+  "header": {
+    "back_to_session": "← Back to session",
+    "live": "live",
+    "offline": "offline",
+    "owner_warning": "⚠ CC not attached",
+    "owner_warning_title": "No CC is currently attached to this board. Posts will not arrive until CC takes ownership via attach_to_board or similar.",
+    "board_meta": "board: {{id}} · concerns: {{count}}",
+    "board_meta_closed": " · closed",
+    "unread_count_button": "Mark all {{count}} unread as read",
+    "unread_count_title": "Mark all {{count}} unread items as read",
+    "unread_confirm": "Mark all {{count}} unread items as read?",
+    "mark_all_read_failed": "Failed to mark all as read"
+  },
+  "sidebar": {
+    "sessions": "Sessions",
+    "no_active_sessions": "No active sessions",
+    "loading": "Loading…",
+    "no_boards": "(no boards)",
+    "unread_dot_title": "{{count}} unread",
+    "inactive_label": "Inactive ({{count}})",
+    "toggle_label": "Toggle sidebar",
+    "filter_label": "Show",
+    "filter_summary": "{{visible}} / {{total}}"
+  },
+  "session_dashboard": {
+    "back_to_top": "← Back to top",
+    "session_meta_boards": "{{cwd}} · boards: {{count}}",
+    "boards_title": "Boards",
+    "session_label": "Session",
+    "session_name_placeholder": "Set a session name…",
+    "session_name_set_title": "Set session name",
+    "session_name_edit_title": "Edit session name",
+    "session_name_save": "Save",
+    "session_name_cancel": "Cancel",
+    "session_name_save_failed": "Failed to save the session name",
+    "rename_button": "Rename",
+    "rename_prompt": "New session name:",
+    "rename_failed": "Rename failed",
+    "archive_button": "Archive",
+    "archive_confirm": "Archive \"{{title}}\"? (You can restore it later)",
+    "archive_failed_http": "Archive failed: HTTP {{status}}",
+    "unarchive_button": "Unarchive",
+    "unarchive_failed_http": "Unarchive failed: HTTP {{status}}",
+    "archived_label": "Archived ({{count}})",
+    "no_boards_help": "No boards in this session yet. They'll appear here once Claude Code calls create_board.",
+    "session_not_found": "Session not found: {{id}}",
+    "node_stats_label": "Node stats:",
+    "needs_reply_count": "⚠ {{count}} needs reply",
+    "open_total": "{{open}} open / {{total}} total",
+    "decided_count": "{{count}} decided"
+  },
+  "root_dashboard": {
+    "title": "All sessions",
+    "active_sessions_meta": "{{count}} active sessions",
+    "boards_count_stat": "{{count}} boards"
+  },
+  "board": {
+    "no_items": "(no items)",
+    "conversation_node_missing": "Conversation node missing"
+  },
+  "item_card": {
+    "expand_node": "Expand node",
+    "expand_message": "Expand message",
+    "mark_read_button": "Mark read",
+    "mark_read_node_title": "Mark unread items in this node as read",
+    "mark_read_default_title": "Mark unread items as read",
+    "you": "You",
+    "claude": "Claude",
+    "sending": "Sending…",
+    "send_button": "Send",
+    "send_failed": "Send failed: {{message}}",
+    "image_uploading": "Uploading image…",
+    "image_upload_failed": "Image upload failed: {{message}}",
+    "input_placeholder": "Enter your reply (⌘/Ctrl+Enter to send, paste/drop for images)",
+    "input_placeholder_default": "Type a message (⌘/Ctrl+Enter to send, paste/drop for images)",
+    "input_disabled": "CC is not attached — cannot post"
+  },
+  "settings": {
+    "title": "Settings",
+    "auto_read_label": "Auto-mark as read",
+    "auto_read_help": "When ON, unread CC messages are automatically marked as read once a node card stays visible on screen for 5 seconds. When OFF, each card shows a Mark-Read button so you can mark messages explicitly.",
+    "language_label": "Language",
+    "language_help": "Choose UI language. \"System\" follows your browser preference.",
+    "language_system": "System",
+    "language_ja": "Japanese",
+    "language_en": "English",
+    "theme_label": "Theme",
+    "theme_help": "UI color scheme. \"System\" follows your OS preference (and updates automatically when you toggle it).",
+    "theme_system": "System",
+    "theme_light": "Light",
+    "theme_dark": "Dark",
+    "power_label": "Prevent sleep",
+    "power_help": "Holds an OS-level wake-lock so this machine ({{platform}}) doesn't go to sleep while discussion-tree is in use. macOS uses caffeinate, Linux uses systemd-inhibit, Windows uses a PowerShell wake-loop (best-effort).",
+    "power_off": "Off",
+    "power_while_mcp": "While MCP sessions are connected",
+    "power_while_broker": "While the broker is running",
+    "footer": "Settings are stored in this device's localStorage (per device).",
+    "close": "Close (Esc)"
+  },
+  "modal": {
+    "close": "Close (Esc)"
+  },
+  "node_modal": {
+    "title_label": "Title",
+    "context_label": "Context"
+  },
+  "system_message": {
+    "status_label": "Status:"
+  },
+  "node_status": {
+    "pending": "Pending",
+    "discussing": "Discussing",
+    "resolved": "Resolved",
+    "agreed": "Agreed",
+    "adopted": "Adopted",
+    "rejected": "Rejected",
+    "needs-reply": "Needs reply",
+    "done": "Done"
+  },
+  "board_status": {
+    "active": "Active",
+    "completed": "Completed",
+    "withdrawn": "Withdrawn",
+    "paused": "Paused"
+  },
+  "errors": {
+    "unknown_session": "Unknown session — register first",
+    "default_board_locked": "Default conversation board has a fixed structure and cannot be modified",
+    "board_not_found": "Board not found",
+    "node_not_found": "Node not found",
+    "kind_invalid": "kind must be 'concern' or 'item'",
+    "update_nothing": "Nothing to update — pass title / context / kind",
+    "self_move": "Cannot move node under itself",
+    "parent_not_found": "new_parent_id not found",
+    "would_cycle": "Would create a cycle",
+    "invalid_status": "Invalid status: {{status}}",
+    "data_required": "data_base64 required",
+    "invalid_base64": "Invalid base64",
+    "empty_payload": "Empty payload",
+    "file_too_large": "File too large (max {{max}} bytes)",
+    "path_required": "Path required",
+    "path_outside": "Path outside allowed directory",
+    "file_not_found": "File not found",
+    "no_recipient": "Recipient (Claude Code) is not attached or not responding. The text is preserved — please retry.",
+    "delivery_timeout": "No response from the recipient. The text is preserved — please retry.",
+    "not_found": "Not found",
+    "invalid_json": "Invalid JSON",
+    "internal": "Internal error: {{message}}"
+  },
+  "default_board": {
+    "title": "Conversation",
+    "concern_title": "Conversation",
+    "item_title": "Conversation",
+    "welcome_message": "Posts here are delivered as direct messages to Claude Code."
+  }
+}

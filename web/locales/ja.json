@@ -1,0 +1,157 @@
+{
+  "header": {
+    "back_to_session": "← セッションへ戻る",
+    "live": "ライブ",
+    "offline": "オフライン",
+    "owner_warning": "⚠ CC 未紐付け",
+    "owner_warning_title": "このボードに現在 CC が紐付いていません。CC が attach_to_board 等で取得するまで投稿は届きません。",
+    "board_meta": "ボード: {{id}} · concern 数: {{count}}",
+    "board_meta_closed": " · クローズ済",
+    "unread_count_button": "未読 {{count}} 件 すべて既読化",
+    "unread_count_title": "{{count}} 件の未読をすべて既読にします",
+    "unread_confirm": "{{count}} 件の未読をすべて既読にしますか？",
+    "mark_all_read_failed": "既読化に失敗しました"
+  },
+  "sidebar": {
+    "sessions": "セッション一覧",
+    "no_active_sessions": "アクティブセッションなし",
+    "loading": "読み込み中…",
+    "no_boards": "(ボードなし)",
+    "unread_dot_title": "未読 {{count}} 件",
+    "inactive_label": "非アクティブ ({{count}})",
+    "toggle_label": "サイドバーを開閉",
+    "filter_label": "表示",
+    "filter_summary": "{{visible}} / {{total}}"
+  },
+  "session_dashboard": {
+    "back_to_top": "← トップへ戻る",
+    "session_meta_boards": "{{cwd}} · ボード数: {{count}}",
+    "boards_title": "ボード一覧",
+    "session_label": "セッション",
+    "session_name_placeholder": "セッション名を設定…",
+    "session_name_set_title": "セッション名を設定する",
+    "session_name_edit_title": "セッション名を変更する",
+    "session_name_save": "保存",
+    "session_name_cancel": "キャンセル",
+    "session_name_save_failed": "セッション名の保存に失敗しました",
+    "rename_button": "名前変更",
+    "rename_prompt": "新しいセッション名:",
+    "rename_failed": "名前変更に失敗しました",
+    "archive_button": "アーカイブ",
+    "archive_confirm": "「{{title}}」をアーカイブしますか？\n(後で表示することもできます)",
+    "archive_failed_http": "アーカイブに失敗しました: HTTP {{status}}",
+    "unarchive_button": "復元",
+    "unarchive_failed_http": "復元に失敗しました: HTTP {{status}}",
+    "archived_label": "アーカイブ済 ({{count}})",
+    "no_boards_help": "このセッションにはまだボードがありません。CC が create_board を呼ぶとここに並びます。",
+    "session_not_found": "セッションが見つかりません: {{id}}",
+    "node_stats_label": "ノード集計:",
+    "needs_reply_count": "⚠ 返答求む {{count}} 件",
+    "open_total": "未確定 {{open}} / 合計 {{total}}",
+    "decided_count": "確定 {{count}} 件"
+  },
+  "root_dashboard": {
+    "title": "全セッション",
+    "active_sessions_meta": "アクティブセッション {{count}} 件",
+    "boards_count_stat": "ボード {{count}} 件"
+  },
+  "board": {
+    "no_items": "(item なし)",
+    "conversation_node_missing": "会話ノードが見つかりません"
+  },
+  "item_card": {
+    "expand_node": "ノード全体を拡大表示",
+    "expand_message": "拡大表示",
+    "mark_read_button": "既読化",
+    "mark_read_node_title": "このノードの未読を既読にする",
+    "mark_read_default_title": "未読を既読にする",
+    "you": "あなた",
+    "claude": "Claude",
+    "sending": "送信中…",
+    "send_button": "送信",
+    "send_failed": "送信失敗: {{message}}",
+    "image_uploading": "画像アップロード中…",
+    "image_upload_failed": "画像アップロード失敗: {{message}}",
+    "input_placeholder": "この検討事項への回答を入力 (⌘/Ctrl+Enter で送信、画像は paste/drop)",
+    "input_placeholder_default": "メッセージを入力 (⌘/Ctrl+Enter で送信、画像は paste/drop)",
+    "input_disabled": "CC 未紐付けのため投稿できません"
+  },
+  "settings": {
+    "title": "設定",
+    "auto_read_label": "自動既読",
+    "auto_read_help": "ON のとき、ノードカードが画面内に 5 秒以上表示されると、その中の未読 CC メッセージが自動で既読になります。OFF にすると各カードに「既読化」ボタンが表示され、明示的にクリックした時だけ既読化します。",
+    "language_label": "表示言語",
+    "language_help": "UI の表示言語。「システム」を選ぶとブラウザの言語設定に従います。",
+    "language_system": "システム",
+    "language_ja": "日本語",
+    "language_en": "English",
+    "theme_label": "外観",
+    "theme_help": "UI のカラーテーマ。「システム」を選ぶと OS の設定に従います (OS 側で切り替えると自動的に追従)。",
+    "theme_system": "システム",
+    "theme_light": "ライト",
+    "theme_dark": "ダーク",
+    "power_label": "スリープ抑止",
+    "power_help": "OS レベルの wake-lock を保持してマシン ({{platform}}) のスリープを抑止します。macOS は caffeinate、Linux は systemd-inhibit、Windows は PowerShell の wake-loop (best-effort) を使用。",
+    "power_off": "抑止しない",
+    "power_while_mcp": "MCP セッション接続中のみ",
+    "power_while_broker": "broker 起動中は常時",
+    "footer": "設定はこのデバイスの localStorage に保存されます (デバイスごとに別)。",
+    "close": "閉じる (Esc)"
+  },
+  "modal": {
+    "close": "閉じる (Esc)"
+  },
+  "node_modal": {
+    "title_label": "タイトル",
+    "context_label": "コンテキスト"
+  },
+  "system_message": {
+    "status_label": "ステータス:"
+  },
+  "node_status": {
+    "pending": "未着手",
+    "discussing": "議論中",
+    "resolved": "解決済",
+    "agreed": "合意",
+    "adopted": "採用",
+    "rejected": "不採用",
+    "needs-reply": "返答求む",
+    "done": "完了"
+  },
+  "board_status": {
+    "active": "進行中",
+    "completed": "完了",
+    "withdrawn": "破棄",
+    "paused": "保留"
+  },
+  "errors": {
+    "unknown_session": "未登録のセッションです。先に register してください",
+    "default_board_locked": "デフォルト会話ボードは構造が固定されており変更できません",
+    "board_not_found": "ボードが見つかりません",
+    "node_not_found": "ノードが見つかりません",
+    "kind_invalid": "kind は 'concern' または 'item' である必要があります",
+    "update_nothing": "更新対象がありません — title / context / kind を渡してください",
+    "self_move": "ノードを自身の下に移動することはできません",
+    "parent_not_found": "new_parent_id が見つかりません",
+    "would_cycle": "循環参照になります",
+    "invalid_status": "無効なステータス: {{status}}",
+    "data_required": "data_base64 が必須です",
+    "invalid_base64": "base64 が不正です",
+    "empty_payload": "空のペイロードです",
+    "file_too_large": "ファイルサイズ超過 (max {{max}} bytes)",
+    "path_required": "path が必須です",
+    "path_outside": "許可ディレクトリ外のパスです",
+    "file_not_found": "ファイルが見つかりません",
+    "no_recipient": "受信側 (Claude Code) が紐付いていないか応答していません。テキストはそのまま再送できます。",
+    "delivery_timeout": "受信側からの応答がありませんでした。テキストを保持しているので再送してください。",
+    "not_found": "見つかりません",
+    "invalid_json": "JSON が不正です",
+    "internal": "内部エラー: {{message}}"
+  },
+  "default_board": {
+    "title": "会話",
+    "concern_title": "会話",
+    "item_title": "会話",
+    "welcome_message": "ここでの投稿は CC への直接メッセージとして届きます。"
+  }
+}

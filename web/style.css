@@ -1,0 +1,2460 @@
+:root {
+  --bg: #fafafa;
+  --panel: #ffffff;
+  --border: #e2e2e2;
+  --border-strong: #c4c4c4;
+  --text: #1a1a1a;
+  --muted: #6b6b6b;
+  --accent: #2563eb;
+  --accent-soft: #dbeafe;
+  --user: #fefce8;
+  --user-border: #fde68a;
+  --cc: #f0f9ff;
+  --cc-border: #bae6fd;
+  --status-pending: #9ca3af;
+  --status-discussing: #f59e0b;
+  --status-resolved: #10b981;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans CJK JP",
+    sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  /* Lock the page to the viewport so the sidebar / header stay put and
+     internal scroll happens inside .sidebar and .board-container instead of
+     creating a whole-page scrollbar. svh handles mobile URL bar collapse. */
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+}
+
+.header {
+  flex: 0 0 auto;
+  /* extra right padding leaves room for the fixed `.gear-fab` overlay. */
+  padding: 16px 60px 16px 24px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.header .meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.header .ws-status {
+  margin-left: auto;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ws-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-pending);
+}
+
+.ws-dot.connected {
+  background: var(--status-resolved);
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.board-container {
+  flex: 1;
+  padding: 24px;
+  /* Vertical scroll lives INSIDE each item-card's thread, never on the
+     container itself. Wide boards still scroll horizontally. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  min-height: 0;
+  /* Establish a containment context so .concern-card-inner can reference the
+     visible board area (viewport minus sidebar) via cqw — that way the sticky
+     title wraps relative to what the user can SEE, not relative to the
+     potentially huge column width that scrolls under it. */
+  container-type: inline-size;
+}
+
+.sidebar {
+  width: 260px;
+  min-width: 260px;
+  flex: 0 0 260px;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  overflow-y: auto;
+  padding: 16px 14px;
+}
+
+.sidebar-toggle {
+  display: none;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* Mobile: keep the desktop 2D layout (concerns horizontal, items horizontal
+     within each concern). Only adjust outer chrome (header padding for the
+     hamburger, dashboard cards stack) — leave the board itself as-is so it
+     scrolls horizontally just like on desktop. */
+
+  .header {
+    flex-wrap: wrap;
+    padding-left: 52px;
+    gap: 8px;
+  }
+
+  .board-cards {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Mobile: shrink the concern card text so it doesn't eat half the screen
+     before items even come into view. */
+  .concern-card .title {
+    font-size: 12px;
+  }
+  .concern-card .context {
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  /* Mobile: the default board's welcome banner ate a noticeable chunk of
+     vertical real-estate at desktop sizing. Shrink the text and tighten
+     padding so the conversation thread starts higher on the viewport.
+     Note: the `<div class="default-board-context md-body">` wrapper inherits
+     `.md-body { font-size: 13px; line-height: 1.55 }` defined later in the
+     file. Equal specificity + later rule = .md-body wins. We bump the
+     selector specificity by AND-ing both classes (`.A.B` → 0,2,0) so the
+     mobile override actually applies. */
+  .default-board-context.md-body {
+    font-size: 10px;
+    line-height: 1.35;
+    padding: 4px 10px;
+    margin-bottom: 4px;
+  }
+  .default-board-context.md-body p {
+    margin: 0;
+  }
+
+  /* Mobile: shrink the outer board-container padding (24px desktop) so the
+     welcome banner sits higher and the send button doesn't leave a big
+     dead-zone below itself. We deliberately drop the safe-area-inset-bottom
+     accommodation: with the Safari toolbar visible svh already excludes the
+     toolbar, and adding the home-indicator inset on top still leaves a
+     visible gap. The send button is large enough that the home-indicator
+     gesture area overlapping it doesn't hurt tappability. */
+  .board-container {
+    padding: 8px 10px;
+  }
+
+  /* Mobile: the divider + spacing above the input area also feels heavy
+     at small sizes — pull it tighter. */
+  .default-board-input {
+    margin-top: 6px;
+    padding-top: 6px;
+    gap: 6px;
+  }
+
+  .sidebar-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 1200;
+    width: 36px;
+    height: 36px;
+    /* Override global `button { padding: 6px 12px }`. */
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    background: var(--panel);
+    border-radius: 6px;
+    line-height: 0;
+    cursor: pointer;
+    color: var(--text);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    /* 100vh on iOS Safari leaves the bottom of the panel under the browser
+       chrome / home indicator. dvh follows the visible area; svh is the
+       smallest stable visible area so the panel doesn't jump as the URL
+       bar collapses. Fall back to vh for older engines. */
+    height: 100vh;
+    height: 100svh;
+    z-index: 1100;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
+    padding-top: 56px;
+    /* Stop the inner scroll from "chaining" into the page underneath. */
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    /* Respect the home-indicator safe area on iPhone X+. */
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1050;
+  }
+
+  .header {
+    padding-left: 52px;
+  }
+}
+
+.sidebar-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+.sidebar-error {
+  color: #b91c1c;
+  font-size: 12px;
+  padding: 6px 8px;
+  background: #fee2e2;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.session {
+  margin-bottom: 18px;
+  position: relative;
+  /* Drag visuals — dragging fades the source, drag-over draws an accent
+     stripe on the top of the drop target so the user sees where the dragged
+     session will land. */
+}
+.session.dragging {
+  opacity: 0.4;
+}
+.session.drag-over::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+.session-header {
+  display: grid;
+  /* chevron | name | activity | drag-handle. The activity indicator only
+     appears when present, so its column will collapse to 0 most of the
+     time (auto = sized to content) and the row stays compact. */
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  column-gap: 4px;
+  row-gap: 1px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed var(--border);
+}
+
+/* Chevron button toggling per-session boards-list collapse. */
+.session-collapse-toggle {
+  background: transparent;
+  border: none;
+  padding: 2px;
+  margin: 0;
+  cursor: pointer;
+  color: var(--muted);
+  line-height: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+}
+.session-collapse-toggle:hover {
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* Right-side drag handle. Visible on hover so the resting layout stays
+   uncluttered. cursor: grab signals the affordance. */
+.session-drag-handle {
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 2px;
+  line-height: 0;
+}
+.session:hover .session-drag-handle {
+  opacity: 0.6;
+}
+.session-drag-handle:hover {
+  opacity: 1 !important;
+  color: var(--text);
+}
+.session.dragging .session-drag-handle {
+  cursor: grabbing;
+}
+
+/* The cwd line wraps to the next row inside the grid, spanning all three
+   columns so it sits flush against the left edge instead of being indented
+   under the chevron. */
+.session-header > .session-cwd {
+  grid-column: 1 / -1;
+}
+
+/* Per-session live-activity indicator. A small spinning two-arrow loop
+   next to the session name shows that the OTHER session is currently busy
+   (tool use / thinking / blocked) so the user can tell at a glance from
+   the sidebar that a session they're not currently looking at has work
+   happening. */
+.session-activity-indicator {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+  cursor: help;
+  color: var(--muted);
+}
+.session-activity-indicator svg {
+  animation: pd-spin 1s linear infinite;
+}
+.session-activity-indicator.activity-working {
+  color: var(--status-discussing);
+}
+.session-activity-indicator.activity-blocked {
+  color: #e11d48;
+}
+@keyframes pd-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Compact at-a-glance counts shown only when a session is collapsed. One
+   tiny chip per board status with a non-zero count; colour matches the
+   sb-status-* pill family but tightened down to a single number. */
+.session-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 0 6px 22px; /* indent past the chevron column */
+}
+.session-summary-chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+  line-height: 1.4;
+}
+/* Per-status colours mirror the sidebar status pills. */
+.sb-summary-active {
+  background: #dbeafe;
+  color: #1e40af;
+  border-color: #93c5fd;
+}
+.sb-summary-completed {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+.sb-summary-withdrawn {
+  background: #f3f4f6;
+  color: #4b5563;
+  border-color: #d1d5db;
+}
+.sb-summary-paused {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+/* Dark-mode variants — same logic as the sb-status-* dark overrides. */
+:root[data-theme="dark"] .sb-summary-active {
+  background: #1c2c4f;
+  color: #93c5fd;
+  border-color: #1e40af;
+}
+:root[data-theme="dark"] .sb-summary-completed {
+  background: #14302a;
+  color: #86efac;
+  border-color: #166534;
+}
+:root[data-theme="dark"] .sb-summary-withdrawn {
+  background: #2a2e36;
+  color: #c4c4c4;
+  border-color: #3a414c;
+}
+:root[data-theme="dark"] .sb-summary-paused {
+  background: #3a2e10;
+  color: #fcd34d;
+  border-color: #92400e;
+}
+
+.session-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.session-name .unnamed {
+  font-style: italic;
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 11px;
+}
+
+.session-cwd {
+  font-size: 10px;
+  color: var(--muted);
+  font-family: "SF Mono", Menlo, monospace;
+}
+
+.boards {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.boards li {
+  margin: 2px 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.boards li a {
+  display: block;
+  padding: 3px 6px;
+  border-radius: 4px;
+  color: var(--text);
+  text-decoration: none;
+  word-break: break-word;
+}
+
+.sidebar-board-link {
+  display: flex !important;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.sidebar-board-title {
+  flex: 1;
+  word-break: break-word;
+  line-height: 1.3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sidebar-default-icon {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.sidebar-board-status {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border: 1px solid;
+  margin-top: 1px;
+}
+
+.sb-status-active {
+  background: #dbeafe;
+  color: #1e40af;
+  border-color: #93c5fd;
+}
+.sb-status-completed {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+.sb-status-withdrawn {
+  background: #f3f4f6;
+  color: #4b5563;
+  border-color: #d1d5db;
+}
+.sb-status-paused {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+.boards li a:hover {
+  background: var(--accent-soft);
+  text-decoration: none;
+}
+
+.boards li.current a {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.empty.empty-boards {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 4px 0 0 8px;
+  font-style: italic;
+}
+
+a.session-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  word-break: break-word;
+  text-decoration: none;
+}
+a.session-name:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* Session dashboard */
+
+.dashboard {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.dashboard-title {
+  margin: 0 0 16px;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.board-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.board-card {
+  display: block;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  text-decoration: none;
+  color: var(--text);
+  transition:
+    box-shadow 0.15s,
+    border-color 0.15s;
+}
+
+.board-card:hover {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  border-color: var(--border-strong);
+}
+
+.board-card .card-title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.card-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.stat {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.stat.needs-reply {
+  background: #ffe4e6;
+  border-color: #fda4af;
+  color: #be123c;
+  font-weight: 700;
+}
+
+.stat.decided {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.board-card-wrap {
+  position: relative;
+}
+
+/* Board-level status — visually distinct from node-stat pills.
+   Top-left colored stripe + label pill at top-right of card header. */
+.board-card-wrap {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.board-card-wrap::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--border-strong);
+  z-index: 1;
+}
+
+.board-status-active::before {
+  background: #93c5fd;
+}
+.board-status-completed::before {
+  background: #15803d;
+}
+.board-status-withdrawn::before {
+  background: #9ca3af;
+}
+.board-status-paused::before {
+  background: #f59e0b;
+}
+
+.board-card .card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.board-card .card-title {
+  margin: 0;
+  flex: 1;
+}
+
+.board-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+
+.board-status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.board-status-active .board-status-pill {
+  background: #dbeafe;
+  color: #1e40af;
+  border-color: #93c5fd;
+}
+.board-status-active .board-status-dot {
+  background: #1e40af;
+}
+
+.board-status-completed .board-status-pill {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+.board-status-completed .board-status-dot {
+  background: #166534;
+}
+
+.board-status-withdrawn .board-status-pill {
+  background: #f3f4f6;
+  color: #4b5563;
+  border-color: #d1d5db;
+}
+.board-status-withdrawn .board-status-dot {
+  background: #4b5563;
+}
+.board-status-withdrawn .board-card {
+  opacity: 0.65;
+}
+
+.board-status-paused .board-status-pill {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+.board-status-paused .board-status-dot {
+  background: #92400e;
+}
+
+.card-stats-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.card-archive {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.board-card-wrap:hover .card-archive {
+  opacity: 1;
+}
+
+.card-archive:hover {
+  background: var(--bg);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.upload-status {
+  font-size: 11px;
+  color: var(--muted);
+  margin-right: 8px;
+  font-style: italic;
+}
+
+/* Default conversation board: a chat-style layout with no concern column or
+   items-row chrome. Uses the full main pane width up to a readable max so
+   long lines don't span 1500px on a wide monitor. */
+.default-board {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  /* Fill the board-container slot — no viewport guessing needed since the
+     parent is already height-constrained by the .app / .app-body chain. */
+  height: 100%;
+  min-height: 0;
+}
+
+.default-board-context {
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 8px 14px;
+  margin-bottom: 10px;
+  flex: 0 0 auto;
+}
+
+.default-board-thread {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 2px;
+  scrollbar-width: none;
+}
+.default-board-thread::-webkit-scrollbar {
+  display: none;
+}
+
+.default-board-thread .thread-msg {
+  padding: 8px 12px;
+  border-radius: 8px;
+  position: relative;
+  font-size: 14px;
+}
+
+.default-board-input {
+  flex: 0 0 auto;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.default-board-input .answer-input {
+  width: 100%;
+  min-height: 80px;
+  resize: vertical;
+  font-size: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.default-board-input .actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.default-board-input .actions button {
+  padding: 8px 20px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+}
+
+.default-board-input .actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Sidebar entry for the default board: pinned visually at top of session,
+   no status pill (it has no status concept). */
+.sidebar .boards li.is-default .sidebar-board-link {
+  font-weight: 600;
+}
+
+/* Optimistic submission: until the broker confirms delivery, the message
+   shows up faded with a small spinner so the user sees something happen
+   without us having committed it to the conversation log. */
+.thread-msg.pending,
+.node-modal-msg.pending {
+  opacity: 0.55;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin: 0 6px 0 4px;
+  border: 2px solid rgba(0, 0, 0, 0.15);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  vertical-align: -2px;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ===== Unread tracker ===== */
+
+/* Sidebar: red dot when board has any unread CC message. */
+.sidebar-unread-dot {
+  flex: 0 0 auto;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  margin-left: 6px;
+  box-shadow: 0 0 4px rgba(239, 68, 68, 0.5);
+}
+
+.sidebar .boards li.has-unread .sidebar-board-title {
+  font-weight: 600;
+}
+
+/* Item card with unread CC content gets a thick warm border (static — no
+   animation) plus a soft persistent glow. Notifies without distracting. */
+.item-card.has-unread {
+  border: 3px solid #f97316;
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.35);
+}
+
+/* Floating settings gear, fixed to the top-right of the viewport so it sits
+   above any page (board / dashboard / root) without each header needing to
+   wire it in. z-index above the sidebar drawer (1100) so it stays reachable. */
+.gear-fab {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  z-index: 1300;
+  width: 32px;
+  height: 32px;
+  /* Override the global `button { padding: 6px 12px }` which would otherwise
+     leave the SVG only ~8x20px inside this 32x32 box-border button. */
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  line-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--muted);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+.gear-fab:hover {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+.settings-modal {
+  max-width: 640px;
+}
+.settings-title {
+  margin: 0 0 20px;
+  font-size: 18px;
+  font-weight: 700;
+}
+/* Each row is a 2-column grid: a fixed-width label column on the left and a
+   flexible control column on the right. The help line spans both columns
+   below so long descriptions get the full row width. */
+.settings-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  column-gap: 20px;
+  row-gap: 8px;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.settings-row:last-of-type {
+  border-bottom: none;
+}
+.settings-label {
+  grid-column: 1;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin: 0;
+}
+.settings-control {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+}
+.settings-control input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  margin: 0;
+}
+.settings-select {
+  font-size: 14px;
+  padding: 7px 32px 7px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  min-width: 200px;
+  font-family: inherit;
+}
+.settings-select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.settings-help {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.settings-footer {
+  margin: 16px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  padding-top: 12px;
+}
+
+/* Inline editable session name in the SessionDashboard header. The h1 hosts
+   the component; we keep the h1's typography (size / weight) and let the
+   inner span flex its parts. */
+.session-name-h1 {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.session-name-display,
+.session-name-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.session-name-text {
+  /* No special styling — inherits from h1. */
+}
+.session-name-unset {
+  color: var(--muted);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 0.7em;
+  font-family: "SF Mono", Menlo, monospace;
+}
+.session-name-input {
+  font-size: inherit;
+  font-weight: inherit;
+  font-family: inherit;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  min-width: 240px;
+}
+.session-name-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.session-name-action {
+  /* Override the global `button { padding: 6px 12px }` so the icon has room. */
+  padding: 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  /* Hide by default; reveal when the user hovers the parent name area. The
+     edit affordance shouldn't compete visually with the title until needed. */
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+}
+.session-name-display:hover .session-name-action.edit,
+.session-name-action.edit:focus,
+.session-name-action.save,
+.session-name-action.cancel {
+  opacity: 1;
+}
+.session-name-action:hover {
+  background: var(--bg);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.session-name-action.save {
+  color: var(--accent);
+}
+.session-name-action.save:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.session-name-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Manual mark-read button on each card / default board (visible only when
+   the auto-read setting is OFF). */
+.mark-node-read {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+.mark-node-read:hover {
+  background: #ffedd5;
+}
+
+/* Sidebar status filter — collapsible row of checkboxes that hides boards
+   whose status is unticked. Default boards bypass the filter. */
+.sidebar-filter {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.sidebar-filter-toggle {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  padding: 4px;
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sidebar-filter-toggle:hover {
+  color: var(--text);
+}
+
+.sidebar-filter-label {
+  flex: 1;
+}
+
+.sidebar-filter-summary {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar-filter-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 4px 0 22px;
+}
+
+.sidebar-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.sidebar-filter-option input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  margin: 0;
+}
+
+.inactive-sessions {
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.inactive-toggle {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  padding: 4px 4px;
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.inactive-toggle:hover {
+  color: var(--text);
+}
+
+.inactive-session {
+  opacity: 0.6;
+}
+
+.inactive-session:hover {
+  opacity: 0.85;
+}
+
+.mark-all-read {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.mark-all-read:hover {
+  background: #fef3c7;
+}
+
+.archived-section {
+  margin-top: 32px;
+  border-top: 1px dashed var(--border);
+  padding-top: 16px;
+}
+
+.archived-toggle {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.archived-toggle:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.board-cards.archived {
+  margin-top: 12px;
+  opacity: 0.7;
+}
+
+.breadcrumb {
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+}
+
+.breadcrumb:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  text-decoration: none;
+}
+
+.session-card-cwd {
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 8px;
+  word-break: break-all;
+}
+
+.owner-warning {
+  font-size: 11px;
+  padding: 4px 10px;
+  background: #ffe4e6;
+  color: #be123c;
+  border: 1px solid #fda4af;
+  border-radius: 999px;
+  font-weight: 700;
+  cursor: help;
+}
+
+textarea.answer-input:disabled {
+  background: #f3f4f6;
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.concerns-row {
+  display: flex;
+  gap: 48px;
+  align-items: stretch;
+  min-width: max-content;
+  /* Take the full height of .board-container so columns can stretch and the
+     items-row inside can claim the remaining space below the concern card. */
+  height: 100%;
+  min-height: 0;
+}
+
+.concern-column {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.concern-card {
+  background: var(--panel);
+  border: 2px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 14px 16px;
+  /* Left-aligned so the inline-block .concern-card-inner sits at the card's
+     left edge — that natural position then matches the sticky `left: 0`
+     threshold from x=0, instead of the inner starting at column-center and
+     only becoming sticky once scroll passes the center. */
+  text-align: left;
+  position: relative;
+}
+
+/* The card box keeps the full column width (so its border / connector aligns
+   with the items below). Only the inner content sticks horizontally so the
+   user can keep the title in view while scrolling through wide columns. */
+.concern-card-inner {
+  display: inline-block;
+  position: sticky;
+  /* `left: 0` is relative to .board-container's padding edge (i.e., flush with
+     where item-card content starts on the left). Combined with the parent's
+     `text-align: left`, the inner is already at sticky's threshold from
+     scroll-x=0, so it stays pinned for the entire horizontal scroll range. */
+  left: 0;
+  /* Cap at the visible board area, not the column width. The column may be
+     much wider than the viewport when many items are stacked horizontally,
+     and we want the title to wrap based on what the user can SEE while sticky
+     — otherwise long lines that fit the column would still extend past the
+     right edge of the viewport, requiring a scroll-to-end to read. cqw uses
+     .board-container's inline-size; -48px subtracts its left+right padding so
+     the inner content edges line up with where item-cards start/end. */
+  max-width: calc(100cqw - 48px);
+  min-width: 0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.concern-card .title {
+  font-weight: 600;
+  font-size: 15px;
+  margin: 0 0 6px;
+}
+
+.concern-card .context {
+  color: #3f3f3f;
+  font-size: 13px;
+  margin: 0;
+  overflow-wrap: anywhere;
+  /* Inline-content paragraphs already get `white-space: pre-wrap` from
+     `.md-body p`. Setting it on the wrapper too made markdown source
+     newlines render as extra blank lines next to the structural <p> /
+     <ul> blocks, doubling the visible vertical spacing. */
+}
+
+.connector {
+  width: 2px;
+  height: 18px;
+  background: var(--border-strong);
+  margin: 0 auto;
+}
+
+/* Items hang horizontally below each concern, all at the same Y row.
+   A horizontal bar joins them, and each item drops a short vertical
+   line up to the bar to form a top-down tree look. */
+.items-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 16px;
+  align-items: stretch;
+  position: relative;
+  padding-top: 18px;
+  /* Consume the leftover vertical space in the column so item-cards can
+     `height: 100%` and the thread scroll fits inside the viewport. */
+  flex: 1;
+  min-height: 0;
+}
+
+.items-row.single {
+  padding-top: 0;
+}
+
+.items-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  /* Align bar ends with the centers of the leftmost/rightmost cards.
+     Inset = card_width / 2 (360 / 2 = 180). Update if card width changes. */
+  left: 180px;
+  right: 180px;
+  height: 2px;
+  background: var(--border-strong);
+}
+
+.items-row.single::before {
+  display: none;
+}
+
+.items-row > .item-card {
+  flex: 0 0 360px;
+  width: 360px;
+  max-width: 360px;
+  min-width: 0;
+  /* No `overflow` here — clipping the box would also hide the ::before
+     connector bar that points up from the card to the items-row baseline.
+     Inline-content overrun is contained by `min-width: 0` plus the
+     `word-break / overflow-wrap` rules on `.md-body` content. */
+}
+
+/* Markdown inline code / pre — must wrap or scroll, not push container width */
+.md-body code {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.md-body pre {
+  max-width: 100%;
+  overflow-x: auto;
+  word-break: normal;
+}
+.md-body pre code {
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.items-row > .item-card::before {
+  content: "";
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 18px;
+  background: var(--border-strong);
+}
+
+.items-row.single > .item-card::before {
+  display: none;
+}
+
+.item-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--status-pending);
+  border-radius: 8px;
+  padding: 12px 14px;
+  transition: border-color 0.2s;
+  position: relative;
+  /* `height: 100%` + `min-height: 0` lets the card fill its items-row slot;
+     the inner .thread becomes the only vertical scroll surface. No more
+     viewport-pixel guessing — works regardless of header / concern-card height. */
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.item-card > .title-row,
+.item-card > .context,
+.item-card > .input-row {
+  flex: 0 0 auto;
+}
+
+.item-card > .thread {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.item-card > .thread::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes flash-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.85);
+    background-color: var(--accent-soft);
+  }
+  60% {
+    background-color: var(--accent-soft);
+  }
+  100% {
+    box-shadow: 0 0 0 22px rgba(37, 99, 235, 0);
+    background-color: var(--panel);
+  }
+}
+
+.item-card.flashing {
+  animation: flash-pulse 1.6s ease-out;
+}
+
+/* In-progress activity (sustained slow pulse — distinct from the brief flash). */
+@keyframes activity-blink {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.5);
+  }
+}
+
+@keyframes activity-badge-blink {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.item-card.active {
+  animation: activity-blink 2.4s ease-in-out infinite;
+}
+
+.activity-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  margin: 8px 0 0;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 600;
+  animation: activity-badge-blink 2.4s ease-in-out infinite;
+  align-self: flex-start;
+}
+
+.activity-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.activity-state {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.activity-msg {
+  font-weight: 500;
+}
+
+.header .activity-badge {
+  margin: 0 12px;
+}
+
+/* per-state color variations on the activity badge.
+   States not listed here fall back to the default (accent blue). */
+.activity-badge[data-state="blocked"] {
+  background: #ffe4e6;
+  color: #be123c;
+  border-color: #fda4af;
+}
+.activity-badge[data-state="blocked"] .activity-dot {
+  background: #be123c;
+}
+
+.activity-badge[data-state="editing"] {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #86efac;
+}
+.activity-badge[data-state="editing"] .activity-dot {
+  background: #166534;
+}
+
+.activity-badge[data-state="running"] {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+.activity-badge[data-state="running"] .activity-dot {
+  background: #92400e;
+}
+
+.activity-badge[data-state="posting"],
+.activity-badge[data-state="thinking"] {
+  /* default accent looks fine for these */
+}
+
+.activity-badge[data-state="idle"] {
+  background: #f3f4f6;
+  color: var(--muted);
+  border-color: var(--border);
+}
+.activity-badge[data-state="idle"] .activity-dot {
+  background: var(--muted);
+}
+
+.item-card.status-discussing {
+  border-left-color: var(--status-discussing);
+}
+
+.item-card.status-resolved {
+  border-left-color: var(--status-resolved);
+  opacity: 0.75;
+}
+
+/* needs-reply: vivid left border + attention-grabbing badge color. */
+.item-card.status-needs-reply {
+  border-left-color: #e11d48;
+  border-left-width: 5px;
+  background: linear-gradient(
+    to right,
+    rgba(225, 29, 72, 0.06) 0%,
+    rgba(255, 255, 255, 0) 30%
+  );
+}
+.item-card.status-needs-reply .status-badge {
+  color: #be123c;
+  border-color: #fda4af;
+  background: #ffe4e6;
+  font-weight: 700;
+}
+
+/* rejected: whole node greyed out. */
+.item-card.status-rejected {
+  opacity: 0.45;
+  background: #f5f5f5;
+  border-left-color: #9ca3af;
+}
+.item-card.status-rejected .status-badge {
+  color: var(--muted);
+  border-color: var(--border);
+  background: #ffffff;
+}
+
+/* adopted: green emphasis. */
+.item-card.status-adopted {
+  border-left-color: #15803d;
+  border-left-width: 5px;
+}
+.item-card.status-adopted .status-badge {
+  color: #166534;
+  border-color: #86efac;
+  background: #dcfce7;
+  font-weight: 700;
+}
+
+/* agreed: blue accent (tunable after real-world use). */
+.item-card.status-agreed {
+  border-left-color: #0284c7;
+}
+.item-card.status-agreed .status-badge {
+  color: #075985;
+  border-color: #7dd3fc;
+  background: #e0f2fe;
+}
+
+/* done: TODO completed. Similar to resolved but a stronger green that better
+   conveys "the task is wrapped up". */
+.item-card.status-done {
+  border-left-color: #047857;
+  opacity: 0.8;
+}
+.item-card.status-done .status-badge {
+  color: #064e3b;
+  border-color: #6ee7b7;
+  background: #d1fae5;
+  font-weight: 700;
+}
+
+.item-card .title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.item-card .title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.item-card .status-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.item-card.status-discussing .status-badge {
+  color: var(--status-discussing);
+  border-color: var(--status-discussing);
+}
+
+.item-card.status-resolved .status-badge {
+  color: var(--status-resolved);
+  border-color: var(--status-resolved);
+}
+
+.item-card .context {
+  margin: 6px 0 0;
+  color: #3f3f3f;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  flex: 0 0 auto;
+}
+
+.thread {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.thread-msg {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  position: relative;
+}
+
+.msg-expand {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 3px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+  line-height: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thread-msg:hover .msg-expand {
+  opacity: 0.7;
+}
+
+.msg-expand:hover {
+  opacity: 1 !important;
+  background: rgba(255, 255, 255, 0.7);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.node-expand {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--muted);
+  opacity: 0.5;
+  transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+  line-height: 0;
+  margin-left: 2px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.item-card:hover .node-expand {
+  opacity: 0.85;
+}
+
+.node-expand:hover {
+  opacity: 1 !important;
+  background: var(--bg);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+}
+
+.modal-content {
+  background: var(--panel);
+  border-radius: 10px;
+  max-width: 880px;
+  max-height: 90vh;
+  width: 100%;
+  overflow-y: auto;
+  padding: 24px 28px;
+  position: relative;
+  border-left: 6px solid var(--accent);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.modal-source-user {
+  border-left-color: #f59e0b;
+}
+.modal-source-cc {
+  border-left-color: var(--accent);
+}
+.modal-source-system {
+  border-left-color: var(--muted);
+}
+
+.modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  line-height: 0;
+  color: var(--muted);
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  /* Same reason as .gear-fab — the global button rule injects 6/12px padding
+     which would crush the SVG. */
+  padding: 0;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.modal-who {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.modal-body {
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.modal-body.md-body h1,
+.modal-body.md-body h2,
+.modal-body.md-body h3,
+.modal-body.md-body h4 {
+  margin: 1.4em 0 0.5em;
+}
+
+.modal-body.md-body > *:first-child {
+  margin-top: 0;
+}
+
+.modal-body.md-body p {
+  margin: 0.7em 0;
+}
+
+.modal-body.md-body ul,
+.modal-body.md-body ol {
+  margin: 0.7em 0;
+}
+
+.modal-body.md-body pre,
+.modal-body.md-body blockquote {
+  margin: 0.9em 0;
+}
+
+.node-modal {
+  border-left: 6px solid var(--accent);
+  max-width: 960px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.node-modal-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.node-modal-input {
+  flex: 0 0 auto;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.node-modal-input .answer-input {
+  width: 100%;
+  min-height: 80px;
+  resize: vertical;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.node-modal-input .actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.node-modal-input .actions button {
+  padding: 6px 16px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+}
+
+.node-modal-input .actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.node-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.node-modal-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+}
+
+.node-modal-context {
+  font-size: 14px;
+  line-height: 1.7;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.node-modal-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.node-modal-msg {
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.node-modal-msg.from-user {
+  background: var(--user);
+  border: 1px solid var(--user-border);
+}
+
+.node-modal-msg.from-cc {
+  background: var(--cc);
+  border: 1px solid var(--cc-border);
+}
+
+.node-modal-msg .modal-who {
+  margin-bottom: 6px;
+}
+
+.thread-msg.from-user {
+  background: var(--user);
+  border: 1px solid var(--user-border);
+}
+
+.thread-msg.from-cc {
+  background: var(--cc);
+  border: 1px solid var(--cc-border);
+}
+
+.thread-msg.from-system {
+  background: transparent;
+  border: none;
+  text-align: center;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 2px 6px;
+  font-style: italic;
+}
+
+.thread-msg .who {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+/* Compact timestamp shown next to the author label inside thread messages
+   and node-modal entries. The parent (.who / .modal-who) provides the gap
+   via flex, so this element only owns its own typography. A leading "·"
+   separator visually disconnects it from the author label without needing
+   a vertical bar or bullet element. */
+.thread-msg-time {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+.thread-msg-time::before {
+  content: "·";
+  margin-right: 6px;
+  opacity: 0.6;
+}
+
+.md-body {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.md-body > *:first-child {
+  margin-top: 0;
+}
+
+.md-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.md-body p {
+  margin: 0.4em 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4 {
+  margin: 0.6em 0 0.3em;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.md-body h1 { font-size: 1.25em; }
+.md-body h2 { font-size: 1.15em; }
+.md-body h3 { font-size: 1.05em; }
+.md-body h4 { font-size: 1em; }
+
+.md-body ul,
+.md-body ol {
+  margin: 0.4em 0;
+  padding-left: 1.4em;
+}
+
+.md-body li {
+  margin: 0.15em 0;
+}
+
+/* Loose lists (any blank line anywhere in the list) make react-markdown wrap
+   each item in <p>, which then inherits the .md-body p margins and balloons
+   the spacing. Reset paragraphs that are direct children of list items. */
+.md-body li > p {
+  margin: 0;
+}
+.md-body li > p + p {
+  margin-top: 0.3em;
+}
+
+.md-body code {
+  font-family:
+    "SF Mono", Menlo, Consolas, "Roboto Mono", "Noto Sans Mono CJK JP",
+    monospace;
+  font-size: 0.9em;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.md-body pre {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 8px 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.md-body pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.9em;
+}
+
+.md-body blockquote {
+  margin: 0.5em 0;
+  padding: 0 0.8em;
+  border-left: 3px solid var(--border-strong);
+  color: var(--muted);
+}
+
+.md-body a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.md-body strong {
+  font-weight: 700;
+}
+
+.md-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  display: block;
+  margin: 0.4em 0;
+  border: 1px solid var(--border);
+}
+
+.md-body table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  font-size: 0.95em;
+}
+
+.md-body th,
+.md-body td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+}
+
+.md-body th {
+  background: var(--bg);
+  font-weight: 600;
+}
+
+.md-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0.6em 0;
+}
+
+.input-row {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+textarea.answer-input {
+  width: 100%;
+  min-height: 60px;
+  resize: vertical;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  background: #fff;
+}
+
+textarea.answer-input:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.input-row .actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+button {
+  padding: 6px 12px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.sub-items {
+  margin-top: 10px;
+  margin-left: 12px;
+  padding-left: 10px;
+  border-left: 1px dashed var(--border-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.error {
+  padding: 24px;
+  color: #b91c1c;
+}
+
+.empty {
+  padding: 24px;
+  color: var(--muted);
+}
+
+/* =============================================================================
+   Dark mode
+   -----------------------------------------------------------------------------
+   The `theme` setting in useSettings resolves to `<html data-theme="light|dark">`
+   inside frontend.tsx (System mode runs prefers-color-scheme detection there).
+   So CSS only needs ONE selector: :root[data-theme="dark"]. The base palette
+   variables flip first, then a handful of selectors below override the
+   hardcoded pastel pill backgrounds where the cascade alone wouldn't cut it
+   (light pastels with dark text would have inverted contrast on a dark
+   background).
+   ============================================================================= */
+
+:root[data-theme="dark"] {
+  --bg: #0e1116;
+  --panel: #161b22;
+  --border: #2a2f37;
+  --border-strong: #3a414c;
+  --text: #e6e8ed;
+  --muted: #8c93a0;
+  --accent: #5b8cf5;
+  --accent-soft: #1c3160;
+  --user: #2d2818;
+  --user-border: #5a4f1f;
+  --cc: #102536;
+  --cc-border: #1f4669;
+  --status-pending: #6b7280;
+  --status-discussing: #fbbf24;
+  --status-resolved: #34d399;
+}
+
+/* Sidebar error chip (#b91c1c on #fee2e2) — invert lightness. */
+:root[data-theme="dark"] .sidebar-error {
+  color: #fca5a5;
+  background: #3a1414;
+}
+
+/* Generic .error block at bottom of file uses the same #b91c1c text — re-tune. */
+:root[data-theme="dark"] .error {
+  color: #fca5a5;
+}
+
+/* Sidebar board-status pills. The light versions rely on pastel bg + dark
+   text + medium border; for dark we deepen the bg, lighten the text, and
+   keep the same accent border so the hue association stays. */
+:root[data-theme="dark"] .sb-status-active {
+  background: #1c2c4f;
+  color: #93c5fd;
+  border-color: #1e40af;
+}
+:root[data-theme="dark"] .sb-status-completed {
+  background: #14302a;
+  color: #86efac;
+  border-color: #166534;
+}
+:root[data-theme="dark"] .sb-status-withdrawn {
+  background: #2a2e36;
+  color: #c4c4c4;
+  border-color: #3a414c;
+}
+:root[data-theme="dark"] .sb-status-paused {
+  background: #3a2e10;
+  color: #fcd34d;
+  border-color: #92400e;
+}
+
+/* "Mark all unread as read" button — same pattern. */
+:root[data-theme="dark"] .mark-all-read {
+  background: #2a210a;
+  color: #fcd34d;
+  border-color: #92400e;
+}
+:root[data-theme="dark"] .mark-all-read:hover {
+  background: #382a10;
+}
+
+/* needs-reply / decided stat pills on the session dashboard. */
+:root[data-theme="dark"] .stat.needs-reply {
+  background: #3a1421;
+  color: #fda4af;
+  border-color: #be123c;
+}
+:root[data-theme="dark"] .stat.decided {
+  background: #14302a;
+  color: #86efac;
+  border-color: #166534;
+}
+
+/* Item-card status badges (light pastel pills with dark text in light mode). */
+:root[data-theme="dark"] .item-card.status-needs-reply {
+  background: linear-gradient(
+    to right,
+    rgba(225, 29, 72, 0.18) 0%,
+    rgba(0, 0, 0, 0) 30%
+  );
+}
+:root[data-theme="dark"] .item-card.status-needs-reply .status-badge {
+  color: #fda4af;
+  border-color: #be123c;
+  background: #3a1421;
+}
+:root[data-theme="dark"] .item-card.status-rejected {
+  background: #1a1d22;
+}
+:root[data-theme="dark"] .item-card.status-rejected .status-badge {
+  background: var(--panel);
+}
+:root[data-theme="dark"] .item-card.status-adopted .status-badge {
+  color: #86efac;
+  border-color: #166534;
+  background: #14302a;
+}
+:root[data-theme="dark"] .item-card.status-agreed .status-badge {
+  color: #7dd3fc;
+  border-color: #075985;
+  background: #0e2a3e;
+}
+:root[data-theme="dark"] .item-card.status-done .status-badge {
+  color: #6ee7b7;
+  border-color: #047857;
+  background: #0c2e26;
+}
+
+/* Settings select — explicit light bg/text to ensure system widgets pick up
+   the right colors when rendered inside a dark-themed page. */
+:root[data-theme="dark"] .settings-select {
+  background: var(--panel);
+  color: var(--text);
+}
+
+/* Owner-warning chip (light pink pill in light mode). */
+:root[data-theme="dark"] .owner-warning {
+  background: #3a1421;
+  color: #fda4af;
+  border-color: #be123c;
+}
+
+/* "current board" highlight in sidebar (uses --accent-soft as bg). The dark
+   --accent-soft we redefined above already cascades, so just verify the text
+   contrast. */
+:root[data-theme="dark"] .boards li.current a {
+  color: #93c5fd;
+}
+
+/* code / pre inside markdown — soften the default browser styling. */
+:root[data-theme="dark"] .md-body code {
+  background: #1f242c;
+  color: #e6e8ed;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+:root[data-theme="dark"] .md-body pre {
+  background: #1f242c;
+}
+:root[data-theme="dark"] .md-body pre code {
+  background: transparent;
+  padding: 0;
+}
+
+/* Gear FAB shadow looks too soft on dark; emphasize border. */
+:root[data-theme="dark"] .gear-fab {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* Sidebar drawer shadow on mobile. */
+:root[data-theme="dark"] .sidebar.open {
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.6);
+}
+
+/* Modal backdrop is already a translucent black, so no override needed. */
+

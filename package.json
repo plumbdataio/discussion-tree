@@ -1,0 +1,41 @@
+{
+  "name": "discussion-tree",
+  "version": "0.1.0",
+  "description": "Turn a single Claude Code session into a structured, parallel decision tree",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/plumbdataio/discussion-tree.git"
+  },
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "broker": "bun broker.ts",
+    "server": "bun server.ts",
+    "test": "playwright test",
+    "test:update": "playwright test --update-snapshots",
+    "postinstall": "patch-package"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "i18next": "^26.0.8",
+    "i18next-browser-languagedetector": "^8.2.1",
+    "lucide-react": "^1.14.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-i18next": "^17.0.6",
+    "react-markdown": "^9.0.0",
+    "remark-gfm": "^4.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/bun": "latest",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "patch-package": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
