@@ -1,0 +1,30 @@
+node_modules/
+*.log
+.DS_Store
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Scratch / pre-publish workspace (e.g. backups of the prior .git history
+# stashed during the public-release rebrand). Never committed.
+.tmp/
+
+# In-flight working docs — README.md is the only public-facing markdown.
+# These accumulate raw discussion logs / unfinished design notes and are
+# kept locally for the author's reference.
+/BACKLOG.md
+/REQUESTS.md
+/SPEC.md
+
+# patch-package-style local customizations. Each clone can keep its own patches without
+# polluting the upstream repo. See README for the convention. patch-package is wired
+# via the postinstall script, so cloning + bun install applies any local patches
+# automatically and produces no git diff in the upstream files.
+patches/
+
+# Playwright transient outputs (test results, traces). Snapshot baselines are
+# committed (tests/snapshots.spec.ts-snapshots/) — those are the regression source of truth.
+test-results/
+playwright-report/
+playwright/.cache/
