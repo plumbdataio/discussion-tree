@@ -7,7 +7,13 @@
 // across broker restarts.
 
 import { Database } from "bun:sqlite";
-import type { ThreadSource } from "../shared/types.ts";
+import {
+  AUTO_BOARD_STATUSES,
+  isSettledNodeStatus,
+  type BoardStatus,
+  type NodeStatus,
+  type ThreadSource,
+} from "../shared/types.ts";
 import { DB_PATH } from "./config.ts";
 
 export const db = new Database(DB_PATH);
@@ -55,11 +61,16 @@ db.run(`
 safeAlter(
   "ALTER TABLE boards ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
 );
-// Board-level status (active / completed / withdrawn / paused) is intentionally
-// distinct from node-level statuses — a board can be "completed" even if some
-// nodes still show needs-reply (the work proceeded outside the board).
+// Board-level status. "discussing" / "settled" are auto-derived from the
+// constituent nodes by recomputeBoardStatus (see below). The lifecycle
+// statuses "completed" / "withdrawn" / "paused" are set explicitly by the
+// user / LLM via set_board_status and are NOT touched by auto-recompute.
+//
+// The legacy default value 'active' (pre-rename) is rewritten to either
+// 'discussing' or 'settled' by the startup migration further down, based on
+// the same node-rollup logic.
 safeAlter(
-  "ALTER TABLE boards ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",
+  "ALTER TABLE boards ADD COLUMN status TEXT NOT NULL DEFAULT 'discussing'",
 );
 // Each cc_session_id gets at most one default board, auto-created on
 // attach_cc_session — used as the casual conversation surface (1 fixed node).
@@ -221,3 +232,55 @@ export const selectPending = db.prepare(
 export const markDelivered = db.prepare(
   `UPDATE pending_messages SET delivered = 1 WHERE id = ?`,
 );
+
+// --- Board status auto-rollup ---
+//
+// "discussing" and "settled" are derived from the constituent nodes; the
+// broker recomputes them on every node-status / structure mutation.
+// "completed" / "withdrawn" / "paused" are explicit user/LLM lifecycle
+// decisions and are NOT touched here — once a board is marked completed
+// the auto-rollup leaves it alone.
+//
+// The legacy value 'active' (pre-rename) is treated as "auto-managed" for
+// the migration path so the startup loop below can rewrite it without a
+// special case at every call site.
+
+export function recomputeBoardStatus(boardId: string): BoardStatus | null {
+  const cur = db
+    .prepare("SELECT status FROM boards WHERE id = ?")
+    .get(boardId) as { status: string } | null;
+  if (!cur) return null;
+  const isAuto = (AUTO_BOARD_STATUSES as readonly string[]).includes(cur.status);
+  const isLegacyActive = cur.status === "active";
+  if (!isAuto && !isLegacyActive) return cur.status as BoardStatus;
+
+  const nodes = db
+    .prepare(
+      "SELECT status FROM nodes WHERE board_id = ? AND deleted_at IS NULL",
+    )
+    .all(boardId) as { status: string }[];
+  let target: BoardStatus;
+  if (nodes.length === 0) {
+    // Empty board: nothing to be settled yet.
+    target = "discussing";
+  } else {
+    const allSettled = nodes.every((n) =>
+      isSettledNodeStatus(n.status as NodeStatus),
+    );
+    target = allSettled ? "settled" : "discussing";
+  }
+  if (cur.status !== target) {
+    db.run("UPDATE boards SET status = ? WHERE id = ?", [target, boardId]);
+  }
+  return target;
+}
+
+// One-shot migration on broker startup: rewrite every legacy 'active' row
+// using the same recompute logic so existing installs converge to the new
+// `discussing` / `settled` taxonomy without manual SQL.
+{
+  const legacy = db
+    .query("SELECT id FROM boards WHERE status = 'active'")
+    .all() as { id: string }[];
+  for (const b of legacy) recomputeBoardStatus(b.id);
+}

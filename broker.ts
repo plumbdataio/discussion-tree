@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * parallel-discussion broker daemon — entry point.
+ * discussion-tree broker daemon — entry point.
  *
  * Singleton HTTP + WebSocket server backed by SQLite. Each handler module
  * under ./broker/ exports its own `routes` table; this file just merges
@@ -132,7 +132,7 @@ const server = Bun.serve({
       }
     }
 
-    return new Response("parallel-discussion broker", { status: 200 });
+    return new Response("discussion-tree broker", { status: 200 });
   },
   websocket: {
     open(ws) {
@@ -150,8 +150,8 @@ const server = Bun.serve({
 });
 
 console.error(
-  `[parallel-discussion broker] listening on http://127.0.0.1:${server.port}`,
+  `[discussion-tree broker] listening on http://127.0.0.1:${server.port}`,
 );
 console.error(
-  `[parallel-discussion broker] state: ${HOME_DIR} · db: ${DB_PATH} · public: ${PUBLIC_URL}`,
+  `[discussion-tree broker] state: ${HOME_DIR} · db: ${DB_PATH} · public: ${PUBLIC_URL}`,
 );

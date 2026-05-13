@@ -101,6 +101,59 @@ describe("websocket broadcasts", () => {
     expect(msgs.some((m) => m.type === "status-update")).toBe(true);
   });
 
+  test("/set-board-status emits a board-status-update event", async () => {
+    const msgs = await captureWsMessages(broker.port, boardId, async () => {
+      await new Promise((r) => setTimeout(r, 50));
+      await post(`${broker.url}/set-board-status`, {
+        board_id: boardId,
+        status: "paused",
+      });
+    });
+    expect(
+      msgs.some(
+        (m) => m.type === "board-status-update" && m.status === "paused",
+      ),
+    ).toBe(true);
+  });
+
+  test("a node-status change that flips the rollup emits board-status-update", async () => {
+    // Use a fresh board so add-item residue from previous tests doesn't
+    // leave stray pending nodes that block the transition to 'settled'.
+    const cr = await post<{ board_id: string }>(
+      `${broker.url}/create-board`,
+      {
+        session_id: sessionId,
+        structure: {
+          title: "WS settle",
+          concerns: [
+            { id: "c1", title: "C1", items: [{ id: "i1", title: "I1" }] },
+          ],
+        },
+      },
+    );
+    const bid = cr.json.board_id;
+    // Pre-settle one of the two nodes; the second mutation is the one we
+    // expect to flip the board to 'settled'.
+    await post(`${broker.url}/set-node-status`, {
+      board_id: bid,
+      node_id: "i1",
+      status: "adopted",
+    });
+    const msgs = await captureWsMessages(broker.port, bid, async () => {
+      await new Promise((r) => setTimeout(r, 50));
+      await post(`${broker.url}/set-node-status`, {
+        board_id: bid,
+        node_id: "c1",
+        status: "resolved",
+      });
+    });
+    expect(
+      msgs.some(
+        (m) => m.type === "board-status-update" && m.status === "settled",
+      ),
+    ).toBe(true);
+  });
+
   test("structural changes (add-item) emit a structure-update event", async () => {
     const msgs = await captureWsMessages(broker.port, boardId, async () => {
       await new Promise((r) => setTimeout(r, 50));

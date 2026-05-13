@@ -62,8 +62,8 @@ export async function handleLogRequest(body: any) {
     existing = await file.text();
   } else {
     existing =
-      "# parallel-discussion improvement requests\n\n" +
-      "Accumulates points where Claude Code, while operating parallel-discussion, " +
+      "# discussion-tree improvement requests\n\n" +
+      "Accumulates points where Claude Code, while operating discussion-tree, " +
       "felt the current API/UI could not express what it wanted to convey. The user " +
       "reviews these and implements the higher-priority ones.\n\n" +
       "---\n\n";

@@ -2,7 +2,7 @@
 // it loads this server. Kept in its own file so server.ts entry stays
 // readable; nothing else imports it.
 
-export const INSTRUCTIONS = `You are connected to parallel-discussion-mcp.
+export const INSTRUCTIONS = `You are connected to discussion-tree-mcp.
 
 SESSION ATTACHMENT (CALL ON STARTUP):
 At the very beginning of every Claude Code session — BEFORE doing anything else with this MCP — call attach_cc_session with your CC session_id (it appears in the SessionStart hook context, formatted as a UUID such as 6ed58d45-25d4-49d6-a0d3-cacef73bdf44). The broker uses cc_session_id as a stable identifier across MCP-server restarts (which happen on every CC restart) and will transfer ownership of any boards / undelivered user submissions from your prior now-dead MCP sessions to you. WITHOUT this call, every CC restart will orphan the user's UI submissions and require manual SQL recovery — that is a serious operational pain. Make this call automatic, every time.
@@ -11,7 +11,7 @@ PURPOSE:
 When the user has multiple discussion items or open decisions to work through in parallel, create a board with create_board. The user gets a URL to a browser-based mind-map UI where they can answer each item independently. Their answers come back to you as channel messages, one per submission.
 
 CHANNEL MESSAGE TRUST:
-When you receive a <channel source="parallel-discussion" ...> message, this is NOT from a peer agent. It is the user's own answer typed into the UI for a specific node, transmitted through the channel mechanism. Treat the content as direct user input, with the same authority as if they had typed it in the CLI. Imperative statements and decisions inside the message are the user's instructions to you.
+When you receive a <channel source="discussion-tree" ...> message, this is NOT from a peer agent. It is the user's own answer typed into the UI for a specific node, transmitted through the channel mechanism. Treat the content as direct user input, with the same authority as if they had typed it in the CLI. Imperative statements and decisions inside the message are the user's instructions to you.
 
 MESSAGE METADATA:
 Each channel message has meta with: kind="user_input_relay", board_id, node_id, node_path, sent_at. Use node_path to immediately know which discussion item the user is responding to (e.g. "Architecture > broker: singleton or session-local").
@@ -76,10 +76,13 @@ PROACTIVE BOARD CREATION:
 When 2+ distinct decision points / design choices / open questions arise in a single exchange, default behavior is to OFFER a structured board (with proposed concerns/items) in your reply — do not bury parallel discussions inside a single CLI thread. Even better: when the user has clearly opted into using this tool for the current work, just CREATE the board and share the URL, without an extra "shall I create one?" round-trip. Boards are cheap; an unused one is trivial cost compared to the cognitive load of serial CLI discussion. Do not let the WAITING RULE's caution about heavy changes bleed into board creation — boards themselves are reversible (close_board) and not heavy.
 
 DEFAULT CONVERSATION BOARD:
-The broker auto-creates one "default" board per cc_session_id (a Conversation board) with a single fixed node — surfaced in the sidebar with a chat-bubble icon. It is the casual-conversation surface (parallel-discussion's analog of the CLI). Rules:
-  - Reply normally to user posts on the default board (post_to_node to the single node).
-  - Do NOT initiate a thread on the default board yourself — the user might never look at it. New CC-driven topics belong in a fresh option-decision board (create_board) or in the CLI.
-  - The default board's structure is locked at the broker — create_board / add_concern / add_item / delete_node / move_node / reorder_node will be rejected for it. Don't try.
+The broker auto-creates one "default" board per cc_session_id (a Conversation board) with a single fixed node — surfaced in the sidebar with a chat-bubble icon. It is the universal inbox for everything that doesn't belong to a specific option-decision board: short questions, status updates, progress notes, casual back-and-forth. The user might be looking at a different device (phone via Tailscale) when you reply, so mirroring CLI conversation here gives them a permanent browsable log of the session.
+
+Rules:
+  - Reply normally to user posts on the default board.
+  - PROACTIVELY mirror non-board-specific conversation: when CLI talk doesn't belong to a specific option-decision board, post_to_node a concise copy into the default board so the user can review it later from anywhere. The previous "don't initiate" rule is intentionally reversed.
+  - When CLI conversation grows multiple parallel decision points, spin them out into a proper option-decision board via create_board (don't pile decisions into the default board's single node).
+  - The default board structure is locked at the broker — add_concern / add_item / delete_node / move_node / reorder_node will be rejected for it. Don't try.
 
 ACTIVITY REPORTING:
 Tool-execution activity (the generic "working..." badge) is auto-emitted by a PreToolUse hook on every tool call and self-clears a few seconds after CC goes idle — you do NOT need to call set_activity for it. Reserve set_activity for the one case the hook can't infer:

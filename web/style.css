@@ -403,11 +403,19 @@ body {
   cursor: default;
   line-height: 1.4;
 }
-/* Per-status colours mirror the sidebar status pills. */
-.sb-summary-active {
+/* Per-status colours mirror the sidebar status pills. discussing = blue
+   (still in motion), settled = teal (verdict landed, but not yet a
+   lifecycle "completed"), completed = green (work done), withdrawn = grey
+   (abandoned), paused = amber (on hold). */
+.sb-summary-discussing {
   background: #dbeafe;
   color: #1e40af;
   border-color: #93c5fd;
+}
+.sb-summary-settled {
+  background: #cffafe;
+  color: #155e75;
+  border-color: #67e8f9;
 }
 .sb-summary-completed {
   background: #dcfce7;
@@ -425,10 +433,15 @@ body {
   border-color: #fcd34d;
 }
 /* Dark-mode variants — same logic as the sb-status-* dark overrides. */
-:root[data-theme="dark"] .sb-summary-active {
+:root[data-theme="dark"] .sb-summary-discussing {
   background: #1c2c4f;
   color: #93c5fd;
   border-color: #1e40af;
+}
+:root[data-theme="dark"] .sb-summary-settled {
+  background: #103745;
+  color: #67e8f9;
+  border-color: #155e75;
 }
 :root[data-theme="dark"] .sb-summary-completed {
   background: #14302a;
@@ -521,10 +534,15 @@ body {
   margin-top: 1px;
 }
 
-.sb-status-active {
+.sb-status-discussing {
   background: #dbeafe;
   color: #1e40af;
   border-color: #93c5fd;
+}
+.sb-status-settled {
+  background: #cffafe;
+  color: #155e75;
+  border-color: #67e8f9;
 }
 .sb-status-completed {
   background: #dcfce7;
@@ -2332,10 +2350,15 @@ button.secondary {
 /* Sidebar board-status pills. The light versions rely on pastel bg + dark
    text + medium border; for dark we deepen the bg, lighten the text, and
    keep the same accent border so the hue association stays. */
-:root[data-theme="dark"] .sb-status-active {
+:root[data-theme="dark"] .sb-status-discussing {
   background: #1c2c4f;
   color: #93c5fd;
   border-color: #1e40af;
+}
+:root[data-theme="dark"] .sb-status-settled {
+  background: #103745;
+  color: #67e8f9;
+  border-color: #155e75;
 }
 :root[data-theme="dark"] .sb-status-completed {
   background: #14302a;

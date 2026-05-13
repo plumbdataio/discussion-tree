@@ -68,21 +68,33 @@ export function handleCloseBoardReq(body: any) {
 }
 
 export function handleSetBoardStatus(body: any) {
-  const allowed = ["active", "completed", "withdrawn", "paused"];
-  if (!allowed.includes(body.status)) {
+  // "discussing" / "settled" are normally auto-derived from node statuses
+  // (see broker/db.ts:recomputeBoardStatus), so explicit set calls for
+  // those values will be quickly overwritten on the next node mutation —
+  // they're accepted for completeness but rarely useful.
+  const allowed = [
+    "discussing",
+    "settled",
+    "completed",
+    "withdrawn",
+    "paused",
+  ];
+  // Backwards-compat: callers that still pass the legacy "active" value
+  // are silently normalized to "discussing" (the closest match in the new
+  // taxonomy).
+  let next = body.status;
+  if (next === "active") next = "discussing";
+  if (!allowed.includes(next)) {
     return { ok: false, error: "invalid status: " + body.status };
   }
-  db.run("UPDATE boards SET status = ? WHERE id = ?", [
-    body.status,
-    body.board_id,
-  ]);
+  db.run("UPDATE boards SET status = ? WHERE id = ?", [next, body.board_id]);
   // Mirror to legacy `closed` flag when the new status implies it.
-  if (body.status === "completed") {
+  if (next === "completed") {
     db.run("UPDATE boards SET closed = 1 WHERE id = ?", [body.board_id]);
   }
   broadcast(body.board_id, {
     type: "board-status-update",
-    status: body.status,
+    status: next,
   });
   return { ok: true };
 }

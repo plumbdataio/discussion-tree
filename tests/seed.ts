@@ -119,7 +119,7 @@ const insertThread = db.prepare(
 insertSession.run(
   "s_test",
   99999,
-  "/Users/test/parallel-discussion",
+  "/Users/test/discussion-tree",
   T0,
   T0,
   1,

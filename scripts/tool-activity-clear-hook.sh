@@ -1,5 +1,5 @@
 #!/bin/bash
-# parallel-discussion Stop hook.
+# discussion-tree Stop hook.
 #
 # Fires when CC finishes a turn. Clears the auto "working" badge immediately
 # instead of waiting for the broker's idle-timeout watchdog. The watchdog is

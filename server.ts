@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * parallel-discussion MCP server — entry point.
+ * discussion-tree MCP server — entry point.
  *
  * Spawned by Claude Code as a stdio MCP server (one per CC instance).
  * Connects to the shared broker daemon, exposes board/node tools, and pushes
@@ -30,7 +30,7 @@ import { getSessionId, myCwd, setSessionId } from "./server/state.ts";
 import { dispatchToolCall, TOOLS } from "./server/tools.ts";
 
 const mcp = new Server(
-  { name: "parallel-discussion", version: "0.1.0" },
+  { name: "discussion-tree", version: "0.1.0" },
   {
     capabilities: {
       experimental: { "claude/channel": {} },

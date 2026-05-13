@@ -12,6 +12,41 @@ export type NodeStatus =
   | "done";
 export type ThreadSource = "user" | "cc" | "system";
 
+// --- Node status classification ---
+//
+// Two disjoint groups make up the full NodeStatus enum. They are referenced
+// by the board-level rollup (discussing vs settled) and by stat counters, so
+// keeping them defined as named constants prevents the membership lists from
+// drifting between broker, frontend, and any future SQL.
+//
+// Edit here when introducing a new NodeStatus value: decide which group the
+// new value belongs to and add it; every consumer picks up the change
+// automatically.
+
+// "Still in motion" — the topic is not yet decided either way. needs-reply
+// counts because the assistant is explicitly asking for input.
+export const IN_PROGRESS_NODE_STATUSES: readonly NodeStatus[] = [
+  "pending",
+  "discussing",
+  "needs-reply",
+];
+
+// "Decided" — a verdict has landed (one option chosen, an option rejected,
+// the topic resolved as moot, the action item completed, or consensus
+// reached). rejected counts because "we've decided NOT to do X" is also a
+// decision and removes the node from the open-questions list.
+export const SETTLED_NODE_STATUSES: readonly NodeStatus[] = [
+  "adopted",
+  "agreed",
+  "rejected",
+  "resolved",
+  "done",
+];
+
+export function isSettledNodeStatus(s: NodeStatus | string): boolean {
+  return (SETTLED_NODE_STATUSES as readonly string[]).includes(s);
+}
+
 // CC-supplied input shapes (used by create_board / add_concern / add_item).
 
 export interface NodeInput {
@@ -174,7 +209,29 @@ export interface Session {
   cc_session_id: string | null;
 }
 
-export type BoardStatus = "active" | "completed" | "withdrawn" | "paused";
+// Board-level status. "discussing" and "settled" are automatically managed
+// by the broker (derived from node statuses, see SETTLED_NODE_STATUSES);
+// "completed" / "withdrawn" / "paused" are set explicitly via
+// set_board_status and are NOT touched by node-status changes — they
+// represent user-driven lifecycle decisions about the board as a whole.
+export type BoardStatus =
+  | "discussing"
+  | "settled"
+  | "completed"
+  | "withdrawn"
+  | "paused";
+
+// Statuses where the broker auto-recomputes the value from node statuses.
+// Set-board-status to anything else (completed / withdrawn / paused) freezes
+// the board against auto-recompute.
+export const AUTO_BOARD_STATUSES: readonly BoardStatus[] = [
+  "discussing",
+  "settled",
+];
+
+export function isAutoBoardStatus(s: BoardStatus | string): boolean {
+  return (AUTO_BOARD_STATUSES as readonly string[]).includes(s);
+}
 
 export interface BoardStats {
   open: number; // pending + discussing + needs-reply

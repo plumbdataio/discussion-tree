@@ -21,7 +21,7 @@ export function RootDashboard() {
   return (
     <div className="app">
       <header className="header">
-        <h1>parallel-discussion</h1>
+        <h1>discussion-tree</h1>
         <span className="meta">
           {t("root_dashboard.active_sessions_meta", { count: sessions.length })}
         </span>

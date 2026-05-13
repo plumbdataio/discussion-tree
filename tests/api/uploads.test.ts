@@ -104,7 +104,7 @@ describe("uploads", () => {
     // is alive" response, not to the actual file content.
     const body = await rawHttpBody(broker.port, "/uploads/../../etc/passwd");
     expect(body).not.toContain("root:");
-    expect(body).toContain("parallel-discussion broker");
+    expect(body).toContain("discussion-tree broker");
   });
 
   test("GET /uploads/ 404 for missing file", async () => {
