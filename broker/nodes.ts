@@ -24,11 +24,31 @@ import { generateId, insertNodesRecursive, maxChildPos } from "./helpers.ts";
 // board's auto-rollup status (discussing ↔ settled). Run after every such
 // mutation; the broadcast lets the sidebar refresh its per-board status
 // pill / per-session summary chips in real time.
-function syncBoardStatus(boardId: string) {
+//
+// Returns { from, to } when the rollup actually moved the board, so the
+// HTTP handler can surface the transition back to the MCP tool caller (the
+// LLM otherwise only learns about it via the UI-only WebSocket broadcast).
+function syncBoardStatus(
+  boardId: string,
+): { from: string; to: string } | null {
+  const before = db
+    .prepare("SELECT status FROM boards WHERE id = ?")
+    .get(boardId) as { status: string } | null;
   const next = recomputeBoardStatus(boardId);
-  if (next) {
-    broadcast(boardId, { type: "board-status-update", status: next });
+  if (!next) return null;
+  broadcast(boardId, { type: "board-status-update", status: next });
+  if (before && before.status !== next) {
+    return { from: before.status, to: next };
   }
+  return null;
+}
+
+// Fold a syncBoardStatus() result into a handler response object.
+function withBoardStatusChange<T extends object>(
+  base: T,
+  change: { from: string; to: string } | null,
+): T & { board_status_changed?: { from: string; to: string } } {
+  return change ? { ...base, board_status_changed: change } : base;
 }
 
 export function handleAddConcern(body: any) {
@@ -53,8 +73,8 @@ export function handleAddConcern(body: any) {
     insertNodesRecursive(body.board_id, id, "item", concern.items);
   }
   broadcast(body.board_id, { type: "structure-update" });
-  syncBoardStatus(body.board_id);
-  return { node_id: id };
+  const change = syncBoardStatus(body.board_id);
+  return withBoardStatusChange({ node_id: id }, change);
 }
 
 export function handleAddItem(body: any) {
@@ -83,8 +103,8 @@ export function handleAddItem(body: any) {
     new Date().toISOString(),
   );
   broadcast(body.board_id, { type: "structure-update" });
-  syncBoardStatus(body.board_id);
-  return { node_id: id };
+  const change = syncBoardStatus(body.board_id);
+  return withBoardStatusChange({ node_id: id }, change);
 }
 
 export function handleUpdateNode(body: any) {
@@ -184,8 +204,8 @@ export function handleSetNodeStatus(body: any) {
       source: "system",
     });
   }
-  syncBoardStatus(body.board_id);
-  return { ok: true };
+  const boardChange = syncBoardStatus(body.board_id);
+  return withBoardStatusChange({ ok: true }, boardChange);
 }
 
 export function handleDeleteNode(body: { board_id: string; node_id: string }) {
@@ -234,8 +254,11 @@ export function handleDeleteNode(body: { board_id: string; node_id: string }) {
     type: "structure-update",
     deleted: Array.from(toDelete),
   });
-  syncBoardStatus(boardId);
-  return { ok: true, deleted_count: toDelete.size };
+  const change = syncBoardStatus(boardId);
+  return withBoardStatusChange(
+    { ok: true, deleted_count: toDelete.size },
+    change,
+  );
 }
 
 export function handleMoveNode(body: {

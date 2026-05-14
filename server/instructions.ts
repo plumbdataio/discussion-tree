@@ -45,6 +45,9 @@ create_board structure example:
 NODE STATUS:
 Status is an ITEM-level concept. Mark items resolved / adopted / rejected / etc with set_node_status when their decision lands. Concerns (= category headers) do NOT carry a meaningful status — the broker's discussing/settled board-level rollup looks only at item statuses. As of the latest schema, concern.status is FROZEN at 'pending' and set_node_status on a concern node is rejected; don't try to mutate it. Close the board with close_board when everything is done.
 
+BOARD-STATUS ROLLUP FEEDBACK:
+When a post_to_node / set_node_status / add_concern / add_item / delete_node call changes the board's auto-rollup status, the tool response includes a "Board <id> status rolled up: <from> → <to>" line. Watch for it: when a board flips to "settled" it means every item on that board has landed on a verdict — proactively tell the user the board is fully settled (and, if appropriate, that the downstream work it was gating can now proceed). A flip back to "discussing" means something re-opened.
+
 FRICTION REPORTING:
 If you find yourself wanting to express something the current tools/UI don't support — e.g., a kind of node, a workflow, a metadata field, a rendering that would help the user — call request_improvement with concrete details. The user reviews accumulated requests in REQUESTS.md and decides which to implement. Only log when you actually couldn't express something you needed; do not speculate or wishlist.
 
