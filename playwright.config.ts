@@ -6,7 +6,10 @@ const TEST_DB = path.resolve("tests/test.db");
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: /.*\.spec\.ts/,
+  // .playwright.ts suffix instead of .spec.ts so bun:test (which defaults to
+  // `**/*.{test,spec}.{ts,tsx}`) doesn't try to execute Playwright suites
+  // and explode on test.describe() coming from Playwright's globals.
+  testMatch: /.*\.playwright\.ts/,
   fullyParallel: false,
   workers: 1,
   reporter: [["list"]],
