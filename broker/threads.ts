@@ -148,12 +148,41 @@ export async function handleSubmitAnswer(body: any): Promise<
       // Delivered: NOW persist into the public thread + broadcast so every
       // connected client (incl. the submitter) sees the real message.
       insertThread.run(body.board_id, body.node_id, "user", body.text, now);
-      bumpStatusToDiscussing.run(body.board_id, body.node_id);
+      // A user reply pulls the node back into 'discussing' from 'pending' or
+      // 'needs-reply'. Capture the old status first so we can log the
+      // transition + broadcast a status-update (otherwise the sidebar's
+      // needs-reply badge wouldn't clear until the next poll).
+      const before = db
+        .prepare("SELECT status FROM nodes WHERE board_id = ? AND id = ?")
+        .get(body.board_id, body.node_id) as { status: string } | null;
+      const bump = bumpStatusToDiscussing.run(body.board_id, body.node_id);
+      const nodeStatusChanged = bump.changes > 0;
+      if (nodeStatusChanged && before) {
+        insertThread.run(
+          body.board_id,
+          body.node_id,
+          "system",
+          `status_change:${before.status}:discussing`,
+          now,
+        );
+      }
       broadcast(body.board_id, {
         type: "thread-update",
         node_id: body.node_id,
         source: "user",
       });
+      if (nodeStatusChanged) {
+        broadcast(body.board_id, {
+          type: "status-update",
+          node_id: body.node_id,
+          status: "discussing",
+        });
+        broadcast(body.board_id, {
+          type: "thread-update",
+          node_id: body.node_id,
+          source: "system",
+        });
+      }
       const boardChange = syncBoardStatus(body.board_id);
       return boardChange
         ? { ok: true, board_status_changed: boardChange }

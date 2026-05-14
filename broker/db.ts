@@ -169,8 +169,14 @@ export const insertNode = db.prepare(
 export const updateNodeStatus = db.prepare(
   `UPDATE nodes SET status = ? WHERE board_id = ? AND id = ?`,
 );
+// A user posting into a node means it's actively being worked again, so
+// pull it back into 'discussing'. Covers both 'pending' (never started)
+// and 'needs-reply' (was flagged for the user — their reply clears that
+// flag). Other statuses (adopted / rejected / etc) are deliberate verdicts
+// and are left alone. `changes` on the result tells the caller whether a
+// transition actually happened, so it can log it / broadcast it.
 export const bumpStatusToDiscussing = db.prepare(
-  `UPDATE nodes SET status = 'discussing' WHERE board_id = ? AND id = ? AND status = 'pending'`,
+  `UPDATE nodes SET status = 'discussing' WHERE board_id = ? AND id = ? AND status IN ('pending', 'needs-reply')`,
 );
 export const selectNodesByBoard = db.prepare(
   `SELECT * FROM nodes WHERE board_id = ? AND deleted_at IS NULL ORDER BY position`,

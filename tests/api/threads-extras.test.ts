@@ -138,6 +138,63 @@ describe("submit-answer error paths", () => {
   });
 });
 
+describe("submit-answer pulls a node back into 'discussing'", () => {
+  // Fire /submit-answer without awaiting (it blocks until delivered), let
+  // the broker insert the pending row, then deliver via /poll-messages.
+  async function userReply(nodeId: string, text: string) {
+    const p = fetch(`${broker.url}/submit-answer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ board_id: boardId, node_id: nodeId, text }),
+    });
+    await new Promise((r) => setTimeout(r, 120));
+    await post(`${broker.url}/poll-messages`, { session_id: sessionId });
+    await p;
+  }
+  const statusOf = async (nodeId: string) => {
+    const v = await fetchView();
+    return v.nodes.find((n: any) => n.id === nodeId)?.status;
+  };
+
+  test("a user reply clears 'needs-reply' back to 'discussing'", async () => {
+    await post(`${broker.url}/set-node-status`, {
+      board_id: boardId,
+      node_id: "ti1",
+      status: "needs-reply",
+    });
+    expect(await statusOf("ti1")).toBe("needs-reply");
+    await userReply("ti1", "here is my reply");
+    expect(await statusOf("ti1")).toBe("discussing");
+  });
+
+  test("the auto-transition is logged as a system thread item", async () => {
+    await post(`${broker.url}/set-node-status`, {
+      board_id: boardId,
+      node_id: "ti1",
+      status: "needs-reply",
+    });
+    await userReply("ti1", "second reply");
+    const v = await fetchView();
+    const sys = (v.threads.ti1 ?? []).filter(
+      (t: any) => t.source === "system",
+    );
+    expect(
+      sys.some((t: any) => t.text === "status_change:needs-reply:discussing"),
+    ).toBe(true);
+  });
+
+  test("a settled status (adopted) is NOT disturbed by a user reply", async () => {
+    await post(`${broker.url}/set-node-status`, {
+      board_id: boardId,
+      node_id: "ti1",
+      status: "adopted",
+    });
+    await userReply("ti1", "reply on a decided node");
+    // Deliberate verdicts stay put — only pending / needs-reply are bumped.
+    expect(await statusOf("ti1")).toBe("adopted");
+  });
+});
+
 describe("mark-thread-items-read / mark-board-read", () => {
   test("mark-thread-items-read with empty array is a no-op", async () => {
     const r = await post<{ ok: boolean; marked?: number }>(
