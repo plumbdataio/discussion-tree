@@ -1824,7 +1824,18 @@ body.concern-resizing * {
   font-size: 12px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  flex: 0 0 auto;
+  /* Cap a long context so it can't push the thread / input row out of the
+     card (or off-screen). It scrolls internally past this height. flex
+     0 1 auto lets it shrink under pressure too; min-height keeps a usable
+     minimum visible. Scrollbar hidden — wheel / touch still scrolls. */
+  flex: 0 1 auto;
+  min-height: 2.4em;
+  max-height: 40dvh;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.item-card .context::-webkit-scrollbar {
+  display: none;
 }
 
 .thread {
