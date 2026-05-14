@@ -1449,6 +1449,31 @@ textarea.answer-input:disabled {
   margin: 0 auto;
 }
 
+/* Drag-handle variant of the connector: same visual line, but expands its
+   hit area vertically (via ::before) so the user can grab it without
+   pixel-hunting. Hover lights up the bar to telegraph that it's draggable;
+   while body.concern-resizing is set (drag in flight) the cursor stays
+   ns-resize even when the pointer drifts off the 2-pixel line. */
+.concern-resize-handle {
+  position: relative;
+  cursor: ns-resize;
+  transition: background 0.15s;
+}
+.concern-resize-handle::before {
+  content: "";
+  position: absolute;
+  inset: -6px -16px;
+  /* Visually invisible, just an enlarged hit target. */
+}
+.concern-resize-handle:hover {
+  background: var(--accent, #1f6feb);
+}
+body.concern-resizing,
+body.concern-resizing * {
+  cursor: ns-resize !important;
+  user-select: none;
+}
+
 /* Items hang horizontally below each concern, all at the same Y row.
    A horizontal bar joins them, and each item drops a short vertical
    line up to the bar to form a top-down tree look. */
