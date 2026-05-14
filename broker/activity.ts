@@ -69,6 +69,28 @@ export function handleHeartbeatTool(body: {
   return { ok: true };
 }
 
+// Mark a session "working" the instant the user submits a message through
+// the UI — immediate feedback before the CC has even polled for it. The
+// session is registered with the watchdog (toolHeartbeats) so the badge
+// self-clears after AUTO_ACTIVITY_TIMEOUT_MS if the CC never responds; the
+// normal path is the Stop hook clearing it once the CC finishes its turn.
+export function markWorkingFromUserSubmit(sessionId: string) {
+  // Don't stomp an explicit LLM-set state (e.g. "blocked"). Those are only
+  // cleared by the LLM itself; a user submit shouldn't override them.
+  const cur = activities.get(sessionId);
+  if (cur && cur.state !== "working") return;
+  const now = Date.now();
+  toolHeartbeats.set(sessionId, now);
+  const entry: Activity = {
+    session_id: sessionId,
+    state: "working",
+    message: "",
+    set_at: new Date(now).toISOString(),
+  };
+  activities.set(sessionId, entry);
+  broadcastActivity(sessionId, entry);
+}
+
 export function handleClearToolActivity(body: { cc_session_id?: string }): {
   ok: boolean;
 } {

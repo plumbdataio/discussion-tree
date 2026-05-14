@@ -21,6 +21,7 @@ import {
 import { broadcast, broadcastToAll } from "./ws.ts";
 import { SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
 import { buildNodePath } from "./helpers.ts";
+import { markWorkingFromUserSubmit } from "./activity.ts";
 
 // Same helper as broker/nodes.ts — node status mutations may flip the
 // parent board's auto-rollup, broadcast lets the sidebar follow. Returns
@@ -129,6 +130,10 @@ export async function handleSubmitAnswer(body: any): Promise<
     now,
   );
   const pendingId = Number(insertResult.lastInsertRowid);
+
+  // Immediate "working" feedback: the user just sent something, show the
+  // badge now rather than waiting for the CC's first PreToolUse hook.
+  markWorkingFromUserSubmit(board.session_id);
 
   // Poll until /poll-messages flips delivered=1, or we time out.
   const deadline = Date.now() + SUBMIT_DELIVERY_TIMEOUT_MS;
