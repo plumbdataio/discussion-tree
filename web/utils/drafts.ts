@@ -47,7 +47,10 @@ type DraftSetter = (next: string | ((prev: string) => string)) => void;
 
 // Debounce window for the localStorage write. Typing only touches React
 // state; the actual setItem is deferred until input pauses for this long.
-const WRITE_DEBOUNCE_MS = 300;
+// Set generously (1s) so a fast typist's brief pauses don't trigger a
+// write mid-burst — the write only needs to land before the tab closes /
+// the card unmounts, both of which flush explicitly.
+const WRITE_DEBOUNCE_MS = 1000;
 
 export function useDraft(
   boardId: string,

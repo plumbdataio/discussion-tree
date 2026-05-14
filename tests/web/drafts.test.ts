@@ -79,9 +79,9 @@ describe("useDraft", () => {
     unmount();
   });
 
-  // The localStorage write is debounced (WRITE_DEBOUNCE_MS = 300). Give it
+  // The localStorage write is debounced (WRITE_DEBOUNCE_MS = 1000). Give it
   // a little extra headroom past that window before asserting.
-  const DEBOUNCE_WAIT = 360;
+  const DEBOUNCE_WAIT = 1100;
   const settle = (ms = DEBOUNCE_WAIT) =>
     act(async () => {
       await new Promise((r) => setTimeout(r, ms));
