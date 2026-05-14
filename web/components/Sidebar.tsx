@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { Activity, SessionListItem } from "../../shared/types.ts";
 import { BOARD_STATUSES, normalizeBoardStatus } from "../utils/constants.ts";
+import { isBoardVisible } from "../utils/boardFilter.ts";
 import {
   type BoardStatusFilter,
   useSettings,
@@ -82,14 +83,11 @@ function SessionItem({
   const { t } = useTranslation();
   const [dragOver, setDragOver] = useState(false);
 
-  // Default boards bypass the status filter — they're the conversation
-  // surface and the user always wants visibility there. For non-default
-  // boards we filter by `status` (defaulting to "discussing" when unset).
-  const visibleBoards = s.boards.filter((b) => {
-    if (b.is_default) return true;
-    const status = normalizeBoardStatus(b.status) as keyof BoardStatusFilter;
-    return filter[status] !== false;
-  });
+  // Visibility = default board OR currently-open board OR passes the status
+  // filter. See isBoardVisible for why the first two bypass the filter.
+  const visibleBoards = s.boards.filter((b) =>
+    isBoardVisible(b, filter, currentBoardId),
+  );
 
   const isDragging = draggingId === s.id;
 
