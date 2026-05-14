@@ -61,7 +61,9 @@
   },
   "concern_card": {
     "expand": "Expand concern",
-    "no_context": "(no context)"
+    "no_context": "(no context)",
+    "resize_handle": "Resize concern card",
+    "resize_handle_title": "Drag to resize, double-click to reset"
   },
   "item_card": {
     "expand_node": "Expand node",
