@@ -254,14 +254,19 @@ export function recomputeBoardStatus(boardId: string): BoardStatus | null {
   const isLegacyActive = cur.status === "active";
   if (!isAuto && !isLegacyActive) return cur.status as BoardStatus;
 
+  // Only ITEM nodes feed the rollup. Concerns are category headers, not
+  // discussion points themselves — their `status` field defaults to
+  // 'pending' and most users never touch it, which would otherwise pin the
+  // board at 'discussing' forever even when every item underneath has
+  // landed on a verdict.
   const nodes = db
     .prepare(
-      "SELECT status FROM nodes WHERE board_id = ? AND deleted_at IS NULL",
+      "SELECT status FROM nodes WHERE board_id = ? AND kind = 'item' AND deleted_at IS NULL",
     )
     .all(boardId) as { status: string }[];
   let target: BoardStatus;
   if (nodes.length === 0) {
-    // Empty board: nothing to be settled yet.
+    // No items: empty / concern-only board. Treat as still in discussion.
     target = "discussing";
   } else {
     const allSettled = nodes.every((n) =>
@@ -275,12 +280,19 @@ export function recomputeBoardStatus(boardId: string): BoardStatus | null {
   return target;
 }
 
-// One-shot migration on broker startup: rewrite every legacy 'active' row
-// using the same recompute logic so existing installs converge to the new
-// `discussing` / `settled` taxonomy without manual SQL.
+// One-shot migration on broker startup:
+//   1. Rewrite every legacy 'active' row using the recompute logic so
+//      existing installs converge to the new `discussing` / `settled`
+//      taxonomy without manual SQL.
+//   2. Re-run recompute over every currently-auto-managed row too
+//      (`discussing` / `settled`) so changes in the recompute rules
+//      themselves (e.g. items-only judgement) propagate to data that
+//      hasn't been mutated since the last broker boot.
 {
-  const legacy = db
-    .query("SELECT id FROM boards WHERE status = 'active'")
+  const targets = db
+    .query(
+      "SELECT id FROM boards WHERE status IN ('active', 'discussing', 'settled')",
+    )
     .all() as { id: string }[];
-  for (const b of legacy) recomputeBoardStatus(b.id);
+  for (const b of targets) recomputeBoardStatus(b.id);
 }
