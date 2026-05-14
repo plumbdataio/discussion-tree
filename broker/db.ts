@@ -280,7 +280,7 @@ export function recomputeBoardStatus(boardId: string): BoardStatus | null {
   return target;
 }
 
-// One-shot migration on broker startup:
+// One-shot migrations on broker startup:
 //   1. Rewrite every legacy 'active' row using the recompute logic so
 //      existing installs converge to the new `discussing` / `settled`
 //      taxonomy without manual SQL.
@@ -288,6 +288,11 @@ export function recomputeBoardStatus(boardId: string): BoardStatus | null {
 //      (`discussing` / `settled`) so changes in the recompute rules
 //      themselves (e.g. items-only judgement) propagate to data that
 //      hasn't been mutated since the last broker boot.
+//   3. Pin every concern node's status back to the default 'pending'.
+//      Concerns are category headers — their status is ignored by the
+//      rollup, never shown in the UI, and a stray non-default value
+//      would drift the schema invariant the broker now enforces at
+//      every set_node_status / update_node mutation.
 {
   const targets = db
     .query(
@@ -295,4 +300,7 @@ export function recomputeBoardStatus(boardId: string): BoardStatus | null {
     )
     .all() as { id: string }[];
   for (const b of targets) recomputeBoardStatus(b.id);
+  db.run(
+    "UPDATE nodes SET status = 'pending' WHERE kind = 'concern' AND status != 'pending'",
+  );
 }
