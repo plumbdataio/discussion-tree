@@ -43,7 +43,7 @@ create_board structure example:
 }
 
 NODE STATUS:
-Mark nodes resolved with set_node_status when discussion concludes. Close the board with close_board when everything is done.
+Status is an ITEM-level concept. Mark items resolved / adopted / rejected / etc with set_node_status when their decision lands. Concerns (= category headers) do NOT carry a meaningful status — the broker's discussing/settled board-level rollup looks only at item statuses, so any status set on a concern is ignored. Close the board with close_board when everything is done.
 
 FRICTION REPORTING:
 If you find yourself wanting to express something the current tools/UI don't support — e.g., a kind of node, a workflow, a metadata field, a rendering that would help the user — call request_improvement with concrete details. The user reviews accumulated requests in REQUESTS.md and decides which to implement. Only log when you actually couldn't express something you needed; do not speculate or wishlist.
