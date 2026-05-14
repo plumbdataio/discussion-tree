@@ -56,24 +56,18 @@ describe("board status auto-rollup (discussing / settled)", () => {
         },
       ],
     });
-    // Settle concern + both items. Concern node also counts toward the
-    // rollup so we have to settle it too (e.g. 'resolved').
+    // Only items feed the rollup — concerns are category headers and are
+    // intentionally ignored. So settling both items is sufficient.
     await post(`${broker.url}/set-node-status`, {
       board_id: id,
       node_id: "i1",
       status: "adopted",
     });
-    expect(await getBoardStatus(id)).toBe("discussing"); // i2/c1 still in-progress
+    expect(await getBoardStatus(id)).toBe("discussing"); // i2 still in-progress
     await post(`${broker.url}/set-node-status`, {
       board_id: id,
       node_id: "i2",
       status: "rejected",
-    });
-    expect(await getBoardStatus(id)).toBe("discussing"); // c1 still 'pending'
-    await post(`${broker.url}/set-node-status`, {
-      board_id: id,
-      node_id: "c1",
-      status: "resolved",
     });
     expect(await getBoardStatus(id)).toBe("settled");
   });
@@ -89,11 +83,6 @@ describe("board status auto-rollup (discussing / settled)", () => {
       board_id: id,
       node_id: "i1",
       status: "adopted",
-    });
-    await post(`${broker.url}/set-node-status`, {
-      board_id: id,
-      node_id: "c1",
-      status: "resolved",
     });
     expect(await getBoardStatus(id)).toBe("settled");
 

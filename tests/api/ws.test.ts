@@ -132,19 +132,13 @@ describe("websocket broadcasts", () => {
       },
     );
     const bid = cr.json.board_id;
-    // Pre-settle one of the two nodes; the second mutation is the one we
-    // expect to flip the board to 'settled'.
-    await post(`${broker.url}/set-node-status`, {
-      board_id: bid,
-      node_id: "i1",
-      status: "adopted",
-    });
+    // Only items feed the rollup; settling i1 alone should flip the board.
     const msgs = await captureWsMessages(broker.port, bid, async () => {
       await new Promise((r) => setTimeout(r, 50));
       await post(`${broker.url}/set-node-status`, {
         board_id: bid,
-        node_id: "c1",
-        status: "resolved",
+        node_id: "i1",
+        status: "adopted",
       });
     });
     expect(
