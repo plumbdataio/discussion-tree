@@ -59,6 +59,10 @@
     "no_items": "(no items)",
     "conversation_node_missing": "Conversation node missing"
   },
+  "concern_card": {
+    "expand": "Expand concern",
+    "no_context": "(no context)"
+  },
   "item_card": {
     "expand_node": "Expand node",
     "expand_message": "Expand message",
@@ -119,6 +123,7 @@
     "done": "Done"
   },
   "board_status": {
+    "active": "Discussing",
     "discussing": "Discussing",
     "settled": "Settled",
     "completed": "Completed",

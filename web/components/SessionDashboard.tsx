@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import type { SessionListItem } from "../../shared/types.ts";
 import { EditableSessionName } from "./EditableSessionName.tsx";
 import { Sidebar } from "./Sidebar.tsx";
+import { normalizeBoardStatus } from "../utils/constants.ts";
 
 export function SessionDashboard({ sessionId }: { sessionId: string }) {
   const { t } = useTranslation();
@@ -63,8 +64,10 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
   if (error) return <div className="error">{error}</div>;
   if (!data) return <div className="empty">{t("sidebar.loading")}</div>;
 
-  const boardStatusLabel = (status: string | undefined) =>
-    t([`board_status.${status ?? "discussing"}`, status ?? "discussing"]);
+  const boardStatusLabel = (status: string | undefined) => {
+    const s = normalizeBoardStatus(status);
+    return t([`board_status.${s}`, s]);
+  };
 
   return (
     <div className="app">

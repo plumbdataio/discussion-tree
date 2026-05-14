@@ -59,6 +59,10 @@
     "no_items": "(item なし)",
     "conversation_node_missing": "会話ノードが見つかりません"
   },
+  "concern_card": {
+    "expand": "Concern を拡大表示",
+    "no_context": "(context 未設定)"
+  },
   "item_card": {
     "expand_node": "ノード全体を拡大表示",
     "expand_message": "拡大表示",
@@ -123,7 +127,8 @@
     "settled": "方針確定",
     "completed": "完了",
     "withdrawn": "破棄",
-    "paused": "保留"
+    "paused": "保留",
+    "active": "議論中"
   },
   "errors": {
     "unknown_session": "未登録のセッションです。先に register してください",

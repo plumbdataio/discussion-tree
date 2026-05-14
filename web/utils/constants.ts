@@ -29,3 +29,19 @@ export const BOARD_STATUSES = [
   "withdrawn",
   "paused",
 ] as const;
+
+// Coerce any persisted board status into the current taxonomy. The legacy
+// value 'active' (pre-rename) is mapped to 'discussing' — the broker's
+// startup migration normally rewrites these rows, but if a stale row sneaks
+// past (mid-migration, an external sqlite edit, an older replica), this
+// keeps the UI from rendering the raw "ACTIVE" string via the i18n fallback.
+// Also defends against null / undefined / unknown values so callers don't
+// need their own ?? chain.
+export function normalizeBoardStatus(
+  raw: string | null | undefined,
+): (typeof BOARD_STATUSES)[number] {
+  if (raw === "active" || raw == null) return "discussing";
+  return (BOARD_STATUSES as readonly string[]).includes(raw)
+    ? (raw as (typeof BOARD_STATUSES)[number])
+    : "discussing";
+}
