@@ -958,6 +958,31 @@ a.session-name:hover {
   font-weight: 600;
 }
 
+/* Sidebar: needs-reply badge — at least one node in the board is flagged
+   for the user's attention. Uses the same rose tone as the item-card
+   needs-reply border (#e11d48) and shows the count, visually distinct
+   from the plain red unread dot. */
+.sidebar-needs-reply-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  background: #e11d48;
+  color: #fff;
+  margin-left: 6px;
+}
+
+.sidebar .boards li.has-needs-reply .sidebar-board-title {
+  font-weight: 600;
+}
+
 /* Item card with unread CC content gets a thick warm border (static — no
    animation) plus a soft persistent glow. Notifies without distracting. */
 .item-card.has-unread {

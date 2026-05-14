@@ -18,6 +18,7 @@
     "loading": "読み込み中…",
     "no_boards": "(ボードなし)",
     "unread_dot_title": "未読 {{count}} 件",
+    "needs_reply_title": "返答求む {{count}} 件",
     "inactive_label": "非アクティブ ({{count}})",
     "toggle_label": "サイドバーを開閉",
     "filter_label": "表示",

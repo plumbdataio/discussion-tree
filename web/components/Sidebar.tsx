@@ -213,6 +213,12 @@ function SessionItem({
           <ul className="boards">
             {visibleBoards.map((b) => {
               const hasUnread = (b.unread_count ?? 0) > 0;
+              // needs-reply is a node-level status: at least one node in this
+              // board is flagged for the user's attention. Distinct from
+              // unread (= new CC messages). Surfaced so the user notices it
+              // without having to open the board.
+              const needsReplyCount = b.stats?.needs_reply ?? 0;
+              const hasNeedsReply = needsReplyCount > 0;
               // Normalize at the boundary: maps legacy 'active' / unknowns /
               // null to a renderable status so the i18n fallback never shows
               // the raw enum string (e.g. "ACTIVE") in the badge.
@@ -227,7 +233,8 @@ function SessionItem({
                   className={
                     (isDefault ? "is-default " : "") +
                     (b.id === currentBoardId ? "current " : "") +
-                    (hasUnread ? "has-unread" : "")
+                    (hasUnread ? "has-unread " : "") +
+                    (hasNeedsReply ? "has-needs-reply" : "")
                   }
                 >
                   <a href={"/board/" + b.id} className="sidebar-board-link">
@@ -241,6 +248,18 @@ function SessionItem({
                       )}
                       {isDefault ? t("default_board.title") : b.title}
                     </span>
+                    {/* needs-reply takes visual priority over the status
+                        badge — it's an actionable flag, not just metadata. */}
+                    {hasNeedsReply && (
+                      <span
+                        className="sidebar-needs-reply-badge"
+                        title={t("sidebar.needs_reply_title", {
+                          count: needsReplyCount,
+                        })}
+                      >
+                        {needsReplyCount}
+                      </span>
+                    )}
                     {hasUnread && (
                       <span
                         className="sidebar-unread-dot"
@@ -249,7 +268,7 @@ function SessionItem({
                         })}
                       />
                     )}
-                    {!isDefault && !hasUnread && (
+                    {!isDefault && !hasUnread && !hasNeedsReply && (
                       <span
                         className={`sidebar-board-status sb-status-${status}`}
                       >
