@@ -24,7 +24,12 @@ node_modules/
 patches/
 
 # Playwright transient outputs (test results, traces). Snapshot baselines are
-# committed (tests/snapshots.spec.ts-snapshots/) — those are the regression source of truth.
+# committed (tests/snapshots.playwright.ts-snapshots/) — those are the regression source of truth.
 test-results/
 playwright-report/
 playwright/.cache/
+
+# Project-local Claude Code config — dev-only. Skills, hooks, and local
+# settings that shouldn't ship in the public repo: they reference local-ops
+# knowledge (e.g. Tailscale setup), absolute paths, and personal permissions.
+.claude/
