@@ -113,6 +113,13 @@ export function handleUpdateNode(body: any) {
       error: "Nothing to update — pass title / context / kind",
     };
   }
+  // Demoting an item to a concern via update? Reset its status back to the
+  // default 'pending' so the schema invariant holds (concerns must have
+  // status='pending'). Setter handled by the same UPDATE statement.
+  if (body.kind === "concern") {
+    sets.push("status = ?");
+    params.push("pending");
+  }
   params.push(body.board_id, body.node_id);
   db.run(
     `UPDATE nodes SET ${sets.join(", ")} WHERE board_id = ? AND id = ?`,
@@ -130,9 +137,24 @@ export function handleSetNodeStatus(body: any) {
   // server.ts. The broker accepts any string here so tests can lock that
   // behavior in across modularization.
   const cur = db
-    .prepare("SELECT status FROM nodes WHERE board_id = ? AND id = ?")
-    .get(body.board_id, body.node_id) as { status: string } | null;
+    .prepare("SELECT status, kind FROM nodes WHERE board_id = ? AND id = ?")
+    .get(body.board_id, body.node_id) as
+    | { status: string; kind: string }
+    | null;
   const oldStatus = cur?.status;
+
+  // Schema-level invariant: concerns are category headers, not discussion
+  // points. Their status is meaningless to the rollup (which looks at items
+  // only) and meaningless to the user (no badge is rendered for concerns).
+  // Reject any attempt to mutate it so a misbehaving caller can't drift
+  // concern.status away from 'pending'. The startup migration in db.ts
+  // pins existing rows back to 'pending'.
+  if (cur?.kind === "concern") {
+    return {
+      ok: false,
+      error: "concern.status is fixed — only item statuses are mutable",
+    };
+  }
 
   updateNodeStatus.run(body.status, body.board_id, body.node_id);
 
