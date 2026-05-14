@@ -14,6 +14,7 @@ import {
   HOME_DIR,
   PORT,
   PUBLIC_URL,
+  STALE_SESSION_SWEEP_MS,
   UPLOADS_DIR,
 } from "./broker/config.ts";
 import {
@@ -37,7 +38,7 @@ import { subscribe, unsubscribe } from "./broker/ws.ts";
 // --- Periodic maintenance ---
 
 cleanStaleSessions();
-setInterval(cleanStaleSessions, 30_000);
+setInterval(cleanStaleSessions, STALE_SESSION_SWEEP_MS);
 startActivityWatchdog();
 initPower();
 

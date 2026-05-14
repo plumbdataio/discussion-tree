@@ -65,6 +65,14 @@ export const SUBMIT_DELIVERY_TIMEOUT_MS = 8_000;
 // this is a safety net for cases where Stop never fires (CC crash mid-turn).
 export const AUTO_ACTIVITY_TIMEOUT_MS = 60_000;
 
+// How often broker.ts re-checks every alive session's PID and soft-deletes
+// rows whose process is gone. Default 30s; tests override to ~100ms via
+// the env var so they can observe the soft-delete deterministically.
+export const STALE_SESSION_SWEEP_MS = parseInt(
+  process.env.PARALLEL_DISCUSSION_STALE_SWEEP_MS ?? "30000",
+  10,
+);
+
 // Side-effect: ensure HOME_DIR and the DB's parent dir exist before
 // bun:sqlite touches the file. mkdir is idempotent (recursive).
 fs.mkdirSync(HOME_DIR, { recursive: true });
