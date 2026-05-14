@@ -152,6 +152,31 @@ The broker has a 60-second safety-net auto-clear, so even if `Stop` fails to fir
 
 Dependencies: `jq`, `curl`.
 
+## Optional: topic-drift nudge (Stop hook)
+
+The MCP `instructions` ask the LLM to push parallel decision points into boards (via `add_concern` / `create_board`) instead of burying them in the CLI thread. Instructions alone don't fire deterministically — when the model has already chosen to enumerate alternatives in-line, only a hook can interrupt that turn.
+
+This hook scans the latest assistant message at end-of-turn (`Stop`). If it spots option-presentation patterns (e.g. `1. … / 2. … / 3. …`, `A. … / B. …`, `Option A`, `案A`) and the current session has discussing/settled boards, it writes a `<system-reminder>` to stdout. Claude Code surfaces hook stdout into the next turn's context, so the next reply will be reminded to surface those decisions on a board.
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun /absolute/path/to/discussion-tree/scripts/topic-drift-hook.ts"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Stays silent if there are no active boards (= no surface to redirect into), and quiet on plain replies. Set `PARALLEL_DISCUSSION_TOPIC_DRIFT_DEBUG=1` to log decisions to stderr.
+
 ## Mobile / accessing from another device (Tailscale Serve)
 
 Setup for opening the UI from a phone or another machine. **Tailscale Serve** proxies over your tailnet only; the broker stays bound to `127.0.0.1` and is safely reachable from your other devices without any public exposure.
