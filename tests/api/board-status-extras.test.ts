@@ -130,4 +130,38 @@ describe("board status auto-rollup", () => {
     expect(board.stats.total).toBeGreaterThanOrEqual(2);
     expect(board.stats.open).toBeGreaterThanOrEqual(2);
   });
+
+  // The sidebar's needs-reply badge is driven entirely by stats.needs_reply,
+  // so the count has to track set-node-status accurately.
+  test("stats.needs_reply counts nodes flagged needs-reply", async () => {
+    const b = await newBoard("nr", ["n1", "n2", "n3"]);
+    const statsOf = async () => {
+      const list = await get<{ sessions: any[] }>(
+        `${broker.url}/api/sessions`,
+      );
+      const me = list.json.sessions.find((s) => s.id === sessionId)!;
+      return me.boards.find((x: any) => x.id === b).stats;
+    };
+    expect((await statsOf()).needs_reply).toBe(0);
+
+    await post(`${broker.url}/set-node-status`, {
+      board_id: b,
+      node_id: "n1",
+      status: "needs-reply",
+    });
+    await post(`${broker.url}/set-node-status`, {
+      board_id: b,
+      node_id: "n2",
+      status: "needs-reply",
+    });
+    expect((await statsOf()).needs_reply).toBe(2);
+
+    // Clearing one flag back to a non-needs-reply status decrements it.
+    await post(`${broker.url}/set-node-status`, {
+      board_id: b,
+      node_id: "n1",
+      status: "adopted",
+    });
+    expect((await statsOf()).needs_reply).toBe(1);
+  });
 });

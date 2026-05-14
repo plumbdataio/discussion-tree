@@ -18,6 +18,7 @@
     "loading": "Loading…",
     "no_boards": "(no boards)",
     "unread_dot_title": "{{count}} unread",
+    "needs_reply_title": "{{count}} awaiting your reply",
     "inactive_label": "Inactive ({{count}})",
     "toggle_label": "Toggle sidebar",
     "filter_label": "Show",
