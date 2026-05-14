@@ -79,21 +79,58 @@ describe("useDraft", () => {
     unmount();
   });
 
-  test("setValue writes through to localStorage", async () => {
+  // The localStorage write is debounced (WRITE_DEBOUNCE_MS = 300). Give it
+  // a little extra headroom past that window before asserting.
+  const DEBOUNCE_WAIT = 360;
+  const settle = (ms = DEBOUNCE_WAIT) =>
+    act(async () => {
+      await new Promise((r) => setTimeout(r, ms));
+    });
+
+  test("setValue updates the returned value synchronously (no wait)", async () => {
+    const { out, unmount } = await mountUseDraft("bd", "nd");
+    await act(async () => {
+      out.api![1]("typed instantly");
+    });
+    // React state is updated right away — only the localStorage write waits.
+    expect(out.api![0]).toBe("typed instantly");
+    unmount();
+  });
+
+  test("setValue writes through to localStorage after the debounce window", async () => {
     const { out, unmount } = await mountUseDraft("bd", "nd");
     await act(async () => {
       out.api![1]("hello world");
     });
+    // Not persisted yet — still inside the debounce window.
+    expect(localStorage.getItem(KEY("bd", "nd"))).toBeNull();
+    await settle();
     expect(localStorage.getItem(KEY("bd", "nd"))).toBe("hello world");
     unmount();
   });
 
-  test("setValue with empty string removes the localStorage entry", async () => {
+  test("rapid updates collapse into a single final write", async () => {
+    const { out, unmount } = await mountUseDraft("bd", "nd");
+    for (const s of ["a", "ab", "abc", "abcd"]) {
+      await act(async () => {
+        out.api![1](s);
+      });
+    }
+    // Mid-burst: nothing committed yet.
+    expect(localStorage.getItem(KEY("bd", "nd"))).toBeNull();
+    await settle();
+    // Only the final value lands.
+    expect(localStorage.getItem(KEY("bd", "nd"))).toBe("abcd");
+    unmount();
+  });
+
+  test("setValue with empty string removes the localStorage entry (after debounce)", async () => {
     localStorage.setItem(KEY("bd", "nd"), "seed");
     const { out, unmount } = await mountUseDraft("bd", "nd");
     await act(async () => {
       out.api![1]("");
     });
+    await settle();
     expect(localStorage.getItem(KEY("bd", "nd"))).toBeNull();
     unmount();
   });
@@ -106,8 +143,22 @@ describe("useDraft", () => {
     await act(async () => {
       out.api![1]((prev) => prev + "def");
     });
+    await settle();
     expect(localStorage.getItem(KEY("bd", "nd"))).toBe("abcdef");
     unmount();
+  });
+
+  test("unmount flushes a pending debounced write", async () => {
+    const { out, unmount } = await mountUseDraft("bd", "nd");
+    await act(async () => {
+      out.api![1]("not yet persisted");
+    });
+    expect(localStorage.getItem(KEY("bd", "nd"))).toBeNull();
+    // Unmount before the debounce timer fires — the cleanup must flush.
+    await act(async () => {
+      unmount();
+    });
+    expect(localStorage.getItem(KEY("bd", "nd"))).toBe("not yet persisted");
   });
 
   test("clear() removes the entry and resets value to empty string", async () => {
