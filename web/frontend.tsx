@@ -64,18 +64,20 @@ function App() {
     return () => mql.removeEventListener("change", apply);
   }, [settings.theme]);
 
-  // `key` props ensure each page re-mounts (and thus refetches its data)
-  // when the route's ID changes. Without the key, BoardApp's useEffect
-  // wouldn't notice the boardId change since useMemo([]) only ran once.
+  // BoardApp takes boardId as a prop and depends on it in every data
+  // effect, so it re-fetches on navigation WITHOUT a `key` — no re-mount,
+  // no white flash of the sidebar/header it contains. SessionDashboard
+  // still uses a key (it reads sessionId as a prop but its internal
+  // effects haven't been migrated off the re-mount pattern yet).
   let page: React.ReactNode;
   if (sessionId) {
     page = <SessionDashboard key={`s:${sessionId}`} sessionId={sessionId} />;
   } else if (boardId) {
-    page = <BoardApp key={`b:${boardId}`} />;
+    page = <BoardApp boardId={boardId} />;
   } else if (path === "/" || path === "") {
     page = <RootDashboard />;
   } else {
-    page = <BoardApp key={`b:${path}`} />;
+    page = <BoardApp boardId={null} />;
   }
   return (
     <>

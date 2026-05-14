@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Activity, BoardView } from "../../shared/types.ts";
 import { ActivityBadge } from "./ActivityBadge.tsx";
@@ -8,11 +8,15 @@ import { Sidebar } from "./Sidebar.tsx";
 import { postSubmitAnswer } from "../utils/api.ts";
 import { translateError } from "../utils/errors.ts";
 import { buildTree } from "../utils/tree.ts";
-import { getBoardIdFromUrl } from "../utils/url.ts";
 
-export function BoardApp() {
+// boardId is passed as a prop (not read from the URL internally) so this
+// component does NOT need a `key` to re-mount on navigation. All data
+// effects below depend on boardId, so they re-run on a prop change while
+// the component instance — and the Sidebar / header it renders — stays
+// mounted. Re-mounting was what caused the full-page white flash on board
+// switches.
+export function BoardApp({ boardId }: { boardId: string | null }) {
   const { t } = useTranslation();
-  const boardId = useMemo(getBoardIdFromUrl, []);
   const [data, setData] = useState<BoardView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
