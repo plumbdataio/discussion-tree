@@ -45,6 +45,10 @@ export function clearDraft(boardId: string, nodeId: string) {
 // `setValue` (or call clearDraft externally) when sending succeeds.
 type DraftSetter = (next: string | ((prev: string) => string)) => void;
 
+// Debounce window for the localStorage write. Typing only touches React
+// state; the actual setItem is deferred until input pauses for this long.
+const WRITE_DEBOUNCE_MS = 300;
+
 export function useDraft(
   boardId: string,
   nodeId: string,
@@ -53,22 +57,75 @@ export function useDraft(
   // Re-hydrate when the (board, node) changes — typical when a parent
   // remounts the textarea for a different node without a full route swap.
   const lastKey = useRef(key(boardId, nodeId));
+
+  // Debounced write state. `write(...)` (a synchronous localStorage.setItem)
+  // used to run on every keystroke — fine when localStorage is small, but a
+  // long draft against a busy storage area adds visible per-keystroke
+  // latency. Now keystrokes only update React state; pendingWrite holds the
+  // (board, node, value) the timer will flush once typing pauses.
+  const writeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingWrite = useRef<{
+    boardId: string;
+    nodeId: string;
+    value: string;
+  } | null>(null);
+
+  // flush lives in a ref so it has a stable identity across renders but
+  // always sees the latest refs. Writes the pending value immediately and
+  // cancels the timer.
+  const flushRef = useRef<() => void>(() => {});
+  flushRef.current = () => {
+    if (writeTimer.current) {
+      clearTimeout(writeTimer.current);
+      writeTimer.current = null;
+    }
+    const pw = pendingWrite.current;
+    if (pw) {
+      write(pw.boardId, pw.nodeId, pw.value);
+      pendingWrite.current = null;
+    }
+  };
+
   useEffect(() => {
     const k = key(boardId, nodeId);
     if (lastKey.current !== k) {
+      // Switching cards: flush the previous key's pending write before
+      // re-hydrating, otherwise the debounce window could drop unsaved text.
+      flushRef.current();
       lastKey.current = k;
       setValue(read(boardId, nodeId));
     }
   }, [boardId, nodeId]);
 
+  // The debounce window must not be able to swallow the final edit: flush
+  // on unmount and on tab close.
+  useEffect(() => {
+    const onBeforeUnload = () => flushRef.current();
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      flushRef.current();
+    };
+  }, []);
+
   const update = (next: string | ((prev: string) => string)) => {
     setValue((cur) => {
       const resolved = typeof next === "function" ? next(cur) : next;
-      write(boardId, nodeId, resolved);
+      pendingWrite.current = { boardId, nodeId, value: resolved };
+      if (writeTimer.current) clearTimeout(writeTimer.current);
+      writeTimer.current = setTimeout(
+        () => flushRef.current(),
+        WRITE_DEBOUNCE_MS,
+      );
       return resolved;
     });
   };
   const clear = () => {
+    if (writeTimer.current) {
+      clearTimeout(writeTimer.current);
+      writeTimer.current = null;
+    }
+    pendingWrite.current = null;
     setValue("");
     clearDraft(boardId, nodeId);
   };
