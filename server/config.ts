@@ -3,7 +3,7 @@
 // broker, polling cadences, the broker script path for auto-spawn).
 
 export const BROKER_PORT = parseInt(
-  process.env.PARALLEL_DISCUSSION_PORT ?? "7898",
+  process.env.DISCUSSION_TREE_PORT ?? "7898",
   10,
 );
 export const BROKER_URL = `http://127.0.0.1:${BROKER_PORT}`;

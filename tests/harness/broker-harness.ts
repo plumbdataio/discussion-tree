@@ -1,9 +1,9 @@
 // Spawn an isolated broker subprocess for a single test file.
 //
 // Each call returns a fresh broker bound to:
-//   - a tmp directory for PARALLEL_DISCUSSION_HOME (uploads / cc-sessions)
-//   - a tmp file for PARALLEL_DISCUSSION_DB
-//   - an OS-assigned port (PARALLEL_DISCUSSION_PORT=0)
+//   - a tmp directory for DISCUSSION_TREE_HOME (uploads / cc-sessions)
+//   - a tmp file for DISCUSSION_TREE_DB
+//   - an OS-assigned port (DISCUSSION_TREE_PORT=0)
 //
 // We capture stderr until the "listening on http://127.0.0.1:<port>" log line
 // to learn the actual port. The kill() returned MUST be called by the caller
@@ -18,7 +18,7 @@ const BROKER_SCRIPT = new URL("../../broker.ts", import.meta.url).pathname;
 export type BrokerHandle = {
   url: string;            // e.g. "http://127.0.0.1:54321"
   port: number;
-  homeDir: string;        // PARALLEL_DISCUSSION_HOME for this broker
+  homeDir: string;        // DISCUSSION_TREE_HOME for this broker
   dbPath: string;
   kill: () => Promise<void>;
 };
@@ -32,9 +32,9 @@ export async function startBroker(
   const proc = Bun.spawn(["bun", BROKER_SCRIPT], {
     env: {
       ...process.env,
-      PARALLEL_DISCUSSION_PORT: "0",
-      PARALLEL_DISCUSSION_HOME: homeDir,
-      PARALLEL_DISCUSSION_DB: dbPath,
+      DISCUSSION_TREE_PORT: "0",
+      DISCUSSION_TREE_HOME: homeDir,
+      DISCUSSION_TREE_DB: dbPath,
       // Drop legacy detection — point DB explicitly at our tmp path.
       ...extraEnv,
     },

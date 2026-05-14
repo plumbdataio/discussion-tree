@@ -45,8 +45,8 @@ export default defineConfig({
     stderr: "pipe",
     env: {
       ...(process.env as Record<string, string>),
-      PARALLEL_DISCUSSION_PORT: String(TEST_PORT),
-      PARALLEL_DISCUSSION_DB: TEST_DB,
+      DISCUSSION_TREE_PORT: String(TEST_PORT),
+      DISCUSSION_TREE_DB: TEST_DB,
     },
   },
   expect: {

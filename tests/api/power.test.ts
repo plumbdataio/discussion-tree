@@ -72,8 +72,8 @@ describe("power / sleep-prevention", () => {
     cpSync(broker.homeDir, survival, { recursive: true });
     await broker.kill();
     const second = await startBroker({
-      PARALLEL_DISCUSSION_HOME: survival,
-      PARALLEL_DISCUSSION_DB: join(survival, "db.sqlite"),
+      DISCUSSION_TREE_HOME: survival,
+      DISCUSSION_TREE_DB: join(survival, "db.sqlite"),
     });
     try {
       const r = await post<{ pref: string }>(

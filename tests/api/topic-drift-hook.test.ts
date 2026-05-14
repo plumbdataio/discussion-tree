@@ -61,7 +61,7 @@ async function runHook(
   const proc = Bun.spawn(["bun", HOOK_SCRIPT], {
     env: {
       ...process.env,
-      PARALLEL_DISCUSSION_PORT: String(opts.brokerPort ?? broker.port),
+      DISCUSSION_TREE_PORT: String(opts.brokerPort ?? broker.port),
     },
     stdin: "pipe",
     stdout: "pipe",
@@ -122,7 +122,7 @@ describe("topic-drift-hook", () => {
 
   test("exits cleanly when transcript_path is missing", async () => {
     const proc = Bun.spawn(["bun", HOOK_SCRIPT], {
-      env: { ...process.env, PARALLEL_DISCUSSION_PORT: String(broker.port) },
+      env: { ...process.env, DISCUSSION_TREE_PORT: String(broker.port) },
       stdin: "pipe",
       stdout: "pipe",
       stderr: "pipe",

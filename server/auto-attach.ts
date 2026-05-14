@@ -15,12 +15,12 @@ import { getSessionId } from "./state.ts";
 
 export async function tryAutoAttach(): Promise<void> {
   const ccPid = process.ppid;
-  // Resolves the same way the hook does — PARALLEL_DISCUSSION_HOME wins,
+  // Resolves the same way the hook does — DISCUSSION_TREE_HOME wins,
   // else default. CC inherits the env, so when the user overrides it the
   // hook and this lookup stay in sync.
   const homeDir =
-    process.env.PARALLEL_DISCUSSION_HOME ??
-    path.join(os.homedir(), ".parallel-discussion");
+    process.env.DISCUSSION_TREE_HOME ??
+    path.join(os.homedir(), ".discussion-tree");
   const file = path.join(homeDir, "cc-sessions", `${ccPid}.json`);
   // The SessionStart hook and this MCP server are both spawned by Claude
   // Code at startup, in parallel — if main() reaches here before the hook

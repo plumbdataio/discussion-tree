@@ -11,7 +11,7 @@ import {
 let broker: BrokerHandle;
 
 beforeAll(async () => {
-  broker = await startBroker({ PARALLEL_DISCUSSION_STALE_SWEEP_MS: "100" });
+  broker = await startBroker({ DISCUSSION_TREE_STALE_SWEEP_MS: "100" });
 });
 afterAll(async () => {
   await broker.kill();

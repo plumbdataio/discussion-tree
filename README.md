@@ -12,7 +12,7 @@ CLI is serial. The moment you have three things to figure out at once with Claud
 - **Live UI.** WebSocket pushes — node status changes, Claude's incoming replies, the working badge from the PreToolUse hook — repaint instantly across every open tab and device.
 - **Default conversation board.** Each CC session auto-gets a chat-style board so you have a casual surface for "talk to Claude in the browser instead of CLI" without creating a structured board first.
 - **Optimistic submit + delivery confirmation.** Posting from the UI shows a tentative card immediately; the broker blocks until the MCP server has actually picked the message up. If CC isn't reachable, the text is preserved in the textarea so you don't lose it.
-- **Image paste / drop.** Screenshots paste straight into the textarea, get uploaded to a per-board directory under `$PARALLEL_DISCUSSION_HOME/uploads/`, and the message text includes the absolute path so Claude reads the image with its `Read` tool before replying.
+- **Image paste / drop.** Screenshots paste straight into the textarea, get uploaded to a per-board directory under `$DISCUSSION_TREE_HOME/uploads/`, and the message text includes the absolute path so Claude reads the image with its `Read` tool before replying.
 - **Per-device UI settings.** Light / dark / system theme, language (English / Japanese / system), auto-mark-as-read, sidebar status filter. Per-device localStorage so your phone and laptop can behave differently.
 - **Inspired by [claude-peers-mcp](https://github.com/zerocolored/claude-peers-mcp).** Same broker-daemon-plus-MCP-server topology; the topic split (intra-session, structured) is where discussion-tree diverges.
 
@@ -91,7 +91,7 @@ Dependency: `jq` (`brew install jq` etc.).
 
 #### 3-3. Verify
 
-After starting a fresh CC session, `<CC PID>.json` briefly appears under `$PARALLEL_DISCUSSION_HOME/cc-sessions/` and is consumed at MCP-server startup. The broker logs `Auto-attached to CC session <uuid>` on success.
+After starting a fresh CC session, `<CC PID>.json` briefly appears under `$DISCUSSION_TREE_HOME/cc-sessions/` and is consumed at MCP-server startup. The broker logs `Auto-attached to CC session <uuid>` on success.
 
 > **Why `$PPID` works on both sides:** inside the hook, `$PPID` is Claude Code's PID. The MCP server reads `process.ppid`, also CC's PID. Same key on both sides.
 
@@ -175,7 +175,7 @@ This hook scans the latest assistant message at end-of-turn (`Stop`). If it spot
 }
 ```
 
-Stays silent if there are no active boards (= no surface to redirect into), and quiet on plain replies. Set `PARALLEL_DISCUSSION_TOPIC_DRIFT_DEBUG=1` to log decisions to stderr.
+Stays silent if there are no active boards (= no surface to redirect into), and quiet on plain replies. Set `DISCUSSION_TREE_TOPIC_DRIFT_DEBUG=1` to log decisions to stderr.
 
 ## Mobile / accessing from another device (Tailscale Serve)
 
@@ -211,7 +211,7 @@ tailscale serve status
 
 Use the `https://<your-machine>.<tailnet>.ts.net` URL from any device on your tailnet.
 
-When sharing board URLs, set `PARALLEL_DISCUSSION_PUBLIC_URL=https://<your-machine>.<tailnet>.ts.net` so `create_board` returns reachable URLs instead of `localhost`.
+When sharing board URLs, set `DISCUSSION_TREE_PUBLIC_URL=https://<your-machine>.<tailnet>.ts.net` so `create_board` returns reachable URLs instead of `localhost`.
 
 ## How it works
 
@@ -226,7 +226,7 @@ When sharing board URLs, set `PARALLEL_DISCUSSION_PUBLIC_URL=https://<your-machi
        │◄─────────────────────────────────│
 ```
 
-- **Broker** (`broker.ts` + `broker/`): HTTP + WebSocket daemon on `localhost:7898`, holds SQLite (`$PARALLEL_DISCUSSION_HOME/db.sqlite`). Auto-launched on the first MCP-server startup; a singleton across CC sessions.
+- **Broker** (`broker.ts` + `broker/`): HTTP + WebSocket daemon on `localhost:7898`, holds SQLite (`$DISCUSSION_TREE_HOME/db.sqlite`). Auto-launched on the first MCP-server startup; a singleton across CC sessions.
 - **MCP server** (`server.ts` + `server/`): stdio MCP process spawned per CC session. Exposes tools, polls the broker for unread messages, forwards them to CC via `notifications/claude/channel`.
 - **Web UI** (`web/`): React SPA. Bundled by Bun.serve via the HTML import, live-updated over WebSocket.
 
@@ -234,20 +234,20 @@ When sharing board URLs, set `PARALLEL_DISCUSSION_PUBLIC_URL=https://<your-machi
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `PARALLEL_DISCUSSION_PORT` | `7898` | broker port |
-| `PARALLEL_DISCUSSION_HOME` | `~/.parallel-discussion` | umbrella state directory (DB, uploads, cc-sessions) |
-| `PARALLEL_DISCUSSION_DB` | `$PARALLEL_DISCUSSION_HOME/db.sqlite`<br>(legacy `~/.parallel-discussion.db` if it already exists) | SQLite file path |
-| `PARALLEL_DISCUSSION_PUBLIC_URL` | `http://localhost:$PORT` | base URL returned by `create_board` (override when reaching the broker through Tailscale Serve / a custom hostname) |
-| `PARALLEL_DISCUSSION_REQUESTS_FILE` | `<repo>/REQUESTS.md` | location for `request_improvement` output |
+| `DISCUSSION_TREE_PORT` | `7898` | broker port |
+| `DISCUSSION_TREE_HOME` | `~/.discussion-tree` | umbrella state directory (DB, uploads, cc-sessions) |
+| `DISCUSSION_TREE_DB` | `$DISCUSSION_TREE_HOME/db.sqlite` | SQLite file path |
+| `DISCUSSION_TREE_PUBLIC_URL` | `http://localhost:$PORT` | base URL returned by `create_board` (override when reaching the broker through Tailscale Serve / a custom hostname) |
+| `DISCUSSION_TREE_REQUESTS_FILE` | `<repo>/REQUESTS.md` | location for `request_improvement` output |
 
-> The env-var prefix is `PARALLEL_DISCUSSION_` (project's working title). Kept stable so the broker / MCP server / SessionStart hook agree across upgrades.
+> The env-var prefix is `DISCUSSION_TREE_`. The broker, MCP server, and SessionStart hook all resolve it identically — keep their defaults in sync.
 
-The defaults need no setup. To relocate state, set `PARALLEL_DISCUSSION_HOME` somewhere Claude Code (and therefore the MCP server, broker, and SessionStart hook it spawns) will inherit. Pick whichever fits your workflow:
+The defaults need no setup. To relocate state, set `DISCUSSION_TREE_HOME` somewhere Claude Code (and therefore the MCP server, broker, and SessionStart hook it spawns) will inherit. Pick whichever fits your workflow:
 
-- **Once-off**: prefix the launch — `PARALLEL_DISCUSSION_HOME=/path claude`
-- **Persistent**: add `export PARALLEL_DISCUSSION_HOME=/path` to `~/.zshenv` (`.zshenv` covers interactive AND launcher-spawned shells; `.zshrc` covers only the former)
+- **Once-off**: prefix the launch — `DISCUSSION_TREE_HOME=/path claude`
+- **Persistent**: add `export DISCUSSION_TREE_HOME=/path` to `~/.zshenv` (`.zshenv` covers interactive AND launcher-spawned shells; `.zshrc` covers only the former)
 - **Project-scoped**: drop a `.envrc` with the export and use [direnv](https://direnv.net/)
-- **GUI-launched CC** (Dock etc.): `launchctl setenv PARALLEL_DISCUSSION_HOME /path` (or persist via a `~/Library/LaunchAgents/*.plist`)
+- **GUI-launched CC** (Dock etc.): `launchctl setenv DISCUSSION_TREE_HOME /path` (or persist via a `~/Library/LaunchAgents/*.plist`)
 
 ## Requirements
 

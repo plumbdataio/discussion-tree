@@ -12,8 +12,8 @@ describe("migrations are idempotent across broker restarts", () => {
 
     // First boot: create a session, kill broker.
     const first = await startBroker({
-      PARALLEL_DISCUSSION_HOME: homeA,
-      PARALLEL_DISCUSSION_DB: dbPath,
+      DISCUSSION_TREE_HOME: homeA,
+      DISCUSSION_TREE_DB: dbPath,
     });
     const sid = await registerSession(first.url, "/tmp/persist");
     await first.kill();
@@ -21,8 +21,8 @@ describe("migrations are idempotent across broker restarts", () => {
     // Second boot on same DB: migrations should NOT throw, and the prior
     // session row should still exist (heartbeat finds it).
     const second = await startBroker({
-      PARALLEL_DISCUSSION_HOME: homeA,
-      PARALLEL_DISCUSSION_DB: dbPath,
+      DISCUSSION_TREE_HOME: homeA,
+      DISCUSSION_TREE_DB: dbPath,
     });
     try {
       const r = await post<{ ok: boolean }>(`${second.url}/heartbeat`, {
