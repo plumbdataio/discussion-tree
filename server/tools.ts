@@ -276,14 +276,21 @@ export const TOOLS = [
   {
     name: "set_board_status",
     description:
-      "Set the BOARD-level status (independent from node-level status). Use this when the board's overall purpose is settled, regardless of whether every internal node has been formally marked. Values: 'active' (default, work in progress), 'completed' (purpose fulfilled, work done — even if some nodes remain in pending/needs-reply because the work proceeded outside the board), 'withdrawn' (proposal abandoned / no longer pursued), 'paused' (temporarily on hold). This is shown distinctly from node aggregation in the UI.",
+      "Set the BOARD-level status. Two of the five values are AUTO-managed by the broker (recomputed from item-node statuses on every mutation) and should not normally be set by hand: 'discussing' (some item nodes still in-progress) and 'settled' (every item node landed in a settled status — adopted / agreed / rejected / resolved / done). The remaining three are EXPLICIT lifecycle decisions the broker leaves alone once set: 'completed' (purpose fulfilled / work done, even if some nodes remain in pending because the work proceeded outside the board), 'withdrawn' (proposal abandoned / no longer pursued), 'paused' (temporarily on hold). Use this tool to declare one of those three; let the broker handle discussing ↔ settled on its own. Legacy value 'active' is accepted and normalized to 'discussing' for backwards compatibility.",
     inputSchema: {
       type: "object" as const,
       properties: {
         board_id: { type: "string" as const },
         status: {
           type: "string" as const,
-          enum: ["active", "completed", "withdrawn", "paused"],
+          enum: [
+            "discussing",
+            "settled",
+            "completed",
+            "withdrawn",
+            "paused",
+            "active",
+          ],
         },
       },
       required: ["board_id", "status"],

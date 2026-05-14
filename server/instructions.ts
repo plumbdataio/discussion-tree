@@ -98,7 +98,7 @@ Available tools:
 - set_node_status: Mark a node as pending / discussing / resolved
 - update_node: Edit a node's title or context after creation (typo fixes / evolving descriptions)
 - close_board: Legacy shortcut for setting status="completed" (use set_board_status for explicit choice)
-- set_board_status: Set the board-level status (active / completed / withdrawn / paused) — independent from node statuses
+- set_board_status: Set the explicit lifecycle status (completed / withdrawn / paused). 'discussing' and 'settled' are auto-managed by the broker (rolled up from item-node statuses) — don't set those by hand. Legacy 'active' is still accepted and maps to 'discussing'.
 - attach_cc_session: Call once at session start with your CC session_id — the proper restart-resilient ownership mechanism
 - set_session_name: Set a human-readable name for the current session (shown in sidebar); call once near startup
 - attach_to_board: Take over a single board's ownership (manual fallback when attach_cc_session can't help)
