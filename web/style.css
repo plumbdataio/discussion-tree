@@ -1376,6 +1376,15 @@ textarea.answer-input:disabled {
      only becoming sticky once scroll passes the center. */
   text-align: left;
   position: relative;
+  /* IMPORTANT: do NOT set `overflow` on .concern-card. CSS sticky resolves
+     its scrollport against the nearest ancestor with any non-visible
+     overflow, and the sticky-x behaviour on .concern-card-inner depends on
+     that scrollport being .board-container (the horizontal scroll source).
+     If we add overflow-y here, the sticky title stops following horizontal
+     scroll — the inner switches to .concern-card as its scrollport instead.
+     Vertical overflow is handled on .concern-card .context.md-body below,
+     which is allowed because the sticky element is .concern-card-inner
+     (a sibling/ancestor of .context), not the context itself. */
 }
 
 /* The card box keeps the full column width (so its border / connector aligns
@@ -1417,6 +1426,20 @@ textarea.answer-input:disabled {
      `.md-body p`. Setting it on the wrapper too made markdown source
      newlines render as extra blank lines next to the structural <p> /
      <ul> blocks, doubling the visible vertical spacing. */
+  /* Cap the context to a viewport-relative height so a long block doesn't
+     push the card below the visible board area. dvh follows the dynamic
+     viewport (excludes the iOS Safari toolbar when it's visible). The
+     scrollbar is hidden — mousewheel / touch / trackpad still scrolls.
+     Note: this overflow is on .context (sibling of .concern-card-inner),
+     not on .concern-card, so it does NOT capture the sticky element's
+     scrollport — .concern-card-inner's sticky-x continues to follow
+     .board-container's horizontal scroll. */
+  max-height: 70dvh;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.concern-card .context::-webkit-scrollbar {
+  display: none;
 }
 
 .connector {
@@ -1850,6 +1873,21 @@ textarea.answer-input:disabled {
   background: var(--bg);
   border-color: var(--border-strong);
   color: var(--text);
+}
+
+/* Concern-card variant: same hover-reveal pattern as the item-card expand
+   button, just hung off a different root selector. flex-start vertical
+   alignment so the title can wrap multiple lines without dragging the
+   button down with it. */
+.concern-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.concern-card:hover .concern-expand {
+  opacity: 0.85;
 }
 
 .modal-backdrop {

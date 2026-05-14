@@ -11,7 +11,7 @@ import {
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { Activity, SessionListItem } from "../../shared/types.ts";
-import { BOARD_STATUSES } from "../utils/constants.ts";
+import { BOARD_STATUSES, normalizeBoardStatus } from "../utils/constants.ts";
 import {
   type BoardStatusFilter,
   useSettings,
@@ -87,7 +87,7 @@ function SessionItem({
   // boards we filter by `status` (defaulting to "discussing" when unset).
   const visibleBoards = s.boards.filter((b) => {
     if (b.is_default) return true;
-    const status = (b.status ?? "discussing") as keyof BoardStatusFilter;
+    const status = normalizeBoardStatus(b.status) as keyof BoardStatusFilter;
     return filter[status] !== false;
   });
 
@@ -190,7 +190,7 @@ function SessionItem({
           ).map(
             (status) => {
               const n = visibleBoards.filter(
-                (b) => (b.status ?? "discussing") === status,
+                (b) => normalizeBoardStatus(b.status) === status,
               ).length;
               if (n === 0) return null;
               return (
@@ -213,7 +213,10 @@ function SessionItem({
           <ul className="boards">
             {visibleBoards.map((b) => {
               const hasUnread = (b.unread_count ?? 0) > 0;
-              const status = b.status ?? "discussing";
+              // Normalize at the boundary: maps legacy 'active' / unknowns /
+              // null to a renderable status so the i18n fallback never shows
+              // the raw enum string (e.g. "ACTIVE") in the badge.
+              const status = normalizeBoardStatus(b.status);
               // Coerce SQLite's 0/1 number into a real boolean before using
               // `&&` — `0 && <X />` evaluates to `0`, which React renders as
               // a literal "0" character.
