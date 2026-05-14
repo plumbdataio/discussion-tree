@@ -376,6 +376,30 @@ function textResult(text: string, isError = false) {
   };
 }
 
+// Broker handlers that mutate node status / structure return this when the
+// board's discussing/settled auto-rollup actually moved as a result.
+type BoardStatusChangeResponse = {
+  board_status_changed?: { from: string; to: string };
+};
+
+// Render a board-status transition as a suffix appended to the tool's text
+// result, so the LLM (which otherwise only learns of rollup changes via the
+// UI-only WebSocket) can tell the user the board just settled / re-opened.
+function boardStatusChangeNote(
+  boardId: string,
+  res: BoardStatusChangeResponse | null | undefined,
+): string {
+  const c = res?.board_status_changed;
+  if (!c) return "";
+  const detail =
+    c.to === "settled"
+      ? " — every item on this board has now landed on a settled status (adopted / agreed / rejected / resolved / done)."
+      : c.to === "discussing"
+        ? " — at least one item is back in progress."
+        : "";
+  return `\n\nBoard ${boardId} status rolled up: ${c.from} → ${c.to}${detail}`;
+}
+
 // Returns a value compatible with the CallToolRequestSchema response shape.
 export async function dispatchToolCall(
   name: string,
@@ -399,12 +423,17 @@ export async function dispatchToolCall(
       case "add_concern": {
         const sessionId = ensureSession();
         const a = args as { board_id: string; concern: any };
-        const res = await brokerFetch<{ node_id: string }>("/add-concern", {
+        const res = await brokerFetch<
+          { node_id: string } & BoardStatusChangeResponse
+        >("/add-concern", {
           session_id: sessionId,
           board_id: a.board_id,
           concern: a.concern,
         });
-        return textResult(`Concern added: ${res.node_id}`);
+        return textResult(
+          `Concern added: ${res.node_id}` +
+            boardStatusChangeNote(a.board_id, res),
+        );
       }
 
       case "add_item": {
@@ -422,13 +451,18 @@ export async function dispatchToolCall(
             true,
           );
         }
-        const res = await brokerFetch<{ node_id: string }>("/add-item", {
+        const res = await brokerFetch<
+          { node_id: string } & BoardStatusChangeResponse
+        >("/add-item", {
           session_id: sessionId,
           board_id: a.board_id,
           concern_id: a.concern_id,
           item: a.item,
         });
-        return textResult(`Item added: ${res.node_id}`);
+        return textResult(
+          `Item added: ${res.node_id}` +
+            boardStatusChangeNote(a.board_id, res),
+        );
       }
 
       case "post_to_node": {
@@ -439,15 +473,19 @@ export async function dispatchToolCall(
           message: string;
           status: string;
         };
-        await brokerFetch("/post-to-node", {
-          session_id: sessionId,
-          board_id: a.board_id,
-          node_id: a.node_id,
-          message: a.message,
-          status: a.status,
-        });
+        const res = await brokerFetch<BoardStatusChangeResponse>(
+          "/post-to-node",
+          {
+            session_id: sessionId,
+            board_id: a.board_id,
+            node_id: a.node_id,
+            message: a.message,
+            status: a.status,
+          },
+        );
         return textResult(
-          `Posted to node ${a.node_id} (board ${a.board_id}, status=${a.status})`,
+          `Posted to node ${a.node_id} (board ${a.board_id}, status=${a.status})` +
+            boardStatusChangeNote(a.board_id, res),
         );
       }
 
@@ -485,18 +523,21 @@ export async function dispatchToolCall(
       case "delete_node": {
         const sessionId = ensureSession();
         const a = args as { board_id: string; node_id: string };
-        const res = await brokerFetch<{
-          ok: boolean;
-          error?: string;
-          deleted_count?: number;
-        }>("/delete-node", {
+        const res = await brokerFetch<
+          {
+            ok: boolean;
+            error?: string;
+            deleted_count?: number;
+          } & BoardStatusChangeResponse
+        >("/delete-node", {
           session_id: sessionId,
           board_id: a.board_id,
           node_id: a.node_id,
         });
         if (!res.ok) return textResult(res.error ?? "Delete failed", true);
         return textResult(
-          `Soft-deleted node ${a.node_id} (and ${(res.deleted_count ?? 1) - 1} descendant(s)). Thread history preserved.`,
+          `Soft-deleted node ${a.node_id} (and ${(res.deleted_count ?? 1) - 1} descendant(s)). Thread history preserved.` +
+            boardStatusChangeNote(a.board_id, res),
         );
       }
 
@@ -554,13 +595,21 @@ export async function dispatchToolCall(
           node_id: string;
           status: string;
         };
-        await brokerFetch("/set-node-status", {
+        const res = await brokerFetch<
+          BoardStatusChangeResponse & { ok?: boolean; error?: string }
+        >("/set-node-status", {
           session_id: sessionId,
           board_id: a.board_id,
           node_id: a.node_id,
           status: a.status,
         });
-        return textResult(`Status of ${a.node_id} set to ${a.status}`);
+        if (res && res.ok === false) {
+          return textResult(res.error ?? "set_node_status failed", true);
+        }
+        return textResult(
+          `Status of ${a.node_id} set to ${a.status}` +
+            boardStatusChangeNote(a.board_id, res),
+        );
       }
 
       case "set_session_name": {

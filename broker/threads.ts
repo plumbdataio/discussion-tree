@@ -23,12 +23,22 @@ import { SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
 import { buildNodePath } from "./helpers.ts";
 
 // Same helper as broker/nodes.ts — node status mutations may flip the
-// parent board's auto-rollup, broadcast lets the sidebar follow.
-function syncBoardStatus(boardId: string) {
+// parent board's auto-rollup, broadcast lets the sidebar follow. Returns
+// { from, to } when the board actually moved so the HTTP response can
+// report the transition back to the MCP tool caller.
+function syncBoardStatus(
+  boardId: string,
+): { from: string; to: string } | null {
+  const before = db
+    .prepare("SELECT status FROM boards WHERE id = ?")
+    .get(boardId) as { status: string } | null;
   const next = recomputeBoardStatus(boardId);
-  if (next) {
-    broadcast(boardId, { type: "board-status-update", status: next });
+  if (!next) return null;
+  broadcast(boardId, { type: "board-status-update", status: next });
+  if (before && before.status !== next) {
+    return { from: before.status, to: next };
   }
+  return null;
 }
 
 export function handlePostToNode(body: any) {
@@ -78,12 +88,14 @@ export function handlePostToNode(body: any) {
       status: body.status,
     });
   }
-  syncBoardStatus(body.board_id);
-  return { ok: true };
+  const boardChange = syncBoardStatus(body.board_id);
+  return boardChange
+    ? { ok: true, board_status_changed: boardChange }
+    : { ok: true };
 }
 
 export async function handleSubmitAnswer(body: any): Promise<
-  | { ok: true }
+  | { ok: true; board_status_changed?: { from: string; to: string } }
   | { ok: false; error: string; reason: "no_recipient" | "timeout" }
 > {
   const board = selectBoard.get(body.board_id) as Board | null;
@@ -137,8 +149,10 @@ export async function handleSubmitAnswer(body: any): Promise<
         node_id: body.node_id,
         source: "user",
       });
-      syncBoardStatus(body.board_id);
-      return { ok: true };
+      const boardChange = syncBoardStatus(body.board_id);
+      return boardChange
+        ? { ok: true, board_status_changed: boardChange }
+        : { ok: true };
     }
     await new Promise((r) => setTimeout(r, 100));
   }
