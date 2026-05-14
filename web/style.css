@@ -2217,12 +2217,19 @@ textarea.answer-input:disabled {
   border-radius: 6px;
   overflow-x: auto;
   margin: 0.5em 0;
+  /* Tighter line-height inside fenced code blocks — the surrounding prose
+     uses 1.55 for legibility, but code lines (typically short, monospace)
+     read better packed closer together, and the previous gap was wide
+     enough that ~3 short lines ate as much space as a small paragraph. */
+  line-height: 1.4;
 }
 
 .md-body pre code {
   background: transparent;
   padding: 0;
   font-size: 0.9em;
+  /* Explicit so it doesn't drift back to 1.55 via inheritance from .md-body. */
+  line-height: inherit;
 }
 
 .md-body blockquote {
