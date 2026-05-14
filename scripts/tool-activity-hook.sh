@@ -16,7 +16,7 @@ set -e
 input=$(cat)
 sid=$(printf '%s' "$input" | jq -r '.session_id // empty')
 tool=$(printf '%s' "$input" | jq -r '.tool_name // empty')
-port="${PARALLEL_DISCUSSION_PORT:-7898}"
+port="${DISCUSSION_TREE_PORT:-7898}"
 
 if [ -n "$sid" ]; then
   body=$(jq -n --arg s "$sid" --arg t "$tool" '{cc_session_id:$s, tool:$t}')

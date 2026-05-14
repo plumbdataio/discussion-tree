@@ -4,46 +4,37 @@
 // this file (and the README's configuration table).
 
 import * as fs from "node:fs";
-import { existsSync } from "node:fs";
 import * as path from "node:path";
 
 export const PORT = parseInt(
-  process.env.PARALLEL_DISCUSSION_PORT ?? "7898",
+  process.env.DISCUSSION_TREE_PORT ?? "7898",
   10,
 );
 
-// PARALLEL_DISCUSSION_HOME is the umbrella state directory. Default:
-// $HOME/.parallel-discussion. The MCP server, broker, and SessionStart hook
+// DISCUSSION_TREE_HOME is the umbrella state directory. Default:
+// $HOME/.discussion-tree. The MCP server, broker, and SessionStart hook
 // all read this same env so a shell-level override flows everywhere.
 export const HOME_DIR =
-  process.env.PARALLEL_DISCUSSION_HOME ??
-  `${process.env.HOME}/.parallel-discussion`;
+  process.env.DISCUSSION_TREE_HOME ??
+  `${process.env.HOME}/.discussion-tree`;
 
-const LEGACY_DB_PATH = `${process.env.HOME}/.parallel-discussion.db`;
-
-// PARALLEL_DISCUSSION_DB takes precedence. Otherwise we keep an existing
-// legacy file (pre-HOME_DIR layout) where it is — never silently move user
-// data — and only fall through to the unified path on a fresh install.
-export const DB_PATH = (() => {
-  if (process.env.PARALLEL_DISCUSSION_DB) {
-    return process.env.PARALLEL_DISCUSSION_DB;
-  }
-  if (existsSync(LEGACY_DB_PATH)) return LEGACY_DB_PATH;
-  return `${HOME_DIR}/db.sqlite`;
-})();
+// DISCUSSION_TREE_DB takes precedence; otherwise the DB lives at the unified
+// path under HOME_DIR.
+export const DB_PATH =
+  process.env.DISCUSSION_TREE_DB ?? `${HOME_DIR}/db.sqlite`;
 
 // REQUESTS.md persists CC's "I want to express X but the API can't" feedback.
 // Defaults next to the broker source for development; tests / packaged
 // installs override via env.
 export const REQUESTS_FILE =
-  process.env.PARALLEL_DISCUSSION_REQUESTS_FILE ??
+  process.env.DISCUSSION_TREE_REQUESTS_FILE ??
   new URL("../REQUESTS.md", import.meta.url).pathname;
 
 // Public URL surfaced in `create_board` responses. Override when the broker is
 // reached through Tailscale Serve / a reverse proxy / a custom hostname so
 // users don't get a localhost URL they can't open.
 export const PUBLIC_URL =
-  process.env.PARALLEL_DISCUSSION_PUBLIC_URL ?? `http://localhost:${PORT}`;
+  process.env.DISCUSSION_TREE_PUBLIC_URL ?? `http://localhost:${PORT}`;
 
 export const UPLOADS_DIR = path.join(HOME_DIR, "uploads");
 export const ALLOWED_IMAGE_EXTS = new Set([
@@ -69,7 +60,7 @@ export const AUTO_ACTIVITY_TIMEOUT_MS = 60_000;
 // rows whose process is gone. Default 30s; tests override to ~100ms via
 // the env var so they can observe the soft-delete deterministically.
 export const STALE_SESSION_SWEEP_MS = parseInt(
-  process.env.PARALLEL_DISCUSSION_STALE_SWEEP_MS ?? "30000",
+  process.env.DISCUSSION_TREE_STALE_SWEEP_MS ?? "30000",
   10,
 );
 

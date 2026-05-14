@@ -151,7 +151,7 @@ describe("boards", () => {
 
   test("create-board honors PUBLIC_URL when set", async () => {
     const customBroker = await startBroker({
-      PARALLEL_DISCUSSION_PUBLIC_URL: "https://my-host.example",
+      DISCUSSION_TREE_PUBLIC_URL: "https://my-host.example",
     });
     try {
       const sid = await registerSession(customBroker.url);

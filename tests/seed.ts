@@ -6,13 +6,13 @@
  * layout edge cases.
  *
  * Usage:
- *   PARALLEL_DISCUSSION_DB=tests/test.db bun tests/seed.ts
+ *   DISCUSSION_TREE_DB=tests/test.db bun tests/seed.ts
  */
 
 import { Database } from "bun:sqlite";
 import * as fs from "node:fs";
 
-const DB_PATH = process.env.PARALLEL_DISCUSSION_DB ?? "tests/test.db";
+const DB_PATH = process.env.DISCUSSION_TREE_DB ?? "tests/test.db";
 
 // Reset the file so repeated runs are idempotent.
 fs.rmSync(DB_PATH, { force: true });

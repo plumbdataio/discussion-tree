@@ -17,7 +17,7 @@ beforeAll(async () => {
   // Override the REQUESTS.md path so the test doesn't mutate the repo file.
   // tmp directory is created fresh per harness; place the file inside it.
   const fakePath = `/tmp/pd-requests-${Math.random().toString(36).slice(2)}.md`;
-  broker = await startBroker({ PARALLEL_DISCUSSION_REQUESTS_FILE: fakePath });
+  broker = await startBroker({ DISCUSSION_TREE_REQUESTS_FILE: fakePath });
   requestsFile = fakePath;
   sessionId = await registerSession(broker.url);
   await attachCC(broker.url, sessionId);

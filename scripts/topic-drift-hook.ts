@@ -26,12 +26,12 @@
 //   }
 //
 // Env:
-//   PARALLEL_DISCUSSION_PORT — broker port, default 7898
-//   PARALLEL_DISCUSSION_TOPIC_DRIFT_DEBUG=1 — log decision to stderr
+//   DISCUSSION_TREE_PORT — broker port, default 7898
+//   DISCUSSION_TREE_TOPIC_DRIFT_DEBUG=1 — log decision to stderr
 
 import { existsSync, readFileSync } from "node:fs";
 
-const DEBUG = process.env.PARALLEL_DISCUSSION_TOPIC_DRIFT_DEBUG === "1";
+const DEBUG = process.env.DISCUSSION_TREE_TOPIC_DRIFT_DEBUG === "1";
 function debug(...args: unknown[]) {
   if (DEBUG) console.error("[topic-drift-hook]", ...args);
 }
@@ -109,7 +109,7 @@ if (!drift) {
 }
 
 // Pull active option-decision boards for this CC session from the broker.
-const port = parseInt(process.env.PARALLEL_DISCUSSION_PORT ?? "7898", 10);
+const port = parseInt(process.env.DISCUSSION_TREE_PORT ?? "7898", 10);
 let activeBoards: Array<{ id: string; title: string; status: string }> = [];
 try {
   const res = await fetch(`http://127.0.0.1:${port}/api/sessions`);
