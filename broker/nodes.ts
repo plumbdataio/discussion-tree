@@ -53,7 +53,7 @@ function withBoardStatusChange<T extends object>(
 
 export function handleAddConcern(body: any) {
   if (isDefaultBoard(body.board_id)) {
-    return { error: DEFAULT_BOARD_LOCKED_ERROR };
+    return { ok: false, error: DEFAULT_BOARD_LOCKED_ERROR };
   }
   const concern = body.concern as NodeInput;
   const id = concern.id || generateId("c");
@@ -74,16 +74,17 @@ export function handleAddConcern(body: any) {
   }
   broadcast(body.board_id, { type: "structure-update" });
   const change = syncBoardStatus(body.board_id);
-  return withBoardStatusChange({ node_id: id }, change);
+  return withBoardStatusChange({ ok: true, node_id: id }, change);
 }
 
 export function handleAddItem(body: any) {
   if (isDefaultBoard(body.board_id)) {
-    return { error: DEFAULT_BOARD_LOCKED_ERROR };
+    return { ok: false, error: DEFAULT_BOARD_LOCKED_ERROR };
   }
   const item = body.item as NodeInput;
   if (item && Array.isArray(item.items) && item.items.length > 0) {
     return {
+      ok: false,
       error:
         "Sub-items are not supported. Pass only top-level items under a concern.",
     };
@@ -104,7 +105,7 @@ export function handleAddItem(body: any) {
   );
   broadcast(body.board_id, { type: "structure-update" });
   const change = syncBoardStatus(body.board_id);
-  return withBoardStatusChange({ node_id: id }, change);
+  return withBoardStatusChange({ ok: true, node_id: id }, change);
 }
 
 export function handleUpdateNode(body: any) {

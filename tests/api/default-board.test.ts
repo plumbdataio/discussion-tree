@@ -39,21 +39,32 @@ describe("default board structure lock", () => {
     expect(items.length).toBe(1);
   });
 
-  test("/add-concern is rejected on the default board", async () => {
-    const r = await post<{ error?: string }>(`${broker.url}/add-concern`, {
-      board_id: defaultBoardId,
-      concern: { id: "x", title: "x" },
-    });
-    expect(r.json.error).toMatch(/Default conversation board|fixed structure|locked/i);
+  test("/add-concern is rejected on the default board (ok=false + error)", async () => {
+    const r = await post<{ ok?: boolean; error?: string; node_id?: string }>(
+      `${broker.url}/add-concern`,
+      { board_id: defaultBoardId, concern: { id: "x", title: "x" } },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.node_id).toBeUndefined();
+    expect(r.json.error).toMatch(
+      /Default conversation board|fixed structure|locked/i,
+    );
   });
 
-  test("/add-item is rejected on the default board", async () => {
-    const r = await post<{ error?: string }>(`${broker.url}/add-item`, {
-      board_id: defaultBoardId,
-      concern_id: "conversation",
-      item: { id: "x", title: "x" },
-    });
-    expect(r.json.error).toMatch(/Default conversation board|fixed structure|locked/i);
+  test("/add-item is rejected on the default board (ok=false + error)", async () => {
+    const r = await post<{ ok?: boolean; error?: string; node_id?: string }>(
+      `${broker.url}/add-item`,
+      {
+        board_id: defaultBoardId,
+        concern_id: "conversation",
+        item: { id: "x", title: "x" },
+      },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.node_id).toBeUndefined();
+    expect(r.json.error).toMatch(
+      /Default conversation board|fixed structure|locked/i,
+    );
   });
 
   // /update-node is intentionally NOT locked on the default board — title /

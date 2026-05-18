@@ -57,7 +57,7 @@ export const TOOLS = [
   {
     name: "add_concern",
     description:
-      "Add a top-level concern (a discussion topic) to an existing board, optionally with items.",
+      "Add a top-level concern (a discussion topic) to an existing board, optionally with items. NOTE: the default conversation board (the auto-created 'Conversation' board, one per cc_session_id) has a FIXED structure of one concern + one item; add_concern / add_item / move_node / reorder_node / delete_node all REJECT it. If a user message on the default board needs structured option-evaluation, create_board a NEW board for it instead of trying to grow the default board.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -79,7 +79,7 @@ export const TOOLS = [
   {
     name: "add_item",
     description:
-      "Add a discussion item under a concern. Boards are intentionally 2-level (concern → items) — sub-items are not supported. If a topic feels like it needs a sub-item, either split it into its own concern or restructure with update_node / move_node.",
+      "Add a discussion item under a concern. Boards are intentionally 2-level (concern → items) — sub-items are not supported. If a topic feels like it needs a sub-item, either split it into its own concern or restructure with update_node / move_node. NOTE: the default conversation board has a FIXED structure of one concern + one item; add_item rejects it (along with add_concern / move_node / reorder_node / delete_node). For structured option-evaluation derived from a default-board conversation, create_board a NEW board instead of growing the default board.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -433,12 +433,19 @@ export async function dispatchToolCall(
         const sessionId = ensureSession();
         const a = args as { board_id: string; concern: any };
         const res = await brokerFetch<
-          { node_id: string } & BoardStatusChangeResponse
+          {
+            ok?: boolean;
+            error?: string;
+            node_id?: string;
+          } & BoardStatusChangeResponse
         >("/add-concern", {
           session_id: sessionId,
           board_id: a.board_id,
           concern: a.concern,
         });
+        if (res && res.ok === false) {
+          return textResult(res.error ?? "add_concern failed", true);
+        }
         return textResult(
           `Concern added: ${res.node_id}` +
             boardStatusChangeNote(a.board_id, res),
@@ -461,13 +468,20 @@ export async function dispatchToolCall(
           );
         }
         const res = await brokerFetch<
-          { node_id: string } & BoardStatusChangeResponse
+          {
+            ok?: boolean;
+            error?: string;
+            node_id?: string;
+          } & BoardStatusChangeResponse
         >("/add-item", {
           session_id: sessionId,
           board_id: a.board_id,
           concern_id: a.concern_id,
           item: a.item,
         });
+        if (res && res.ok === false) {
+          return textResult(res.error ?? "add_item failed", true);
+        }
         return textResult(
           `Item added: ${res.node_id}` +
             boardStatusChangeNote(a.board_id, res),
