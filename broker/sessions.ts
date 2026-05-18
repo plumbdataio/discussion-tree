@@ -60,8 +60,10 @@ export function handleAttachCCSession(body: any) {
   // Primary reclaim — same cc_session_id, attach was called before the prior
   // MCP died.
   const deadSessions = db
-    .prepare("SELECT id FROM sessions WHERE alive = 0 AND cc_session_id = ?")
-    .all(ccId) as { id: string }[];
+    .prepare(
+      "SELECT id, name FROM sessions WHERE alive = 0 AND cc_session_id = ? ORDER BY last_seen DESC",
+    )
+    .all(ccId) as { id: string; name: string | null }[];
   if (deadSessions.length > 0) {
     const deadIds = deadSessions.map((s) => s.id);
     const placeholders = deadIds.map(() => "?").join(",");
@@ -75,6 +77,18 @@ export function handleAttachCCSession(body: any) {
     );
     reclaimed.boards = b.changes;
     reclaimed.messages = m.changes;
+
+    // Carry the human-readable session name forward — without this, every CC
+    // restart erases the name the user set in the sidebar. Use the most-recent
+    // dead session's name (ORDER BY last_seen DESC above) and only fill if the
+    // new session hasn't set its own name yet.
+    const inheritedName = deadSessions.find((s) => s.name)?.name ?? null;
+    if (inheritedName) {
+      db.run("UPDATE sessions SET name = ? WHERE id = ? AND name IS NULL", [
+        inheritedName,
+        sessionId,
+      ]);
+    }
   }
 
   // Secondary reclaim — same cwd, never bound. Limited to same cwd so we

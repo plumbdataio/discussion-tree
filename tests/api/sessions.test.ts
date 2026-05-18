@@ -96,6 +96,52 @@ describe("sessions", () => {
     expect(sb!.boards.find((b: any) => b.is_default)).toBeTruthy();
   });
 
+  test("/attach-cc-session inherits the session name from a prior dead session with same cc_session_id", async () => {
+    const cwd = "/tmp/name-inherit";
+    const ccId = `cc-name-${Math.random().toString(36).slice(2)}`;
+
+    const sidA = await registerSession(broker.url, cwd);
+    await attachCC(broker.url, sidA, ccId);
+    await post(`${broker.url}/set-session-name`, {
+      session_id: sidA,
+      name: "discussion-tree dev",
+    });
+    await post(`${broker.url}/unregister`, { session_id: sidA });
+
+    const sidB = await registerSession(broker.url, cwd);
+    await attachCC(broker.url, sidB, ccId);
+
+    const list = await get<{ sessions: any[] }>(`${broker.url}/api/sessions`);
+    const sb = list.json.sessions.find((s) => s.id === sidB);
+    expect(sb?.name).toBe("discussion-tree dev");
+  });
+
+  test("/attach-cc-session does NOT overwrite a name the new session has already set", async () => {
+    const cwd = "/tmp/name-no-overwrite";
+    const ccId = `cc-name-${Math.random().toString(36).slice(2)}`;
+
+    const sidA = await registerSession(broker.url, cwd);
+    await attachCC(broker.url, sidA, ccId);
+    await post(`${broker.url}/set-session-name`, {
+      session_id: sidA,
+      name: "old name",
+    });
+    await post(`${broker.url}/unregister`, { session_id: sidA });
+
+    const sidB = await registerSession(broker.url, cwd);
+    // The new session sets its name FIRST, then attaches — attach must not
+    // clobber what's already there.
+    await post(`${broker.url}/set-session-name`, {
+      session_id: sidB,
+      name: "new name",
+    });
+    await attachCC(broker.url, sidB, ccId);
+
+    const list = await get<{ sessions: any[] }>(`${broker.url}/api/sessions`);
+    const sb = list.json.sessions.find((s) => s.id === sidB);
+    expect(sb?.name).toBe("new name");
+  });
+
   test("/set-session-name updates the row", async () => {
     const sid = await registerSession(broker.url);
     const r = await post<{ ok: boolean }>(`${broker.url}/set-session-name`, {
