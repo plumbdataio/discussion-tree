@@ -62,6 +62,20 @@ export function handlePostToNode(body: any) {
     };
   }
 
+  // Decrement the owning session's unanswered counter — clamped at 0 so a
+  // bundled-reply pattern (one CC post answering multiple user submissions)
+  // doesn't drive it negative. The Stop hook uses this counter to nag the
+  // user only when something is actually still outstanding.
+  const ownerRow = db
+    .prepare("SELECT session_id FROM boards WHERE id = ?")
+    .get(body.board_id) as { session_id: string } | null;
+  if (ownerRow) {
+    db.run(
+      "UPDATE sessions SET unanswered_user_posts = MAX(0, unanswered_user_posts - 1) WHERE id = ?",
+      [ownerRow.session_id],
+    );
+  }
+
   // 1. CC message goes in first so it appears before any status_change in
   //    the timeline.
   insertThread.run(
@@ -181,6 +195,14 @@ export async function handleSubmitAnswer(body: any): Promise<
       | { delivered: number }
       | null;
     if (row?.delivered === 1) {
+      // Bump the owning session's unanswered-user-post counter. Counts both
+      // kinds for now — a structure request also expects an ack from CC, and
+      // overcounting is recoverable via /reset-unanswered.
+      db.run(
+        "UPDATE sessions SET unanswered_user_posts = unanswered_user_posts + 1 WHERE id = ?",
+        [board.session_id],
+      );
+
       // board_structure_request: no node-level mirror or status bump — the
       // request doesn't belong to any specific node and the CC will report
       // back via post_to_node after applying the structure change.

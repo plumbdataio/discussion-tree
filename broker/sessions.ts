@@ -142,6 +142,46 @@ export function handleSetSessionName(body: any) {
   return { ok: true };
 }
 
+// Read the unanswered-user-post counter for the alive session bound to a CC
+// session_id. Used by the Stop hook to decide whether to nag.
+export function handleGetUnansweredPosts(body: {
+  cc_session_id?: string;
+}): { ok: boolean; count: number; session_id?: string } {
+  if (!body.cc_session_id) return { ok: false, count: 0 };
+  const row = db
+    .prepare(
+      "SELECT id, unanswered_user_posts FROM sessions WHERE cc_session_id = ? AND alive = 1 ORDER BY last_seen DESC LIMIT 1",
+    )
+    .get(body.cc_session_id) as
+    | { id: string; unanswered_user_posts: number }
+    | null;
+  if (!row) return { ok: false, count: 0 };
+  return { ok: true, count: row.unanswered_user_posts, session_id: row.id };
+}
+
+// Force the unanswered counter to zero. Two ways in: cc_session_id (the hook
+// path) or session_id (the MCP tool path). Used when the counter drifted out
+// of sync (bundled CC replies, manual UI activity, etc).
+export function handleResetUnansweredPosts(body: {
+  cc_session_id?: string;
+  session_id?: string;
+}): { ok: boolean; session_id?: string } {
+  let sessionId: string | null = body.session_id ?? null;
+  if (!sessionId && body.cc_session_id) {
+    const row = db
+      .prepare(
+        "SELECT id FROM sessions WHERE cc_session_id = ? AND alive = 1 ORDER BY last_seen DESC LIMIT 1",
+      )
+      .get(body.cc_session_id) as { id: string } | null;
+    sessionId = row?.id ?? null;
+  }
+  if (!sessionId) return { ok: false };
+  db.run("UPDATE sessions SET unanswered_user_posts = 0 WHERE id = ?", [
+    sessionId,
+  ]);
+  return { ok: true, session_id: sessionId };
+}
+
 export function handleAttachToBoard(body: any) {
   // Take ownership of a board for this session, redirecting future user
   // submissions and any undelivered pending messages.
@@ -317,4 +357,6 @@ export const routes = {
   "/attach-cc-session": handleAttachCCSession,
   "/attach-to-board": handleAttachToBoard,
   "/set-session-name": handleSetSessionName,
+  "/get-unanswered": handleGetUnansweredPosts,
+  "/reset-unanswered": handleResetUnansweredPosts,
 };

@@ -340,6 +340,15 @@ export const TOOLS = [
     },
   },
   {
+    name: "reset_unanswered_posts",
+    description:
+      "Force the unanswered-user-post counter for THIS session to zero. The broker increments the counter on every UI submission and decrements it on every post_to_node, then the Stop hook nags the user if the count is non-zero when your turn ends. The counter desyncs in legitimate situations — e.g. you bundled one post_to_node reply that covered two user submissions, or the user posted into nodes you don't intend to ack individually. Call this when you KNOW everything is answered (typically right before yielding the turn) so the nag doesn't fire spuriously. No arguments — it always targets the current session.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+    },
+  },
+  {
     name: "request_improvement",
     description:
       "Submit a concrete friction point about discussion-tree-mcp itself to the user's review queue (REQUESTS.md). Use this when you wanted to express something the current tools/UI did not support — a missing node kind, an unsupported workflow, a rendering gap. The user reviews accumulated requests and decides which to implement. Be specific about the actual situation; do not speculate.",
@@ -710,6 +719,17 @@ export async function dispatchToolCall(
         return textResult(
           `Activity: ${a.state}${a.message ? ` — ${a.message}` : ""}`,
         );
+      }
+
+      case "reset_unanswered_posts": {
+        const sessionId = ensureSession();
+        const res = await brokerFetch<{ ok: boolean }>("/reset-unanswered", {
+          session_id: sessionId,
+        });
+        if (!res?.ok) {
+          return textResult("reset_unanswered_posts failed", true);
+        }
+        return textResult("Unanswered-post counter reset to 0");
       }
 
       case "request_improvement": {

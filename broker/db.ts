@@ -47,6 +47,18 @@ function safeAlter(sql: string) {
 safeAlter("ALTER TABLE sessions ADD COLUMN alive INTEGER NOT NULL DEFAULT 1");
 safeAlter("ALTER TABLE sessions ADD COLUMN cc_session_id TEXT");
 safeAlter("ALTER TABLE sessions ADD COLUMN name TEXT");
+// Counter of user UI submissions that haven't been matched by a CC
+// post_to_node yet. Incremented when a user_input_relay is delivered to CC,
+// decremented when CC posts back into any node on a board owned by this
+// session. The Stop hook reads this on idle and warns the user if the CC
+// finished its turn while leaving submissions unanswered (e.g. CC replied
+// in the CLI only, forgetting to mirror via post_to_node). The contract is
+// best-effort — combined posts and cross-node replies can desync; the
+// reset_unanswered_posts MCP tool and the /reset-unanswered endpoint exist
+// for that case.
+safeAlter(
+  "ALTER TABLE sessions ADD COLUMN unanswered_user_posts INTEGER NOT NULL DEFAULT 0",
+);
 
 db.run(`
   CREATE TABLE IF NOT EXISTS boards (

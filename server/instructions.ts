@@ -108,4 +108,8 @@ Available tools:
 - set_session_name: Set a human-readable name for the current session (shown in sidebar); call once near startup
 - attach_to_board: Take over a single board's ownership (manual fallback when attach_cc_session can't help)
 - set_activity: Mark "blocked" while waiting on user OK before a heavy change (the generic working badge is auto-set by a hook; you only use this for waits)
-- request_improvement: Submit a concrete friction point to REQUESTS.md for the user to review`;
+- reset_unanswered_posts: Force the unanswered-user-post counter for THIS session to zero. The broker increments it on UI submissions and decrements on post_to_node; the Stop hook nags if non-zero. Call this when you bundled one reply that covered multiple submissions, or otherwise know the count drifted out of sync — typically right before yielding the turn.
+- request_improvement: Submit a concrete friction point to REQUESTS.md for the user to review
+
+UNANSWERED POST COUNTER:
+The broker tracks per-session counter "unanswered_user_posts" that goes up on each UI submission delivered to you and down on each post_to_node you make. A Stop hook nags the user if the count is non-zero when your turn ends, surfacing cases where you replied only in the CLI and forgot to mirror via post_to_node. The contract is best-effort — bundled replies (one post_to_node summarizing N user submissions) or replies to non-user-initiated state will desync it. When you KNOW the count should be zero but might not be (e.g. you just bundled a reply), call reset_unanswered_posts before yielding the turn.`;

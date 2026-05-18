@@ -156,6 +156,188 @@ describe("sessions", () => {
     expect(me?.name).toBe("my session");
   });
 
+  test("/get-unanswered returns 0 for a fresh session", async () => {
+    const sid = await registerSession(broker.url);
+    const ccId = await attachCC(broker.url, sid);
+    const r = await post<{ ok: boolean; count: number }>(
+      `${broker.url}/get-unanswered`,
+      { cc_session_id: ccId },
+    );
+    expect(r.json.ok).toBe(true);
+    expect(r.json.count).toBe(0);
+  });
+
+  test("/get-unanswered counts up on /submit-answer delivery and back down on /post-to-node", async () => {
+    const sid = await registerSession(broker.url);
+    const ccId = await attachCC(broker.url, sid);
+    const board = await post<{ board_id: string }>(
+      `${broker.url}/create-board`,
+      {
+        session_id: sid,
+        structure: {
+          title: "counter-board",
+          concerns: [
+            { id: "c1", title: "C1", items: [{ id: "i1", title: "I1" }] },
+          ],
+        },
+      },
+    );
+
+    // 2 submissions → drain → counter should be 2.
+    const submitP1 = post(`${broker.url}/submit-answer`, {
+      board_id: board.json.board_id,
+      node_id: "i1",
+      text: "first",
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    await post(`${broker.url}/poll-messages`, { session_id: sid });
+    await submitP1;
+
+    const submitP2 = post(`${broker.url}/submit-answer`, {
+      board_id: board.json.board_id,
+      node_id: "i1",
+      text: "second",
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    await post(`${broker.url}/poll-messages`, { session_id: sid });
+    await submitP2;
+
+    const afterSubmit = await post<{ ok: boolean; count: number }>(
+      `${broker.url}/get-unanswered`,
+      { cc_session_id: ccId },
+    );
+    expect(afterSubmit.json.count).toBe(2);
+
+    // 1 CC reply → counter drops to 1.
+    await post(`${broker.url}/post-to-node`, {
+      board_id: board.json.board_id,
+      node_id: "i1",
+      message: "ack 1",
+      status: "discussing",
+    });
+    const afterPost1 = await post<{ ok: boolean; count: number }>(
+      `${broker.url}/get-unanswered`,
+      { cc_session_id: ccId },
+    );
+    expect(afterPost1.json.count).toBe(1);
+
+    // 2nd reply → counter 0.
+    await post(`${broker.url}/post-to-node`, {
+      board_id: board.json.board_id,
+      node_id: "i1",
+      message: "ack 2",
+      status: "discussing",
+    });
+    const afterPost2 = await post<{ ok: boolean; count: number }>(
+      `${broker.url}/get-unanswered`,
+      { cc_session_id: ccId },
+    );
+    expect(afterPost2.json.count).toBe(0);
+
+    // Extra reply (no pending submission) → stays at 0 (clamped).
+    await post(`${broker.url}/post-to-node`, {
+      board_id: board.json.board_id,
+      node_id: "i1",
+      message: "extra",
+      status: "discussing",
+    });
+    const afterPost3 = await post<{ ok: boolean; count: number }>(
+      `${broker.url}/get-unanswered`,
+      { cc_session_id: ccId },
+    );
+    expect(afterPost3.json.count).toBe(0);
+  });
+
+  test("/reset-unanswered (by cc_session_id) zeros the counter", async () => {
+    const sid = await registerSession(broker.url);
+    const ccId = await attachCC(broker.url, sid);
+    const board = await post<{ board_id: string }>(
+      `${broker.url}/create-board`,
+      {
+        session_id: sid,
+        structure: {
+          title: "reset-by-cc",
+          concerns: [
+            { id: "c1", title: "C1", items: [{ id: "i1", title: "I1" }] },
+          ],
+        },
+      },
+    );
+    const sp = post(`${broker.url}/submit-answer`, {
+      board_id: board.json.board_id,
+      node_id: "i1",
+      text: "x",
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    await post(`${broker.url}/poll-messages`, { session_id: sid });
+    await sp;
+
+    const before = await post<{ ok: boolean; count: number }>(
+      `${broker.url}/get-unanswered`,
+      { cc_session_id: ccId },
+    );
+    expect(before.json.count).toBe(1);
+
+    const reset = await post<{ ok: boolean }>(
+      `${broker.url}/reset-unanswered`,
+      { cc_session_id: ccId },
+    );
+    expect(reset.json.ok).toBe(true);
+
+    const after = await post<{ ok: boolean; count: number }>(
+      `${broker.url}/get-unanswered`,
+      { cc_session_id: ccId },
+    );
+    expect(after.json.count).toBe(0);
+  });
+
+  test("/reset-unanswered (by session_id, the MCP tool path) zeros the counter", async () => {
+    const sid = await registerSession(broker.url);
+    const ccId = await attachCC(broker.url, sid);
+    const board = await post<{ board_id: string }>(
+      `${broker.url}/create-board`,
+      {
+        session_id: sid,
+        structure: {
+          title: "reset-by-sid",
+          concerns: [
+            { id: "c1", title: "C1", items: [{ id: "i1", title: "I1" }] },
+          ],
+        },
+      },
+    );
+    const sp = post(`${broker.url}/submit-answer`, {
+      board_id: board.json.board_id,
+      node_id: "i1",
+      text: "y",
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    await post(`${broker.url}/poll-messages`, { session_id: sid });
+    await sp;
+
+    const r = await post<{ ok: boolean; session_id?: string }>(
+      `${broker.url}/reset-unanswered`,
+      { session_id: sid },
+    );
+    expect(r.json.ok).toBe(true);
+    expect(r.json.session_id).toBe(sid);
+
+    const after = await post<{ ok: boolean; count: number }>(
+      `${broker.url}/get-unanswered`,
+      { cc_session_id: ccId },
+    );
+    expect(after.json.count).toBe(0);
+  });
+
+  test("/get-unanswered returns ok=false for unknown cc_session_id", async () => {
+    const r = await post<{ ok: boolean; count: number }>(
+      `${broker.url}/get-unanswered`,
+      { cc_session_id: "no-such-cc" },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.count).toBe(0);
+  });
+
   test("/api/sessions includes the live activity entry under each session", async () => {
     const sid = await registerSession(broker.url);
     const ccId = await attachCC(broker.url, sid);
