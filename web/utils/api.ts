@@ -10,6 +10,21 @@ export function postSubmitAnswer(
   });
 }
 
+export function postBoardStructureRequest(boardId: string, text: string) {
+  return fetch("/submit-answer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      board_id: boardId,
+      // node_id is unused for structure requests — the broker substitutes a
+      // synthetic placeholder — but the existing endpoint validates presence.
+      node_id: "__board__",
+      text,
+      kind: "board_structure_request",
+    }),
+  });
+}
+
 export async function uploadImage(
   file: File,
   boardId: string,

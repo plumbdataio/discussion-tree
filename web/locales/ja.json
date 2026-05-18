@@ -108,6 +108,16 @@
   "modal": {
     "close": "閉じる (Esc)"
   },
+  "structure_request": {
+    "trigger_label": "ボード構成変更を依頼",
+    "trigger_title": "Concern や Item の追加・編集を Claude に依頼します",
+    "title": "ボード構成の変更を依頼",
+    "description": "Concern (列) や Item (カード) の追加・編集・再構成などを自由文で書いてください。Claude が解釈してこのボードを編集し、結果を投稿します。",
+    "placeholder": "例: 「リスク評価」という concern を最後に追加して、その下に「事業継続リスク」と「技術リスク」の 2 つの item を作って",
+    "send": "送信 (Cmd/Ctrl+Enter)",
+    "sending": "送信中…",
+    "cancel": "キャンセル"
+  },
   "node_modal": {
     "title_label": "タイトル",
     "context_label": "コンテキスト"

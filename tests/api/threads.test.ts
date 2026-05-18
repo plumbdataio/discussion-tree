@@ -127,6 +127,42 @@ describe("threads", () => {
     expect(threads.i1.some((t) => t.text === "user reply")).toBe(true);
   });
 
+  test("/submit-answer with kind=board_structure_request: delivered as structure request, no thread mirror", async () => {
+    const submitP = post<{ ok: boolean }>(`${broker.url}/submit-answer`, {
+      board_id: boardId,
+      node_id: "__board__",
+      text: "Please add a 'Risk' concern with two items",
+      kind: "board_structure_request",
+    });
+
+    await new Promise((r) => setTimeout(r, 80));
+    const polled = await post<{ messages: any[] }>(
+      `${broker.url}/poll-messages`,
+      { session_id: sessionId },
+    );
+    const structureMsg = polled.json.messages.find(
+      (m: any) => m.kind === "board_structure_request",
+    );
+    expect(structureMsg).toBeTruthy();
+    expect(structureMsg.node_id).toBe("__board__");
+    expect(structureMsg.text).toContain("'Risk'");
+
+    const final = await submitP;
+    expect(final.json.ok).toBe(true);
+
+    // The request must NOT have produced a thread item on any node — it is a
+    // structure-change instruction, not a node-bound reply. Specifically, the
+    // synthetic "__board__" id must not have created a thread bucket either.
+    const threads = await fetchThreads();
+    expect(threads.__board__).toBeUndefined();
+    // And the existing i1 thread must NOT have inherited this text.
+    expect(
+      (threads.i1 ?? []).some((t) =>
+        t.text.includes("Please add a 'Risk' concern"),
+      ),
+    ).toBe(false);
+  });
+
   test("/mark-thread-items-read flips read_at on listed CC messages", async () => {
     // Generate a CC message to mark unread, then mark it read.
     await post(`${broker.url}/post-to-node`, {

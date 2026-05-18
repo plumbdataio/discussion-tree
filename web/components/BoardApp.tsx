@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { Wand2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Activity, BoardView } from "../../shared/types.ts";
 import { ActivityBadge } from "./ActivityBadge.tsx";
+import { BoardStructureRequestModal } from "./BoardStructureRequestModal.tsx";
 import { ConcernColumn } from "./ConcernColumn.tsx";
 import { DefaultBoardLayout } from "./DefaultBoardLayout.tsx";
 import { Sidebar } from "./Sidebar.tsx";
@@ -24,6 +26,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   const [activitiesBySession, setActivitiesBySession] = useState<
     Record<string, Activity | null>
   >({});
+  const [structureRequestOpen, setStructureRequestOpen] = useState(false);
 
   const fetchBoard = useCallback(async () => {
     if (!boardId) return;
@@ -168,6 +171,18 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           {data.board.closed ? t("header.board_meta_closed") : ""}
         </span>
         {headerActivity && <ActivityBadge activity={headerActivity} />}
+        {!data.board.is_default && (
+          <button
+            type="button"
+            className="board-request-trigger"
+            onClick={() => setStructureRequestOpen(true)}
+            title={t("structure_request.trigger_title")}
+            aria-label={t("structure_request.trigger_title")}
+          >
+            <Wand2 size={14} strokeWidth={1.75} />
+            <span>{t("structure_request.trigger_label")}</span>
+          </button>
+        )}
         {!ownerAlive && (
           <span
             className="owner-warning"
@@ -239,6 +254,12 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           )}
         </div>
       </div>
+      {structureRequestOpen && boardId && (
+        <BoardStructureRequestModal
+          boardId={boardId}
+          onClose={() => setStructureRequestOpen(false)}
+        />
+      )}
     </div>
   );
 }

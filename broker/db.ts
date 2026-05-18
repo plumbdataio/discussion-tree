@@ -230,7 +230,7 @@ export const selectThreadsByBoard = db.prepare(
 );
 
 export const insertPending = db.prepare(
-  `INSERT INTO pending_messages (session_id, board_id, node_id, node_path, text, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+  `INSERT INTO pending_messages (session_id, board_id, node_id, node_path, text, created_at, kind) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 );
 export const selectPending = db.prepare(
   `SELECT * FROM pending_messages WHERE session_id = ? AND delivered = 0 AND cancelled = 0 ORDER BY created_at`,

@@ -2587,3 +2587,107 @@ button.secondary {
 
 /* Modal backdrop is already a translucent black, so no override needed. */
 
+/* --- Board structure-request trigger + modal ----------------------------- */
+
+.board-request-trigger {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  line-height: 1;
+}
+.board-request-trigger:hover {
+  background: var(--bg);
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.modal-structure-request {
+  border-left-color: #a855f7;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-title {
+  font-size: 16px;
+  margin: 0;
+  color: var(--text);
+}
+
+.modal-description {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.55;
+}
+
+.modal-textarea {
+  width: 100%;
+  min-height: 180px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  resize: vertical;
+  box-sizing: border-box;
+}
+.modal-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.18);
+}
+
+.modal-error {
+  color: #dc2626;
+  font-size: 13px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.modal-cancel {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.modal-cancel:hover:not(:disabled) {
+  color: var(--text);
+}
+.modal-cancel:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.modal-submit {
+  background: #a855f7;
+  color: #fff;
+  border: 1px solid #a855f7;
+  border-radius: 6px;
+  padding: 6px 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.modal-submit:hover:not(:disabled) {
+  background: #9333ea;
+}
+.modal-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+

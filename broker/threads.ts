@@ -138,15 +138,32 @@ export async function handleSubmitAnswer(body: any): Promise<
     };
   }
 
+  // Two flavors of submission share this endpoint:
+  //   - user_input_relay (default): a reply targeted at a specific node, gets
+  //     mirrored into that node's thread on delivery.
+  //   - board_structure_request: a free-text instruction to restructure the
+  //     board (add concerns/items, edit, rename). No specific node is
+  //     targeted; the broker uses a synthetic node_id and skips the thread
+  //     mirror so the request doesn't leave an orphan thread item.
+  const kind: "user_input_relay" | "board_structure_request" =
+    body.kind === "board_structure_request"
+      ? "board_structure_request"
+      : "user_input_relay";
+  const isStructureRequest = kind === "board_structure_request";
+
   const now = new Date().toISOString();
-  const path = buildNodePath(body.board_id, body.node_id);
+  const nodeId = isStructureRequest ? "__board__" : body.node_id;
+  const path = isStructureRequest
+    ? board.title
+    : buildNodePath(body.board_id, body.node_id);
   const insertResult = insertPending.run(
     board.session_id,
     body.board_id,
-    body.node_id,
+    nodeId,
     path,
     body.text,
     now,
+    kind,
   );
   const pendingId = Number(insertResult.lastInsertRowid);
 
@@ -164,6 +181,12 @@ export async function handleSubmitAnswer(body: any): Promise<
       | { delivered: number }
       | null;
     if (row?.delivered === 1) {
+      // board_structure_request: no node-level mirror or status bump — the
+      // request doesn't belong to any specific node and the CC will report
+      // back via post_to_node after applying the structure change.
+      if (isStructureRequest) {
+        return { ok: true };
+      }
       // Delivered: NOW persist into the public thread + broadcast so every
       // connected client (incl. the submitter) sees the real message.
       insertThread.run(body.board_id, body.node_id, "user", body.text, now);

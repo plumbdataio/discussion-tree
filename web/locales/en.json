@@ -108,6 +108,16 @@
   "modal": {
     "close": "Close (Esc)"
   },
+  "structure_request": {
+    "trigger_label": "Ask to restructure board",
+    "trigger_title": "Ask Claude to add or edit concerns and items on this board",
+    "title": "Request a board structure change",
+    "description": "Describe in plain text how you'd like Claude to add, edit, or reorganize the concerns and items on this board. Claude will interpret it, apply the changes, and post a summary.",
+    "placeholder": "e.g. \"Add a 'Risk assessment' concern at the end, with two items: 'business continuity risk' and 'technical risk'\"",
+    "send": "Send (Cmd/Ctrl+Enter)",
+    "sending": "Sending…",
+    "cancel": "Cancel"
+  },
   "node_modal": {
     "title_label": "Title",
     "context_label": "Context"

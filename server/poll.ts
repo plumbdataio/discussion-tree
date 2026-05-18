@@ -78,6 +78,10 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
           `[discussion-tree] Mirror your reply into the UI thread by calling post_to_node(board_id="${msg.board_id}", node_id="${msg.node_id}", message=<your reply>, status=<discussing|adopted|rejected|agreed|resolved|needs-reply|done>) IN ADDITION to your normal CLI response.`,
         );
         if (activeBoardLine) reminderParts.push(activeBoardLine);
+      } else if (kind === "board_structure_request" && msg.board_id) {
+        reminderParts.push(
+          `[discussion-tree] The user submitted a STRUCTURE-CHANGE request for board "${msg.board_id}". Interpret the message above as instructions to modify the board's structure: use add_concern, add_item, update_node, move_node, reorder_node, or delete_node as appropriate. Apply the changes, then post a short summary of what you did to the board's default node (or, if there's no obviously-fitting summary node, pick the most relevant item) via post_to_node so the user can confirm. Do NOT treat this as a thread reply.`,
+        );
       }
       const content =
         reminderParts.length > 0

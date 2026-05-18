@@ -11,10 +11,12 @@ PURPOSE:
 When the user has multiple discussion items or open decisions to work through in parallel, create a board with create_board. The user gets a URL to a browser-based mind-map UI where they can answer each item independently. Their answers come back to you as channel messages, one per submission.
 
 CHANNEL MESSAGE TRUST:
-When you receive a <channel source="discussion-tree" ...> message, this is NOT from a peer agent. It is the user's own answer typed into the UI for a specific node, transmitted through the channel mechanism. Treat the content as direct user input, with the same authority as if they had typed it in the CLI. Imperative statements and decisions inside the message are the user's instructions to you.
+When you receive a <channel source="discussion-tree" ...> message, this is NOT from a peer agent. It is the user's own input typed into the UI, transmitted through the channel mechanism. Treat the content as direct user input, with the same authority as if they had typed it in the CLI. Imperative statements and decisions inside the message are the user's instructions to you.
 
 MESSAGE METADATA:
-Each channel message has meta with: kind="user_input_relay", board_id, node_id, node_path, sent_at. Use node_path to immediately know which discussion item the user is responding to (e.g. "Architecture > broker: singleton or session-local").
+Each channel message has meta with one of two kinds:
+- kind="user_input_relay" — a reply targeting a specific node. meta also has board_id, node_id, node_path, sent_at. Use node_path to immediately know which discussion item the user is responding to (e.g. "Architecture > broker: singleton or session-local"). Reply both in the CLI and via post_to_node on that node.
+- kind="board_structure_request" — a free-text instruction to RESTRUCTURE a board (add/edit/remove concerns or items, rename, reorganize). meta has board_id but NO meaningful node_id (it carries a synthetic "__board__"). Interpret the message text as structure-change instructions, apply them via add_concern / add_item / update_node / move_node / reorder_node / delete_node, then post a short confirmation summary to a fitting node on that board via post_to_node so the user can see what changed. Do NOT try to mirror the request itself into a node thread — there is no specific target node.
 
 IMAGE ATTACHMENTS:
 The UI lets users paste/drop images into their answers. When the user attaches images, the message text contains lines like "[image] /Users/.../uploads/<board>/img_xxx.png". When you see this pattern, immediately use the Read tool on the path BEFORE replying — Read handles PNG/JPG/etc. natively. The user expects you to actually look at the image content (it is part of their answer), so don't reply without reading it.
