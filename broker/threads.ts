@@ -43,6 +43,25 @@ function syncBoardStatus(
 }
 
 export function handlePostToNode(body: any) {
+  // Schema-level invariant (same posture as set_node_status on concerns):
+  // concerns are category headers and don't render threads in the UI.
+  // A post landing on a concern would be stranded — visible in the DB but
+  // unreachable through the UI, and it would inflate the sidebar's unread
+  // dot on a board the user can't possibly clear. Reject early.
+  const target = db
+    .prepare("SELECT kind FROM nodes WHERE board_id = ? AND id = ?")
+    .get(body.board_id, body.node_id) as { kind: string } | null;
+  if (!target) {
+    return { ok: false, error: "node not found" };
+  }
+  if (target.kind === "concern") {
+    return {
+      ok: false,
+      error:
+        "post_to_node target must be an item — concerns are category headers and don't render threads in the UI. Pick a child item, or add one with add_item.",
+    };
+  }
+
   // 1. CC message goes in first so it appears before any status_change in
   //    the timeline.
   insertThread.run(

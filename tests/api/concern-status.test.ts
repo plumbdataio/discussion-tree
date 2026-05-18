@@ -94,3 +94,51 @@ describe("concern.status is a schema-level invariant", () => {
     expect(await getStatus(id, "i1")).toBe("pending");
   });
 });
+
+describe("concern is not a discussion target", () => {
+  test("/post-to-node targeting a concern is rejected", async () => {
+    const id = await createBoard();
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/post-to-node`,
+      {
+        board_id: id,
+        node_id: "c1",
+        message: "should be rejected",
+        status: "discussing",
+      },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toMatch(/concern/i);
+  });
+
+  test("/post-to-node on a non-existent node returns 'not found'", async () => {
+    const id = await createBoard();
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/post-to-node`,
+      {
+        board_id: id,
+        node_id: "ghost",
+        message: "x",
+        status: "discussing",
+      },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toMatch(/not found/i);
+  });
+
+  test("/post-to-node on an item still works (no regression)", async () => {
+    const id = await createBoard();
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/post-to-node`,
+      {
+        board_id: id,
+        node_id: "i1",
+        message: "a normal post",
+        status: "discussing",
+      },
+    );
+    // ok-shape: either { ok: true, ... } or no ok field at all (success path
+    // doesn't set ok=false). The reject path explicitly sets ok=false.
+    expect(r.json.ok === false).toBe(false);
+  });
+});

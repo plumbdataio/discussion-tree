@@ -199,7 +199,11 @@ export function handleListSessions() {
         (counts.resolved ?? 0);
       const total = Object.values(counts).reduce((a, c) => a + c, 0);
       // Unread = CC-authored thread items with NULL read_at, restricted to
-      // nodes that haven't been soft-deleted.
+      // nodes that are alive AND items (kind='item'). Concerns are
+      // category headers — the UI doesn't render a thread on them, so a
+      // thread item stranded on a concern would leave the sidebar's
+      // unread dot stuck on a board the user can't possibly clear.
+      // post_to_node also rejects concern targets to prevent new ones.
       const unreadRow = db
         .prepare(
           `SELECT COUNT(*) AS cnt FROM thread_items t
@@ -207,7 +211,8 @@ export function handleListSessions() {
            WHERE t.board_id = ?
              AND t.read_at IS NULL
              AND t.source = 'cc'
-             AND n.deleted_at IS NULL`,
+             AND n.deleted_at IS NULL
+             AND n.kind = 'item'`,
         )
         .get(b.id) as { cnt: number };
       return {

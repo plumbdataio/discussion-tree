@@ -473,16 +473,18 @@ export async function dispatchToolCall(
           message: string;
           status: string;
         };
-        const res = await brokerFetch<BoardStatusChangeResponse>(
-          "/post-to-node",
-          {
-            session_id: sessionId,
-            board_id: a.board_id,
-            node_id: a.node_id,
-            message: a.message,
-            status: a.status,
-          },
-        );
+        const res = await brokerFetch<
+          BoardStatusChangeResponse & { ok?: boolean; error?: string }
+        >("/post-to-node", {
+          session_id: sessionId,
+          board_id: a.board_id,
+          node_id: a.node_id,
+          message: a.message,
+          status: a.status,
+        });
+        if (res && res.ok === false) {
+          return textResult(res.error ?? "post_to_node failed", true);
+        }
         return textResult(
           `Posted to node ${a.node_id} (board ${a.board_id}, status=${a.status})` +
             boardStatusChangeNote(a.board_id, res),
