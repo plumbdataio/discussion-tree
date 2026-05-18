@@ -56,6 +56,13 @@ export function handleHeartbeatTool(body: {
   if (!body.cc_session_id) return { ok: false };
   const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
   if (!sessionId) return { ok: false };
+  // Don't stomp an explicit non-working state (e.g. "blocked" set by the
+  // AskUserQuestion / ExitPlanMode hook). PreToolUse hooks fire in
+  // unspecified order — if heartbeat ran AFTER the blocked-on-user hook,
+  // overwriting would erase the blocked badge. Same posture as
+  // markWorkingFromUserSubmit.
+  const cur = activities.get(sessionId);
+  if (cur && cur.state !== "working") return { ok: true };
   const now = Date.now();
   toolHeartbeats.set(sessionId, now);
   const entry: Activity = {
@@ -108,10 +115,55 @@ export function handleClearToolActivity(body: { cc_session_id?: string }): {
   return { ok: true };
 }
 
+// PreToolUse(AskUserQuestion|ExitPlanMode) hook entry — Claude is now waiting
+// on the user. Flip to "blocked" so the sidebar badge tells the user without
+// them needing to look at the CLI. message carries a short preview of the
+// question. cc_session_id, not session_id: hooks only know the CC side.
+export function handleBlockedOnUserStart(body: {
+  cc_session_id?: string;
+  question?: string;
+}): { ok: boolean } {
+  if (!body.cc_session_id) return { ok: false };
+  const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
+  if (!sessionId) return { ok: false };
+  const raw = (body.question ?? "").trim();
+  // Keep the badge tooltip readable — a long question would blow out the UI.
+  const message = raw.length > 160 ? raw.slice(0, 157) + "…" : raw;
+  const entry: Activity = {
+    session_id: sessionId,
+    state: "blocked",
+    message,
+    set_at: new Date().toISOString(),
+  };
+  activities.set(sessionId, entry);
+  broadcastActivity(sessionId, entry);
+  return { ok: true };
+}
+
+// PostToolUse(AskUserQuestion|ExitPlanMode) hook entry — the user has
+// answered (or the plan exited) and the tool call returned. Drop the blocked
+// state. Only clears "blocked" so we don't stomp other states the LLM may
+// have set in the meantime.
+export function handleBlockedOnUserClear(body: { cc_session_id?: string }): {
+  ok: boolean;
+} {
+  if (!body.cc_session_id) return { ok: false };
+  const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
+  if (!sessionId) return { ok: false };
+  const cur = activities.get(sessionId);
+  if (cur && cur.state === "blocked") {
+    activities.delete(sessionId);
+    broadcastActivity(sessionId, null);
+  }
+  return { ok: true };
+}
+
 export const routes = {
   "/set-activity": handleSetActivity,
   "/heartbeat-tool": handleHeartbeatTool,
   "/clear-tool-activity": handleClearToolActivity,
+  "/blocked-on-user-start": handleBlockedOnUserStart,
+  "/blocked-on-user-clear": handleBlockedOnUserClear,
 };
 
 // Watchdog — clear stale auto-activity entries when neither Stop nor

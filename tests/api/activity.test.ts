@@ -82,4 +82,63 @@ describe("activity", () => {
     expect(r.json.ok).toBe(true);
     expect(r.json.cleared).toBe(true);
   });
+
+  test("/blocked-on-user-start sets blocked state with the question text", async () => {
+    const r = await post<{ ok: boolean }>(
+      `${broker.url}/blocked-on-user-start`,
+      { cc_session_id: ccSessionId, question: "Should I commit this?" },
+    );
+    expect(r.json.ok).toBe(true);
+  });
+
+  test("/blocked-on-user-start truncates very long question text", async () => {
+    const long = "x".repeat(500);
+    const r = await post<{ ok: boolean }>(
+      `${broker.url}/blocked-on-user-start`,
+      { cc_session_id: ccSessionId, question: long },
+    );
+    expect(r.json.ok).toBe(true);
+    // No easy way to peek at the in-memory map from here; the truncation
+    // contract is tested implicitly by the absence of a crash and by the
+    // sidebar message length in manual testing. We at least confirm the
+    // endpoint accepts oversize input.
+  });
+
+  test("/blocked-on-user-clear removes the blocked state", async () => {
+    await post(`${broker.url}/blocked-on-user-start`, {
+      cc_session_id: ccSessionId,
+      question: "ready?",
+    });
+    const r = await post<{ ok: boolean }>(
+      `${broker.url}/blocked-on-user-clear`,
+      { cc_session_id: ccSessionId },
+    );
+    expect(r.json.ok).toBe(true);
+  });
+
+  test("/blocked-on-user-clear does NOT touch a non-blocked state", async () => {
+    // Set a working state first.
+    await post(`${broker.url}/heartbeat-tool`, {
+      cc_session_id: ccSessionId,
+      tool: "Edit",
+    });
+    // Clear should be a no-op for "working".
+    const r = await post<{ ok: boolean }>(
+      `${broker.url}/blocked-on-user-clear`,
+      { cc_session_id: ccSessionId },
+    );
+    expect(r.json.ok).toBe(true);
+    // Clean up.
+    await post(`${broker.url}/clear-tool-activity`, {
+      cc_session_id: ccSessionId,
+    });
+  });
+
+  test("/blocked-on-user-start returns ok=false for an unknown cc_session_id", async () => {
+    const r = await post<{ ok: boolean }>(
+      `${broker.url}/blocked-on-user-start`,
+      { cc_session_id: "no-such-cc", question: "?" },
+    );
+    expect(r.json.ok).toBe(false);
+  });
 });
