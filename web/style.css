@@ -273,22 +273,29 @@ body {
 .session {
   margin-bottom: 18px;
   position: relative;
-  /* Drag visuals — dragging fades the source, drag-over draws an accent
-     stripe on the top of the drop target so the user sees where the dragged
-     session will land. */
+  /* Drag visuals — dragging fades the source; drop-before / drop-after draw
+     an accent line on the corresponding edge of the hovered target so the
+     user sees exactly where the released session will land. */
 }
 .session.dragging {
   opacity: 0.4;
 }
-.session.drag-over::before {
+.session.drop-before::before,
+.session.drop-after::after {
   content: "";
   position: absolute;
-  top: -4px;
   left: -4px;
   right: -4px;
-  height: 2px;
+  height: 3px;
   background: var(--accent);
-  border-radius: 1px;
+  border-radius: 1.5px;
+  pointer-events: none;
+}
+.session.drop-before::before {
+  top: -10px;
+}
+.session.drop-after::after {
+  bottom: -10px;
 }
 
 .session-header {

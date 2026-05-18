@@ -47,6 +47,8 @@ function applyOrder(
   return result;
 }
 
+type DropPosition = "before" | "after";
+
 type SessionItemProps = {
   s: SessionListItem;
   currentBoardId: string | null;
@@ -58,7 +60,7 @@ type SessionItemProps = {
   draggingId: string | null;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
-  onDropOn: (targetId: string) => void;
+  onDropOn: (targetId: string, position: DropPosition) => void;
   draggable: boolean;
   // Live activity (working / blocked / etc) for this session — used to render
   // a small spinning indicator next to the name so the user can see when
@@ -81,7 +83,10 @@ function SessionItem({
   activity,
 }: SessionItemProps) {
   const { t } = useTranslation();
-  const [dragOver, setDragOver] = useState(false);
+  // null while the cursor isn't over this item; otherwise records whether the
+  // drop would land BEFORE the current item or AFTER it. Computed from the
+  // mouse Y vs the item's rect midpoint on every dragover.
+  const [dropPosition, setDropPosition] = useState<DropPosition | null>(null);
 
   // Visibility = default board OR currently-open board OR passes the status
   // filter. See isBoardVisible for why the first two bypass the filter.
@@ -90,6 +95,7 @@ function SessionItem({
   );
 
   const isDragging = draggingId === s.id;
+  const dragActive = !!draggingId && draggingId !== s.id;
 
   return (
     <div
@@ -98,7 +104,9 @@ function SessionItem({
         `session` +
         (inactive ? " inactive-session" : "") +
         (isDragging ? " dragging" : "") +
-        (dragOver && draggingId && draggingId !== s.id ? " drag-over" : "")
+        (dropPosition && dragActive
+          ? ` drop-${dropPosition}`
+          : "")
       }
       draggable={draggable}
       onDragStart={(e) => {
@@ -114,27 +122,43 @@ function SessionItem({
         onDragStart(s.id);
       }}
       onDragEnd={() => {
-        setDragOver(false);
+        setDropPosition(null);
         onDragEnd();
       }}
       onDragEnter={(e) => {
-        if (!draggable || !draggingId || draggingId === s.id) return;
+        if (!dragActive) return;
         e.preventDefault();
-        setDragOver(true);
       }}
       onDragOver={(e) => {
-        if (!draggable || !draggingId || draggingId === s.id) return;
+        if (!dragActive) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
+        // Compare cursor Y against the item's midpoint to decide whether the
+        // drop should land BEFORE or AFTER this item. This is what makes
+        // "move to the very bottom" work — drop on the lower half of the
+        // last item and it goes after, not before.
+        const rect = e.currentTarget.getBoundingClientRect();
+        const pos: DropPosition =
+          e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+        setDropPosition((cur) => (cur === pos ? cur : pos));
       }}
-      onDragLeave={() => {
-        setDragOver(false);
+      onDragLeave={(e) => {
+        // Only clear when the cursor actually leaves the element (not when
+        // it crosses into a child). relatedTarget is null when leaving the
+        // window or, for nested elements, the entered element.
+        const next = e.relatedTarget as Node | null;
+        if (!next || !e.currentTarget.contains(next)) {
+          setDropPosition(null);
+        }
       }}
       onDrop={(e) => {
-        if (!draggable || !draggingId || draggingId === s.id) return;
+        if (!dragActive) return;
         e.preventDefault();
-        setDragOver(false);
-        onDropOn(s.id);
+        const rect = e.currentTarget.getBoundingClientRect();
+        const pos: DropPosition =
+          e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+        setDropPosition(null);
+        onDropOn(s.id, pos);
       }}
     >
       <div className="session-header">
@@ -407,16 +431,21 @@ export function Sidebar({
 
   const orderedActive = applyOrder(sessions ?? [], settings.sessionOrder);
 
-  const reorderTo = (fromId: string, toId: string) => {
+  const reorderTo = (
+    fromId: string,
+    toId: string,
+    position: DropPosition,
+  ) => {
     if (fromId === toId) return;
     const ids = orderedActive.map((s) => s.id);
     const fromIdx = ids.indexOf(fromId);
     const toIdx = ids.indexOf(toId);
     if (fromIdx < 0 || toIdx < 0) return;
     ids.splice(fromIdx, 1);
-    // When dragging downward, removing fromIdx shifts the target one slot
-    // earlier; when dragging upward, the target's index is unchanged.
-    const insertAt = fromIdx < toIdx ? toIdx - 1 : toIdx;
+    // After removing fromIdx, indices >= fromIdx are shifted left by one.
+    // Recompute the target index in the post-removal array.
+    const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;
+    const insertAt = position === "before" ? adjustedTo : adjustedTo + 1;
     ids.splice(insertAt, 0, fromId);
     updateSettings({ sessionOrder: ids });
   };
@@ -499,7 +528,9 @@ export function Sidebar({
             draggingId={draggingId}
             onDragStart={setDraggingId}
             onDragEnd={() => setDraggingId(null)}
-            onDropOn={(targetId) => reorderTo(draggingId ?? "", targetId)}
+            onDropOn={(targetId, position) =>
+              reorderTo(draggingId ?? "", targetId, position)
+            }
             draggable
             activity={activitiesBySession[s.id] ?? null}
           />
