@@ -1887,9 +1887,16 @@ body.concern-resizing * {
 }
 
 .msg-expand {
-  position: absolute;
+  /* Float so the button sits at the message's top-right while staying in
+     normal flow (absolute positioning would prevent sticky from working).
+     Sticky pins it to the top of the thread scrollport for the entire
+     vertical range of THIS message, so when the user scrolls down through
+     a long message the expand handle stays clickable at the top edge of
+     the visible area instead of disappearing with the message header. */
+  float: right;
+  position: sticky;
   top: 3px;
-  right: 3px;
+  margin: 3px 3px 0 6px;
   background: transparent;
   border: 1px solid transparent;
   padding: 3px;
@@ -1902,6 +1909,7 @@ body.concern-resizing * {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  z-index: 2;
 }
 
 .thread-msg:hover .msg-expand {

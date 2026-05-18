@@ -203,12 +203,10 @@ export function ItemCard({
                 className={`thread-msg from-${it.source}${isUnread ? " unread" : ""}`}
                 data-unread-id={isUnread ? it.id : undefined}
               >
-                <span className="who">
-                  {it.source === "user" ? t("item_card.you") : t("item_card.claude")}
-                  <span className="thread-msg-time" title={it.created_at}>
-                    {formatThreadTimestamp(it.created_at)}
-                  </span>
-                </span>
+                {/* `msg-expand` must come BEFORE the text content so its
+                    `float: right + position: sticky` anchors at the message's
+                    top-right and tracks the thread scroll without dropping
+                    out of flow (absolute would defeat sticky). */}
                 <button
                   className="msg-expand"
                   title={t("item_card.expand_message")}
@@ -216,6 +214,12 @@ export function ItemCard({
                 >
                   <Maximize2 size={12} strokeWidth={1.75} />
                 </button>
+                <span className="who">
+                  {it.source === "user" ? t("item_card.you") : t("item_card.claude")}
+                  <span className="thread-msg-time" title={it.created_at}>
+                    {formatThreadTimestamp(it.created_at)}
+                  </span>
+                </span>
                 <MDView text={it.text} />
               </div>
             );

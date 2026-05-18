@@ -173,12 +173,8 @@ export function DefaultBoardLayout({
               className={`thread-msg from-${it.source}${isUnread ? " unread" : ""}`}
               data-unread-id={isUnread ? it.id : undefined}
             >
-              <span className="who">
-                {it.source === "user" ? t("item_card.you") : t("item_card.claude")}
-                <span className="thread-msg-time" title={it.created_at}>
-                  {formatThreadTimestamp(it.created_at)}
-                </span>
-              </span>
+              {/* msg-expand placed BEFORE the text so float+sticky anchors
+                  at the message top-right and survives thread scroll. */}
               <button
                 className="msg-expand"
                 title={t("item_card.expand_message")}
@@ -186,6 +182,12 @@ export function DefaultBoardLayout({
               >
                 <Maximize2 size={12} strokeWidth={1.75} />
               </button>
+              <span className="who">
+                {it.source === "user" ? t("item_card.you") : t("item_card.claude")}
+                <span className="thread-msg-time" title={it.created_at}>
+                  {formatThreadTimestamp(it.created_at)}
+                </span>
+              </span>
               <MDView text={it.text} />
             </div>
           );
