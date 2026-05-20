@@ -276,4 +276,7 @@ export interface BoardView {
   threads: Record<string, ThreadItem[]>;
   activity?: Activity | null;
   owner_alive?: boolean;
+  // null when the owning session has no human-set name yet — the frontend
+  // falls back to the session id in that case (or just omits the segment).
+  owner_session_name?: string | null;
 }

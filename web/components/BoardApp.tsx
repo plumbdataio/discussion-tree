@@ -52,6 +52,24 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     fetchBoard();
   }, [boardId, fetchBoard, t]);
 
+  // Keep document.title in sync with the loaded board so external trackers
+  // (Clockify auto-tracker, browser tab strip, history) get something more
+  // useful than the literal "discussion-tree". Resets on unmount so the
+  // next page (session dashboard / root) can write its own.
+  useEffect(() => {
+    if (!data) return;
+    const owner = data.owner_session_name ?? "";
+    const boardTitle = data.board.is_default
+      ? t("default_board.title")
+      : data.board.title;
+    document.title = owner
+      ? `discussion-tree / ${owner} / ${boardTitle}`
+      : `discussion-tree / ${boardTitle}`;
+    return () => {
+      document.title = "discussion-tree";
+    };
+  }, [data, t]);
+
   useEffect(() => {
     if (!boardId) return;
     const proto = window.location.protocol === "https:" ? "wss" : "ws";

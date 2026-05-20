@@ -100,10 +100,22 @@ export function getBoardView(boardId: string) {
   }
   const activity = activities.get(board.session_id) ?? null;
   const ownerRow = db
-    .prepare("SELECT alive FROM sessions WHERE id = ?")
-    .get(board.session_id) as { alive: number } | null;
+    .prepare("SELECT alive, name FROM sessions WHERE id = ?")
+    .get(board.session_id) as { alive: number; name: string | null } | null;
   const owner_alive = ownerRow?.alive === 1;
-  return { board, nodes, threads: threadsByNode, activity, owner_alive };
+  // Exposed so the frontend can update document.title to a meaningful
+  // string like "discussion-tree / <session> / <board>" — that's what
+  // Clockify's auto-tracker (and other browser-based time trackers) pick
+  // up as the activity description when the tab is the active page.
+  const owner_session_name = ownerRow?.name ?? null;
+  return {
+    board,
+    nodes,
+    threads: threadsByNode,
+    activity,
+    owner_alive,
+    owner_session_name,
+  };
 }
 
 export function buildNodePath(boardId: string, nodeId: string): string {

@@ -30,6 +30,18 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
       .catch((e) => setError(String(e)));
   }, [sessionId, refreshKey, t]);
 
+  // Browser-tab + auto-tracker friendly title. See BoardApp for the same
+  // pattern; root dashboard keeps the bare "discussion-tree".
+  useEffect(() => {
+    if (!data) return;
+    document.title = data.name
+      ? `discussion-tree / ${data.name}`
+      : "discussion-tree";
+    return () => {
+      document.title = "discussion-tree";
+    };
+  }, [data?.name]);
+
   const handleArchive = async (boardId: string, title: string) => {
     if (!confirm(t("session_dashboard.archive_confirm", { title }))) return;
     const res = await fetch("/archive-board", {
