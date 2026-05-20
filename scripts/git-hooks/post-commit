@@ -22,11 +22,13 @@ RESET=$'\033[0m'
 # available (e.g. CI).
 {
   printf '\n%s========================================================================%s\n' "$RED" "$RESET"
-  printf '%s⚠ public リポジトリにふさわしいコミットメッセージになっているか、一度立ち止まって振り返ること！！！%s\n' "$YELLOW" "$RESET"
+  printf '%s⚠  STOP — this is a public repository. Reread the commit message you just wrote BEFORE pushing.%s\n' "$YELLOW" "$RESET"
+  printf '%s    Watch for: business / project names, customer terms, internal IDs, credentials, file paths.%s\n' "$YELLOW" "$RESET"
   printf '%s========================================================================%s\n\n' "$RED" "$RESET"
 } > /dev/tty 2>/dev/null || {
   printf '\n%s========================================================================%s\n' "$RED" "$RESET" >&2
-  printf '%s⚠ public リポジトリにふさわしいコミットメッセージになっているか、一度立ち止まって振り返ること！！！%s\n' "$YELLOW" "$RESET" >&2
+  printf '%s⚠  STOP — this is a public repository. Reread the commit message you just wrote BEFORE pushing.%s\n' "$YELLOW" "$RESET" >&2
+  printf '%s    Watch for: business / project names, customer terms, internal IDs, credentials, file paths.%s\n' "$YELLOW" "$RESET" >&2
   printf '%s========================================================================%s\n\n' "$RED" "$RESET" >&2
 }
 
