@@ -1458,20 +1458,32 @@ textarea.answer-input:disabled {
      `.md-body p`. Setting it on the wrapper too made markdown source
      newlines render as extra blank lines next to the structural <p> /
      <ul> blocks, doubling the visible vertical spacing. */
-  /* Cap the context to a viewport-relative height so a long block doesn't
-     push the card below the visible board area. dvh follows the dynamic
-     viewport (excludes the iOS Safari toolbar when it's visible). The
-     scrollbar is hidden — mousewheel / touch / trackpad still scrolls.
-     Note: this overflow is on .context (sibling of .concern-card-inner),
-     not on .concern-card, so it does NOT capture the sticky element's
-     scrollport — .concern-card-inner's sticky-x continues to follow
-     .board-container's horizontal scroll. */
-  max-height: 70dvh;
+  /* Cap the context at 15% of the viewport — empirically tuned via
+     DevTools to leave enough room for the items underneath. dvh follows
+     the dynamic viewport (excludes the iOS Safari toolbar when it's
+     visible). The scrollbar is hidden — mousewheel / touch / trackpad
+     still scrolls. Note: this overflow is on .context (sibling of
+     .concern-card-inner), not on .concern-card, so it does NOT capture
+     the sticky element's scrollport — .concern-card-inner's sticky-x
+     continues to follow .board-container's horizontal scroll. */
+  max-height: 15dvh;
   overflow-y: auto;
-  scrollbar-width: none;
+  /* Keep the scrollbar visible at all times so the user can tell at a
+     glance that more content is below the fold. Firefox uses thin; Webkit
+     uses the explicit ::-webkit-scrollbar rule below. */
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
 }
 .concern-card .context::-webkit-scrollbar {
-  display: none;
+  width: 6px;
+  height: 6px;
+}
+.concern-card .context::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+.concern-card .context::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .connector {
@@ -1603,19 +1615,45 @@ body.concern-resizing * {
 }
 
 .item-card > .title-row,
-.item-card > .context,
 .item-card > .input-row {
   flex: 0 0 auto;
 }
 
+
 .item-card > .thread {
   flex: 1;
-  min-height: 0;
+  min-width: 0;
+  /* Guarantee a usable amount of vertical space for the conversation —
+     otherwise a long .context can claim its full max-height and leave
+     thread with ~0 height, hiding messages even though they exist.
+     With .context now `flex: 0 1 auto` (shrink: 1), thread's min-height
+     reclaims space and pushes context to scroll internally. */
+  min-height: 200px;
   overflow-y: auto;
-  scrollbar-width: none;
+  /* Code blocks (`<pre>`) request their content's intrinsic width as
+     min-content. Without horizontal clipping here, a long `--build-arg ...`
+     line widens the thread and breaks out of the item-card's 360px slot,
+     bleeding into the neighbor card. The item-card itself intentionally
+     keeps overflow:visible so its `::before` connector bar isn't clipped,
+     so we apply the horizontal clip on the inner .thread instead. The
+     `.md-body pre { overflow-x: auto }` rule then turns the line into a
+     scrollable strip within the visible 360px. */
+  overflow-x: hidden;
+  /* Always-visible scrollbar so the user can tell at a glance there are
+     more messages below the visible region. */
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
 }
 .item-card > .thread::-webkit-scrollbar {
-  display: none;
+  width: 6px;
+  height: 6px;
+}
+.item-card > .thread::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+.item-card > .thread::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 @keyframes flash-pulse {
@@ -1763,7 +1801,7 @@ body.concern-resizing * {
     rgba(255, 255, 255, 0) 30%
   );
 }
-.item-card.status-needs-reply .status-badge {
+.status-badge.status-needs-reply {
   color: #be123c;
   border-color: #fda4af;
   background: #ffe4e6;
@@ -1776,7 +1814,7 @@ body.concern-resizing * {
   background: #f5f5f5;
   border-left-color: #9ca3af;
 }
-.item-card.status-rejected .status-badge {
+.status-badge.status-rejected {
   color: var(--muted);
   border-color: var(--border);
   background: #ffffff;
@@ -1787,7 +1825,7 @@ body.concern-resizing * {
   border-left-color: #15803d;
   border-left-width: 5px;
 }
-.item-card.status-adopted .status-badge {
+.status-badge.status-adopted {
   color: #166534;
   border-color: #86efac;
   background: #dcfce7;
@@ -1798,7 +1836,7 @@ body.concern-resizing * {
 .item-card.status-agreed {
   border-left-color: #0284c7;
 }
-.item-card.status-agreed .status-badge {
+.status-badge.status-agreed {
   color: #075985;
   border-color: #7dd3fc;
   background: #e0f2fe;
@@ -1810,7 +1848,7 @@ body.concern-resizing * {
   border-left-color: #047857;
   opacity: 0.8;
 }
-.item-card.status-done .status-badge {
+.status-badge.status-done {
   color: #064e3b;
   border-color: #6ee7b7;
   background: #d1fae5;
@@ -1830,7 +1868,9 @@ body.concern-resizing * {
   font-weight: 600;
 }
 
-.item-card .status-badge {
+/* The pill base — used by both ItemCard's title-row badge and NodeModal's
+   header badge. The status-specific colors above stack on top of this. */
+.status-badge {
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 999px;
@@ -1838,14 +1878,15 @@ body.concern-resizing * {
   color: var(--muted);
   border: 1px solid var(--border);
   white-space: nowrap;
+  display: inline-block;
 }
 
-.item-card.status-discussing .status-badge {
+.status-badge.status-discussing {
   color: var(--status-discussing);
   border-color: var(--status-discussing);
 }
 
-.item-card.status-resolved .status-badge {
+.status-badge.status-resolved {
   color: var(--status-resolved);
   border-color: var(--status-resolved);
 }
@@ -1856,18 +1897,29 @@ body.concern-resizing * {
   font-size: 12px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  /* Cap a long context so it can't push the thread / input row out of the
-     card (or off-screen). It scrolls internally past this height. flex
-     0 1 auto lets it shrink under pressure too; min-height keeps a usable
-     minimum visible. Scrollbar hidden — wheel / touch still scrolls. */
+  /* Cap at 10% of the viewport — empirically tuned via DevTools. With
+     .thread's min-height: 200px below, this keeps the thread + textarea
+     comfortably visible even on long context. flex 0 1 auto allows extra
+     shrink under pressure; min-height keeps a usable minimum. */
   flex: 0 1 auto;
   min-height: 2.4em;
-  max-height: 40dvh;
+  max-height: 10dvh;
   overflow-y: auto;
-  scrollbar-width: none;
+  /* Always-visible scrollbar (same posture as .concern-card .context) so
+     the user can tell at a glance there's more to read. */
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
 }
 .item-card .context::-webkit-scrollbar {
-  display: none;
+  width: 6px;
+  height: 6px;
+}
+.item-card .context::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+.item-card .context::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .thread {
@@ -2527,7 +2579,7 @@ button.secondary {
     rgba(0, 0, 0, 0) 30%
   );
 }
-:root[data-theme="dark"] .item-card.status-needs-reply .status-badge {
+:root[data-theme="dark"] .status-badge.status-needs-reply {
   color: #fda4af;
   border-color: #be123c;
   background: #3a1421;
@@ -2535,20 +2587,20 @@ button.secondary {
 :root[data-theme="dark"] .item-card.status-rejected {
   background: #1a1d22;
 }
-:root[data-theme="dark"] .item-card.status-rejected .status-badge {
+:root[data-theme="dark"] .status-badge.status-rejected {
   background: var(--panel);
 }
-:root[data-theme="dark"] .item-card.status-adopted .status-badge {
+:root[data-theme="dark"] .status-badge.status-adopted {
   color: #86efac;
   border-color: #166534;
   background: #14302a;
 }
-:root[data-theme="dark"] .item-card.status-agreed .status-badge {
+:root[data-theme="dark"] .status-badge.status-agreed {
   color: #7dd3fc;
   border-color: #075985;
   background: #0e2a3e;
 }
-:root[data-theme="dark"] .item-card.status-done .status-badge {
+:root[data-theme="dark"] .status-badge.status-done {
   color: #6ee7b7;
   border-color: #047857;
   background: #0c2e26;

@@ -163,7 +163,7 @@ export function ItemCard({
     >
       <div className="title-row">
         <h3 className="title">{node.title}</h3>
-        <span className="status-badge">
+        <span className={`status-badge status-${node.status}`}>
           {t([`node_status.${node.status}`, node.status])}
         </span>
         {showManualReadButton && (
