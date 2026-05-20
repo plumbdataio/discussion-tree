@@ -14,8 +14,7 @@
     "broker": "bun broker.ts",
     "server": "bun server.ts",
     "test": "playwright test",
-    "test:update": "playwright test --update-snapshots",
-    "postinstall": "patch-package"
+    "test:update": "playwright test --update-snapshots"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
@@ -34,8 +33,7 @@
     "@types/bun": "latest",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "happy-dom": "^20.9.0",
-    "patch-package": "latest"
+    "happy-dom": "^20.9.0"
   },
   "peerDependencies": {
     "typescript": "^5"

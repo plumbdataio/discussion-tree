@@ -2,6 +2,8 @@
 // recursive node insert for create-board, the read-side getBoardView used by
 // /api/board/<id> and indirectly by tests.
 
+import { randomBytes } from "node:crypto";
+
 import type { Board, Node, NodeInput, ThreadItem } from "../shared/types.ts";
 import {
   db,
@@ -14,20 +16,21 @@ import {
 } from "./db.ts";
 import { activities } from "./activity.ts";
 
+// Board / session / node IDs act as bearer capabilities for /api/board/:id
+// and /ws/:id — anyone who learns the ID can fetch and subscribe. So the
+// entropy has to be unguessable. 16 random bytes (= 128 bits, 32 hex chars)
+// matches the OWASP guidance for session-id-equivalent tokens.
 export function generateId(prefix?: string): string {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let id = "";
-  for (let i = 0; i < 8; i++) {
-    id += chars[Math.floor(Math.random() * chars.length)];
-  }
+  const id = randomBytes(16).toString("hex");
   return prefix ? `${prefix}_${id}` : id;
 }
 
-// Random ID for uploaded files; the timestamp prefix prevents accidental
-// re-collisions when two uploads happen in the same millisecond.
+// Upload file IDs face the same exposure (the URL is shared with anyone
+// viewing the board). Same posture but keep the timestamp prefix for
+// human-friendly sorting when browsing the uploads dir on disk.
 export function generateRandomId(prefix: string): string {
-  const random = Math.random().toString(36).slice(2, 10);
-  return `${prefix}_${Date.now().toString(36)}_${random}`;
+  const id = randomBytes(12).toString("hex");
+  return `${prefix}_${Date.now().toString(36)}_${id}`;
 }
 
 export function maxChildPos(
