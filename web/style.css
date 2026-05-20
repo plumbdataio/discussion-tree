@@ -273,9 +273,20 @@ body {
 .session {
   margin-bottom: 18px;
   position: relative;
+  /* Left accent bar so the user can see at a glance where one session's
+     block ends and the next begins. Without it, sibling session titles
+     and the boards belonging to them visually flatten into one list. */
+  border-left: 3px solid var(--border);
+  padding-left: 10px;
   /* Drag visuals — dragging fades the source; drop-before / drop-after draw
      an accent line on the corresponding edge of the hovered target so the
      user sees exactly where the released session will land. */
+}
+/* When the currently-open board belongs to this session, light up the bar
+   in the accent color so the user can spot "this is the session I'm in"
+   even with the sidebar scrolled. */
+.session.has-current-board {
+  border-left-color: var(--accent);
 }
 .session.dragging {
   opacity: 0.4;

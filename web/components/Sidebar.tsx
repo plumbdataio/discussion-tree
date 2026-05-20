@@ -96,6 +96,9 @@ function SessionItem({
 
   const isDragging = draggingId === s.id;
   const dragActive = !!draggingId && draggingId !== s.id;
+  const hasCurrentBoard =
+    currentBoardId != null &&
+    s.boards.some((b) => b.id === currentBoardId);
 
   return (
     <div
@@ -104,6 +107,7 @@ function SessionItem({
         `session` +
         (inactive ? " inactive-session" : "") +
         (isDragging ? " dragging" : "") +
+        (hasCurrentBoard ? " has-current-board" : "") +
         (dropPosition && dragActive
           ? ` drop-${dropPosition}`
           : "")
