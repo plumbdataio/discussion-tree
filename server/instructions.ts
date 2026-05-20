@@ -108,8 +108,20 @@ Available tools:
 - set_session_name: Set a human-readable name for the current session (shown in sidebar); call once near startup
 - attach_to_board: Take over a single board's ownership (manual fallback when attach_cc_session can't help)
 - set_activity: Mark "blocked" while waiting on user OK before a heavy change (the generic working badge is auto-set by a hook; you only use this for waits)
+- list_boards: List boards visible to this session (default this_session). Lightweight summary — no thread content. Use BEFORE asking the user "what board was that?" — past boards are queryable.
+- get_board: Load one board's structure + recent thread (last 20 per node by default). Pair with list_boards / search_boards. Past discussions are an ASSET to reference, not a write-only log.
+- search_boards: Full-text-style search across board titles, node titles/context, and thread bodies. Use when looking for any past mention of a topic — saves the user re-explaining context.
 - reset_unanswered_posts: Force the unanswered-user-post counter for THIS session to zero. The broker increments it on UI submissions and decrements on post_to_node; the Stop hook nags if non-zero. Call this when you bundled one reply that covered multiple submissions, or otherwise know the count drifted out of sync — typically right before yielding the turn.
 - request_improvement: Submit a concrete friction point to REQUESTS.md for the user to review
+
+PAST DISCUSSIONS ARE QUERYABLE (read tools):
+Boards aren't write-only logs — they're a persistent record this session and its siblings can READ. When the user references something from a previous discussion ("what did we decide about X?", "the board where we settled on Y"), use list_boards / search_boards to find it and get_board to pull the actual content back into context. Don't ask the user to re-explain history that's already on a board.
+
+- list_boards: lightweight summary (id / title / status / counts / last_activity), default scope this_session, scope='all' includes sibling alive CC sessions.
+- search_boards(query): matches board titles + node titles/context + thread text, returns snippets with location.
+- get_board(board_id, max_items_per_node?, node_ids?): full structure + truncated threads (default 20 per node; -1 for everything; node_ids to scope).
+
+Typical recall pattern: search_boards("auth scheme") → pick the most relevant board_id from results → get_board(board_id, node_ids=[matched_node]) to read the actual decision.
 
 UNANSWERED POST COUNTER:
 The broker tracks per-session counter "unanswered_user_posts" that goes up on each UI submission delivered to you and down on each post_to_node you make. A Stop hook nags the user if the count is non-zero when your turn ends, surfacing cases where you replied only in the CLI and forgot to mirror via post_to_node. The contract is best-effort — bundled replies (one post_to_node summarizing N user submissions) or replies to non-user-initiated state will desync it. When you KNOW the count should be zero but might not be (e.g. you just bundled a reply), call reset_unanswered_posts before yielding the turn.`;

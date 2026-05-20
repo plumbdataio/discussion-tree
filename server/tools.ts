@@ -340,6 +340,65 @@ export const TOOLS = [
     },
   },
   {
+    name: "list_boards",
+    description:
+      "List boards visible to this Claude Code session. Use this when the user references a past discussion ('what did we decide about X?', 'check the previous board') or when you need to recall an earlier decision without re-asking. Returns a lightweight summary per board (id, title, status, concern/item counts, last activity, owning session name) — NOT the full thread; follow up with get_board to load the actual content of a specific board. Default scope is this_session (only boards owned by your own CC session); pass scope='all' to also see boards owned by OTHER alive CC sessions on this machine — useful when collaborating across parallel CC sessions, but more expensive in context.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        scope: {
+          type: "string" as const,
+          enum: ["this_session", "all"],
+          description:
+            "Default 'this_session'. Use 'all' to include alive sibling sessions.",
+        },
+      },
+    },
+  },
+  {
+    name: "get_board",
+    description:
+      "Load a single board's full structure (concerns + items) and recent thread for each node. Use this AFTER list_boards or search_boards to pull a specific past discussion back into context. By default each node's thread is truncated to the most recent 20 items (older content tends to be summarized in later posts anyway, and full threads can be huge). Pass max_items_per_node=-1 to retrieve everything, or node_ids=['x','y'] to scope the read to specific nodes (cheapest option when you only care about one decision's history). thread_truncated[node_id] in the response tells you the FULL count when truncation happened, so you can decide whether to re-load with -1.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        board_id: { type: "string" as const },
+        max_items_per_node: {
+          type: "number" as const,
+          description:
+            "Default 20 (most recent items per node). Pass -1 for no limit.",
+        },
+        node_ids: {
+          type: "array" as const,
+          items: { type: "string" as const },
+          description:
+            "Restrict the thread payload to these nodes only (the structure list still includes every node). Useful when only one decision is relevant.",
+        },
+      },
+      required: ["board_id"],
+    },
+  },
+  {
+    name: "search_boards",
+    description:
+      "Full-text-style search across boards visible to this Claude Code session. Matches board titles, node titles + context (markdown), and thread message bodies. Returns up to ~25 matches with snippets and the location (board_id / node_id / thread_item_id). Use this when the user asks about a past discussion but you don't know which board it lives on, or when looking for any past mention of a topic. Default scope is this_session; pass scope='all' to include sibling sessions' boards.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string" as const },
+        scope: {
+          type: "string" as const,
+          enum: ["this_session", "all"],
+        },
+        limit: {
+          type: "number" as const,
+          description: "Max matches (default 25, capped at 100).",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
     name: "reset_unanswered_posts",
     description:
       "Force the unanswered-user-post counter for THIS session to zero. The broker increments the counter on every UI submission and decrements it on every post_to_node, then the Stop hook nags the user if the count is non-zero when your turn ends. The counter desyncs in legitimate situations — e.g. you bundled one post_to_node reply that covered two user submissions, or the user posted into nodes you don't intend to ack individually. Call this when you KNOW everything is answered (typically right before yielding the turn) so the nag doesn't fire spuriously. No arguments — it always targets the current session.",
@@ -733,6 +792,78 @@ export async function dispatchToolCall(
         return textResult(
           `Activity: ${a.state}${a.message ? ` — ${a.message}` : ""}`,
         );
+      }
+
+      case "list_boards": {
+        const sessionId = ensureSession();
+        const a = args as { scope?: "this_session" | "all" };
+        const res = await brokerFetch<{
+          ok: boolean;
+          boards?: any[];
+          error?: string;
+        }>("/list-boards", { session_id: sessionId, scope: a.scope });
+        if (!res.ok) {
+          return textResult(res.error ?? "list_boards failed", true);
+        }
+        return textResult(JSON.stringify(res.boards, null, 2));
+      }
+
+      case "get_board": {
+        const a = args as {
+          board_id: string;
+          max_items_per_node?: number;
+          node_ids?: string[];
+        };
+        const res = await brokerFetch<{
+          ok: boolean;
+          board?: any;
+          nodes?: any[];
+          threads?: Record<string, any[]>;
+          thread_truncated?: Record<string, number>;
+          error?: string;
+        }>("/get-board-view", {
+          board_id: a.board_id,
+          max_items_per_node: a.max_items_per_node,
+          node_ids: a.node_ids,
+        });
+        if (!res.ok) {
+          return textResult(res.error ?? "get_board failed", true);
+        }
+        return textResult(
+          JSON.stringify(
+            {
+              board: res.board,
+              nodes: res.nodes,
+              threads: res.threads,
+              thread_truncated: res.thread_truncated,
+            },
+            null,
+            2,
+          ),
+        );
+      }
+
+      case "search_boards": {
+        const sessionId = ensureSession();
+        const a = args as {
+          query: string;
+          scope?: "this_session" | "all";
+          limit?: number;
+        };
+        const res = await brokerFetch<{
+          ok: boolean;
+          matches?: any[];
+          error?: string;
+        }>("/search-boards", {
+          session_id: sessionId,
+          query: a.query,
+          scope: a.scope,
+          limit: a.limit,
+        });
+        if (!res.ok) {
+          return textResult(res.error ?? "search_boards failed", true);
+        }
+        return textResult(JSON.stringify(res.matches, null, 2));
       }
 
       case "reset_unanswered_posts": {

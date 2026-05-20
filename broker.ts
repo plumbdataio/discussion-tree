@@ -26,6 +26,7 @@ import { routes as feedbackRoutes } from "./broker/feedback.ts";
 import { getBoardView } from "./broker/helpers.ts";
 import { routes as nodesRoutes } from "./broker/nodes.ts";
 import { initPower, routes as powerRoutes } from "./broker/power.ts";
+import { routes as readsRoutes } from "./broker/reads.ts";
 import {
   cleanStaleSessions,
   handleListSessions,
@@ -60,6 +61,7 @@ const POST_ROUTES: Record<string, RouteHandler> = {
   ...uploadsRoutes,
   ...feedbackRoutes,
   ...powerRoutes,
+  ...readsRoutes,
 };
 
 // --- HTTP + WebSocket server ---
