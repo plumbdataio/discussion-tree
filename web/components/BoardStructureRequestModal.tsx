@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { postBoardStructureRequest } from "../utils/api.ts";
@@ -54,7 +55,9 @@ export function BoardStructureRequestModal({
     }
   }
 
-  return (
+  // Portal into document.body so .board-container's layout containment
+  // can't trap the fixed backdrop.
+  return createPortal(
     <div
       className="modal-backdrop"
       onClick={() => {
@@ -115,6 +118,7 @@ export function BoardStructureRequestModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { SupportedLanguage } from "../i18n.ts";
@@ -49,7 +50,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  return (
+  // Portal into document.body so .board-container's layout containment
+  // can't trap the fixed backdrop.
+  return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
       <div
         className="modal-content settings-modal"
@@ -151,6 +154,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
         <p className="settings-footer">{t("settings.footer")}</p>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

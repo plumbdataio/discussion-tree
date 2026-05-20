@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
@@ -32,7 +33,9 @@ export function MessageModal({
           ? "system"
           : source;
 
-  return (
+  // Portal through to document.body so ancestor stacking contexts (e.g.
+  // .board-container's container-type) can't trap the backdrop in a sub-area.
+  return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
       <div
         className={`modal-content modal-source-${source}`}
@@ -59,6 +62,7 @@ export function MessageModal({
           </ReactMarkdown>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

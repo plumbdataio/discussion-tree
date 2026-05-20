@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
@@ -26,7 +27,12 @@ export function ConcernPreviewModal({
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  return (
+  // Render through a portal into document.body so that ancestor stacking
+  // contexts / layout containment (e.g. `.board-container` has
+  // `container-type: inline-size`, which establishes layout containment and
+  // captures `position: fixed` descendants) can't trap the backdrop inside
+  // a sub-area of the page.
+  return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
       <div
         className="modal-content node-modal concern-preview-modal"
@@ -63,6 +69,7 @@ export function ConcernPreviewModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

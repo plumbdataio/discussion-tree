@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
@@ -128,7 +129,9 @@ export function NodeModal({
     }
   };
 
-  return (
+  // Portal into document.body so .board-container's layout containment
+  // (container-type: inline-size) can't trap the fixed backdrop.
+  return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
       <div
         className="modal-content node-modal"
@@ -249,6 +252,7 @@ export function NodeModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
