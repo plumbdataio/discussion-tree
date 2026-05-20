@@ -74,6 +74,22 @@ When sharing a newly-created board URL with the user (in post_to_node or CLI), i
 COHESION GRANULARITY:
 A board is the single settle-able unit: "1 board = 1 actionable feature / decision". When ALL concerns and items in a board settle, one piece of downstream work can proceed. The corollary: do NOT mix topics that can settle independently into one board. If Topic A and Topic B can each settle on their own and either can be implemented without waiting for the other, they belong in separate boards. The UI naturally shows one board at a time, so this granularity also reads more intuitively. Within a board, multiple concerns are appropriate only when they are sub-axes that ALL need to settle together (e.g., "frontend FW choice" + "backend FW choice" + "deployment target choice" all need answers before coding can start — one board with three concerns). If a concern feels independently actionable from the others in the same board, split it into its own board instead.
 
+NODE / CONCERN TITLE FORMATTING:
+Board readability depends heavily on title consistency. When you add nodes (concerns or items) to the SAME board, follow these rules so the cards read as a clean uniform list:
+
+  - **Keep titles SHORT** — aim for under 40 characters; never exceed 60. Long titles wrap awkwardly in the card UI and bury the meaning. Long detail belongs in `context`, not `title`.
+  - **Do NOT repeat context the board or concern already provides.** If the board is "bsb-admin env review" and the concern is "Supabase keys", a child item titled "bsb-admin: SUPABASE_SECRET_KEY の方針" is redundant — the bsb-admin / Supabase context is implicit. Just write "SUPABASE_SECRET_KEY の方針". Same for prefixes like "cloud-run:", "frontend:", "API:" when the board / concern already scopes that.
+  - **Pick ONE grammatical pattern per board** and stick to it. Mixing "〜の方針" / "〜未設定" / "〜の確認" / "〜どうするか" / "〜やるか" inside one board reads as random. Choose a single form up front for the items in this board, e.g.:
+    - All decision items → noun phrase: "〜の方針", "〜の選定", "〜の運用ルール"
+    - All confirmation items → noun phrase: "〜の確認", "〜の動作確認"
+    - All open questions → question form: "〜どうするか", "〜とは何か"
+    Don't mix patterns within the same concern.
+  - **Match the language to the user's working language** (Japanese in a JP session, English in an EN session). Don't switch mid-board.
+  - **No trailing punctuation** (no terminal "?", "。", "!", "…").
+  - **Don't pack two topics into one node.** If a title would naturally want "X と Y" or "X 及び Y", it's two nodes.
+
+These rules apply equally to add_concern, add_item, create_board (every title in the structure tree), and update_node when renaming an existing node. When extending an existing board, look at the current sibling titles FIRST and match their pattern instead of introducing a new one.
+
 NODE GRANULARITY:
 Each node should represent ONE decision / answer / option that the user can comment on or evaluate INDEPENDENTLY. When you have multiple alternatives the user needs to weigh (e.g., "option A vs B vs C", or "approach X / Y / Z"), do NOT bundle them into a single node titled "A or B or C — pick one". Create ONE node PER alternative under a shared concern, so the user can comment on each option separately and you can record per-option Pros/Cons. The whole point of this tool is per-option parallel evaluation; bundling alternatives defeats that. Add a separate "decision" / "final" node where the chosen alternative is recorded.
 

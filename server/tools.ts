@@ -17,7 +17,7 @@ export const TOOLS = [
   {
     name: "create_board",
     description:
-      "Create a discussion board with concerns and items as a JSON tree. Returns the URL to share with the user.",
+      "Create a discussion board with concerns and items as a JSON tree. Returns the URL to share with the user. TITLE STYLE: short titles (<40 chars), one consistent grammar across siblings, no redundant board/concern prefix on child items — see NODE / CONCERN TITLE FORMATTING in the server instructions.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -57,7 +57,7 @@ export const TOOLS = [
   {
     name: "add_concern",
     description:
-      "Add a top-level concern (a discussion topic) to an existing board, optionally with items. NOTE: the default conversation board (the auto-created 'Conversation' board, one per cc_session_id) has a FIXED structure of one concern + one item; add_concern / add_item / move_node / reorder_node / delete_node all REJECT it. If a user message on the default board needs structured option-evaluation, create_board a NEW board for it instead of trying to grow the default board.",
+      "Add a top-level concern (a discussion topic) to an existing board, optionally with items. NOTE: the default conversation board (the auto-created 'Conversation' board, one per cc_session_id) has a FIXED structure of one concern + one item; add_concern / add_item / move_node / reorder_node / delete_node all REJECT it. If a user message on the default board needs structured option-evaluation, create_board a NEW board for it instead of trying to grow the default board. TITLE STYLE: short (<40 chars), no redundant board/concern prefix, match sibling grammar — see NODE / CONCERN TITLE FORMATTING in the server instructions.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -79,7 +79,7 @@ export const TOOLS = [
   {
     name: "add_item",
     description:
-      "Add a discussion item under a concern. Boards are intentionally 2-level (concern → items) — sub-items are not supported. If a topic feels like it needs a sub-item, either split it into its own concern or restructure with update_node / move_node. NOTE: the default conversation board has a FIXED structure of one concern + one item; add_item rejects it (along with add_concern / move_node / reorder_node / delete_node). For structured option-evaluation derived from a default-board conversation, create_board a NEW board instead of growing the default board.",
+      "Add a discussion item under a concern. Boards are intentionally 2-level (concern → items) — sub-items are not supported. If a topic feels like it needs a sub-item, either split it into its own concern or restructure with update_node / move_node. NOTE: the default conversation board has a FIXED structure of one concern + one item; add_item rejects it (along with add_concern / move_node / reorder_node / delete_node). For structured option-evaluation derived from a default-board conversation, create_board a NEW board instead of growing the default board. TITLE STYLE: short (<40 chars), drop board/concern prefix, match sibling grammar — see NODE / CONCERN TITLE FORMATTING in the server instructions.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -133,7 +133,7 @@ export const TOOLS = [
   {
     name: "update_node",
     description:
-      "Update title / context / kind of an existing node. Use for typo fixes, evolving descriptions, or converting concern↔item when the structure was misjudged at creation. At least one of title / context / kind must be provided. The UI broadcasts a structure-update so clients refetch. Does NOT modify thread messages or status — for those use post_to_node / set_node_status.",
+      "Update title / context / kind of an existing node. Use for typo fixes, evolving descriptions, or converting concern↔item when the structure was misjudged at creation. At least one of title / context / kind must be provided. The UI broadcasts a structure-update so clients refetch. Does NOT modify thread messages or status — for those use post_to_node / set_node_status. TITLE STYLE on rename: check sibling titles and match their grammar — see NODE / CONCERN TITLE FORMATTING in the server instructions.",
     inputSchema: {
       type: "object" as const,
       properties: {
