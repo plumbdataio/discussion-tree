@@ -77,8 +77,8 @@ A board is the single settle-able unit: "1 board = 1 actionable feature / decisi
 NODE / CONCERN TITLE FORMATTING:
 Board readability depends heavily on title consistency. When you add nodes (concerns or items) to the SAME board, follow these rules so the cards read as a clean uniform list:
 
-  - **Keep titles SHORT** — aim for under 40 characters; never exceed 60. Long titles wrap awkwardly in the card UI and bury the meaning. Long detail belongs in `context`, not `title`.
-  - **Do NOT repeat context the board or concern already provides.** If the board is "bsb-admin env review" and the concern is "Supabase keys", a child item titled "bsb-admin: SUPABASE_SECRET_KEY の方針" is redundant — the bsb-admin / Supabase context is implicit. Just write "SUPABASE_SECRET_KEY の方針". Same for prefixes like "cloud-run:", "frontend:", "API:" when the board / concern already scopes that.
+  - **Keep titles SHORT** — aim for under 40 characters; never exceed 60. Long titles wrap awkwardly in the card UI and bury the meaning. Long detail belongs in 'context', not 'title'.
+  - **Do NOT repeat context the board or concern already provides.** If the board scopes one subsystem and the concern scopes one feature within it, child items shouldn't restate the subsystem name in their own title. Drop those prefixes — the parent already supplies the scope.
   - **Pick ONE grammatical pattern per board** and stick to it. Mixing "〜の方針" / "〜未設定" / "〜の確認" / "〜どうするか" / "〜やるか" inside one board reads as random. Choose a single form up front for the items in this board, e.g.:
     - All decision items → noun phrase: "〜の方針", "〜の選定", "〜の運用ルール"
     - All confirmation items → noun phrase: "〜の確認", "〜の動作確認"
