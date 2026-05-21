@@ -261,6 +261,11 @@ export interface SessionListItem {
   // per-session activity indicator so the user can see at a glance which
   // OTHER sessions are busy while they look at one in particular.
   activity?: Activity | null;
+  // Latest context-window free % reported by the CC statusline hook.
+  // remaining_pct is 0..100 (already includes the 4% safety margin from
+  // statusline-command.sh). null when no report has arrived yet, or
+  // when the CC session is dead.
+  context_usage?: { remaining_pct: number; set_at: string } | null;
   boards: BoardListItem[];
   archived_boards?: BoardListItem[];
 }
@@ -279,4 +284,9 @@ export interface BoardView {
   // null when the owning session has no human-set name yet — the frontend
   // falls back to the session id in that case (or just omits the segment).
   owner_session_name?: string | null;
+  // null when no CC statusline report has reached the broker yet for
+  // this session (e.g. fresh broker, or the CC's first PostToolUse
+  // hasn't fired since attach). The board header renders a colored
+  // chip from this when present.
+  owner_context_usage?: { remaining_pct: number; set_at: string } | null;
 }

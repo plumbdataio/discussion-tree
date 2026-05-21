@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { Activity, BoardView } from "../../shared/types.ts";
 import { ActivityBadge } from "./ActivityBadge.tsx";
 import { BoardStructureRequestModal } from "./BoardStructureRequestModal.tsx";
+import { ContextMeter } from "./ContextMeter.tsx";
 import { ConcernColumn } from "./ConcernColumn.tsx";
 import { DefaultBoardLayout } from "./DefaultBoardLayout.tsx";
 import { Sidebar } from "./Sidebar.tsx";
@@ -189,6 +190,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           {data.board.closed ? t("header.board_meta_closed") : ""}
         </span>
         {headerActivity && <ActivityBadge activity={headerActivity} />}
+        <ContextMeter usage={data.owner_context_usage} prefix="Context: " />
         {!data.board.is_default && (
           <button
             type="button"

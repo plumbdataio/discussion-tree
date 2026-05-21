@@ -15,6 +15,7 @@ import {
   selectThreadsByBoard,
 } from "./db.ts";
 import { activities } from "./activity.ts";
+import { getContextUsage } from "./context-usage.ts";
 
 // Board / session / node IDs act as bearer capabilities for /api/board/:id
 // and /ws/:id — anyone who learns the ID can fetch and subscribe. So the
@@ -108,6 +109,10 @@ export function getBoardView(boardId: string) {
   // Clockify's auto-tracker (and other browser-based time trackers) pick
   // up as the activity description when the tab is the active page.
   const owner_session_name = ownerRow?.name ?? null;
+  // Mirror context-meter info onto the board view too — saves the
+  // header from doing a second /api/sessions fetch just to read one
+  // number per page render.
+  const owner_context_usage = getContextUsage(board.session_id);
   return {
     board,
     nodes,
@@ -115,6 +120,7 @@ export function getBoardView(boardId: string) {
     activity,
     owner_alive,
     owner_session_name,
+    owner_context_usage,
   };
 }
 

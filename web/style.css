@@ -377,6 +377,37 @@ body {
    (tool use / thinking / blocked) so the user can tell at a glance from
    the sidebar that a session they're not currently looking at has work
    happening. */
+
+/* Context-window free % chip rendered in the board header. Colored by
+   severity: green when plenty of headroom, amber when nearing 20%, red
+   when <= 5% (the CC statusline's compact-mandatory band). */
+.context-meter {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.context-meter.context-ok {
+  color: #166534;
+  border-color: #86efac;
+  background: #dcfce7;
+}
+.context-meter.context-warn {
+  color: #92400e;
+  border-color: #fcd34d;
+  background: #fef3c7;
+}
+.context-meter.context-critical {
+  color: #991b1b;
+  border-color: #fca5a5;
+  background: #fee2e2;
+  font-weight: 700;
+}
+
 .session-activity-indicator {
   display: inline-flex;
   align-items: center;

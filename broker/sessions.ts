@@ -5,6 +5,7 @@
 // counts into the shape the sidebar / dashboards expect.
 
 import { activities } from "./activity.ts";
+import { getContextUsage } from "./context-usage.ts";
 import { db, insertSession, updateSessionSeen } from "./db.ts";
 import { ensureDefaultBoard } from "./default-board.ts";
 import { generateId } from "./helpers.ts";
@@ -309,6 +310,7 @@ export function handleListSessions() {
     // events still drive instant updates; this is the initial value + a
     // self-healing fallback for tabs that miss a WS frame.
     const activity = activities.get(s.id) ?? null;
+    const context_usage = getContextUsage(s.id);
     return {
       id: s.id,
       name: s.name,
@@ -316,6 +318,7 @@ export function handleListSessions() {
       alive: s.alive,
       cc_session_id: s.cc_session_id,
       activity,
+      context_usage,
       boards: enrichBoards(activeBoards),
       archived_boards: enrichBoards(archivedBoards),
     };

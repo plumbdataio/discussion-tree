@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { SessionListItem } from "../../shared/types.ts";
+import { ContextMeter } from "./ContextMeter.tsx";
 import { EditableSessionName } from "./EditableSessionName.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { normalizeBoardStatus } from "../utils/constants.ts";
@@ -98,6 +99,7 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
             }}
           />
         </h1>
+        <ContextMeter usage={data.context_usage} prefix="Context: " />
         <span className="meta">
           {t("session_dashboard.session_meta_boards", {
             cwd: data.cwd,

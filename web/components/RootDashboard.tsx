@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { SessionListItem } from "../../shared/types.ts";
+import { ContextMeter } from "./ContextMeter.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 
 export function RootDashboard() {
@@ -52,6 +53,7 @@ export function RootDashboard() {
                       count: s.boards.length,
                     })}
                   </span>
+                  <ContextMeter usage={s.context_usage} />
                 </div>
               </a>
             ))}
