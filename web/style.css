@@ -135,10 +135,80 @@ body {
      hamburger, dashboard cards stack) — leave the board itself as-is so it
      scrolls horizontally just like on desktop. */
 
+  /* Mobile: lay the header out as a single horizontally-scrolling row
+     instead of wrapping. Two reasons:
+       1. The thread eats the vertical real-estate a wrapped header
+          would steal.
+       2. Activity / context-meter chips appear and disappear at
+          runtime; with a wrapping header that would change the
+          header height every time, jolting the layout. A scrolling
+          row keeps the header height constant. */
   .header {
-    flex-wrap: wrap;
-    padding-left: 52px;
-    gap: 8px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px 12px 8px 52px;
+    gap: 6px;
+    /* Hide the horizontal scrollbar; flick-to-scroll still works. */
+    scrollbar-width: none;
+  }
+  .header::-webkit-scrollbar {
+    display: none;
+  }
+  .header > * {
+    flex-shrink: 0;
+  }
+
+  /* Mobile: the board-meta line ("ボード: bd_xxx · concern 数: N") is
+     debug-grade info — useful on desktop, never worth a header slot on
+     a phone screen. Hide it. */
+  .header .meta {
+    display: none;
+  }
+
+  /* Mobile: trim the h1 so more chips fit on the visible portion of the
+     scrolling header before the user has to flick. */
+  .header h1 {
+    font-size: 15px;
+  }
+
+  /* Mobile: the unread "全部既読化" button has a long Japanese label;
+     compact padding + smaller font keeps it from claiming a disproportionate
+     fraction of the header. */
+  .header .mark-all-read {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  /* Mobile: faint ▶ / ◀ affordance at the bottom edges of the
+     scrolling header whenever there's content out of view that
+     direction. BoardApp toggles the .can-scroll-left/right classes
+     from a scroll + ResizeObserver. The arrows are tiny and below the
+     content so they hint without crowding the chips. */
+  .header.can-scroll-left::before,
+  .header.can-scroll-right::after {
+    position: absolute;
+    bottom: 0;
+    font-size: 9px;
+    line-height: 1;
+    color: var(--muted);
+    opacity: 0.55;
+    pointer-events: none;
+    /* Header itself is scrollable so the absolute positioning needs to
+       sit on the scroll viewport, not the inner content. position:
+       sticky on the inner content + fixed left/right works too but
+       absolute on the header's box is simpler. */
+  }
+  .header {
+    position: relative;
+  }
+  .header.can-scroll-left::before {
+    content: "◀";
+    left: 4px;
+  }
+  .header.can-scroll-right::after {
+    content: "▶";
+    right: 4px;
   }
 
   .board-cards {
@@ -155,22 +225,19 @@ body {
     line-height: 1.4;
   }
 
-  /* Mobile: the default board's welcome banner ate a noticeable chunk of
-     vertical real-estate at desktop sizing. Shrink the text and tighten
-     padding so the conversation thread starts higher on the viewport.
-     Note: the `<div class="default-board-context md-body">` wrapper inherits
-     `.md-body { font-size: 13px; line-height: 1.55 }` defined later in the
-     file. Equal specificity + later rule = .md-body wins. We bump the
-     selector specificity by AND-ing both classes (`.A.B` → 0,2,0) so the
-     mobile override actually applies. */
+  /* Mobile: the default-board welcome banner ("ここでの投稿は CC への
+     直接メッセージとして届きます。") is informational and adds zero
+     value once the user has used the board even once. Hide it entirely
+     so the conversation thread starts at the top of the visible area. */
   .default-board-context.md-body {
-    font-size: 10px;
-    line-height: 1.35;
-    padding: 4px 10px;
-    margin-bottom: 4px;
+    display: none;
   }
-  .default-board-context.md-body p {
-    margin: 0;
+
+  /* Mobile: the live/offline WS indicator in the header takes up an
+     entire chip and the same information is implicit when the user
+     can actually see new messages arrive. Hide it. */
+  .header .ws-status {
+    display: none;
   }
 
   /* Mobile: shrink the outer board-container padding (24px desktop) so the
@@ -1779,6 +1846,12 @@ body.concern-resizing * {
 
 .header .activity-badge {
   margin: 0 12px;
+  /* `.activity-badge` sets `align-self: flex-start` so it pins to the
+     top inside the item card's flex column. The header is a different
+     flex container (align-items: center) and that override pulled the
+     pill a few pixels above the rest of the chips. Re-anchor it to
+     center alignment so all the header chips share a baseline. */
+  align-self: center;
 }
 
 /* per-state color variations on the activity badge.
@@ -1937,7 +2010,12 @@ body.concern-resizing * {
   margin: 6px 0 0;
   color: #3f3f3f;
   font-size: 12px;
-  white-space: pre-wrap;
+  /* No `white-space: pre-wrap` — the context wrapper is always a markdown
+     body. Markdown source's blank-line-as-paragraph-break is already
+     translated to <p> / <ul> / etc by react-markdown; leaving pre-wrap
+     here also rendered the in-source whitespace verbatim inside each
+     block, ballooning the gap between e.g. a bold lead-in and the
+     following bullet list. */
   overflow-wrap: anywhere;
   /* Cap at 10% of the viewport — empirically tuned via DevTools. With
      .thread's min-height: 200px below, this keeps the thread + textarea
@@ -1975,9 +2053,21 @@ body.concern-resizing * {
   padding: 6px 10px;
   border-radius: 6px;
   font-size: 13px;
+  /* pre-wrap so plain-text user messages keep their newlines. The nested
+     markdown body (rendered through MDView) opts back to normal below so
+     in-source whitespace between e.g. a paragraph and a following list
+     doesn't get faithfully shown as a giant gap. */
   white-space: pre-wrap;
   word-break: break-word;
   position: relative;
+}
+.thread-msg .md-body,
+.thread-msg .md-body * {
+  white-space: normal;
+}
+.thread-msg .md-body pre,
+.thread-msg .md-body pre * {
+  white-space: pre;
 }
 
 .msg-expand {
@@ -2331,9 +2421,48 @@ body.concern-resizing * {
   margin-bottom: 0;
 }
 
+/* Visible separation between sibling block types (e.g. a paragraph
+   followed by a list, or a list followed by a heading). The per-tag
+   margin rules below give 0.4em-ish vertical space, which collapses
+   to feeling cramped when the tags switch — this rule re-adds a
+   readable 0.8em gap between consecutive children. Adjacent same-type
+   siblings (paragraph + paragraph, list + list) keep the tighter spacing
+   via the more-specific rules below. */
+/* The selectors below MUST out-specify `.md-body p` / `.md-body ul,ol`
+   (0,1,1). `.md-body > * + *` is only 0,1,0 and lost the cascade, which
+   is why earlier attempts at this gap did not visibly change anything.
+   Listing concrete element names brings us to 0,1,2 (one class + two
+   tags) so the override actually applies. */
+.md-body > * + p,
+.md-body > * + ul,
+.md-body > * + ol,
+.md-body > * + h1,
+.md-body > * + h2,
+.md-body > * + h3,
+.md-body > * + h4,
+.md-body > * + h5,
+.md-body > * + h6,
+.md-body > * + pre,
+.md-body > * + blockquote,
+.md-body > * + table,
+.md-body > * + hr {
+  margin-top: 0.8em !important;
+}
+/* Same-type siblings stay tight. Specificity 0,1,2 again. */
+.md-body > p + p,
+.md-body > ul + ul,
+.md-body > ol + ol {
+  margin-top: 0.4em;
+}
+
 .md-body p {
   margin: 0.4em 0;
-  white-space: pre-wrap;
+  /* No `white-space: pre-wrap` here. Markdown source whitespace (e.g.
+     a paragraph followed by a couple of blank lines before a list) was
+     being faithfully rendered, which left an enormous gap inside the
+     card. Standard markdown semantics already collapse those into
+     paragraph break + sibling margins; let the browser do that. */
+  white-space: normal;
   word-break: break-word;
 }
 

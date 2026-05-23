@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Wand2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Activity, BoardView } from "../../shared/types.ts";
@@ -28,6 +28,13 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     Record<string, Activity | null>
   >({});
   const [structureRequestOpen, setStructureRequestOpen] = useState(false);
+  // Tracks whether the (mobile) horizontally-scrolling header has content
+  // hidden to either side. Drives the faint left/right arrow affordances
+  // injected via CSS `::before` / `::after`. Re-evaluated on scroll, on
+  // header resize, and on every data fetch (chip set can change).
+  const [headerCanLeft, setHeaderCanLeft] = useState(false);
+  const [headerCanRight, setHeaderCanRight] = useState(false);
+  const headerRef = useRef<HTMLElement | null>(null);
 
   const fetchBoard = useCallback(async () => {
     if (!boardId) return;
@@ -129,6 +136,29 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     return () => ws.close();
   }, [boardId, fetchBoard]);
 
+  // Watch the header for "is there content out of view?" so the CSS-level
+  // arrow affordances only show when there's actually somewhere to flick.
+  // Reruns when the board data changes — chips (activity / context-meter /
+  // structure-request button) come and go with the data.
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const check = () => {
+      const left = el.scrollLeft > 1;
+      const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+      setHeaderCanLeft((prev) => (prev === left ? prev : left));
+      setHeaderCanRight((prev) => (prev === right ? prev : right));
+    };
+    check();
+    el.addEventListener("scroll", check, { passive: true });
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", check);
+      ro.disconnect();
+    };
+  }, [data]);
+
   const handleSubmit = useCallback(
     async (nodeId: string, text: string) => {
       if (!boardId) throw new Error("no board");
@@ -172,7 +202,14 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
 
   return (
     <div className="app">
-      <header className="header">
+      <header
+        ref={headerRef}
+        className={
+          "header" +
+          (headerCanLeft ? " can-scroll-left" : "") +
+          (headerCanRight ? " can-scroll-right" : "")
+        }
+      >
         <a
           className="breadcrumb"
           href={"/session/" + data.board.session_id}

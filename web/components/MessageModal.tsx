@@ -2,9 +2,7 @@ import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { MarkdownAnchor, urlTransform } from "./MarkdownAnchor.tsx";
+import { MDView } from "./MDView.tsx";
 
 export function MessageModal({
   text,
@@ -50,17 +48,7 @@ export function MessageModal({
           <X size={18} strokeWidth={1.75} />
         </button>
         <div className="modal-who">{who}</div>
-        <div className="modal-body md-body">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            urlTransform={urlTransform}
-            components={{
-              a: ({ node, ...props }) => <MarkdownAnchor {...props} />,
-            }}
-          >
-            {text}
-          </ReactMarkdown>
-        </div>
+        <MDView className="modal-body" text={text} />
       </div>
     </div>,
     document.body,

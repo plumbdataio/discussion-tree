@@ -2,10 +2,8 @@ import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import type { Node } from "../../shared/types.ts";
-import { MarkdownAnchor, urlTransform } from "./MarkdownAnchor.tsx";
+import { MDView } from "./MDView.tsx";
 
 // Read-only enlarged view of a concern (title + context only — child nodes
 // are intentionally omitted; concerns are category headers and their value as
@@ -51,17 +49,7 @@ export function ConcernPreviewModal({
         </div>
         <div className="node-modal-scroll">
           {concern.context ? (
-            <div className="node-modal-context md-body">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                urlTransform={urlTransform}
-                components={{
-                  a: ({ node: _n, ...props }) => <MarkdownAnchor {...props} />,
-                }}
-              >
-                {concern.context}
-              </ReactMarkdown>
-            </div>
+            <MDView className="node-modal-context" text={concern.context} />
           ) : (
             <div className="empty" style={{ padding: 12 }}>
               {t("concern_card.no_context")}

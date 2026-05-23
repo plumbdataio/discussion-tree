@@ -11,7 +11,6 @@
 import type { Activity, SetActivityRequest } from "../shared/types.ts";
 import { db } from "./db.ts";
 import { broadcastToAll } from "./ws.ts";
-import { AUTO_ACTIVITY_TIMEOUT_MS } from "./config.ts";
 
 export const activities = new Map<string, Activity>();
 const toolHeartbeats = new Map<string, number>();
@@ -166,19 +165,15 @@ export const routes = {
   "/blocked-on-user-clear": handleBlockedOnUserClear,
 };
 
-// Watchdog — clear stale auto-activity entries when neither Stop nor
-// /clear-tool-activity got through (CC crash mid-turn etc).
+// Watchdog — used to auto-clear stale "working" entries after
+// AUTO_ACTIVITY_TIMEOUT_MS when neither Stop nor /clear-tool-activity
+// got through. Disabled at user request: the timeout was clearing
+// badges that were actually still relevant (long-running tool calls
+// look idle to the watchdog), so the badge would disappear and
+// reappear mid-task. Stop / clear-tool-activity / explicit overrides
+// continue to clear normally; the only thing this no-op'd path lost
+// is the safety net for a CC that crashes silently. Re-enable if
+// stuck badges become a problem in practice.
 export function startActivityWatchdog() {
-  setInterval(() => {
-    const now = Date.now();
-    for (const [sid, at] of toolHeartbeats.entries()) {
-      if (now - at <= AUTO_ACTIVITY_TIMEOUT_MS) continue;
-      toolHeartbeats.delete(sid);
-      const cur = activities.get(sid);
-      if (cur && cur.state === "working") {
-        activities.delete(sid);
-        broadcastActivity(sid, null);
-      }
-    }
-  }, 1000);
+  // intentionally a no-op
 }

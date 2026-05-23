@@ -68,7 +68,25 @@ export function DefaultBoardLayout({
 
   useEffect(() => {
     const el = threadRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    // Initial snap to bottom. The single-pass version stopped one render
+    // short on real conversations because markdown images, code blocks,
+    // and async font swaps grow the thread height AFTER the first paint
+    // — the scrollTop computed here was still correct relative to the
+    // height at that instant. Re-pin a few times across the next ~600ms
+    // so late content hydration also lands us at the actual bottom.
+    const pin = () => {
+      el.scrollTop = el.scrollHeight;
+    };
+    pin();
+    const raf = requestAnimationFrame(pin);
+    const t1 = window.setTimeout(pin, 200);
+    const t2 = window.setTimeout(pin, 600);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, [myThread.length, tentativeText]);
 
   const handleImageFiles = async (files: File[]) => {

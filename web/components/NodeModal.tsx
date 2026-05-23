@@ -2,10 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import type { Node, ThreadItem } from "../../shared/types.ts";
-import { MarkdownAnchor, urlTransform } from "./MarkdownAnchor.tsx";
+import { MDView } from "./MDView.tsx";
 import { renderSystemMessage } from "./SystemMessage.tsx";
 import { getBoardIdFromUrl } from "../utils/url.ts";
 import { extractImageFiles, uploadImage } from "../utils/api.ts";
@@ -153,17 +151,7 @@ export function NodeModal({
         </div>
         <div className="node-modal-scroll" ref={threadRef}>
           {node.context && (
-            <div className="node-modal-context md-body">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                urlTransform={urlTransform}
-                components={{
-                  a: ({ node: _n, ...props }) => <MarkdownAnchor {...props} />,
-                }}
-              >
-                {node.context}
-              </ReactMarkdown>
-            </div>
+            <MDView className="node-modal-context" text={node.context} />
           )}
           {(threadItems.length > 0 || tentativeText) && (
             <div className="node-modal-thread">
@@ -186,17 +174,7 @@ export function NodeModal({
                         {formatThreadTimestamp(it.created_at)}
                       </span>
                     </div>
-                    <div className="md-body modal-body">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        urlTransform={urlTransform}
-                        components={{
-                          a: ({ node: _n, ...props }) => <MarkdownAnchor {...props} />,
-                        }}
-                      >
-                        {it.text}
-                      </ReactMarkdown>
-                    </div>
+                    <MDView className="modal-body" text={it.text} />
                   </div>
                 );
               })}
@@ -206,17 +184,7 @@ export function NodeModal({
                     {t("item_card.you")} <span className="loading-spinner" />{" "}
                     {t("item_card.sending")}
                   </div>
-                  <div className="md-body modal-body">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      urlTransform={urlTransform}
-                      components={{
-                        a: ({ node: _n, ...props }) => <MarkdownAnchor {...props} />,
-                      }}
-                    >
-                      {tentativeText}
-                    </ReactMarkdown>
-                  </div>
+                  <MDView className="modal-body" text={tentativeText} />
                 </div>
               )}
             </div>
