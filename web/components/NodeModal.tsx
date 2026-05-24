@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Node, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
+import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
 import { renderSystemMessage } from "./SystemMessage.tsx";
 import { getBoardIdFromUrl } from "../utils/url.ts";
 import { extractImageFiles, uploadImage } from "../utils/api.ts";
@@ -189,6 +190,7 @@ export function NodeModal({
               )}
             </div>
           )}
+          <ScrollToBottomButton scrollRef={threadRef} />
         </div>
         <div className="node-modal-input">
           <textarea

@@ -7,6 +7,7 @@ import { MDView } from "./MDView.tsx";
 import { MessageModal } from "./MessageModal.tsx";
 import { NodeModal } from "./NodeModal.tsx";
 import { renderSystemMessage } from "./SystemMessage.tsx";
+import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
 import { extractImageFiles, uploadImage } from "../utils/api.ts";
 import { useDraft } from "../utils/drafts.ts";
 import { formatThreadTimestamp } from "../utils/format.ts";
@@ -233,6 +234,7 @@ export function ItemCard({
               <MDView text={tentativeText} />
             </div>
           )}
+          <ScrollToBottomButton scrollRef={threadRef} />
         </div>
       )}
 

@@ -180,6 +180,33 @@ body {
     padding: 3px 8px;
   }
 
+  /* Mobile item-card layout: the previous combination of
+     `.context max-height: 10dvh` + `.thread min-height: 200px` plus the
+     scrolling header left no room for the input row, so the send button
+     could fall below the visible card area. Tighten context + thread
+     floor on mobile and pin the input row so it never gets pushed off. */
+  .item-card .context {
+    max-height: 8dvh;
+  }
+  .item-card > .thread {
+    min-height: 100px;
+    /* Reserve room at the bottom so the last few messages and any
+       status-change system entries don't sit underneath the sticky
+       input row below. */
+    padding-bottom: 70px;
+  }
+  .item-card > .input-row {
+    flex: 0 0 auto;
+    min-height: 56px;
+    /* Stick the row to the bottom of the visible card so it's always
+       reachable even when nested flex math wants to push it off. */
+    position: sticky;
+    bottom: 0;
+    background: var(--panel);
+    padding-top: 4px;
+    z-index: 2;
+  }
+
   /* Mobile: faint ▶ / ◀ affordance at the bottom edges of the
      scrolling header whenever there's content out of view that
      direction. BoardApp toggles the .can-scroll-left/right classes
@@ -941,6 +968,7 @@ a.session-name:hover {
   display: flex;
   flex-direction: column;
   width: 100%;
+  position: relative;
   max-width: 880px;
   margin: 0 auto;
   /* Fill the board-container slot — no viewport guessing needed since the
@@ -2821,6 +2849,45 @@ button.secondary {
 /* Sidebar drawer shadow on mobile. */
 :root[data-theme="dark"] .sidebar.open {
   box-shadow: 2px 0 16px rgba(0, 0, 0, 0.6);
+}
+
+/* "Jump to latest" affordance — appears bottom-right of any thread that
+   isn't currently scrolled to its last entry. Offset from the scrollbar
+   gutter (right: 16px) and just above the input row (bottom: 70px = the
+   sticky input-row reservation we added on mobile). z-index above thread
+   contents but below modals. */
+/* Placed as the last child of a scrollable thread; sticky to the bottom
+   of that scrollport so it rides over the content right side without
+   overlapping the input row underneath. margin-left: auto pushes it to
+   the right edge while staying inside the thread's padding. */
+.scroll-to-bottom {
+  position: sticky;
+  bottom: 8px;
+  margin-left: auto;
+  margin-right: 4px;
+  display: flex;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  z-index: 3;
+  opacity: 0.9;
+  transition: opacity 0.15s, transform 0.15s;
+  /* Don't claim flex grow space inside flex-column threads. */
+  flex: 0 0 32px;
+  align-self: flex-end;
+}
+.scroll-to-bottom:hover {
+  opacity: 1;
+  color: var(--text);
+  transform: translateY(-1px);
 }
 
 /* Modal backdrop is already a translucent black, so no override needed. */

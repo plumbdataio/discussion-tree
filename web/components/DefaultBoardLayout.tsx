@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { BoardView, Node, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
 import { MessageModal } from "./MessageModal.tsx";
+import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
 import { renderSystemMessage } from "./SystemMessage.tsx";
 import { extractImageFiles, uploadImage } from "../utils/api.ts";
 import { useDraft } from "../utils/drafts.ts";
@@ -219,6 +220,7 @@ export function DefaultBoardLayout({
             <MDView text={tentativeText} />
           </div>
         )}
+        <ScrollToBottomButton scrollRef={threadRef} />
       </div>
       <div className="default-board-input">
         <textarea
