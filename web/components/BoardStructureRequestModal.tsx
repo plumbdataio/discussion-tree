@@ -4,7 +4,11 @@ import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { BoardView, ThreadItem } from "../../shared/types.ts";
 import { ThreadMessage } from "./ThreadMessage.tsx";
-import { postBoardStructureRequest } from "../utils/api.ts";
+import {
+  extractImageFiles,
+  postBoardStructureRequest,
+  uploadImage,
+} from "../utils/api.ts";
 import { translateError } from "../utils/errors.ts";
 
 // Free-text modal for asking the CC to restructure a board (add a concern,
@@ -30,6 +34,7 @@ export function BoardStructureRequestModal({
   const { t } = useTranslation();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -84,6 +89,57 @@ export function BoardStructureRequestModal({
       /* network blip — count stays unread, next thread update retries */
     });
   }, [logThread]);
+
+  // Mirrors the existing ItemCard / DefaultBoardLayout image flow:
+  // dropped or pasted image files get uploaded to the broker's
+  // /uploads/<board>/ and the markdown reference + absolute filesystem
+  // path get appended to the text body. Claude can then pick up the
+  // image via the Read tool using the path.
+  async function handleImageFiles(files: File[]) {
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      const uploaded: { url: string; path: string }[] = [];
+      for (const f of files) {
+        try {
+          uploaded.push(await uploadImage(f, boardId));
+        } catch (e) {
+          alert(
+            t("item_card.image_upload_failed", {
+              message: e instanceof Error ? e.message : String(e),
+            }),
+          );
+        }
+      }
+      if (uploaded.length > 0) {
+        setText((prev) => {
+          const sep = prev && !prev.endsWith("\n") ? "\n" : "";
+          const block = uploaded
+            .map((u) => `![image](${u.url})\n[image] [${u.path}](${u.url})`)
+            .join("\n\n");
+          return prev + sep + block + "\n";
+        });
+      }
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const files = extractImageFiles(e.clipboardData?.items ?? null);
+    if (files.length > 0) {
+      e.preventDefault();
+      handleImageFiles(files);
+    }
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLTextAreaElement>) {
+    const files = extractImageFiles(e.dataTransfer?.files ?? null);
+    if (files.length > 0) {
+      e.preventDefault();
+      handleImageFiles(files);
+    }
+  }
 
   async function submit() {
     if (!text.trim() || sending) return;
@@ -164,12 +220,19 @@ export function BoardStructureRequestModal({
               void submit();
             }
           }}
+          onPaste={handlePaste}
+          onDrop={handleDrop}
           rows={8}
           placeholder={t("structure_request.placeholder")}
           disabled={sending}
         />
         {error && <div className="modal-error">{error}</div>}
         <div className="modal-actions">
+          {uploading && (
+            <span className="upload-status">
+              {t("item_card.image_uploading")}
+            </span>
+          )}
           <button
             type="button"
             className="modal-cancel"
@@ -182,7 +245,7 @@ export function BoardStructureRequestModal({
             type="button"
             className="modal-submit"
             onClick={() => void submit()}
-            disabled={sending || !text.trim()}
+            disabled={sending || uploading || !text.trim()}
           >
             {sending
               ? t("structure_request.sending")
