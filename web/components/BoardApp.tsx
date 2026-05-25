@@ -35,6 +35,11 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   const [headerCanLeft, setHeaderCanLeft] = useState(false);
   const [headerCanRight, setHeaderCanRight] = useState(false);
   const headerRef = useRef<HTMLElement | null>(null);
+  // Bumped by Page Lifecycle "resume" events so the WS effect below
+  // re-runs (re-establishes a fresh socket) after the browser unfreezes
+  // the tab — the previous socket would have been closed by the
+  // freeze handler.
+  const [wsEpoch, setWsEpoch] = useState(0);
 
   const fetchBoard = useCallback(async () => {
     if (!boardId) return;
@@ -87,6 +92,17 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     // Track in-flight flash timers so unmount / board switch clears them
     // and we don't leak setState calls into a torn-down tree.
     const flashTimers = new Set<ReturnType<typeof setTimeout>>();
+    // Page Lifecycle: close the socket cleanly when the browser is about
+    // to freeze the tab. A frozen tab can't send WS frames anyway, and
+    // a still-open socket can mislead the OS into thinking we're active.
+    const onFreeze = () => {
+      try {
+        ws.close();
+      } catch {
+        /* ignore — close may race with native teardown */
+      }
+    };
+    document.addEventListener("freeze", onFreeze as any);
     ws.addEventListener("message", (e) => {
       let msg: any = null;
       try {
@@ -139,11 +155,25 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
       fetchBoard();
     });
     return () => {
+      document.removeEventListener("freeze", onFreeze as any);
       ws.close();
       for (const h of flashTimers) clearTimeout(h);
       flashTimers.clear();
     };
-  }, [boardId, fetchBoard]);
+  }, [boardId, fetchBoard, wsEpoch]);
+
+  // Page Lifecycle: the browser unfreezes the tab. Re-fetch the board so
+  // we catch up on any state that moved while we slept, and bump
+  // wsEpoch so the WS effect above tears down + re-establishes the
+  // socket (the freeze handler closed it).
+  useEffect(() => {
+    const onResume = () => {
+      fetchBoard();
+      setWsEpoch((n) => n + 1);
+    };
+    document.addEventListener("resume", onResume as any);
+    return () => document.removeEventListener("resume", onResume as any);
+  }, [fetchBoard]);
 
   // Watch the header for "is there content out of view?" so the CSS-level
   // arrow affordances only show when there's actually somewhere to flick.
