@@ -80,7 +80,7 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
         if (activeBoardLine) reminderParts.push(activeBoardLine);
       } else if (kind === "board_structure_request" && msg.board_id) {
         reminderParts.push(
-          `[discussion-tree] The user submitted a STRUCTURE-CHANGE request for board "${msg.board_id}". Interpret the message above as instructions to modify the board's structure: use add_concern, add_item, update_node, move_node, reorder_node, or delete_node as appropriate. Apply the changes, then post a short summary of what you did to the board's default node (or, if there's no obviously-fitting summary node, pick the most relevant item) via post_to_node so the user can confirm. Do NOT treat this as a thread reply.`,
+          `[discussion-tree] The user submitted a STRUCTURE-CHANGE request for board "${msg.board_id}". Interpret the message above as instructions to modify the board's structure: use add_concern, add_item, update_node, move_node, reorder_node, or delete_node as appropriate. Apply the changes, then append a SHORT SUMMARY of what you did (or chose NOT to do, with reason) to that board's dedicated audit-trail node — to find it, call get_board(board_id="${msg.board_id}") and look for the item node with is_log=1 (titled "Structure changes" under the "Board log" concern). Post your summary there via post_to_node. The user's original request is already auto-recorded on that same log node, so your post pairs with it. Do NOT post into any user content node, and do NOT treat this as a normal thread reply.`,
         );
       }
       const content =

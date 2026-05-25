@@ -21,6 +21,7 @@ import {
 import { broadcast, broadcastToAll } from "./ws.ts";
 import { SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
 import { buildNodePath } from "./helpers.ts";
+import { ensureBoardLogNode } from "./structure-log.ts";
 import { markWorkingFromUserSubmit } from "./activity.ts";
 
 // Same helper as broker/nodes.ts — node status mutations may flip the
@@ -203,10 +204,22 @@ export async function handleSubmitAnswer(body: any): Promise<
         [board.session_id],
       );
 
-      // board_structure_request: no node-level mirror or status bump — the
-      // request doesn't belong to any specific node and the CC will report
-      // back via post_to_node after applying the structure change.
+      // board_structure_request: no node-level mirror or status bump on
+      // any user content node, but we DO append the raw request text to
+      // the per-board structure-change log so the user has an audit
+      // trail of "what was asked + (later) what was done". The CC is
+      // expected to append its own summary post on the same log node
+      // after applying the changes — see server/instructions.ts.
       if (isStructureRequest) {
+        const log = ensureBoardLogNode(body.board_id);
+        if (log) {
+          insertThread.run(body.board_id, log.nodeId, "user", body.text, now);
+          broadcast(body.board_id, {
+            type: "thread-update",
+            node_id: log.nodeId,
+            source: "user",
+          });
+        }
         return { ok: true };
       }
       // Delivered: NOW persist into the public thread + broadcast so every
