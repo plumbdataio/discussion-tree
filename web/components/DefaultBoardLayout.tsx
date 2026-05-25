@@ -4,7 +4,7 @@ import type { BoardView, Node, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
 import { MessageModal } from "./MessageModal.tsx";
 import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
-import { ThreadMessage } from "./ThreadMessage.tsx";
+import { ThreadList, type ThreadListHandle } from "./ThreadList.tsx";
 import { extractImageFiles, uploadImage } from "../utils/api.ts";
 import { useDraft } from "../utils/drafts.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
@@ -43,7 +43,8 @@ export function DefaultBoardLayout({
   const [uploading, setUploading] = useState(false);
   const [tentativeText, setTentativeText] = useState<string | null>(null);
   const [expandedMsg, setExpandedMsg] = useState<ThreadItem | null>(null);
-  const threadRef = useRef<HTMLDivElement>(null);
+  const threadRef = useRef<HTMLElement | null>(null);
+  const virtuosoRef = useRef<ThreadListHandle>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useMarkReadOnVisible(rootRef, myThread);
@@ -66,16 +67,17 @@ export function DefaultBoardLayout({
   };
 
   useEffect(() => {
-    const el = threadRef.current;
-    if (!el) return;
-    // Initial snap to bottom. The single-pass version stopped one render
-    // short on real conversations because markdown images, code blocks,
-    // and async font swaps grow the thread height AFTER the first paint
-    // — the scrollTop computed here was still correct relative to the
-    // height at that instant. Re-pin a few times across the next ~600ms
-    // so late content hydration also lands us at the actual bottom.
+    // Virtuoso has followOutput="auto" already, but on initial mount /
+    // after a long re-fetch the dynamic-height measurement can land us
+    // slightly above the actual bottom. Re-pin a few times across the
+    // next ~600ms so late markdown / image hydration also ends at the
+    // true last message.
+    if (!myThread.length) return;
     const pin = () => {
-      el.scrollTop = el.scrollHeight;
+      virtuosoRef.current?.scrollToIndex({
+        index: "LAST",
+        behavior: "auto",
+      });
     };
     pin();
     const raf = requestAnimationFrame(pin);
@@ -180,19 +182,15 @@ export function DefaultBoardLayout({
       <div className="default-board-context md-body">
         <MDView text={t("default_board.welcome_message")} />
       </div>
-      <div className="default-board-thread" ref={threadRef}>
-        {myThread.map((it) => (
-          <ThreadMessage key={it.id} item={it} onExpand={openExpandedMsg} />
-        ))}
-        {tentativeText && (
-          <div className="thread-msg from-user pending">
-            <span className="who">
-              {t("item_card.you")} <span className="loading-spinner" />{" "}
-              {t("item_card.sending")}
-            </span>
-            <MDView text={tentativeText} />
-          </div>
-        )}
+      <div className="default-board-thread-wrap">
+        <ThreadList
+          ref={virtuosoRef}
+          className="default-board-thread"
+          items={myThread}
+          tentativeText={tentativeText}
+          onExpand={openExpandedMsg}
+          scrollRef={threadRef}
+        />
         <ScrollToBottomButton scrollRef={threadRef} />
       </div>
       <div className="default-board-input">
