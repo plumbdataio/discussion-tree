@@ -402,13 +402,27 @@ export function Sidebar({
       }
     };
     fetchSessions();
-    const interval = setInterval(fetchSessions, 10000);
+    // Skip the 10s poll while the tab is in the background — iOS Safari
+    // suspends/discards inactive tabs under memory pressure, and a
+    // ticking interval keeps the renderer "active" enough to count
+    // against that budget. Resume immediately on visibilitychange so
+    // the UI catches up the moment the user returns.
+    const tick = () => {
+      if (document.hidden) return;
+      fetchSessions();
+    };
+    const interval = setInterval(tick, 10000);
+    const onVisibility = () => {
+      if (!document.hidden) fetchSessions();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     // BoardApp dispatches this when the broker tells it unread counts shifted.
     const onRefresh = () => fetchSessions();
     window.addEventListener("pd-sidebar-refresh", onRefresh);
     return () => {
       cancelled = true;
       clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pd-sidebar-refresh", onRefresh);
     };
   }, []);

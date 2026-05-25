@@ -84,6 +84,9 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     const ws = new WebSocket(`${proto}://${window.location.host}/ws/${boardId}`);
     ws.addEventListener("open", () => setWsConnected(true));
     ws.addEventListener("close", () => setWsConnected(false));
+    // Track in-flight flash timers so unmount / board switch clears them
+    // and we don't leak setState calls into a torn-down tree.
+    const flashTimers = new Set<ReturnType<typeof setTimeout>>();
     ws.addEventListener("message", (e) => {
       let msg: any = null;
       try {
@@ -103,13 +106,15 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
             next.add(id);
             return next;
           });
-          setTimeout(() => {
+          const handle = setTimeout(() => {
+            flashTimers.delete(handle);
             setFlashingNodes((prev) => {
               const next = new Set(prev);
               next.delete(id);
               return next;
             });
           }, 1500);
+          flashTimers.add(handle);
         } else if (msg.type === "activity") {
           const sid: string = msg.session_id;
           setActivitiesBySession((prev) => ({
@@ -133,7 +138,11 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
       }
       fetchBoard();
     });
-    return () => ws.close();
+    return () => {
+      ws.close();
+      for (const h of flashTimers) clearTimeout(h);
+      flashTimers.clear();
+    };
   }, [boardId, fetchBoard]);
 
   // Watch the header for "is there content out of view?" so the CSS-level

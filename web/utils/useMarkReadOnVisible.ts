@@ -39,6 +39,14 @@ export function useMarkReadOnVisible(
 
     const tick = () => {
       if (posted) return;
+      // Tab in the background: nothing the user can be "looking at",
+      // and on iOS Safari a ticking interval keeps the renderer active
+      // and contributes to tab-eviction pressure. Skip the work; resume
+      // on the next tick after the tab becomes visible again.
+      if (document.hidden) {
+        visibleSince = null;
+        return;
+      }
       const r = card.getBoundingClientRect();
       if (r.height === 0) {
         visibleSince = null;
