@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Maximize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Activity, Node, ThreadItem } from "../../shared/types.ts";
@@ -6,11 +6,10 @@ import { ActivityBadge } from "./ActivityBadge.tsx";
 import { MDView } from "./MDView.tsx";
 import { MessageModal } from "./MessageModal.tsx";
 import { NodeModal } from "./NodeModal.tsx";
-import { renderSystemMessage } from "./SystemMessage.tsx";
 import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
+import { ThreadMessage } from "./ThreadMessage.tsx";
 import { extractImageFiles, uploadImage } from "../utils/api.ts";
 import { useDraft } from "../utils/drafts.ts";
-import { formatThreadTimestamp } from "../utils/format.ts";
 import { getBoardIdFromUrl } from "../utils/url.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useSettings } from "../utils/settings.ts";
@@ -69,6 +68,12 @@ export function ItemCard({
       /* network blip — UI stays unread, user can retry */
     });
   };
+
+  // Stable identity so memoized ThreadMessage doesn't re-render on every
+  // parent re-render (i.e. every keystroke in the draft textarea).
+  const openExpandedMsg = useCallback((it: ThreadItem) => {
+    setExpandedMsg(it);
+  }, []);
 
   useEffect(() => {
     const el = threadRef.current;
@@ -189,42 +194,9 @@ export function ItemCard({
 
       {(myThread.length > 0 || tentativeText) && (
         <div className="thread" ref={threadRef}>
-          {myThread.map((it) => {
-            if (it.source === "system") {
-              return (
-                <div key={it.id} className="thread-msg from-system">
-                  {renderSystemMessage(it.text)}
-                </div>
-              );
-            }
-            const isUnread = it.source === "cc" && !it.read_at;
-            return (
-              <div
-                key={it.id}
-                className={`thread-msg from-${it.source}${isUnread ? " unread" : ""}`}
-                data-unread-id={isUnread ? it.id : undefined}
-              >
-                {/* `msg-expand` must come BEFORE the text content so its
-                    `float: right + position: sticky` anchors at the message's
-                    top-right and tracks the thread scroll without dropping
-                    out of flow (absolute would defeat sticky). */}
-                <button
-                  className="msg-expand"
-                  title={t("item_card.expand_message")}
-                  onClick={() => setExpandedMsg(it)}
-                >
-                  <Maximize2 size={12} strokeWidth={1.75} />
-                </button>
-                <span className="who">
-                  {it.source === "user" ? t("item_card.you") : t("item_card.claude")}
-                  <span className="thread-msg-time" title={it.created_at}>
-                    {formatThreadTimestamp(it.created_at)}
-                  </span>
-                </span>
-                <MDView text={it.text} />
-              </div>
-            );
-          })}
+          {myThread.map((it) => (
+            <ThreadMessage key={it.id} item={it} onExpand={openExpandedMsg} />
+          ))}
           {tentativeText && (
             <div className="thread-msg from-user pending">
               <span className="who">

@@ -6,7 +6,7 @@ import { ChevronDown } from "lucide-react";
 // the latest message. Re-evaluates on scroll, on container resize, and
 // on every immediate child resize so newly-arrived markdown / image
 // content also flips the button on.
-export function ScrollToBottomButton({
+function ScrollToBottomButtonImpl({
   scrollRef,
 }: {
   scrollRef: React.RefObject<HTMLElement | null>;
@@ -51,3 +51,8 @@ export function ScrollToBottomButton({
     </button>
   );
 }
+
+// Memoized: scrollRef is a stable useRef on the caller side, so this
+// component never needs to re-render just because the parent did
+// (e.g. on every textarea keystroke).
+export const ScrollToBottomButton = React.memo(ScrollToBottomButtonImpl);

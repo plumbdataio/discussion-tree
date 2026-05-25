@@ -15,7 +15,7 @@ function severityClass(pct: number): string {
 // board header, the session dashboard header, and the root-dashboard
 // session cards. Returns null when no usage has been reported yet, so
 // callers can drop in `<ContextMeter usage={...} />` unconditionally.
-export function ContextMeter({
+function ContextMeterImpl({
   usage,
   prefix,
 }: {
@@ -37,3 +37,15 @@ export function ContextMeter({
     </span>
   );
 }
+
+// Memoized so the chip doesn't re-render on every parent re-render
+// (BoardApp updates state on every WS message / draft keystroke).
+// Custom comparator: usage prop is a fresh object on each fetch, but
+// the displayed value only depends on remaining_pct + set_at.
+export const ContextMeter = React.memo(
+  ContextMeterImpl,
+  (prev, next) =>
+    prev.prefix === next.prefix &&
+    prev.usage?.remaining_pct === next.usage?.remaining_pct &&
+    prev.usage?.set_at === next.usage?.set_at,
+);

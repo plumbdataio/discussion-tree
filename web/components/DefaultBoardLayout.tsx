@@ -1,14 +1,12 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Maximize2 } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { BoardView, Node, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
 import { MessageModal } from "./MessageModal.tsx";
 import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
-import { renderSystemMessage } from "./SystemMessage.tsx";
+import { ThreadMessage } from "./ThreadMessage.tsx";
 import { extractImageFiles, uploadImage } from "../utils/api.ts";
 import { useDraft } from "../utils/drafts.ts";
-import { formatThreadTimestamp } from "../utils/format.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useSettings } from "../utils/settings.ts";
 
@@ -165,6 +163,12 @@ export function DefaultBoardLayout({
     }
   };
 
+  // Stable identity so memoized ThreadMessage skips reconciliation
+  // on every keystroke in the draft textarea.
+  const openExpandedMsg = useCallback((it: ThreadItem) => {
+    setExpandedMsg(it);
+  }, []);
+
   return (
     <div
       ref={rootRef}
@@ -177,40 +181,9 @@ export function DefaultBoardLayout({
         <MDView text={t("default_board.welcome_message")} />
       </div>
       <div className="default-board-thread" ref={threadRef}>
-        {myThread.map((it) => {
-          if (it.source === "system") {
-            return (
-              <div key={it.id} className="thread-msg from-system">
-                {renderSystemMessage(it.text)}
-              </div>
-            );
-          }
-          const isUnread = it.source === "cc" && !it.read_at;
-          return (
-            <div
-              key={it.id}
-              className={`thread-msg from-${it.source}${isUnread ? " unread" : ""}`}
-              data-unread-id={isUnread ? it.id : undefined}
-            >
-              {/* msg-expand placed BEFORE the text so float+sticky anchors
-                  at the message top-right and survives thread scroll. */}
-              <button
-                className="msg-expand"
-                title={t("item_card.expand_message")}
-                onClick={() => setExpandedMsg(it)}
-              >
-                <Maximize2 size={12} strokeWidth={1.75} />
-              </button>
-              <span className="who">
-                {it.source === "user" ? t("item_card.you") : t("item_card.claude")}
-                <span className="thread-msg-time" title={it.created_at}>
-                  {formatThreadTimestamp(it.created_at)}
-                </span>
-              </span>
-              <MDView text={it.text} />
-            </div>
-          );
-        })}
+        {myThread.map((it) => (
+          <ThreadMessage key={it.id} item={it} onExpand={openExpandedMsg} />
+        ))}
         {tentativeText && (
           <div className="thread-msg from-user pending">
             <span className="who">
