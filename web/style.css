@@ -987,35 +987,25 @@ a.session-name:hover {
   flex: 0 0 auto;
 }
 
-/* Wrapper for the virtualized thread + the floating "scroll to
-   bottom" button. position: relative so the button absolutely-
-   positions against this box. */
-.default-board-thread-wrap {
-  flex: 1 1 auto;
-  min-height: 0;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  padding: 4px 2px;
-}
-
-/* The class lands on Virtuoso's outer element, which sizes its own
-   internal scroller. We don't apply overflow/scrollbar styles here
-   anymore — Virtuoso manages overflow on its inner scroller. */
 .default-board-thread {
   flex: 1 1 auto;
   min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 2px;
+  scrollbar-width: none;
+}
+.default-board-thread::-webkit-scrollbar {
+  display: none;
 }
 
-/* Items rendered by Virtuoso are not flex children, so the old
-   `gap: 8px` from .default-board-thread doesn't apply. Re-create the
-   spacing via per-item margin. */
 .default-board-thread .thread-msg {
   padding: 8px 12px;
   border-radius: 8px;
   position: relative;
   font-size: 14px;
-  margin-bottom: 8px;
 }
 
 .default-board-input {
