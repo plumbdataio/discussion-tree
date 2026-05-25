@@ -245,6 +245,16 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   const concerns = (childrenByParent.get(null) ?? []).filter(
     (c) => c.is_log !== 1,
   );
+  // Count unread Claude responses in the structure-change log so the
+  // modal trigger can advertise that there's something new to read.
+  const logItem = data.nodes.find(
+    (n) => n.is_log === 1 && n.kind === "item",
+  );
+  const logUnreadCount = logItem
+    ? (data.threads[logItem.id] ?? []).filter(
+        (it) => it.source === "cc" && !it.read_at,
+      ).length
+    : 0;
   const ownerAlive = data.owner_alive !== false; // default to true if undefined (legacy)
 
   // Pick the activity belonging to this board's owning session, falling back to
@@ -290,13 +300,17 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
         {!data.board.is_default && (
           <button
             type="button"
-            className="board-request-trigger"
+            className={
+              "board-request-trigger" +
+              (logUnreadCount > 0 ? " has-unread" : "")
+            }
             onClick={() => setStructureRequestOpen(true)}
             title={t("structure_request.trigger_title")}
             aria-label={t("structure_request.trigger_title")}
           >
             <Wand2 size={14} strokeWidth={1.75} />
             <span>{t("structure_request.trigger_label")}</span>
+            {logUnreadCount > 0 && <span className="unread-dot" />}
           </button>
         )}
         {!ownerAlive && (

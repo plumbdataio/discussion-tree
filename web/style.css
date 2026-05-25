@@ -2938,6 +2938,40 @@ button.secondary {
   border-color: var(--accent);
 }
 
+/* When the per-board structure-change log has unread Claude responses
+   that the user hasn't opened the modal to see yet, pulse the trigger
+   button (same low-amplitude red glow as the context-meter critical
+   band) and tack a sidebar-style red dot to the right of the label so
+   it's findable at a glance even on a busy header. */
+.board-request-trigger.has-unread {
+  animation: board-request-pulse 2.4s ease-in-out infinite;
+}
+.board-request-trigger .unread-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  margin-left: 4px;
+  box-shadow: 0 0 4px rgba(239, 68, 68, 0.5);
+  flex: 0 0 auto;
+}
+@keyframes board-request-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
+  }
+  50% {
+    box-shadow: 0 0 4px 1px rgba(220, 38, 38, 0.35);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-request-trigger.has-unread {
+    animation: none;
+    box-shadow: 0 0 3px 1px rgba(220, 38, 38, 0.25);
+  }
+}
+
 .modal-structure-request {
   border-left-color: #a855f7;
   max-width: 640px;

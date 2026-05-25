@@ -68,6 +68,23 @@ export function BoardStructureRequestModal({
     if (el) el.scrollTop = el.scrollHeight;
   }, [logThread.length]);
 
+  // Mark log-node Claude responses read whenever the modal is open and
+  // unread items are visible. Re-runs when the thread grows (a new
+  // arrival during the modal session also clears immediately).
+  useEffect(() => {
+    const unreadIds = logThread
+      .filter((it) => it.source === "cc" && !it.read_at)
+      .map((it) => it.id);
+    if (unreadIds.length === 0) return;
+    fetch("/mark-thread-items-read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thread_item_ids: unreadIds }),
+    }).catch(() => {
+      /* network blip — count stays unread, next thread update retries */
+    });
+  }, [logThread]);
+
   async function submit() {
     if (!text.trim() || sending) return;
     setSending(true);
