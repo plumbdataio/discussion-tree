@@ -9,6 +9,7 @@ import { ConcernColumn } from "./ConcernColumn.tsx";
 import { DefaultBoardLayout } from "./DefaultBoardLayout.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { postSubmitAnswer } from "../utils/api.ts";
+import { readBoardCache, writeBoardCache } from "../utils/boardCache.ts";
 import { translateError } from "../utils/errors.ts";
 import { buildTree } from "../utils/tree.ts";
 
@@ -52,6 +53,10 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
       }
       const view = (await res.json()) as BoardView;
       setData(view);
+      // Persist for next cold start (iOS tab eviction / hard reload).
+      writeBoardCache(boardId, view).catch(() => {
+        /* best effort */
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -62,7 +67,18 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
       setError(t("errors.not_found"));
       return;
     }
+    // Stale-while-revalidate: render the cached snapshot immediately so
+    // a reloaded tab has something on screen before the network round-
+    // trip completes, then overwrite once the fresh fetch lands.
+    let cancelled = false;
+    readBoardCache(boardId).then((cached) => {
+      if (cancelled || !cached) return;
+      setData((prev) => prev ?? cached);
+    });
     fetchBoard();
+    return () => {
+      cancelled = true;
+    };
   }, [boardId, fetchBoard, t]);
 
   // Keep document.title in sync with the loaded board so external trackers
