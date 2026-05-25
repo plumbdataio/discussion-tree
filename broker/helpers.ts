@@ -16,6 +16,7 @@ import {
 } from "./db.ts";
 import { activities } from "./activity.ts";
 import { getContextUsage } from "./context-usage.ts";
+import { ensureBoardLogNode } from "./structure-log.ts";
 
 // Board / session / node IDs act as bearer capabilities for /api/board/:id
 // and /ws/:id — anyone who learns the ID can fetch and subscribe. So the
@@ -92,6 +93,9 @@ export function structureHasSubItems(structure: any): boolean {
 export function getBoardView(boardId: string) {
   const board = selectBoard.get(boardId) as Board | null;
   if (!board) return null;
+  // Lazily ensure the per-board structure-change log concern + item
+  // exist before we read nodes. No-op for default boards. Idempotent.
+  ensureBoardLogNode(boardId);
   const nodes = selectNodesByBoard.all(boardId) as Node[];
   const threads = selectThreadsByBoard.all(boardId) as ThreadItem[];
   const threadsByNode: Record<string, ThreadItem[]> = {};

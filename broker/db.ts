@@ -106,6 +106,11 @@ db.run(`
 `);
 // Soft-delete preserves thread history when a node is "deleted".
 safeAlter("ALTER TABLE nodes ADD COLUMN deleted_at TEXT");
+// Marks the special "Board log" concern + its "Structure changes" item
+// that auto-record every board-structure-change request. These nodes
+// must never be deletable / movable / reorderable by the user or by
+// Claude, because the rest of the system assumes they're always there.
+safeAlter("ALTER TABLE nodes ADD COLUMN is_log INTEGER NOT NULL DEFAULT 0");
 
 db.run(`
   CREATE TABLE IF NOT EXISTS thread_items (
@@ -279,7 +284,10 @@ export function recomputeBoardStatus(boardId: string): BoardStatus | null {
   // landed on a verdict.
   const nodes = db
     .prepare(
-      "SELECT status FROM nodes WHERE board_id = ? AND kind = 'item' AND deleted_at IS NULL",
+      // is_log items are the auto-created "Structure changes" log node;
+      // they're not part of the user's actual decision space, so they
+      // shouldn't influence board-status rollup.
+      "SELECT status FROM nodes WHERE board_id = ? AND kind = 'item' AND deleted_at IS NULL AND is_log = 0",
     )
     .all(boardId) as { status: string }[];
   let target: BoardStatus;

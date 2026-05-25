@@ -84,6 +84,10 @@ export interface Node {
   status: NodeStatus;
   position: number;
   created_at: string;
+  // 1 = auto-created "Board log" concern or the "Structure changes" item
+  // beneath it. Frontends should render these with a localized title and
+  // hide structural-mutation affordances (delete / drag-reorder / etc).
+  is_log?: number;
 }
 
 export interface ThreadItem {

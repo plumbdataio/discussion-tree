@@ -87,7 +87,7 @@ describe("create-board reachability gate", () => {
     expect(r.json.error).toMatch(/attach_cc_session/i);
   });
 
-  test("create-board with empty concerns array works and produces a board with 0 nodes", async () => {
+  test("create-board with empty concerns array works and produces a board whose only nodes are the auto-created board-log structure", async () => {
     const s = await registerSession(broker.url, "/tmp/empty-concerns");
     await attachCC(broker.url, s);
     const r = await post<{ board_id: string }>(`${broker.url}/create-board`, {
@@ -96,7 +96,12 @@ describe("create-board reachability gate", () => {
     });
     expect(r.json.board_id).toMatch(/^bd_/);
     const v = await get<any>(`${broker.url}/api/board/${r.json.board_id}`);
-    expect(v.json.nodes.length).toBe(0);
+    // The "Board log" concern + "Structure changes" item are lazily
+    // created by getBoardView, so a fresh board with no user-supplied
+    // concerns still shows 2 nodes on first read.
+    const userNodes = v.json.nodes.filter((n: any) => n.is_log !== 1);
+    expect(userNodes.length).toBe(0);
+    expect(v.json.nodes.length).toBe(2);
   });
 });
 

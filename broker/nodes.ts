@@ -18,6 +18,18 @@ import {
   DEFAULT_BOARD_LOCKED_ERROR,
   isDefaultBoard,
 } from "./default-board.ts";
+
+// Helper for structural-mutation handlers: returns true and a friendly
+// error response when the target is a board-log node. The log concern +
+// log item are auto-created by getBoardView and must persist for the
+// life of the board so the audit trail stays intact.
+const BOARD_LOG_LOCKED_ERROR = "errors.board_log_protected";
+function isLogNode(boardId: string, nodeId: string): boolean {
+  const row = db
+    .prepare("SELECT is_log FROM nodes WHERE board_id = ? AND id = ?")
+    .get(boardId, nodeId) as { is_log: number } | undefined;
+  return row?.is_log === 1;
+}
 import { generateId, insertNodesRecursive, maxChildPos } from "./helpers.ts";
 
 // Helper: any node-structure / node-status mutation may flip the parent
@@ -213,6 +225,9 @@ export function handleDeleteNode(body: { board_id: string; node_id: string }) {
   if (isDefaultBoard(body.board_id)) {
     return { ok: false, error: DEFAULT_BOARD_LOCKED_ERROR };
   }
+  if (isLogNode(body.board_id, body.node_id)) {
+    return { ok: false, error: BOARD_LOG_LOCKED_ERROR };
+  }
   // Soft-delete: set deleted_at on the node and all descendants. Thread items
   // and pending messages are preserved (conversation history is permanent).
   const now = new Date().toISOString();
@@ -269,6 +284,9 @@ export function handleMoveNode(body: {
 }) {
   if (isDefaultBoard(body.board_id)) {
     return { ok: false, error: DEFAULT_BOARD_LOCKED_ERROR };
+  }
+  if (isLogNode(body.board_id, body.node_id)) {
+    return { ok: false, error: BOARD_LOG_LOCKED_ERROR };
   }
   const boardId = body.board_id;
   const nodeId = body.node_id;
@@ -336,6 +354,9 @@ export function handleReorderNode(body: {
 }) {
   if (isDefaultBoard(body.board_id)) {
     return { ok: false, error: DEFAULT_BOARD_LOCKED_ERROR };
+  }
+  if (isLogNode(body.board_id, body.node_id)) {
+    return { ok: false, error: BOARD_LOG_LOCKED_ERROR };
   }
   const boardId = body.board_id;
   const nodeId = body.node_id;
