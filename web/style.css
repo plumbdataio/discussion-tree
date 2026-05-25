@@ -65,11 +65,6 @@ body {
   font-weight: 600;
 }
 
-.header .meta {
-  color: var(--muted);
-  font-size: 12px;
-}
-
 .header .ws-status {
   margin-left: auto;
   font-size: 12px;
@@ -161,10 +156,8 @@ body {
 
   /* Mobile: the board-meta line ("ボード: bd_xxx · concern 数: N") is
      debug-grade info — useful on desktop, never worth a header slot on
-     a phone screen. Hide it. */
-  .header .meta {
-    display: none;
-  }
+     a phone screen. (Note: the .meta chip itself was removed across all
+     three pages on 2026-05-25; comment kept for context.) */
 
   /* Mobile: trim the h1 so more chips fit on the visible portion of the
      scrolling header before the user has to flick. */

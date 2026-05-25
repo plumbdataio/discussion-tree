@@ -100,12 +100,6 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
           />
         </h1>
         <ContextMeter usage={data.context_usage} prefix="Context: " />
-        <span className="meta">
-          {t("session_dashboard.session_meta_boards", {
-            cwd: data.cwd,
-            count: data.boards.length,
-          })}
-        </span>
       </header>
       <div className="app-body">
         <Sidebar currentBoardId={null} />

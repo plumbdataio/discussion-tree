@@ -23,9 +23,6 @@ export function RootDashboard() {
     <div className="app">
       <header className="header">
         <h1>discussion-tree</h1>
-        <span className="meta">
-          {t("root_dashboard.active_sessions_meta", { count: sessions.length })}
-        </span>
       </header>
       <div className="app-body">
         <Sidebar currentBoardId={null} />
