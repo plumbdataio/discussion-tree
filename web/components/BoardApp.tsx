@@ -290,7 +290,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
         <h1>
           {data.board.is_default ? t("default_board.title") : data.board.title}
         </h1>
-        {data.board.closed && (
+        {Boolean(data.board.closed) && (
           <span className="closed-badge" title={t("header.board_meta_closed")}>
             {t("header.board_meta_closed")}
           </span>
