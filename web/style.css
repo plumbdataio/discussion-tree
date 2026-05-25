@@ -1529,6 +1529,19 @@ a.session-name:hover {
   cursor: help;
 }
 
+/* Subtle "closed" badge for closed boards. The board-meta line that
+   used to host this was removed; we surface only the closed state now
+   because the rest (id, concern count) is derivable. */
+.closed-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--bg-elev, #f3f4f6);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: help;
+}
+
 textarea.answer-input:disabled {
   background: #f3f4f6;
   color: var(--muted);
