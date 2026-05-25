@@ -2,11 +2,12 @@ import React from "react";
 
 type Usage = { remaining_pct: number; set_at: string };
 
-// Severity bands mirror the statusline script's compact-judgement
-// thresholds: <= 5% is the "compact mandatory" red band, <= 20% is the
-// caution band, otherwise plenty of headroom.
+// Severity bands. <= 10% is the "compact imminent" red band (also
+// gets a subtle pulsing box-shadow via CSS so it's noticeable in
+// peripheral vision without dominating the chrome); <= 20% is the
+// caution band; otherwise plenty of headroom.
 function severityClass(pct: number): string {
-  if (pct <= 5) return "context-critical";
+  if (pct <= 10) return "context-critical";
   if (pct <= 20) return "context-warn";
   return "context-ok";
 }

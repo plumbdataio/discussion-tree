@@ -500,6 +500,25 @@ body {
   border-color: #fca5a5;
   background: #fee2e2;
   font-weight: 700;
+  /* Subtle pulsing red glow so the chip catches peripheral attention
+     when compact is imminent (<= 10% free). Amplitude kept low so it
+     doesn't dominate the chrome. */
+  animation: context-critical-pulse 2.4s ease-in-out infinite;
+}
+@keyframes context-critical-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
+  }
+  50% {
+    box-shadow: 0 0 4px 1px rgba(220, 38, 38, 0.35);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .context-meter.context-critical {
+    animation: none;
+    box-shadow: 0 0 3px 1px rgba(220, 38, 38, 0.25);
+  }
 }
 
 .session-activity-indicator {
