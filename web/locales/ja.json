@@ -116,7 +116,9 @@
     "placeholder": "例: 「リスク評価」という concern を最後に追加して、その下に「事業継続リスク」と「技術リスク」の 2 つの item を作って",
     "send": "送信 (Cmd/Ctrl+Enter)",
     "sending": "送信中…",
-    "cancel": "キャンセル"
+    "cancel": "キャンセル",
+    "history_title": "これまでの依頼履歴",
+    "history_empty": "まだ依頼はありません。"
   },
   "node_modal": {
     "title_label": "タイトル",

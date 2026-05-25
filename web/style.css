@@ -2959,6 +2959,43 @@ button.secondary {
   line-height: 1.55;
 }
 
+/* Per-board structure-change history shown above the input. Renders
+   the broker-managed log node thread (user requests + Claude summaries
+   in chronological order) so the modal doubles as an audit trail. */
+.modal-structure-history {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.modal-structure-history-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.modal-structure-history-empty {
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+.modal-structure-history-thread {
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 2px;
+}
+.modal-structure-history-thread .thread-msg {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
 .modal-textarea {
   width: 100%;
   min-height: 180px;

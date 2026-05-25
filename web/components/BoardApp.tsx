@@ -238,7 +238,13 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   }
 
   const childrenByParent = buildTree(data.nodes);
-  const concerns = childrenByParent.get(null) ?? [];
+  // Hide the per-board structure-change log concern from the main
+  // concerns row — its content lives inside the
+  // BoardStructureRequestModal instead, so it shouldn't add noise to
+  // the user's actual discussion topics.
+  const concerns = (childrenByParent.get(null) ?? []).filter(
+    (c) => c.is_log !== 1,
+  );
   const ownerAlive = data.owner_alive !== false; // default to true if undefined (legacy)
 
   // Pick the activity belonging to this board's owning session, falling back to
@@ -367,6 +373,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
       {structureRequestOpen && boardId && (
         <BoardStructureRequestModal
           boardId={boardId}
+          boardView={data}
           onClose={() => setStructureRequestOpen(false)}
         />
       )}

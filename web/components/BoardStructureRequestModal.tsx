@@ -1,7 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import type { BoardView, ThreadItem } from "../../shared/types.ts";
+import { ThreadMessage } from "./ThreadMessage.tsx";
 import { postBoardStructureRequest } from "../utils/api.ts";
 import { translateError } from "../utils/errors.ts";
 
@@ -10,11 +12,19 @@ import { translateError } from "../utils/errors.ts";
 // the existing /submit-answer endpoint with kind="board_structure_request",
 // so the same block-until-delivered semantics apply — the modal stays open
 // until the CC actually picks up the request.
+//
+// The modal also doubles as the per-board structure-change audit trail:
+// the broker auto-records each request to a dedicated log node (kind=item
+// with is_log=1) and the CC is asked to post a summary back to the same
+// node, so showing that node's thread inside this modal gives the user
+// "what I asked / what was done" in one place.
 export function BoardStructureRequestModal({
   boardId,
+  boardView,
   onClose,
 }: {
   boardId: string;
+  boardView: BoardView;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -34,6 +44,29 @@ export function BoardStructureRequestModal({
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
+
+  // Pull the per-board log item out of the supplied board view. The log
+  // node is auto-created by the broker on getBoardView, so as long as
+  // the user has the board open at all, boardView.nodes will include
+  // a single item with is_log === 1.
+  const logNode = boardView.nodes.find(
+    (n) => n.is_log === 1 && n.kind === "item",
+  );
+  const logThread: ThreadItem[] = logNode
+    ? boardView.threads[logNode.id] ?? []
+    : [];
+
+  // ThreadMessage wants a stable onExpand prop; we don't open a sub-
+  // modal from inside this modal, so noop it.
+  const noopExpand = useCallback(() => {}, []);
+
+  // Auto-pin the log thread to the bottom when entries arrive so the
+  // latest request/response pair is visible without scrolling.
+  const logRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = logRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [logThread.length]);
 
   async function submit() {
     if (!text.trim() || sending) return;
@@ -81,6 +114,28 @@ export function BoardStructureRequestModal({
         <p className="modal-description">
           {t("structure_request.description")}
         </p>
+        {logNode && (
+          <div className="modal-structure-history">
+            <h3 className="modal-structure-history-title">
+              {t("structure_request.history_title")}
+            </h3>
+            {logThread.length === 0 ? (
+              <div className="modal-structure-history-empty">
+                {t("structure_request.history_empty")}
+              </div>
+            ) : (
+              <div className="modal-structure-history-thread" ref={logRef}>
+                {logThread.map((it) => (
+                  <ThreadMessage
+                    key={it.id}
+                    item={it}
+                    onExpand={noopExpand}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <textarea
           ref={textareaRef}
           className="modal-textarea"

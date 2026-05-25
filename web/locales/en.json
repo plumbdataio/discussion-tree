@@ -116,7 +116,9 @@
     "placeholder": "e.g. \"Add a 'Risk assessment' concern at the end, with two items: 'business continuity risk' and 'technical risk'\"",
     "send": "Send (Cmd/Ctrl+Enter)",
     "sending": "Sending…",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "history_title": "Previous requests",
+    "history_empty": "No requests yet."
   },
   "node_modal": {
     "title_label": "Title",
