@@ -1,5 +1,6 @@
 import React from "react";
 import ReactMarkdown from "react-markdown";
+import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { MarkdownAnchor, urlTransform } from "./MarkdownAnchor.tsx";
 
@@ -13,8 +14,12 @@ function MDViewImpl({
   const cls = `md-body${className ? " " + className : ""}`;
   return (
     <div className={cls}>
+      {/* remark-breaks turns single newlines into <br> instead of
+          letting CommonMark collapse them to a space. Closer to what
+          users type in the textarea expect to see — the "GitHub
+          comment / chat" feel rather than strict CommonMark. */}
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkBreaks]}
         urlTransform={urlTransform}
         components={{
           a: ({ node, ...props }) => <MarkdownAnchor {...props} />,
