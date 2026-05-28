@@ -125,6 +125,34 @@ body {
 }
 
 @media (max-width: 768px) {
+  /* Mobile: anchor the chrome so the header can never scroll off-screen
+     and iOS Safari's rubber-band bounce can't drag the layout. We lock
+     html/body and pin .app to the full viewport rect; all scrolling
+     then happens INSIDE thread containers, which are already
+     overflow:auto. Without this, on iOS Safari the page itself ends up
+     scrollable (URL-bar collapse edge cases) and the header slides up
+     out of view. */
+  html,
+  body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  .app {
+    position: fixed;
+    inset: 0;
+  }
+  /* Bounce-off for every internal scroll container we surface on mobile.
+     overscroll-behavior: contain prevents scroll chaining; combined
+     with the html/body lock above, this removes the rubber-band feel
+     at the thread / board edges too. */
+  .board-container,
+  .default-board-thread,
+  .item-card > .thread,
+  .node-modal-scroll,
+  .modal-structure-history-thread {
+    overscroll-behavior: contain;
+  }
+
   /* Mobile: keep the desktop 2D layout (concerns horizontal, items horizontal
      within each concern). Only adjust outer chrome (header padding for the
      hamburger, dashboard cards stack) — leave the board itself as-is so it
