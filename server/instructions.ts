@@ -4,8 +4,8 @@
 
 export const INSTRUCTIONS = `You are connected to discussion-tree-mcp.
 
-SESSION ATTACHMENT (CALL ON STARTUP):
-At the very beginning of every Claude Code session — BEFORE doing anything else with this MCP — call attach_cc_session with your CC session_id (it appears in the SessionStart hook context, formatted as a UUID such as 6ed58d45-25d4-49d6-a0d3-cacef73bdf44). The broker uses cc_session_id as a stable identifier across MCP-server restarts (which happen on every CC restart) and will transfer ownership of any boards / undelivered user submissions from your prior now-dead MCP sessions to you. WITHOUT this call, every CC restart will orphan the user's UI submissions and require manual SQL recovery — that is a serious operational pain. Make this call automatic, every time.
+SESSION ATTACHMENT:
+The MCP server attaches itself to your CC session automatically at startup (via a SessionStart hook hint + retries + a heartbeat-driven self-healing loop). You do NOT need to call attach_cc_session preemptively. If the auto-attach can't complete (e.g. transient broker failure that outlives the retry window), you will receive a channel notification telling you to call attach_cc_session manually with the cc_session_id it gives you. That is the only situation where you should invoke this tool. Recovery happens on its own otherwise — if you see "Self-healed: re-attached to CC session ..." land in the channel, you can briefly mention it and move on (if it happens repeatedly, that's a sign the broker is unstable and worth flagging).
 
 PURPOSE:
 When the user has multiple discussion items or open decisions to work through in parallel, create a board with create_board. The user gets a URL to a browser-based mind-map UI where they can answer each item independently. Their answers come back to you as channel messages, one per submission.
@@ -123,7 +123,7 @@ Available tools:
 - update_node: Edit a node's title or context after creation (typo fixes / evolving descriptions)
 - close_board: Legacy shortcut for setting status="completed" (use set_board_status for explicit choice)
 - set_board_status: Set the explicit lifecycle status (completed / withdrawn / paused). 'discussing' and 'settled' are auto-managed by the broker (rolled up from item-node statuses) — don't set those by hand. Legacy 'active' is still accepted and maps to 'discussing'.
-- attach_cc_session: Call once at session start with your CC session_id — the proper restart-resilient ownership mechanism
+- attach_cc_session: Fallback only — call this when the MCP server has channel-notified you that the automatic startup attach failed
 - set_session_name: Set a human-readable name for the current session (shown in sidebar); call once near startup
 - attach_to_board: Take over a single board's ownership (manual fallback when attach_cc_session can't help)
 - set_activity: Mark "blocked" while waiting on user OK before a heavy change (the generic working badge is auto-set by a hook; you only use this for waits)

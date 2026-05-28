@@ -21,7 +21,14 @@ export function handleRegister(body: any) {
 
 export function handleHeartbeat(body: any) {
   updateSessionSeen.run(new Date().toISOString(), body.session_id);
-  return { ok: true };
+  // Mirror back the cc_session_id binding so the MCP server can run a
+  // cheap self-healing check on every heartbeat — if it sees null here
+  // (= auto-attach never made it through) it knows to retry. Single
+  // already-prepared SELECT, no extra round-trip.
+  const row = db
+    .prepare("SELECT cc_session_id FROM sessions WHERE id = ?")
+    .get(body.session_id) as { cc_session_id: string | null } | undefined;
+  return { ok: true, cc_session_id: row?.cc_session_id ?? null };
 }
 
 export function handleUnregister(body: any) {

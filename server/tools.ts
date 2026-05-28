@@ -248,7 +248,7 @@ export const TOOLS = [
   {
     name: "attach_cc_session",
     description:
-      "Call ONCE at the start of every Claude Code session, passing your CC session_id (visible in SessionStart hook context, a UUID). The broker associates the current MCP-server session with this stable cc_session_id and transfers ownership of boards / undelivered messages from any prior dead MCP session that had the same cc_session_id. Without this, user UI submissions orphan after every CC restart and must be SQL-redirected manually.",
+      "FALLBACK ONLY — the MCP server normally attaches itself automatically (via SessionStart hook hint + startup retries + heartbeat self-healing). Call this tool ONLY after the server channel-notifies you that automatic attach failed and explicitly asks you to attach manually. Passing the cc_session_id (UUID, visible in the channel notification or your SessionStart hook context) binds the broker session and reclaims boards / pending messages from prior dead MCP sessions with the same cc_session_id.",
     inputSchema: {
       type: "object" as const,
       properties: {
