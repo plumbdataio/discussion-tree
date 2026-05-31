@@ -68,9 +68,22 @@ const POST_ROUTES: Record<string, RouteHandler> = {
 
 // --- HTTP + WebSocket server ---
 
+// DISCUSSION_TREE_BIND lets you expose the broker to other devices
+// (e.g. via Tailscale Serve from a different LAN host) without
+// touching code. Default stays 127.0.0.1 so the safe path is the
+// default. Anything else means "no auth, anyone who can reach this
+// port can drive every MCP tool" — warn loudly so it's not done
+// accidentally.
+const BIND_HOST = process.env.DISCUSSION_TREE_BIND ?? "127.0.0.1";
+if (BIND_HOST !== "127.0.0.1" && BIND_HOST !== "localhost") {
+  console.error(
+    `[discussion-tree broker] WARNING: binding to ${BIND_HOST} — the broker has NO authentication, anything that can reach this port can read/write boards. Make sure only trusted hosts can reach it (Tailscale ACL / firewall).`,
+  );
+}
+
 const server = Bun.serve({
   port: PORT,
-  hostname: "127.0.0.1",
+  hostname: BIND_HOST,
   routes: {
     "/": indexHtml,
     "/board/:id": indexHtml,

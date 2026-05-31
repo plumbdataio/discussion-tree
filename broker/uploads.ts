@@ -70,9 +70,19 @@ export function handleOpenFile(body: { path?: string }):
   if (!fs.existsSync(resolved)) {
     return { ok: false, error: "file not found" };
   }
-  // macOS `open` — opens the file in its default application. We don't wait
-  // for the GUI app to launch.
-  Bun.spawn(["open", resolved]).unref();
+  // Hand the file to the OS so its default app opens it. Per-platform:
+  //   darwin  -> open <path>
+  //   win32   -> cmd /c start "" <path>   (empty "" is the window title)
+  //   linux   -> xdg-open <path>
+  // We don't wait for the GUI app to launch.
+  const platform = process.platform;
+  const argv =
+    platform === "darwin"
+      ? ["open", resolved]
+      : platform === "win32"
+        ? ["cmd", "/c", "start", "", resolved]
+        : ["xdg-open", resolved];
+  Bun.spawn(argv).unref();
   return { ok: true };
 }
 

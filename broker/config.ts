@@ -14,9 +14,12 @@ export const PORT = parseInt(
 // DISCUSSION_TREE_HOME is the umbrella state directory. Default:
 // $HOME/.discussion-tree. The MCP server, broker, and SessionStart hook
 // all read this same env so a shell-level override flows everywhere.
+// os.homedir() — not process.env.HOME — because HOME is unset on
+// stock Windows shells (would land us at "undefined/.discussion-tree").
+import { homedir } from "node:os";
+import { join } from "node:path";
 export const HOME_DIR =
-  process.env.DISCUSSION_TREE_HOME ??
-  `${process.env.HOME}/.discussion-tree`;
+  process.env.DISCUSSION_TREE_HOME ?? join(homedir(), ".discussion-tree");
 
 // DISCUSSION_TREE_DB takes precedence; otherwise the DB lives at the unified
 // path under HOME_DIR.
