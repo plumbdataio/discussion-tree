@@ -33,7 +33,16 @@ All three:
 ## Installing them
 
 Register the hook in `~/.claude/settings.json` with the absolute path
-to `bun` and to the script (PATH-independent):
+to `bun` and to the script (PATH-independent).
+
+> **Windows: use forward slashes in the absolute path.** Claude Code
+> runs hook commands through Git Bash (`/usr/bin/bash -c "<command>"`)
+> even on Windows. Bash treats `\` as an escape inside the quoted
+> string, so `C:\Users\me\.bun\bin\bun.exe` collapses to
+> `C:Usersme.bunbinbun.exe` and `command not found` fires. Write the
+> path with forward slashes — `C:/Users/me/.bun/bin/bun.exe` — and
+> bash leaves it intact. (`.claude.json` MCP server registrations
+> are fine with either form because they spawn via argv, not bash.)
 
 ```jsonc
 {
@@ -43,7 +52,7 @@ to `bun` and to the script (PATH-independent):
         "hooks": [
           {
             "type": "command",
-            "command": "<bun.exe absolute path> <repo>/scripts/ts/dt-session-start.ts"
+            "command": "C:/Users/<you>/.bun/bin/bun.exe <repo>/scripts/ts/dt-session-start.ts"
           }
         ]
       }
@@ -53,7 +62,7 @@ to `bun` and to the script (PATH-independent):
         "hooks": [
           {
             "type": "command",
-            "command": "<bun.exe absolute path> <repo>/scripts/ts/dt-tool-activity.ts"
+            "command": "C:/Users/<you>/.bun/bin/bun.exe <repo>/scripts/ts/dt-tool-activity.ts"
           }
         ]
       }
@@ -63,7 +72,7 @@ to `bun` and to the script (PATH-independent):
         "hooks": [
           {
             "type": "command",
-            "command": "<bun.exe absolute path> <repo>/scripts/ts/dt-tool-activity-clear.ts"
+            "command": "C:/Users/<you>/.bun/bin/bun.exe <repo>/scripts/ts/dt-tool-activity-clear.ts"
           }
         ]
       }
