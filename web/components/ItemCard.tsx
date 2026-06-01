@@ -192,23 +192,26 @@ export function ItemCard({
       {isActive && activity && <ActivityBadge activity={activity} />}
       {node.context && <MDView className="context" text={node.context} />}
 
-      {(myThread.length > 0 || tentativeText) && (
-        <div className="thread" ref={threadRef}>
-          {myThread.map((it) => (
-            <ThreadMessage key={it.id} item={it} onExpand={openExpandedMsg} />
-          ))}
-          {tentativeText && (
-            <div className="thread-msg from-user pending">
-              <span className="who">
-                {t("item_card.you")} <span className="loading-spinner" />{" "}
-                {t("item_card.sending")}
-              </span>
-              <MDView text={tentativeText} />
-            </div>
-          )}
-          <ScrollToBottomButton scrollRef={threadRef} />
-        </div>
-      )}
+      {/* Always render .thread, even when empty, so its flex:1 fills the
+          card and the input row stays anchored to the bottom regardless
+          of whether messages exist yet (= matches mobile's behaviour,
+          and avoids the per-card jitter where empty threads pulled the
+          input up to the title). */}
+      <div className="thread" ref={threadRef}>
+        {myThread.map((it) => (
+          <ThreadMessage key={it.id} item={it} onExpand={openExpandedMsg} />
+        ))}
+        {tentativeText && (
+          <div className="thread-msg from-user pending">
+            <span className="who">
+              {t("item_card.you")} <span className="loading-spinner" />{" "}
+              {t("item_card.sending")}
+            </span>
+            <MDView text={tentativeText} />
+          </div>
+        )}
+        <ScrollToBottomButton scrollRef={threadRef} />
+      </div>
 
       <div className="input-row">
         <textarea
