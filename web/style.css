@@ -2305,6 +2305,14 @@ body.concern-resizing * {
 .modal-body {
   font-size: 14px;
   line-height: 1.7;
+  /* Long ASCII runs (path lists, env-var names, package IDs separated
+     by / or _) don't have natural word boundaries, so the default
+     wrap algorithm leaves them as a single horizontally-scrolling line
+     until the next hyphen or space. Force a per-character wrap fallback
+     so they break inside the modal width — matches the .md-body code
+     rule that already does this for inline code. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .modal-body.md-body h1,
