@@ -2320,6 +2320,18 @@ body.concern-resizing * {
 
 .modal-body.md-body p {
   margin: 0.7em 0;
+  /* CommonMark would normally collapse a single source newline inside a
+     paragraph into a space. We use remark-breaks in MDView so those
+     newlines render as <br> instead, and the rule below forces the
+     <br> to actually take vertical space inside modal-body paragraphs
+     (without this, the <br> renders as a zero-height inline break and
+     long single-paragraph notes look like one giant line that needs
+     horizontal scroll). */
+}
+.modal-body.md-body p br {
+  display: block;
+  content: "";
+  margin-top: 0.3em;
 }
 
 .modal-body.md-body ul,
