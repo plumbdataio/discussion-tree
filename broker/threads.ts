@@ -63,18 +63,27 @@ export function handlePostToNode(body: any) {
     };
   }
 
-  // Decrement the owning session's unanswered counter — clamped at 0 so a
-  // bundled-reply pattern (one CC post answering multiple user submissions)
-  // doesn't drive it negative. The Stop hook uses this counter to nag the
-  // user only when something is actually still outstanding.
+  // Zero the owning session's unanswered counter. We treat a single CC
+  // post as covering every outstanding user submission so far (the
+  // "bundled-reply" pattern — the standard case when the user fires N
+  // channel pushes in quick succession and the CC answers them in one
+  // synthesized reply). If a FRESH user submission arrives after this
+  // post, handleSubmitAnswer bumps the counter back to 1 and the Stop
+  // hook nags correctly.
+  //
+  // This used to be `MAX(0, n - 1)` (= per-post decrement), but that
+  // produced spurious nags every time the CC bundled a reply: the user
+  // sent 3 submissions, the CC posted once, the counter stayed at 2,
+  // and the Stop hook insisted on more replies even though there was
+  // nothing left to answer. reset_unanswered_posts now serves only as
+  // an escape hatch for "yield without posting" cases.
   const ownerRow = db
     .prepare("SELECT session_id FROM boards WHERE id = ?")
     .get(body.board_id) as { session_id: string } | null;
   if (ownerRow) {
-    db.run(
-      "UPDATE sessions SET unanswered_user_posts = MAX(0, unanswered_user_posts - 1) WHERE id = ?",
-      [ownerRow.session_id],
-    );
+    db.run("UPDATE sessions SET unanswered_user_posts = 0 WHERE id = ?", [
+      ownerRow.session_id,
+    ]);
   }
 
   // 1. CC message goes in first so it appears before any status_change in

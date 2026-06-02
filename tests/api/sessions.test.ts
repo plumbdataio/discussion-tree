@@ -167,7 +167,12 @@ describe("sessions", () => {
     expect(r.json.count).toBe(0);
   });
 
-  test("/get-unanswered counts up on /submit-answer delivery and back down on /post-to-node", async () => {
+  test("/post-to-node zeroes the unanswered counter (bundled-reply pattern)", async () => {
+    // 2 user submissions → counter = 2.
+    // 1 CC reply → counter = 0 immediately. We treat one post_to_node as
+    // covering every outstanding submission so far; the Stop hook then
+    // only fires if NEW submissions arrive after this reply (covered by
+    // the next test).
     const sid = await registerSession(broker.url);
     const ccId = await attachCC(broker.url, sid);
     const board = await post<{ board_id: string }>(
@@ -183,7 +188,6 @@ describe("sessions", () => {
       },
     );
 
-    // 2 submissions → drain → counter should be 2.
     const submitP1 = post(`${broker.url}/submit-answer`, {
       board_id: board.json.board_id,
       node_id: "i1",
@@ -208,44 +212,104 @@ describe("sessions", () => {
     );
     expect(afterSubmit.json.count).toBe(2);
 
-    // 1 CC reply → counter drops to 1.
+    // Single bundled reply → counter zeroes.
     await post(`${broker.url}/post-to-node`, {
       board_id: board.json.board_id,
       node_id: "i1",
-      message: "ack 1",
+      message: "bundled ack",
       status: "discussing",
     });
-    const afterPost1 = await post<{ ok: boolean; count: number }>(
+    const afterPost = await post<{ ok: boolean; count: number }>(
       `${broker.url}/get-unanswered`,
       { cc_session_id: ccId },
     );
-    expect(afterPost1.json.count).toBe(1);
+    expect(afterPost.json.count).toBe(0);
 
-    // 2nd reply → counter 0.
-    await post(`${broker.url}/post-to-node`, {
-      board_id: board.json.board_id,
-      node_id: "i1",
-      message: "ack 2",
-      status: "discussing",
-    });
-    const afterPost2 = await post<{ ok: boolean; count: number }>(
-      `${broker.url}/get-unanswered`,
-      { cc_session_id: ccId },
-    );
-    expect(afterPost2.json.count).toBe(0);
-
-    // Extra reply (no pending submission) → stays at 0 (clamped).
+    // Extra reply when nothing is outstanding → still 0.
     await post(`${broker.url}/post-to-node`, {
       board_id: board.json.board_id,
       node_id: "i1",
       message: "extra",
       status: "discussing",
     });
-    const afterPost3 = await post<{ ok: boolean; count: number }>(
+    const afterExtra = await post<{ ok: boolean; count: number }>(
       `${broker.url}/get-unanswered`,
       { cc_session_id: ccId },
     );
-    expect(afterPost3.json.count).toBe(0);
+    expect(afterExtra.json.count).toBe(0);
+  });
+
+  test("/post-to-node then a fresh /submit-answer pushes the counter back to 1", async () => {
+    // Verifies the turn-aware reconcile: bundled reply zeroes the counter,
+    // but a NEW submission afterwards still nags correctly. Without this
+    // contract, a user who fires a new submission right after the CC's
+    // reply would be ignored by the Stop hook.
+    const sid = await registerSession(broker.url);
+    const ccId = await attachCC(broker.url, sid);
+    const board = await post<{ board_id: string }>(
+      `${broker.url}/create-board`,
+      {
+        session_id: sid,
+        structure: {
+          title: "reconcile-board",
+          concerns: [
+            { id: "c1", title: "C1", items: [{ id: "i1", title: "I1" }] },
+          ],
+        },
+      },
+    );
+
+    // submit → drain → counter = 1.
+    const s1 = post(`${broker.url}/submit-answer`, {
+      board_id: board.json.board_id,
+      node_id: "i1",
+      text: "first",
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    await post(`${broker.url}/poll-messages`, { session_id: sid });
+    await s1;
+    expect(
+      (
+        await post<{ ok: boolean; count: number }>(
+          `${broker.url}/get-unanswered`,
+          { cc_session_id: ccId },
+        )
+      ).json.count,
+    ).toBe(1);
+
+    // CC bundled reply → counter = 0.
+    await post(`${broker.url}/post-to-node`, {
+      board_id: board.json.board_id,
+      node_id: "i1",
+      message: "ack",
+      status: "discussing",
+    });
+    expect(
+      (
+        await post<{ ok: boolean; count: number }>(
+          `${broker.url}/get-unanswered`,
+          { cc_session_id: ccId },
+        )
+      ).json.count,
+    ).toBe(0);
+
+    // Fresh submission after the post → counter back to 1, nag is correct.
+    const s2 = post(`${broker.url}/submit-answer`, {
+      board_id: board.json.board_id,
+      node_id: "i1",
+      text: "follow-up",
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    await post(`${broker.url}/poll-messages`, { session_id: sid });
+    await s2;
+    expect(
+      (
+        await post<{ ok: boolean; count: number }>(
+          `${broker.url}/get-unanswered`,
+          { cc_session_id: ccId },
+        )
+      ).json.count,
+    ).toBe(1);
   });
 
   test("/reset-unanswered (by cc_session_id) zeros the counter", async () => {

@@ -401,7 +401,7 @@ export const TOOLS = [
   {
     name: "reset_unanswered_posts",
     description:
-      "Force the unanswered-user-post counter for THIS session to zero. The broker increments the counter on every UI submission and decrements it on every post_to_node, then the Stop hook nags the user if the count is non-zero when your turn ends. The counter desyncs in legitimate situations — e.g. you bundled one post_to_node reply that covered two user submissions, or the user posted into nodes you don't intend to ack individually. Call this when you KNOW everything is answered (typically right before yielding the turn) so the nag doesn't fire spuriously. No arguments — it always targets the current session.",
+      "Force the unanswered-user-post counter for THIS session to zero. post_to_node already zeroes the counter every time it's called (bundled-reply pattern: one CC post covers every outstanding submission so far), so you rarely need this — it's an escape hatch for cases where you want to yield without posting at all (e.g. the user explicitly told you not to mirror this turn). No arguments — it always targets the current session.",
     inputSchema: {
       type: "object" as const,
       properties: {},
