@@ -8,6 +8,7 @@ import {
   MessageCircle,
   RefreshCw,
 } from "lucide-react";
+import { HelpBubbleIcon } from "./HelpBubbleIcon.tsx";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { Activity, SessionListItem } from "../../shared/types.ts";
@@ -191,7 +192,17 @@ function SessionItem({
             }
             aria-label={activity.state}
           >
-            <RefreshCw size={14} strokeWidth={2.75} />
+            {/* "blocked" = CC waiting on the user (AskUserQuestion /
+                ExitPlanMode). Show a chat-bubble-with-alert glyph + pulse
+                instead of the spinning refresh icon — a spinning icon
+                reads as "still working" and was easy to overlook, and a
+                generic warning triangle didn't convey "the assistant
+                wants to talk to you". */}
+            {activity.state === "blocked" ? (
+              <HelpBubbleIcon size={16} strokeWidth={2} />
+            ) : (
+              <RefreshCw size={14} strokeWidth={2.75} />
+            )}
           </span>
         )}
         {draggable && (

@@ -549,7 +549,7 @@ body {
   cursor: help;
   color: var(--muted);
 }
-.session-activity-indicator svg {
+.session-activity-indicator.activity-working svg {
   animation: pd-spin 1s linear infinite;
 }
 .session-activity-indicator.activity-working {
@@ -557,6 +557,12 @@ body {
 }
 .session-activity-indicator.activity-blocked {
   color: #e11d48;
+}
+/* blocked = CC is paused waiting on the user. Don't spin (that reads as
+   "still working"); pulse the alert glyph instead so a quick glance
+   distinguishes blocked from working. */
+.session-activity-indicator.activity-blocked svg {
+  animation: activity-badge-blink 1.6s ease-in-out infinite;
 }
 @keyframes pd-spin {
   from {
