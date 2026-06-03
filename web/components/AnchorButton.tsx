@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Anchor } from "lucide-react";
+import { Leaf } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { SessionListItem } from "../../shared/types.ts";
 import { AnchorListModal } from "./AnchorListModal.tsx";
@@ -53,7 +53,7 @@ export function AnchorButton() {
         aria-label={t("anchor.list_button_title")}
         onClick={() => setOpen(true)}
       >
-        <Anchor size={18} strokeWidth={1.75} />
+        <Leaf size={18} strokeWidth={1.75} />
       </button>
       {open && (
         <AnchorListModal sessions={sessions} onClose={() => setOpen(false)} />

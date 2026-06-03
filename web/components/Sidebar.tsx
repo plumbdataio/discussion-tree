@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import {
-  Anchor,
   ChevronDown,
   ChevronRight,
   Filter,
   GripVertical,
+  Leaf,
   Menu,
   MessageCircle,
   RefreshCw,
@@ -511,7 +511,7 @@ export function Sidebar({
               setDrawerOpen(false);
             }}
           >
-            <Anchor size={14} strokeWidth={1.75} />
+            <Leaf size={14} strokeWidth={1.75} />
             <span>{t("anchor.list_button_title")}</span>
           </button>
           <button

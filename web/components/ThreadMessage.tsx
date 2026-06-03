@@ -1,5 +1,5 @@
 import React from "react";
-import { Anchor, Maximize2 } from "lucide-react";
+import { Leaf, Maximize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
@@ -79,7 +79,7 @@ function ThreadMessageImpl({
           aria-pressed={isPinned}
           onClick={handleAnchor}
         >
-          <Anchor size={18} strokeWidth={isPinned ? 2.5 : 1.75} />
+          <Leaf size={18} strokeWidth={isPinned ? 2.5 : 1.75} />
         </button>
       )}
       <button

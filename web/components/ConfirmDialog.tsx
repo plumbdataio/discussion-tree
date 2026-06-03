@@ -34,7 +34,7 @@ export function ConfirmDialog({
   return createPortal(
     <div className="modal-backdrop confirm-backdrop" onClick={onCancel}>
       <div
-        className="modal confirm-dialog"
+        className="confirm-dialog"
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}

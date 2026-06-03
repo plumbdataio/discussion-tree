@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Anchor, X } from "lucide-react";
+import { Leaf, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Favorite, SessionListItem } from "../../shared/types.ts";
 import {
@@ -128,14 +128,14 @@ export function AnchorListModal({
   return createPortal(
     <div className="modal-backdrop anchor-list-backdrop" onClick={onClose}>
       <div
-        className="modal anchor-list-modal"
+        className="anchor-list-modal"
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="anchor-list-header">
           <h2 className="anchor-list-title">
-            <Anchor size={18} strokeWidth={2} aria-hidden="true" />
+            <Leaf size={18} strokeWidth={2} aria-hidden="true" />
             {t("anchor.list_title")}
           </h2>
           <button
@@ -236,7 +236,7 @@ export function AnchorListModal({
                       }}
                       title={t("anchor.unanchor")}
                     >
-                      <Anchor size={14} strokeWidth={2.25} />
+                      <Leaf size={14} strokeWidth={2.25} />
                       <span>{t("anchor.unanchor")}</span>
                     </button>
                     <span
