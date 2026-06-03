@@ -21,6 +21,7 @@ export function ItemCard({
   flashingNodes,
   activity,
   ownerAlive,
+  ownerSessionId,
   onSubmit,
 }: {
   node: Node;
@@ -29,6 +30,10 @@ export function ItemCard({
   flashingNodes: Set<string>;
   activity: Activity | null;
   ownerAlive: boolean;
+  // Owning broker session_id of the parent board. Forwarded to
+  // ThreadMessage so the Anchor toggle can persist against the
+  // right session.
+  ownerSessionId: string;
   onSubmit: (nodeId: string, text: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
@@ -199,7 +204,14 @@ export function ItemCard({
           input up to the title). */}
       <div className="thread" ref={threadRef}>
         {myThread.map((it) => (
-          <ThreadMessage key={it.id} item={it} onExpand={openExpandedMsg} />
+          <ThreadMessage
+            key={it.id}
+            item={it}
+            boardId={node.board_id}
+            nodeId={node.id}
+            sessionId={ownerSessionId}
+            onExpand={openExpandedMsg}
+          />
         ))}
         {tentativeText && (
           <div className="thread-msg from-user pending">

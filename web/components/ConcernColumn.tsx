@@ -17,6 +17,7 @@ export function ConcernColumn({
   flashingNodes,
   activity,
   ownerAlive,
+  ownerSessionId,
   onSubmit,
 }: {
   concern: Node;
@@ -25,6 +26,7 @@ export function ConcernColumn({
   flashingNodes: Set<string>;
   activity: Activity | null;
   ownerAlive: boolean;
+  ownerSessionId: string;
   onSubmit: (nodeId: string, text: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
@@ -122,6 +124,7 @@ export function ConcernColumn({
                 flashingNodes={flashingNodes}
                 activity={activity}
                 ownerAlive={ownerAlive}
+                ownerSessionId={ownerSessionId}
                 onSubmit={onSubmit}
               />
             ))}

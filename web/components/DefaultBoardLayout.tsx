@@ -18,11 +18,15 @@ export function DefaultBoardLayout({
   ownerAlive,
   onSubmit,
   flashingNodes,
+  ownerSessionId,
 }: {
   data: BoardView;
   ownerAlive: boolean;
   onSubmit: (nodeId: string, text: string) => Promise<void>;
   flashingNodes: Set<string>;
+  // Owner session_id of this default board — forwarded to ThreadMessage
+  // for Anchor toggling.
+  ownerSessionId: string;
 }) {
   const { t } = useTranslation();
   // Default boards are seeded with a single root concern + a single item under
@@ -182,7 +186,14 @@ export function DefaultBoardLayout({
       </div>
       <div className="default-board-thread" ref={threadRef}>
         {myThread.map((it) => (
-          <ThreadMessage key={it.id} item={it} onExpand={openExpandedMsg} />
+          <ThreadMessage
+            key={it.id}
+            item={it}
+            boardId={data.board.id}
+            nodeId={node.id}
+            sessionId={ownerSessionId}
+            onExpand={openExpandedMsg}
+          />
         ))}
         {tentativeText && (
           <div className="thread-msg from-user pending">

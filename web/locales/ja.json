@@ -83,6 +83,13 @@
     "input_placeholder_default": "メッセージを入力 (⌘/Ctrl+Enter で送信、画像は paste/drop)",
     "input_disabled": "CC 未紐付けのため投稿できません"
   },
+  "anchor": {
+    "add_title": "このメッセージにアンカーを留める",
+    "remove_title": "アンカーを外す",
+    "added": "アンカーを留めました",
+    "removed": "アンカーを外しました",
+    "failed": "アンカー操作に失敗しました"
+  },
   "settings": {
     "title": "設定",
     "auto_read_label": "自動既読",

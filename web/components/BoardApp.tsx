@@ -7,6 +7,11 @@ import { BoardStructureRequestModal } from "./BoardStructureRequestModal.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
 import { ConcernColumn } from "./ConcernColumn.tsx";
 import { DefaultBoardLayout } from "./DefaultBoardLayout.tsx";
+import {
+  applyFavoriteAdded,
+  applyFavoriteRemoved,
+  loadFavoritesForSession,
+} from "../utils/favorites.ts";
 import { Sidebar } from "./Sidebar.tsx";
 import { postSubmitAnswer } from "../utils/api.ts";
 import { readBoardCache, writeBoardCache } from "../utils/boardCache.ts";
@@ -80,6 +85,15 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
       cancelled = true;
     };
   }, [boardId, fetchBoard, t]);
+
+  // Load the anchor (favorites) set for the board owner the moment we
+  // know who owns it. The ThreadMessage rows subscribe to the store so
+  // any cached pins show up the instant they render.
+  useEffect(() => {
+    const sid = data?.board?.session_id;
+    if (!sid) return;
+    loadFavoritesForSession(sid, true);
+  }, [data?.board?.session_id]);
 
   // Keep document.title in sync with the loaded board so external trackers
   // (Clockify auto-tracker, browser tab strip, history) get something more
@@ -165,6 +179,16 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           // Sidebar polls /api/sessions on its own schedule; nudge it to
           // refetch immediately when unread counts shift.
           window.dispatchEvent(new Event("pd-sidebar-refresh"));
+          return;
+        } else if (msg.type === "favorite-added" && msg.favorite) {
+          // Update the local anchor store; don't trigger a board re-fetch.
+          applyFavoriteAdded(msg.favorite);
+          return;
+        } else if (
+          msg.type === "favorite-removed" &&
+          typeof msg.thread_item_id === "number"
+        ) {
+          applyFavoriteRemoved(msg.thread_item_id);
           return;
         }
       }
@@ -365,6 +389,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
               ownerAlive={ownerAlive}
               onSubmit={handleSubmit}
               flashingNodes={flashingNodes}
+              ownerSessionId={ownerSessionId}
             />
           ) : (
             <div className="concerns-row">
@@ -377,6 +402,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
                   flashingNodes={flashingNodes}
                   activity={nodeActivity}
                   ownerAlive={ownerAlive}
+                  ownerSessionId={ownerSessionId}
                   onSubmit={handleSubmit}
                 />
               ))}

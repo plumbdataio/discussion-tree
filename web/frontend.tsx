@@ -5,6 +5,7 @@ import { BoardApp } from "./components/BoardApp.tsx";
 import { GearButton } from "./components/GearButton.tsx";
 import { RootDashboard } from "./components/RootDashboard.tsx";
 import { SessionDashboard } from "./components/SessionDashboard.tsx";
+import { ToastContainer } from "./components/Toast.tsx";
 import { useSettings } from "./utils/settings.ts";
 import { installLinkInterceptor, useRoute } from "./utils/router.ts";
 import {
@@ -83,6 +84,7 @@ function App() {
     <>
       {page}
       <GearButton />
+      <ToastContainer />
     </>
   );
 }

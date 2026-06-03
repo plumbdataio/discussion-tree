@@ -83,6 +83,13 @@
     "input_placeholder_default": "Type a message (⌘/Ctrl+Enter to send, paste/drop for images)",
     "input_disabled": "CC is not attached — cannot post"
   },
+  "anchor": {
+    "add_title": "Anchor this message",
+    "remove_title": "Unanchor",
+    "added": "Anchored",
+    "removed": "Unanchored",
+    "failed": "Anchor toggle failed"
+  },
   "settings": {
     "title": "Settings",
     "auto_read_label": "Auto-mark as read",
