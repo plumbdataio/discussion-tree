@@ -2455,6 +2455,27 @@ body.concern-resizing * {
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
+/* Match the per-source background tinting that thread messages use
+   so the user can see at a glance whose message they pinned without
+   reading the [source] tag. */
+.anchor-list-row-from-user {
+  background: var(--user);
+  border-color: var(--user-border);
+}
+.anchor-list-row-from-cc {
+  background: var(--cc);
+  border-color: var(--cc-border);
+}
+/* Path header sits a notch darker than the row body so the user can
+   read it as a label, not as part of the message text. Reuses the
+   border tones from each source palette — they're already in-family
+   but visibly darker than the row body fill. */
+.anchor-list-row-from-user .anchor-row-path {
+  background: var(--user-border);
+}
+.anchor-list-row-from-cc .anchor-row-path {
+  background: var(--cc-border);
+}
 .anchor-list-row:hover {
   border-color: #16a34a;
   box-shadow: 0 2px 6px rgba(22, 163, 74, 0.12);
@@ -2463,6 +2484,27 @@ body.concern-resizing * {
   font-size: 12px;
   color: var(--muted);
   word-break: break-word;
+  /* Stick to the top of the row while the row is in view — the
+     message body can be much longer than the viewport, and without
+     this the user loses track of which session / board / node they're
+     reading once the path scrolls off-screen. inherit picks up the
+     per-source background tint so the sticky band doesn't reveal the
+     body text underneath; the per-source rules above override to a
+     slightly darker shade so the band reads as a label. */
+  position: sticky;
+  top: 0;
+  background: inherit;
+  z-index: 1;
+  /* The label spans wider than the text — extend the dark band a few
+     px past the text on both sides and round the corners so it reads
+     as a pill, not a flat band. The text itself stays at the same
+     horizontal position as the row body below. radius is 1px tighter
+     than the row (6px) — same physical curve reads as slightly
+     bigger on the inner element, so trimming a px keeps them
+     visually concentric. */
+  margin: -2px -4px 4px -4px;
+  padding: 4px 4px;
+  border-radius: 4px;
 }
 .anchor-row-source {
   margin-left: 4px;

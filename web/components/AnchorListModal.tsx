@@ -215,7 +215,7 @@ export function AnchorListModal({
               return (
                 <div
                   key={fav.id}
-                  className="anchor-list-row"
+                  className={`anchor-list-row anchor-list-row-from-${fav.source ?? "cc"}`}
                   onClick={() => handleRowClick(fav)}
                   role="button"
                   tabIndex={0}
