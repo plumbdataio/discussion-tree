@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Leaf, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -53,9 +53,10 @@ export function AnchorListModal({
     readLS(LS_FILTER_SESSION, ALL_SESSIONS),
   );
   const [sortDir, setSortDir] = useState<SortDir>(() =>
-    readLS(LS_SORT_DIR, "desc") === "asc" ? "asc" : "desc",
+    readLS(LS_SORT_DIR, "asc") === "desc" ? "desc" : "asc",
   );
   const [confirm, setConfirm] = useState<Favorite | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   // Persist filter / sort whenever they change.
   useEffect(() => {
@@ -96,6 +97,21 @@ export function AnchorListModal({
     return filtered;
   }, [all, filterSession, sortDir]);
 
+  // Match the conversational thread convention: when the newest items
+  // are at the bottom (= ascending sort), open the modal already
+  // scrolled to the bottom so the user lands on the latest pin
+  // without flicking. Reset to top on descending sort, since that
+  // puts the newest items up there.
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    if (sortDir === "asc") {
+      el.scrollTop = el.scrollHeight;
+    } else {
+      el.scrollTop = 0;
+    }
+  }, [sortDir, visible.length]);
+
   const sessionName = (sid: string): string => {
     const s = sessions.find((x) => x.id === sid);
     return s?.name ?? sid;
@@ -103,9 +119,9 @@ export function AnchorListModal({
 
   const clearFilters = () => {
     setFilterSession(ALL_SESSIONS);
-    setSortDir("desc");
+    setSortDir("asc");
   };
-  const filtersActive = filterSession !== ALL_SESSIONS || sortDir !== "desc";
+  const filtersActive = filterSession !== ALL_SESSIONS || sortDir !== "asc";
 
   const handleRowClick = (fav: Favorite) => {
     onClose();
@@ -174,7 +190,7 @@ export function AnchorListModal({
                 : "anchor.sort_oldest_first",
             )}
           >
-            {sortDir === "desc" ? "↓ " : "↑ "}
+            {sortDir === "desc" ? "↑ " : "↓ "}
             {t(
               sortDir === "desc"
                 ? "anchor.sort_newest_first"
@@ -192,7 +208,7 @@ export function AnchorListModal({
           )}
         </div>
 
-        <div className="anchor-list-body">
+        <div className="anchor-list-body" ref={bodyRef}>
           {visible.length === 0 ? (
             <div className="anchor-empty">{t("anchor.empty")}</div>
           ) : (
