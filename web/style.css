@@ -370,10 +370,13 @@ body {
 
   /* On mobile the persistent corner buttons get in the way of the
      header chip row and the conversation. Hide them and surface the
-     same affordances inside the Sidebar's quick-actions row instead. */
+     same affordances inside the Sidebar's quick-actions row instead.
+     !important defeats the base `.gear-fab/.anchor-fab { display: flex }`
+     rule which sits later in the file (cascade order) and would
+     otherwise win at the same specificity. */
   .gear-fab,
   .anchor-fab {
-    display: none;
+    display: none !important;
   }
 }
 
