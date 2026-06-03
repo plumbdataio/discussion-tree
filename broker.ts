@@ -22,6 +22,7 @@ import {
   startActivityWatchdog,
 } from "./broker/activity.ts";
 import { routes as boardsRoutes } from "./broker/boards.ts";
+import { routes as favoritesRoutes } from "./broker/favorites.ts";
 import { routes as feedbackRoutes } from "./broker/feedback.ts";
 import { getBoardView } from "./broker/helpers.ts";
 import { routes as nodesRoutes } from "./broker/nodes.ts";
@@ -64,6 +65,7 @@ const POST_ROUTES: Record<string, RouteHandler> = {
   ...powerRoutes,
   ...readsRoutes,
   ...contextUsageRoutes,
+  ...favoritesRoutes,
 };
 
 // --- HTTP + WebSocket server ---

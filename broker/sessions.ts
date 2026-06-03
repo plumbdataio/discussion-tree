@@ -83,6 +83,14 @@ export function handleAttachCCSession(body: any) {
       `UPDATE pending_messages SET session_id = ? WHERE delivered = 0 AND session_id IN (${placeholders})`,
       [sessionId, ...deadIds],
     );
+    // Anchors (favorites) follow the same reclaim path so they survive a CC
+    // restart that triggers a new broker session row. Same posture as
+    // boards / pending_messages: the user's pin set is tied to the CC's
+    // logical identity, not to the underlying broker row id.
+    db.run(
+      `UPDATE favorites SET session_id = ? WHERE session_id IN (${placeholders})`,
+      [sessionId, ...deadIds],
+    );
     reclaimed.boards = b.changes;
     reclaimed.messages = m.changes;
 

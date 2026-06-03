@@ -156,6 +156,33 @@ safeAlter(
   "ALTER TABLE pending_messages ADD COLUMN cancelled INTEGER NOT NULL DEFAULT 0",
 );
 
+// Anchors (= per-session pinned thread items). The "favorites" name is the
+// implementation-level term; user-facing UI calls these "anchors" / 「アンカー」.
+// Scoped to a session_id so multiple sessions don't see each other's pins;
+// attach_cc_session carries them across CC restarts via the same reclaim
+// path that handles boards / pending_messages.
+//
+// UNIQUE (session_id, thread_item_id) prevents the same message from being
+// pinned twice in the same session — the UI treats the Anchor icon as a
+// toggle so any double-tap would otherwise produce a duplicate row.
+db.run(`
+  CREATE TABLE IF NOT EXISTS favorites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    board_id TEXT NOT NULL,
+    node_id TEXT NOT NULL,
+    thread_item_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (session_id, thread_item_id)
+  )
+`);
+db.run(
+  `CREATE INDEX IF NOT EXISTS favorites_by_session ON favorites(session_id, created_at DESC)`,
+);
+db.run(
+  `CREATE INDEX IF NOT EXISTS favorites_by_thread_item ON favorites(thread_item_id)`,
+);
+
 // --- Prepared statements ---
 //
 // IMPORTANT: there are intentionally NO DELETE FROM statements anywhere.
@@ -244,6 +271,25 @@ export const insertThread = {
 
 export const selectThreadsByBoard = db.prepare(
   `SELECT * FROM thread_items WHERE board_id = ? ORDER BY id`,
+);
+
+// Favorites (= anchors). Insert uses INSERT OR IGNORE so the UNIQUE
+// constraint on (session_id, thread_item_id) is a no-op when the user
+// re-pins something already pinned; the UI treats the Anchor icon as a
+// toggle so handleAddFavorite needs to be idempotent.
+export const insertFavorite = db.prepare(
+  `INSERT OR IGNORE INTO favorites (session_id, board_id, node_id, thread_item_id, created_at) VALUES (?, ?, ?, ?, ?)`,
+);
+export const removeFavoriteByThreadItem = db.prepare(
+  `DELETE FROM favorites WHERE session_id = ? AND thread_item_id = ?`,
+);
+export const selectFavoritesBySession = db.prepare(
+  `SELECT id, session_id, board_id, node_id, thread_item_id, created_at FROM favorites WHERE session_id = ? ORDER BY created_at DESC, id DESC`,
+);
+// Used by the frontend to know which messages render with the "anchored"
+// shadow; cheap because it's keyed off the session and is small per session.
+export const selectFavoriteThreadItemIdsBySession = db.prepare(
+  `SELECT thread_item_id FROM favorites WHERE session_id = ?`,
 );
 
 export const insertPending = db.prepare(

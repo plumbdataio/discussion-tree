@@ -100,6 +100,17 @@ export interface ThreadItem {
   read_at?: string | null;
 }
 
+// Anchor (= per-session pinned thread item). Stored as `favorites` in the
+// DB; the user-facing UI calls them "anchors" / 「アンカー」.
+export interface Favorite {
+  id: number;
+  session_id: string;
+  board_id: string;
+  node_id: string;
+  thread_item_id: number;
+  created_at: string;
+}
+
 export interface PendingMessage {
   id: number;
   session_id: string;
