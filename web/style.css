@@ -365,6 +365,47 @@ body {
   .header {
     padding-left: 52px;
   }
+
+  /* On mobile the persistent corner buttons get in the way of the
+     header chip row and the conversation. Hide them and surface the
+     same affordances inside the Sidebar's quick-actions row instead. */
+  .gear-fab,
+  .anchor-fab {
+    display: none;
+  }
+}
+
+/* Sidebar quick-actions row — used for the mobile-only Settings /
+   Anchors links that replace the corner fab buttons on small screens.
+   Hidden on desktop where the fab buttons cover the same job. */
+.sidebar-quick-actions {
+  display: none;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+@media (max-width: 768px) {
+  .sidebar-quick-actions {
+    display: flex;
+  }
+}
+.sidebar-quick-action {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.sidebar-quick-action:hover {
+  border-color: var(--text);
 }
 
 .sidebar-title {
@@ -1183,15 +1224,13 @@ a.session-name:hover {
 /* Floating settings gear, fixed to the top-right of the viewport so it sits
    above any page (board / dashboard / root) without each header needing to
    wire it in. z-index above the sidebar drawer (1100) so it stays reachable. */
-.gear-fab {
+.gear-fab,
+.anchor-fab {
   position: fixed;
   top: 10px;
-  right: 12px;
   z-index: 1300;
   width: 32px;
   height: 32px;
-  /* Override the global `button { padding: 6px 12px }` which would otherwise
-     leave the SVG only ~8x20px inside this 32x32 box-border button. */
   padding: 0;
   border-radius: 50%;
   border: 1px solid var(--border-strong);
@@ -1204,7 +1243,16 @@ a.session-name:hover {
   color: var(--muted);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
-.gear-fab:hover {
+.gear-fab {
+  right: 12px;
+}
+/* Anchor list trigger sits left of the gear so the two share the same
+   pinned-corner strip on the desktop layout. */
+.anchor-fab {
+  right: 52px;
+}
+.gear-fab:hover,
+.anchor-fab:hover {
   color: var(--text);
   border-color: var(--text);
 }
@@ -2249,13 +2297,16 @@ body.concern-resizing * {
   border-radius: 4px;
 }
 
-/* Toast container — top-right of the viewport. Stacked vertically with
-   a small gap so two near-simultaneous notifications don't overlap.
-   pointer-events:none on the container keeps it from intercepting
-   clicks while individual toasts can still be hovered. */
+/* Toast container — sits just below the board header so notifications
+   don't overlap the chip row or trigger button. Pastel colour palette
+   (blue-50 body / blue-700 text for ok, red-50 / red-700 for error)
+   keeps the band readable but well below the visual weight of a
+   full-saturation accent pill. pointer-events:none on the container
+   keeps it from intercepting clicks while individual toasts can still
+   be hovered. */
 .toast-container {
   position: fixed;
-  top: 12px;
+  top: 60px;
   right: 12px;
   z-index: 9999;
   display: flex;
@@ -2264,18 +2315,21 @@ body.concern-resizing * {
   pointer-events: none;
 }
 .toast {
-  background: var(--accent);
-  color: white;
+  background: #eff6ff;
+  color: #1e40af;
   padding: 8px 14px;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid #bfdbfe;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   pointer-events: auto;
   animation: toast-in 0.18s ease-out;
 }
 .toast-error {
-  background: #be123c;
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: #fecaca;
 }
 @keyframes toast-in {
   from {
@@ -2286,6 +2340,211 @@ body.concern-resizing * {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Anchor list modal — opens from the AnchorButton, shows every pinned
+   message across sessions, lets the user filter / sort / jump.
+   Inherits the existing .modal-backdrop + .modal frame. */
+.anchor-list-modal {
+  width: min(720px, 92vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+.anchor-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.anchor-list-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.anchor-list-close {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 4px;
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 0;
+}
+.anchor-list-close:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.anchor-list-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-tint, transparent);
+}
+.anchor-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.anchor-filter select {
+  font-size: 13px;
+  padding: 4px 6px;
+}
+.anchor-sort-toggle,
+.anchor-clear-filters {
+  font-size: 13px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.anchor-sort-toggle:hover,
+.anchor-clear-filters:hover {
+  border-color: var(--text);
+}
+.anchor-list-body {
+  overflow-y: auto;
+  padding: 8px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #fbfdfc; /* subtle warm-green tint so the list reads as a
+                          distinct surface from the underlying board */
+}
+:root[data-theme="dark"] .anchor-list-body {
+  background: rgba(22, 101, 52, 0.05);
+}
+.anchor-empty {
+  padding: 32px 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.anchor-list-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.anchor-list-row:hover {
+  border-color: #166534;
+  box-shadow: 0 2px 6px rgba(22, 101, 52, 0.12);
+}
+.anchor-row-path {
+  font-size: 12px;
+  color: var(--muted);
+  word-break: break-word;
+}
+.anchor-row-source {
+  margin-left: 4px;
+  color: var(--accent);
+  font-weight: 500;
+}
+.anchor-row-body {
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.anchor-row-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.anchor-row-unpin {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #166534;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.anchor-row-unpin:hover {
+  background: rgba(22, 101, 52, 0.08);
+  border-color: rgba(22, 101, 52, 0.35);
+}
+
+/* Confirm dialog — generic two-button modal layered above the anchor
+   list backdrop. */
+.confirm-backdrop {
+  z-index: 4500;
+}
+.confirm-dialog {
+  width: min(420px, 92vw);
+  padding: 20px;
+}
+.confirm-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.confirm-message {
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.confirm-cancel,
+.confirm-ok {
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  color: var(--text);
+}
+.confirm-ok.confirm-tone-warn {
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+.confirm-ok.confirm-tone-warn:hover {
+  background: #fee2e2;
+}
+
+/* Jump highlight pulse — applied imperatively for ~2s after an anchor
+   click brings the user back to the message. */
+@keyframes anchor-jump-pulse {
+  0% {
+    box-shadow: 0 0 0 4px rgba(22, 101, 52, 0.4);
+    background: rgba(22, 101, 52, 0.1);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(22, 101, 52, 0);
+    background: transparent;
+  }
+}
+.thread-msg.highlight-jump {
+  animation: anchor-jump-pulse 2s ease-out;
+  border-radius: 4px;
 }
 
 .node-expand {

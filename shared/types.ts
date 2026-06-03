@@ -102,6 +102,11 @@ export interface ThreadItem {
 
 // Anchor (= per-session pinned thread item). Stored as `favorites` in the
 // DB; the user-facing UI calls them "anchors" / 「アンカー」.
+//
+// The optional `*_title` / `text` / `source` fields are populated by the
+// list / broadcast paths so the UI can render the anchor list without a
+// separate fetch per row. They aren't part of the storage schema —
+// add_favorite by id alone, the broker joins on the fly.
 export interface Favorite {
   id: number;
   session_id: string;
@@ -109,6 +114,15 @@ export interface Favorite {
   node_id: string;
   thread_item_id: number;
   created_at: string;
+  // Enrichment (optional). Present on list / WS responses, absent on
+  // the bare store entry that handleAddFavorite returns synchronously.
+  board_title?: string;
+  concern_title?: string;
+  node_title?: string;
+  session_name?: string | null;
+  text?: string;
+  source?: ThreadSource;
+  thread_item_created_at?: string;
 }
 
 export interface PendingMessage {

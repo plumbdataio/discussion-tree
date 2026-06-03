@@ -70,6 +70,7 @@ function ThreadMessageImpl({
     <div
       className={`thread-msg from-${item.source}${isUnread ? " unread" : ""}${isPinned ? " is-pinned" : ""}`}
       data-unread-id={isUnread ? item.id : undefined}
+      data-thread-item-id={item.id}
     >
       {showAnchor && (
         <button
@@ -78,7 +79,7 @@ function ThreadMessageImpl({
           aria-pressed={isPinned}
           onClick={handleAnchor}
         >
-          <Anchor size={12} strokeWidth={isPinned ? 2.5 : 1.75} />
+          <Anchor size={18} strokeWidth={isPinned ? 2.5 : 1.75} />
         </button>
       )}
       <button

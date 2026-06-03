@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  Anchor,
   ChevronDown,
   ChevronRight,
   Filter,
@@ -7,6 +8,7 @@ import {
   Menu,
   MessageCircle,
   RefreshCw,
+  Settings,
 } from "lucide-react";
 import { HelpBubbleIcon } from "./HelpBubbleIcon.tsx";
 import { useTranslation } from "react-i18next";
@@ -496,6 +498,34 @@ export function Sidebar({
         />
       )}
       <aside className={`sidebar${drawerOpen ? " open" : ""}`}>
+        {/* Mobile-only quick actions — replaces the desktop corner fab
+            buttons (.gear-fab / .anchor-fab) which are hidden at
+            <=768px. Click dispatches a CustomEvent that the AnchorButton
+            and GearButton listen for, keeping their modal state local. */}
+        <div className="sidebar-quick-actions">
+          <button
+            type="button"
+            className="sidebar-quick-action"
+            onClick={() => {
+              window.dispatchEvent(new Event("pd-open-anchors"));
+              setDrawerOpen(false);
+            }}
+          >
+            <Anchor size={14} strokeWidth={1.75} />
+            <span>{t("anchor.list_button_title")}</span>
+          </button>
+          <button
+            type="button"
+            className="sidebar-quick-action"
+            onClick={() => {
+              window.dispatchEvent(new Event("pd-open-settings"));
+              setDrawerOpen(false);
+            }}
+          >
+            <Settings size={14} strokeWidth={1.75} />
+            <span>{t("settings.title")}</span>
+          </button>
+        </div>
         <h2 className="sidebar-title">{t("sidebar.sessions")}</h2>
 
         <div className="sidebar-filter">

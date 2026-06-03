@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import i18n, { resolveLanguage } from "./i18n.ts";
+import { AnchorButton } from "./components/AnchorButton.tsx";
 import { BoardApp } from "./components/BoardApp.tsx";
 import { GearButton } from "./components/GearButton.tsx";
 import { RootDashboard } from "./components/RootDashboard.tsx";
@@ -83,6 +84,7 @@ function App() {
   return (
     <>
       {page}
+      <AnchorButton />
       <GearButton />
       <ToastContainer />
     </>

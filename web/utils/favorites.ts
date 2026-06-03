@@ -23,8 +23,15 @@ type Listener = () => void;
 
 const favs = new Map<number, Favorite>();
 const listeners = new Set<Listener>();
+const emptySnapshot: ReadonlyArray<Favorite> = [];
+let snapshot: ReadonlyArray<Favorite> = emptySnapshot;
 
 function notify() {
+  // Rebuild the array snapshot BEFORE notifying so any useAllFavorites()
+  // subscriber that re-reads via useSyncExternalStore gets the fresh
+  // value on the same tick. Doing it from a listener instead would
+  // depend on Set iteration order.
+  snapshot = Array.from(favs.values());
   for (const l of listeners) l();
 }
 
@@ -169,6 +176,39 @@ export async function toggleFavorite(args: {
   }
 }
 
+// Standalone remove (no toggle). Used by the anchor list modal where
+// the user just clicked "Unanchor" from a row rather than the toggle
+// icon on the message itself.
+export async function removeFavoriteByThreadItem(args: {
+  sessionId: string;
+  threadItemId: number;
+}): Promise<void> {
+  const existing = favs.get(args.threadItemId);
+  if (existing) {
+    favs.delete(args.threadItemId);
+    notify();
+  }
+  try {
+    const res = await fetch("/remove-favorite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: args.sessionId,
+        thread_item_id: args.threadItemId,
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const j = (await res.json()) as { ok: boolean; error?: string };
+    if (!j.ok) throw new Error(j.error ?? "remove failed");
+  } catch (e) {
+    if (existing) {
+      favs.set(args.threadItemId, existing);
+      notify();
+    }
+    throw e;
+  }
+}
+
 // React hook so a single message row re-renders when its own pin state
 // changes — useSyncExternalStore's selector keeps the hook from firing
 // for unrelated changes to the store.
@@ -178,4 +218,48 @@ export function useFavorited(threadItemId: number): boolean {
     () => favs.has(threadItemId),
     () => false,
   );
+}
+
+// Full-store hook used by the anchor list modal — re-renders whenever
+// any pin changes, returning a fresh snapshot each time. The snapshot
+// reference only rotates inside notify() so useSyncExternalStore's
+// stability invariant is respected.
+export function useAllFavorites(): ReadonlyArray<Favorite> {
+  return useSyncExternalStore(
+    (cb) => subscribeFavorites(cb),
+    () => snapshot,
+    () => emptySnapshot,
+  );
+}
+
+// Fan-out load: fetch /list-favorites for many sessions and merge into
+// the store. Used by AnchorListModal to populate the "All sessions"
+// view in one mount.
+export async function loadFavoritesForSessions(
+  sessionIds: ReadonlyArray<string>,
+): Promise<void> {
+  if (sessionIds.length === 0) return;
+  const all: Favorite[] = [];
+  await Promise.all(
+    sessionIds.map(async (sid) => {
+      try {
+        const res = await fetch("/list-favorites", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sid }),
+        });
+        if (!res.ok) return;
+        const j = (await res.json()) as {
+          ok: boolean;
+          favorites?: Favorite[];
+        };
+        if (j.ok && Array.isArray(j.favorites)) {
+          for (const f of j.favorites) all.push(f);
+        }
+      } catch {
+        /* per-session tolerance */
+      }
+    }),
+  );
+  setFavorites(all, false);
 }

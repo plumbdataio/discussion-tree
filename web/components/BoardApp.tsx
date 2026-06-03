@@ -12,6 +12,10 @@ import {
   applyFavoriteRemoved,
   loadFavoritesForSession,
 } from "../utils/favorites.ts";
+import {
+  consumePendingJump,
+  subscribePendingJump,
+} from "../utils/anchorJump.ts";
 import { Sidebar } from "./Sidebar.tsx";
 import { postSubmitAnswer } from "../utils/api.ts";
 import { readBoardCache, writeBoardCache } from "../utils/boardCache.ts";
@@ -94,6 +98,36 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     if (!sid) return;
     loadFavoritesForSession(sid, true);
   }, [data?.board?.session_id]);
+
+  // Consume any pending anchor jump targeting this board: scroll the
+  // matching thread item into view and pulse-highlight it for a couple
+  // of seconds. Runs whenever the board's data changes (= initial
+  // load, hot board switch) and whenever the jump channel notifies
+  // (= same-board click in the modal).
+  useEffect(() => {
+    if (!boardId || !data) return;
+    const tryConsume = () => {
+      const tid = consumePendingJump(boardId);
+      if (tid == null) return;
+      // Two rAFs so the layout has had a chance to settle: data →
+      // render → paint → measure.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const el = document.querySelector(
+            `[data-thread-item-id="${tid}"]`,
+          ) as HTMLElement | null;
+          if (!el) return;
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.classList.add("highlight-jump");
+          setTimeout(() => {
+            el.classList.remove("highlight-jump");
+          }, 2000);
+        });
+      });
+    };
+    tryConsume();
+    return subscribePendingJump(tryConsume);
+  }, [boardId, data]);
 
   // Keep document.title in sync with the loaded board so external trackers
   // (Clockify auto-tracker, browser tab strip, history) get something more

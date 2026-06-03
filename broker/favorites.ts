@@ -10,7 +10,6 @@ import {
   db,
   insertFavorite,
   removeFavoriteByThreadItem,
-  selectFavoritesBySession,
 } from "./db.ts";
 import { broadcastToAll } from "./ws.ts";
 
@@ -21,6 +20,68 @@ function lookupAliveSessionByCcId(ccSessionId: string): string | null {
     )
     .get(ccSessionId) as { id: string } | null;
   return row?.id ?? null;
+}
+
+// JOIN the rich context the UI needs (board title, node titles, source,
+// message body) directly onto each favorite. Keeping this in one query
+// avoids N+1 round-trips when the anchor list modal renders dozens of
+// rows; thread_items.text isn't large enough at v1 sizes to matter.
+//
+// Resolving the concern title needs nodes.parent_id — the favorited
+// item's parent is the concern node. LEFT JOIN so an orphaned node
+// (deleted concern, etc.) still shows up rather than disappearing.
+const selectEnrichedFavoritesBySession = db.prepare(
+  `SELECT
+     f.id,
+     f.session_id,
+     f.board_id,
+     f.node_id,
+     f.thread_item_id,
+     f.created_at,
+     b.title AS board_title,
+     s.name AS session_name,
+     n.title AS node_title,
+     c.title AS concern_title,
+     t.text AS text,
+     t.source AS source,
+     t.created_at AS thread_item_created_at
+   FROM favorites f
+   LEFT JOIN boards b ON b.id = f.board_id
+   LEFT JOIN sessions s ON s.id = f.session_id
+   LEFT JOIN nodes n ON n.board_id = f.board_id AND n.id = f.node_id
+   LEFT JOIN nodes c ON c.board_id = f.board_id AND c.id = n.parent_id
+   LEFT JOIN thread_items t ON t.id = f.thread_item_id
+   WHERE f.session_id = ?
+   ORDER BY f.created_at DESC, f.id DESC`,
+);
+
+function enrichOne(sessionId: string, threadItemId: number): Favorite | null {
+  const row = db
+    .prepare(
+      `SELECT
+         f.id,
+         f.session_id,
+         f.board_id,
+         f.node_id,
+         f.thread_item_id,
+         f.created_at,
+         b.title AS board_title,
+         s.name AS session_name,
+         n.title AS node_title,
+         c.title AS concern_title,
+         t.text AS text,
+         t.source AS source,
+         t.created_at AS thread_item_created_at
+       FROM favorites f
+       LEFT JOIN boards b ON b.id = f.board_id
+       LEFT JOIN sessions s ON s.id = f.session_id
+       LEFT JOIN nodes n ON n.board_id = f.board_id AND n.id = f.node_id
+       LEFT JOIN nodes c ON c.board_id = f.board_id AND c.id = n.parent_id
+       LEFT JOIN thread_items t ON t.id = f.thread_item_id
+       WHERE f.session_id = ? AND f.thread_item_id = ?`,
+    )
+    .get(sessionId, threadItemId) as Favorite | null;
+  return row;
 }
 
 // Resolve the broker session_id for a request that may have come in as
@@ -70,11 +131,7 @@ export function handleAddFavorite(body: {
     body.thread_item_id,
     now,
   );
-  const row = db
-    .prepare(
-      "SELECT id, session_id, board_id, node_id, thread_item_id, created_at FROM favorites WHERE session_id = ? AND thread_item_id = ?",
-    )
-    .get(sessionId, body.thread_item_id) as Favorite | null;
+  const row = enrichOne(sessionId, body.thread_item_id);
 
   if (row) {
     broadcastToAll({
@@ -114,7 +171,7 @@ export function handleListFavorites(body: {
 }): { ok: boolean; favorites?: Favorite[]; error?: string } {
   const sessionId = resolveSessionId(body);
   if (!sessionId) return { ok: false, error: "session not found" };
-  const rows = selectFavoritesBySession.all(sessionId) as Favorite[];
+  const rows = selectEnrichedFavoritesBySession.all(sessionId) as Favorite[];
   return { ok: true, favorites: rows };
 }
 

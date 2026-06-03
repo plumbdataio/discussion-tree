@@ -88,7 +88,20 @@
     "remove_title": "アンカーを外す",
     "added": "アンカーを留めました",
     "removed": "アンカーを外しました",
-    "failed": "アンカー操作に失敗しました"
+    "failed": "アンカー操作に失敗しました",
+    "list_button_title": "アンカー一覧",
+    "list_title": "アンカー一覧",
+    "close": "閉じる",
+    "session": "セッション",
+    "all_sessions": "すべてのセッション",
+    "sort_newest_first": "新しい順",
+    "sort_oldest_first": "古い順",
+    "clear_filters": "フィルタをクリア",
+    "empty": "アンカーはまだありません。 メッセージ右上の ⚓ アイコンで留められます。",
+    "unanchor": "アンカー解除",
+    "unanchor_confirm_title": "アンカーを外しますか?",
+    "unanchor_confirm_message": "このメッセージのアンカー留めを解除します。 元のメッセージ自体は残ります。",
+    "cancel": "キャンセル"
   },
   "settings": {
     "title": "設定",
