@@ -10,6 +10,7 @@ import {
 } from "../utils/favorites.ts";
 import { jumpToAnchor } from "../utils/anchorJump.ts";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
+import { MDView } from "./MDView.tsx";
 import { showToast } from "./Toast.tsx";
 import { formatThreadTimestamp } from "../utils/format.ts";
 
@@ -33,11 +34,10 @@ function writeLS(key: string, value: string) {
   }
 }
 
-function previewText(text: string | undefined, limit = 200): string {
-  if (!text) return "";
-  if (text.length <= limit) return text;
-  return text.slice(0, limit - 1) + "…";
-}
+// We used to truncate-with-ellipsis here, but the user prefers seeing
+// the whole pinned message in the list (so they can recognise it
+// without a jump). MDView still handles overflow-wrap, and the modal
+// body scrolls, so a long row is just a tall row.
 
 export function AnchorListModal({
   sessions,
@@ -197,13 +197,18 @@ export function AnchorListModal({
             <div className="anchor-empty">{t("anchor.empty")}</div>
           ) : (
             visible.map((fav) => {
-              const path = [
+              // Collapse consecutive duplicates so default boards (which
+              // intentionally use the same title for board / concern /
+              // node — "会話" / "Conversation") don't render as
+              // "discussion-tree › 会話 › 会話 › 会話".
+              const segs = [
                 fav.session_name ?? sessionName(fav.session_id),
                 fav.board_title ?? fav.board_id,
                 fav.concern_title,
                 fav.node_title ?? fav.node_id,
-              ]
-                .filter(Boolean)
+              ].filter((s): s is string => Boolean(s));
+              const path = segs
+                .filter((s, i) => i === 0 || s !== segs[i - 1])
                 .join(" › ");
               const sourceLabel =
                 fav.source === "user" ? t("item_card.you") : t("item_card.claude");
@@ -222,10 +227,21 @@ export function AnchorListModal({
                   }}
                 >
                   <div className="anchor-row-path">
-                    📍 {path}{" "}
-                    <span className="anchor-row-source">[{sourceLabel}]</span>
+                    {path}{" "}
+                    <span className="anchor-row-source">[{sourceLabel}]</span>{" "}
+                    <span
+                      className="anchor-row-time"
+                      title={fav.thread_item_created_at ?? fav.created_at}
+                    >
+                      {formatThreadTimestamp(
+                        fav.thread_item_created_at ?? fav.created_at,
+                      )}
+                    </span>
                   </div>
-                  <div className="anchor-row-body">{previewText(fav.text)}</div>
+                  <MDView
+                    className="anchor-row-body"
+                    text={fav.text ?? ""}
+                  />
                   <div className="anchor-row-footer">
                     <button
                       type="button"
@@ -239,14 +255,6 @@ export function AnchorListModal({
                       <Leaf size={14} strokeWidth={2.25} />
                       <span>{t("anchor.unanchor")}</span>
                     </button>
-                    <span
-                      className="anchor-row-time"
-                      title={fav.thread_item_created_at ?? fav.created_at}
-                    >
-                      {formatThreadTimestamp(
-                        fav.thread_item_created_at ?? fav.created_at,
-                      )}
-                    </span>
                   </div>
                 </div>
               );
