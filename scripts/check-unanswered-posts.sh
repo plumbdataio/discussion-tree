@@ -41,6 +41,24 @@ if ! [[ "$count" =~ ^[0-9]+$ ]]; then
 fi
 
 if [ "$count" -gt 0 ]; then
+  # Stop is about to block-and-resume the turn. Re-arm the "working" badge
+  # for THIS cc_session_id so the UI keeps spinning while the LLM silently
+  # thinks between the block decision and its next tool call. Without
+  # this, the badge clears at Stop and only comes back at the next
+  # PreToolUse — the resulting "no badge for a few seconds" gap reads as
+  # "the assistant stalled" to anyone watching the dt UI.
+  #
+  # /heartbeat-tool guards against overwriting an explicit non-"working"
+  # state (e.g. a manually-set "blocked"), so this is safe to always send.
+  hb_body=$(jq -n --arg s "$sid" --arg t "stop-hook-continuation" '{cc_session_id:$s, tool:$t}')
+  curl -sS \
+    --max-time 1 \
+    -X POST \
+    -H "Content-Type: application/json" \
+    -d "$hb_body" \
+    "http://127.0.0.1:${port}/heartbeat-tool" \
+    >/dev/null 2>&1 || true
+
   if [ "$count" -eq 1 ]; then
     msg="discussion-tree: there is 1 UI submission from the user that you haven't acknowledged with post_to_node yet. Please send the corresponding reply (or, if you already bundled it into another post and the count is desynced, call reset_unanswered_posts) before yielding the turn."
   else
