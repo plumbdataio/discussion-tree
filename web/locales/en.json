@@ -83,6 +83,11 @@
     "input_placeholder_default": "Type a message (⌘/Ctrl+Enter to send, paste/drop for images)",
     "input_disabled": "CC is not attached — cannot post"
   },
+  "node_status_filter": {
+    "trigger_title": "Filter nodes by status",
+    "summary": "Filter {{visible}}/{{total}}",
+    "reset": "Show all"
+  },
   "anchor": {
     "add_title": "Bookmark this message",
     "remove_title": "Remove bookmark",

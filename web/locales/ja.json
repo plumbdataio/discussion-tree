@@ -83,6 +83,11 @@
     "input_placeholder_default": "メッセージを入力 (⌘/Ctrl+Enter で送信、画像は paste/drop)",
     "input_disabled": "CC 未紐付けのため投稿できません"
   },
+  "node_status_filter": {
+    "trigger_title": "ノードステータスでフィルタ",
+    "summary": "フィルタ {{visible}}/{{total}}",
+    "reset": "全表示に戻す"
+  },
   "anchor": {
     "add_title": "このメッセージにしおりを挟む",
     "remove_title": "しおりを外す",

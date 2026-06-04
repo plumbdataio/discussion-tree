@@ -16,6 +16,11 @@ import {
   consumePendingJump,
   subscribePendingJump,
 } from "../utils/anchorJump.ts";
+import { NodeStatusFilterButton } from "./NodeStatusFilterButton.tsx";
+import {
+  isNodeVisible,
+  useNodeStatusFilter,
+} from "../utils/nodeStatusFilter.ts";
 import { Sidebar } from "./Sidebar.tsx";
 import { postSubmitAnswer } from "../utils/api.ts";
 import { readBoardCache, writeBoardCache } from "../utils/boardCache.ts";
@@ -303,6 +308,31 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   const concerns = (childrenByParent.get(null) ?? []).filter(
     (c) => c.is_log !== 1,
   );
+
+  // Per-status node filter (header dropdown). Walk the children map
+  // and drop items whose status the user has unchecked. Concerns are
+  // never filtered out individually — the rule is "hide a concern only
+  // when every item under it has been filtered away" so an empty
+  // concern with no items at all stays visible.
+  const [nodeStatusFilter] = useNodeStatusFilter();
+  const filteredChildrenByParent = (() => {
+    const next = new Map<string | null, typeof concerns>();
+    for (const [parent, kids] of childrenByParent) {
+      next.set(
+        parent,
+        kids.filter((n) => {
+          if (n.kind !== "item") return true;
+          return isNodeVisible(n.status, nodeStatusFilter);
+        }),
+      );
+    }
+    return next;
+  })();
+  const visibleConcerns = concerns.filter((c) => {
+    const kids = childrenByParent.get(c.id) ?? [];
+    if (kids.length === 0) return true; // empty concern: keep visible
+    return (filteredChildrenByParent.get(c.id) ?? []).length > 0;
+  });
   // Count unread Claude responses in the structure-change log so the
   // modal trigger can advertise that there's something new to read.
   const logItem = data.nodes.find(
@@ -355,6 +385,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
         )}
         {headerActivity && <ActivityBadge activity={headerActivity} />}
         <ContextMeter usage={data.owner_context_usage} prefix="Context: " />
+        {!data.board.is_default && <NodeStatusFilterButton />}
         {!data.board.is_default && (
           <button
             type="button"
@@ -427,11 +458,11 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
             />
           ) : (
             <div className="concerns-row">
-              {concerns.map((c) => (
+              {visibleConcerns.map((c) => (
                 <ConcernColumn
                   key={c.id}
                   concern={c}
-                  childrenByParent={childrenByParent}
+                  childrenByParent={filteredChildrenByParent}
                   threads={data.threads}
                   flashingNodes={flashingNodes}
                   activity={nodeActivity}
