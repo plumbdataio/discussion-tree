@@ -44,7 +44,7 @@ function ScrollToBottomButtonImpl({
       title="一番下まで"
       onClick={() => {
         const el = scrollRef.current;
-        if (el) el.scrollTop = el.scrollHeight;
+        if (el) el.lastElementChild?.scrollIntoView({ block: "end" });
       }}
     >
       <ChevronDown size={16} strokeWidth={2} />

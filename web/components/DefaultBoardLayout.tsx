@@ -79,7 +79,7 @@ export function DefaultBoardLayout({
     // height at that instant. Re-pin a few times across the next ~600ms
     // so late content hydration also lands us at the actual bottom.
     const pin = () => {
-      el.scrollTop = el.scrollHeight;
+      el.lastElementChild?.scrollIntoView({ block: "end" });
     };
     pin();
     const raf = requestAnimationFrame(pin);

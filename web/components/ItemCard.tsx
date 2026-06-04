@@ -83,7 +83,7 @@ export function ItemCard({
   useEffect(() => {
     const el = threadRef.current;
     if (el) {
-      el.scrollTop = el.scrollHeight;
+      el.lastElementChild?.scrollIntoView({ block: "end" });
     }
   }, [myThread.length]);
 
