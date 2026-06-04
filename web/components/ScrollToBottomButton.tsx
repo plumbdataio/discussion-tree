@@ -44,7 +44,12 @@ function ScrollToBottomButtonImpl({
       title="一番下まで"
       onClick={() => {
         const el = scrollRef.current;
-        if (el) el.lastElementChild?.scrollIntoView({ block: "end" });
+        // Don't use el.lastElementChild here — the button itself is the
+        // last child of the scroll container, so scrollIntoView on it
+        // only nudges by a few px. Setting scrollTop past scrollHeight
+        // lets the browser clamp to the real bottom and forces layout
+        // for any content-visibility-skipped rows along the way.
+        if (el) el.scrollTop = Number.MAX_SAFE_INTEGER;
       }}
     >
       <ChevronDown size={16} strokeWidth={2} />
