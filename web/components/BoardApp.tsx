@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Wand2 } from "lucide-react";
+import { Cog, Wand2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Activity, BoardView } from "../../shared/types.ts";
 import { ActivityBadge } from "./ActivityBadge.tsx";
@@ -223,6 +223,11 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           // refetch immediately when unread counts shift.
           window.dispatchEvent(new Event("pd-sidebar-refresh"));
           return;
+        } else if (msg.type === "bg-tasks-update") {
+          // BG marker rides on the same sidebar-poll pipe — nudge it
+          // to refetch /api/sessions which now carries bg_task_count.
+          window.dispatchEvent(new Event("pd-sidebar-refresh"));
+          return;
         } else if (msg.type === "favorite-added" && msg.favorite) {
           // Update the local anchor store; don't trigger a board re-fetch.
           applyFavoriteAdded(msg.favorite);
@@ -391,6 +396,15 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           </span>
         )}
         {headerActivity && <ActivityBadge activity={headerActivity} />}
+        {(data.owner_bg_task_count ?? 0) > 0 && (
+          <span
+            className="header-bg-indicator"
+            title={`background tasks: ${data.owner_bg_task_count}`}
+          >
+            <Cog size={14} strokeWidth={2.25} />
+            <span className="header-bg-count">{data.owner_bg_task_count}</span>
+          </span>
+        )}
         <ContextMeter usage={data.owner_context_usage} prefix="Context: " />
         {!data.board.is_default && <NodeStatusFilterButton />}
         {!data.board.is_default && (

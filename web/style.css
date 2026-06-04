@@ -614,6 +614,33 @@ body {
 .session-activity-indicator.activity-blocked svg {
   animation: activity-badge-blink 1.6s ease-in-out infinite;
 }
+
+/* Background-task marker — sits to the right of the activity spinner
+   in the sidebar (and inside the board header next to the activity
+   badge). Renders a small cog + a count so the user can see at a
+   glance that the CC has live Bash run_in_background tasks pending,
+   distinct from the regular "working" spinner. */
+.session-bg-indicator,
+.header-bg-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: #7c2d12;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.session-bg-indicator svg,
+.header-bg-indicator svg {
+  animation: pd-spin 2s linear infinite;
+}
+.header-bg-indicator {
+  margin-left: 8px;
+}
 @keyframes pd-spin {
   from {
     transform: rotate(0deg);

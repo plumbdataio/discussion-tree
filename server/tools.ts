@@ -408,6 +408,23 @@ export const TOOLS = [
     },
   },
   {
+    name: "report_bg_task_done",
+    description:
+      "Tell the broker that one or more background Bash tasks have finished, so the BG marker in the UI clears. Call this immediately whenever you see a `<task-notification status=\"completed\" task-id=\"...\">` system message in your context — pass the task-id values from those notifications. Bundling multiple ids into a single call is fine if you see several at once. The broker auto-registered each BG task when its PreToolUse hook fired, so you only have to handle the done side.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        task_ids: {
+          type: "array" as const,
+          items: { type: "string" as const },
+          description:
+            "tool_use_id values from <task-notification status=\"completed\"> system messages (the task-id attribute). Pass them as-is; the broker matches by exact string.",
+        },
+      },
+      required: ["task_ids"],
+    },
+  },
+  {
     name: "request_improvement",
     description:
       "Submit a concrete friction point about discussion-tree-mcp itself to the user's review queue (REQUESTS.md). Use this when you wanted to express something the current tools/UI did not support — a missing node kind, an unsupported workflow, a rendering gap. The user reviews accumulated requests and decides which to implement. Be specific about the actual situation; do not speculate.",
@@ -875,6 +892,25 @@ export async function dispatchToolCall(
           return textResult("reset_unanswered_posts failed", true);
         }
         return textResult("Unanswered-post counter reset to 0");
+      }
+
+      case "report_bg_task_done": {
+        const sessionId = ensureSession();
+        const a = args as { task_ids: string[] };
+        const res = await brokerFetch<{
+          ok: boolean;
+          cleared: number;
+          remaining: number;
+        }>("/bg-task-done", {
+          session_id: sessionId,
+          task_ids: a.task_ids,
+        });
+        if (!res?.ok) {
+          return textResult("report_bg_task_done failed", true);
+        }
+        return textResult(
+          `BG tasks cleared: ${res.cleared}; remaining in-flight: ${res.remaining}`,
+        );
       }
 
       case "request_improvement": {

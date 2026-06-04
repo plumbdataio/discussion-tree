@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
+  Cog,
   Filter,
   GripVertical,
   Menu,
@@ -204,6 +205,16 @@ function SessionItem({
             ) : (
               <RefreshCw size={14} strokeWidth={2.75} />
             )}
+          </span>
+        )}
+        {(s.bg_task_count ?? 0) > 0 && (
+          <span
+            className="session-bg-indicator"
+            title={`background tasks: ${s.bg_task_count}`}
+            aria-label={`background tasks: ${s.bg_task_count}`}
+          >
+            <Cog size={14} strokeWidth={2.25} />
+            <span className="session-bg-count">{s.bg_task_count}</span>
           </span>
         )}
         {draggable && (

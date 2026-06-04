@@ -16,6 +16,7 @@ import {
 } from "./db.ts";
 import { activities } from "./activity.ts";
 import { getContextUsage } from "./context-usage.ts";
+import { bgTaskCountForSession } from "./activity.ts";
 import { ensureBoardLogNode } from "./structure-log.ts";
 
 // Board / session / node IDs act as bearer capabilities for /api/board/:id
@@ -117,6 +118,7 @@ export function getBoardView(boardId: string) {
   // header from doing a second /api/sessions fetch just to read one
   // number per page render.
   const owner_context_usage = getContextUsage(board.session_id);
+  const owner_bg_task_count = bgTaskCountForSession(board.session_id);
   return {
     board,
     nodes,
@@ -125,6 +127,7 @@ export function getBoardView(boardId: string) {
     owner_alive,
     owner_session_name,
     owner_context_usage,
+    owner_bg_task_count,
   };
 }
 

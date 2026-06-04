@@ -28,6 +28,26 @@ if [ -n "$sid" ]; then
     -d "$body" \
     "http://127.0.0.1:${port}/heartbeat-tool" \
     >/dev/null 2>&1 || true
+
+  # Track Bash run_in_background launches so the UI can show a BG marker
+  # next to the working spinner. The broker holds a per-session set of
+  # in-flight BG task tokens; CC clears them via the report_bg_task_done
+  # MCP tool after seeing the matching <task-notification>.
+  if [ "$tool" = "Bash" ]; then
+    bg=$(printf '%s' "$input" | jq -r '.tool_input.run_in_background // false')
+    if [ "$bg" = "true" ]; then
+      tu=$(printf '%s' "$input" | jq -r '.tool_use_id // empty')
+      if [ -n "$tu" ]; then
+        bg_body=$(jq -n --arg s "$sid" --arg id "$tu" \
+          '{cc_session_id:$s, task_id:$id}')
+        curl -sS --max-time 1 -X POST \
+          -H "Content-Type: application/json" \
+          -d "$bg_body" \
+          "http://127.0.0.1:${port}/bg-task-start" \
+          >/dev/null 2>&1 || true
+      fi
+    fi
+  fi
 fi
 
 exit 0

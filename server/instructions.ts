@@ -131,6 +131,7 @@ Available tools:
 - get_board: Load one board's structure + recent thread (last 20 per node by default). Pair with list_boards / search_boards. Past discussions are an ASSET to reference, not a write-only log.
 - search_boards: Full-text-style search across board titles, node titles/context, and thread bodies. Use when looking for any past mention of a topic — saves the user re-explaining context.
 - reset_unanswered_posts: Force the unanswered-user-post counter for THIS session to zero. post_to_node already zeroes the counter (bundled-reply pattern), so you rarely need this — it's an escape hatch for "yield without posting" turns (e.g. the user explicitly told you not to mirror this turn).
+- report_bg_task_done: Tell the broker that one or more background Bash tasks have finished, so the BG marker in the UI clears. Call this immediately whenever you see a `<task-notification status="completed" task-id="...">` system message — pass the task-id values. Bundling multiple ids in one call is fine.
 - request_improvement: Submit a concrete friction point to REQUESTS.md for the user to review
 
 PAST DISCUSSIONS ARE QUERYABLE (read tools):
@@ -143,4 +144,11 @@ Boards aren't write-only logs — they're a persistent record this session and i
 Typical recall pattern: search_boards("auth scheme") → pick the most relevant board_id from results → get_board(board_id, node_ids=[matched_node]) to read the actual decision.
 
 UNANSWERED POST COUNTER:
-The broker tracks per-session counter "unanswered_user_posts" that goes up on each UI submission delivered to you and **resets to zero on each post_to_node you make** (bundled-reply pattern — one CC post is treated as covering every outstanding submission so far). A Stop hook nags the user if the count is non-zero when your turn ends, surfacing cases where you replied only in the CLI and forgot to mirror via post_to_node. As long as you post_to_node at least once in a turn, the counter is zero — even if the user fired N submissions in that turn. If a NEW submission arrives after your final post, the counter bumps back to 1 and the Stop hook correctly nags. reset_unanswered_posts is an escape hatch for the rare case where you want to yield without posting at all.`;
+The broker tracks per-session counter "unanswered_user_posts" that goes up on each UI submission delivered to you and **resets to zero on each post_to_node you make** (bundled-reply pattern — one CC post is treated as covering every outstanding submission so far). A Stop hook nags the user if the count is non-zero when your turn ends, surfacing cases where you replied only in the CLI and forgot to mirror via post_to_node. As long as you post_to_node at least once in a turn, the counter is zero — even if the user fired N submissions in that turn. If a NEW submission arrives after your final post, the counter bumps back to 1 and the Stop hook correctly nags. reset_unanswered_posts is an escape hatch for the rare case where you want to yield without posting at all.
+
+BACKGROUND TASK MARKER:
+When you launch a Bash command with run_in_background:true, the PreToolUse hook auto-registers the task with the broker so the UI shows a small "BG" marker next to the working spinner. The marker stays up until you report the task done.
+
+The broker has NO way to learn that a BG task has finished — verified 2026-06-04: <task-notification status="completed" task-id="..."> system messages are delivered only to your message stream, never to the Notification hook. So YOU are responsible for clearing the marker.
+
+Rule: every time you see a <task-notification status="completed" task-id="..."> in your context, call report_bg_task_done with that task-id IMMEDIATELY (same turn, before yielding). You can bundle multiple ids in a single call if several notifications arrived together. Missing this leaves the BG marker stuck on the UI long after the work has actually finished.`;

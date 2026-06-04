@@ -4,7 +4,7 @@
 // here — it stitches together sessions, boards, node stats, and unread
 // counts into the shape the sidebar / dashboards expect.
 
-import { activities } from "./activity.ts";
+import { activities, bgTaskCountForSession } from "./activity.ts";
 import { getContextUsage } from "./context-usage.ts";
 import { db, insertSession, updateSessionSeen } from "./db.ts";
 import { ensureDefaultBoard } from "./default-board.ts";
@@ -334,6 +334,7 @@ export function handleListSessions() {
       cc_session_id: s.cc_session_id,
       activity,
       context_usage,
+      bg_task_count: bgTaskCountForSession(s.id),
       boards: enrichBoards(activeBoards),
       archived_boards: enrichBoards(archivedBoards),
     };

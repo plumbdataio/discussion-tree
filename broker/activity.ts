@@ -15,6 +15,25 @@ import { broadcastToAll } from "./ws.ts";
 export const activities = new Map<string, Activity>();
 const toolHeartbeats = new Map<string, number>();
 
+// In-flight background-task counters per broker session_id. Driven from
+// PreToolUse(Bash) (run_in_background:true → add) and from the CC-side
+// report_bg_task_done MCP tool (→ delete). Frontend renders a BG marker
+// next to the working spinner whenever the set for a session is non-empty.
+//
+// The keys inside each set are CC tool_use_ids, which are unique per
+// invocation, so the same task can't double-count.
+const bgTasks = new Map<string, Set<string>>();
+
+function broadcastBgTasks(sessionId: string) {
+  const set = bgTasks.get(sessionId);
+  const count = set?.size ?? 0;
+  broadcastToAll({ type: "bg-tasks-update", session_id: sessionId, count });
+}
+
+export function bgTaskCountForSession(sessionId: string): number {
+  return bgTasks.get(sessionId)?.size ?? 0;
+}
+
 function broadcastActivity(sessionId: string, entry: Activity | null) {
   broadcastToAll({ type: "activity", session_id: sessionId, activity: entry });
 }
@@ -157,6 +176,65 @@ export function handleBlockedOnUserClear(body: { cc_session_id?: string }): {
   return { ok: true };
 }
 
+// PreToolUse(Bash with run_in_background:true) routes the launch here.
+// The CC tool_use_id is the natural task token because it's unique per
+// invocation and is what `<task-notification>` carries back on
+// completion, so report_bg_task_done can match by the same value.
+export function handleBgTaskStart(body: {
+  cc_session_id?: string;
+  task_id?: string;
+}): { ok: boolean; error?: string; count?: number } {
+  if (!body.cc_session_id || !body.task_id) {
+    return { ok: false, error: "cc_session_id and task_id required" };
+  }
+  const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
+  if (!sessionId) return { ok: false, error: "session not found" };
+  let set = bgTasks.get(sessionId);
+  if (!set) {
+    set = new Set();
+    bgTasks.set(sessionId, set);
+  }
+  set.add(body.task_id);
+  broadcastBgTasks(sessionId);
+  return { ok: true, count: set.size };
+}
+
+// CC calls this through the report_bg_task_done MCP tool after seeing a
+// <task-notification status="completed" task-id=...> in its message
+// stream. Accepts a list so multiple completions seen on the same turn
+// can be cleared in one round-trip.
+export function handleBgTaskDone(body: {
+  session_id?: string;
+  cc_session_id?: string;
+  task_ids?: string[];
+}): { ok: boolean; cleared: number; remaining: number; error?: string } {
+  let sessionId: string | null = body.session_id ?? null;
+  if (!sessionId && body.cc_session_id) {
+    sessionId = lookupAliveSessionByCcId(body.cc_session_id);
+  }
+  if (!sessionId) {
+    return { ok: false, cleared: 0, remaining: 0, error: "session not found" };
+  }
+  if (!Array.isArray(body.task_ids)) {
+    return {
+      ok: false,
+      cleared: 0,
+      remaining: bgTasks.get(sessionId)?.size ?? 0,
+      error: "task_ids array required",
+    };
+  }
+  const set = bgTasks.get(sessionId);
+  let cleared = 0;
+  if (set) {
+    for (const id of body.task_ids) {
+      if (set.delete(id)) cleared++;
+    }
+    if (set.size === 0) bgTasks.delete(sessionId);
+  }
+  broadcastBgTasks(sessionId);
+  return { ok: true, cleared, remaining: bgTasks.get(sessionId)?.size ?? 0 };
+}
+
 // Bulk clear for a set of sessions. Used when an external tool wants
 // to silence every spinner across a group of CCs at once (e.g. a
 // scheduled "observation mode" where the user wants the badges
@@ -186,6 +264,8 @@ export const routes = {
   "/clear-activities-for-sessions": handleClearActivitiesForSessions,
   "/blocked-on-user-start": handleBlockedOnUserStart,
   "/blocked-on-user-clear": handleBlockedOnUserClear,
+  "/bg-task-start": handleBgTaskStart,
+  "/bg-task-done": handleBgTaskDone,
 };
 
 // Watchdog — used to auto-clear stale "working" entries after

@@ -307,6 +307,10 @@ export interface SessionListItem {
   // statusline-command.sh). null when no report has arrived yet, or
   // when the CC session is dead.
   context_usage?: { remaining_pct: number; set_at: string } | null;
+  // In-flight Bash run_in_background:true tasks the broker has not yet
+  // seen reported done. Frontend renders a BG marker next to the
+  // working spinner whenever this is > 0.
+  bg_task_count?: number;
   boards: BoardListItem[];
   archived_boards?: BoardListItem[];
 }
@@ -330,4 +334,5 @@ export interface BoardView {
   // hasn't fired since attach). The board header renders a colored
   // chip from this when present.
   owner_context_usage?: { remaining_pct: number; set_at: string } | null;
+  owner_bg_task_count?: number;
 }
