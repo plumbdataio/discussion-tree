@@ -1119,6 +1119,10 @@ a.session-name:hover {
   gap: 8px;
   padding: 4px 2px;
   scrollbar-width: none;
+  /* iOS Safari needs this for momentum scrolling inside a nested overflow
+     container; without it, swipes inside the thread feel dead or get
+     hijacked by the parent layout. Harmless / ignored on other engines. */
+  -webkit-overflow-scrolling: touch;
 }
 .default-board-thread::-webkit-scrollbar {
   display: none;

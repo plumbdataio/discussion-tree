@@ -81,7 +81,13 @@ export function DefaultBoardLayout({
     // hydration grew the thread, which felt like being yanked back
     // every time they tried to scroll up.
     const pin = () => {
-      el.scrollTop = Number.MAX_SAFE_INTEGER;
+      // iOS Safari clamps scrollTop assignments through an i32 path; passing
+      // Number.MAX_SAFE_INTEGER (≈ 2^53) trips that and snaps scroll back to
+      // 0 instead of saturating to scrollHeight, which is why mobile users
+      // saw the thread stuck at the top. 1e9 is well above any realistic
+      // thread height and stays inside int32, so both WebKit and Blink
+      // saturate normally.
+      el.scrollTop = 1e9;
     };
     pin();
     // Re-pin whenever the thread's children resize during the first
