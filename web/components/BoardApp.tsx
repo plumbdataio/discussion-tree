@@ -55,6 +55,10 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   // the tab — the previous socket would have been closed by the
   // freeze handler.
   const [wsEpoch, setWsEpoch] = useState(0);
+  // Per-status node filter — read here so the hook order is stable
+  // across the early-return branches below. The downstream filtering
+  // happens after `data` is known to be present.
+  const [nodeStatusFilter] = useNodeStatusFilter();
 
   const fetchBoard = useCallback(async () => {
     if (!boardId) return;
@@ -314,7 +318,10 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   // never filtered out individually — the rule is "hide a concern only
   // when every item under it has been filtered away" so an empty
   // concern with no items at all stays visible.
-  const [nodeStatusFilter] = useNodeStatusFilter();
+  //
+  // (nodeStatusFilter hook was hoisted to the top of the component
+  // alongside the other hooks; reading it here is a plain object
+  // access.)
   const filteredChildrenByParent = (() => {
     const next = new Map<string | null, typeof concerns>();
     for (const [parent, kids] of childrenByParent) {
