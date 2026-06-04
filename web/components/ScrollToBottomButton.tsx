@@ -44,12 +44,23 @@ function ScrollToBottomButtonImpl({
       title="一番下まで"
       onClick={() => {
         const el = scrollRef.current;
-        // Don't use el.lastElementChild here — the button itself is the
-        // last child of the scroll container, so scrollIntoView on it
-        // only nudges by a few px. Setting scrollTop past scrollHeight
-        // lets the browser clamp to the real bottom and forces layout
-        // for any content-visibility-skipped rows along the way.
-        if (el) el.scrollTop = Number.MAX_SAFE_INTEGER;
+        if (!el) return;
+        // content-visibility:auto means off-screen rows render with a
+        // 100px intrinsic-size placeholder; jumping to the bottom in
+        // one go only reaches the bottom of that placeholder height.
+        // As the rows about to enter the viewport hydrate they grow
+        // and the real bottom drifts down. Re-pin a few times across
+        // the next ~400ms so the user sees a single smooth jump.
+        const pin = () => {
+          el.scrollTop = Number.MAX_SAFE_INTEGER;
+        };
+        pin();
+        requestAnimationFrame(() => {
+          pin();
+          requestAnimationFrame(pin);
+        });
+        setTimeout(pin, 100);
+        setTimeout(pin, 300);
       }}
     >
       <ChevronDown size={16} strokeWidth={2} />
