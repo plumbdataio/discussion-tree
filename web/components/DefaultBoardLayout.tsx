@@ -84,11 +84,18 @@ export function DefaultBoardLayout({
       el.scrollTop = Number.MAX_SAFE_INTEGER;
     };
     pin();
-    const t1 = window.setTimeout(pin, 200);
-    const t2 = window.setTimeout(pin, 1000);
+    // Re-pin whenever the thread's children resize during the first
+    // 2.5s after mount — image / font / content-visibility hydration
+    // all fire inside that window and steadily grow the height.
+    // After the grace period we disconnect, so the user's own
+    // scrolling from that point onward is never overridden.
+    const ro = new ResizeObserver(() => pin());
+    ro.observe(el);
+    Array.from(el.children).forEach((c) => ro.observe(c));
+    const stop = window.setTimeout(() => ro.disconnect(), 2500);
     return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
+      ro.disconnect();
+      clearTimeout(stop);
     };
   }, [myThread.length, tentativeText]);
 
