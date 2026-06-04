@@ -24,6 +24,7 @@ import {
 import { routes as boardsRoutes } from "./broker/boards.ts";
 import { routes as favoritesRoutes } from "./broker/favorites.ts";
 import { routes as feedbackRoutes } from "./broker/feedback.ts";
+import { routes as globalBannerRoutes } from "./broker/global-banner.ts";
 import { getBoardView } from "./broker/helpers.ts";
 import { routes as nodesRoutes } from "./broker/nodes.ts";
 import { initPower, routes as powerRoutes } from "./broker/power.ts";
@@ -66,6 +67,7 @@ const POST_ROUTES: Record<string, RouteHandler> = {
   ...readsRoutes,
   ...contextUsageRoutes,
   ...favoritesRoutes,
+  ...globalBannerRoutes,
 };
 
 // --- HTTP + WebSocket server ---

@@ -2306,6 +2306,61 @@ body.concern-resizing * {
   border-radius: 4px;
 }
 
+/* Global banner — fixed at the very top of the viewport, above the
+   board header and the corner FABs. Sized for a single message line
+   plus a dismiss button. Three tones (info / warn / error) cover the
+   intended use cases; the colour swing is intentional so warn / error
+   read at a glance from across the screen. z-index higher than the
+   corner FABs (1300) but lower than the toast layer (9999). */
+.global-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+.global-banner-info {
+  background: #dbeafe;
+  color: #1e3a8a;
+  border-bottom: 1px solid #93c5fd;
+}
+.global-banner-warn {
+  background: #fef3c7;
+  color: #92400e;
+  border-bottom: 1px solid #fcd34d;
+}
+.global-banner-error {
+  background: #fecaca;
+  color: #7f1d1d;
+  border-bottom: 1px solid #f87171;
+}
+.global-banner-message {
+  flex: 0 1 auto;
+}
+.global-banner-dismiss {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 4px;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  line-height: 0;
+  opacity: 0.7;
+}
+.global-banner-dismiss:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.06);
+}
+
 /* Toast container — sits just below the board header so notifications
    don't overlap the chip row or trigger button. Pastel colour palette
    (blue-50 body / blue-700 text for ok, red-50 / red-700 for error)

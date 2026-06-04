@@ -130,4 +130,44 @@ describe("heartbeat-tool / clear-tool-activity (cc_session_id-driven)", () => {
     );
     expect(r.json.ok).toBe(false);
   });
+
+  test("/clear-activities-for-sessions wipes every state, including explicit ones", async () => {
+    const sid = await registerSession(broker.url);
+    const ccId = await attachCC(broker.url, sid);
+    // Seed an explicit "blocked" state — these normally survive
+    // /clear-tool-activity. The bulk-clear endpoint should drop them
+    // anyway so external schedulers can quiet every spinner at once.
+    await post(`${broker.url}/set-activity`, {
+      session_id: sid,
+      state: "blocked",
+      message: "manual",
+    });
+    const before = await get<{ sessions: { id: string; activity: any }[] }>(
+      `${broker.url}/api/sessions`,
+    );
+    expect(
+      before.json.sessions.find((s) => s.id === sid)?.activity?.state,
+    ).toBe("blocked");
+
+    const r = await post<{ ok: boolean; cleared: number }>(
+      `${broker.url}/clear-activities-for-sessions`,
+      { session_ids: [sid] },
+    );
+    expect(r.json.ok).toBe(true);
+    expect(r.json.cleared).toBe(1);
+
+    const after = await get<{ sessions: { id: string; activity: any }[] }>(
+      `${broker.url}/api/sessions`,
+    );
+    expect(after.json.sessions.find((s) => s.id === sid)?.activity).toBeNull();
+  });
+
+  test("/clear-activities-for-sessions rejects a non-array body", async () => {
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/clear-activities-for-sessions`,
+      { session_ids: "not-an-array" },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toContain("session_ids");
+  });
 });

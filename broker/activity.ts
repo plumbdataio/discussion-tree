@@ -157,10 +157,33 @@ export function handleBlockedOnUserClear(body: { cc_session_id?: string }): {
   return { ok: true };
 }
 
+// Bulk clear for a set of sessions. Used when an external tool wants
+// to silence every spinner across a group of CCs at once (e.g. a
+// scheduled "observation mode" where the user wants the badges
+// quieted until they intervene). Clears all flavours — both the
+// hook-managed "working" entries and any explicit states the LLM
+// set — and broadcasts an `activity` event with null per session
+// so frontends drop the badge immediately.
+export function handleClearActivitiesForSessions(body: {
+  session_ids?: string[];
+}): { ok: boolean; cleared: number; error?: string } {
+  if (!Array.isArray(body.session_ids)) {
+    return { ok: false, cleared: 0, error: "session_ids array required" };
+  }
+  let cleared = 0;
+  for (const sid of body.session_ids) {
+    if (activities.delete(sid)) cleared++;
+    toolHeartbeats.delete(sid);
+    broadcastActivity(sid, null);
+  }
+  return { ok: true, cleared };
+}
+
 export const routes = {
   "/set-activity": handleSetActivity,
   "/heartbeat-tool": handleHeartbeatTool,
   "/clear-tool-activity": handleClearToolActivity,
+  "/clear-activities-for-sessions": handleClearActivitiesForSessions,
   "/blocked-on-user-start": handleBlockedOnUserStart,
   "/blocked-on-user-clear": handleBlockedOnUserClear,
 };

@@ -4,6 +4,7 @@ import i18n, { resolveLanguage } from "./i18n.ts";
 import { AnchorButton } from "./components/AnchorButton.tsx";
 import { BoardApp } from "./components/BoardApp.tsx";
 import { GearButton } from "./components/GearButton.tsx";
+import { GlobalBanner } from "./components/GlobalBanner.tsx";
 import { RootDashboard } from "./components/RootDashboard.tsx";
 import { SessionDashboard } from "./components/SessionDashboard.tsx";
 import { ToastContainer } from "./components/Toast.tsx";
@@ -83,6 +84,7 @@ function App() {
   }
   return (
     <>
+      <GlobalBanner />
       {page}
       <AnchorButton />
       <GearButton />

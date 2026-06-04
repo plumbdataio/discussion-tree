@@ -100,6 +100,18 @@ export interface ThreadItem {
   read_at?: string | null;
 }
 
+// Global banner (= a single message shown at the top of every page).
+// Used for cross-session announcements that need to interrupt the user
+// regardless of which board they're on. Stored in-memory on the
+// broker; cleared automatically once `expires_at` passes.
+export type GlobalBannerTone = "info" | "warn" | "error";
+export interface GlobalBanner {
+  message: string;
+  tone: GlobalBannerTone;
+  expires_at?: string | null;
+  set_at: string;
+}
+
 // Anchor (= per-session pinned thread item). Stored as `favorites` in the
 // DB; the user-facing UI calls them "anchors" / 「アンカー」.
 //
