@@ -2333,6 +2333,17 @@ body.concern-resizing * {
   border-radius: 4px;
 }
 
+/* Default board (general) gets long fast — hundreds of thread items
+   on a single tall thread. content-visibility: auto lets the browser
+   skip paint + layout for messages outside the current viewport,
+   without removing them from the DOM (so Cmd+F search still finds
+   them). contain-intrinsic-size keeps the scrollbar honest by giving
+   the browser a height estimate while the message is skipped. */
+.default-board-thread .thread-msg {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 100px;
+}
+
 /* Per-board node-status filter — small trigger chip in the board
    header that opens a popover with one checkbox per NodeStatus.
    Filter state is persisted in localStorage by useNodeStatusFilter,
