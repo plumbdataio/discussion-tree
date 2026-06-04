@@ -371,12 +371,16 @@ body {
   /* On mobile we drop the settings gear from the header corner and
      surface it inside the Sidebar instead — the freed slot is what
      makes room for the anchor (.anchor-fab) on phones where header
-     space is tight. The bookmark trigger stays in the corner so
-     the user can pop the list open without first opening the
-     drawer. !important defeats the base `.gear-fab { display: flex }`
-     rule which sits later in the file (cascade order). */
+     space is tight. The bookmark trigger then slides into the gear's
+     old right:12px slot so the rightmost-tap zone is consistent
+     across the two layouts. !important defeats the base
+     `.gear-fab/.anchor-fab` rules which sit later in the file
+     (cascade order). */
   .gear-fab {
     display: none !important;
+  }
+  .anchor-fab {
+    right: 12px !important;
   }
 }
 
