@@ -4,7 +4,6 @@ import {
   ChevronRight,
   Filter,
   GripVertical,
-  Leaf,
   Menu,
   MessageCircle,
   RefreshCw,
@@ -498,22 +497,13 @@ export function Sidebar({
         />
       )}
       <aside className={`sidebar${drawerOpen ? " open" : ""}`}>
-        {/* Mobile-only quick actions — replaces the desktop corner fab
-            buttons (.gear-fab / .anchor-fab) which are hidden at
-            <=768px. Click dispatches a CustomEvent that the AnchorButton
-            and GearButton listen for, keeping their modal state local. */}
+        {/* Mobile-only quick actions — replaces the .gear-fab corner
+            button which is hidden at <=768px. The .anchor-fab stays
+            in the header on mobile (it occupies the slot the gear
+            vacated), so the bookmark list is reached without first
+            opening the drawer. Click dispatches a CustomEvent that
+            GearButton listens for, keeping its modal state local. */}
         <div className="sidebar-quick-actions">
-          <button
-            type="button"
-            className="sidebar-quick-action"
-            onClick={() => {
-              window.dispatchEvent(new Event("pd-open-anchors"));
-              setDrawerOpen(false);
-            }}
-          >
-            <Leaf size={14} strokeWidth={1.75} />
-            <span>{t("anchor.list_button_title")}</span>
-          </button>
           <button
             type="button"
             className="sidebar-quick-action"

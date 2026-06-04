@@ -368,14 +368,14 @@ body {
     padding-left: 52px;
   }
 
-  /* On mobile the persistent corner buttons get in the way of the
-     header chip row and the conversation. Hide them and surface the
-     same affordances inside the Sidebar's quick-actions row instead.
-     !important defeats the base `.gear-fab/.anchor-fab { display: flex }`
-     rule which sits later in the file (cascade order) and would
-     otherwise win at the same specificity. */
-  .gear-fab,
-  .anchor-fab {
+  /* On mobile we drop the settings gear from the header corner and
+     surface it inside the Sidebar instead — the freed slot is what
+     makes room for the anchor (.anchor-fab) on phones where header
+     space is tight. The bookmark trigger stays in the corner so
+     the user can pop the list open without first opening the
+     drawer. !important defeats the base `.gear-fab { display: flex }`
+     rule which sits later in the file (cascade order). */
+  .gear-fab {
     display: none !important;
   }
 }
