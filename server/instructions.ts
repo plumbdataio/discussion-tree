@@ -131,7 +131,7 @@ Available tools:
 - get_board: Load one board's structure + recent thread (last 20 per node by default). Pair with list_boards / search_boards. Past discussions are an ASSET to reference, not a write-only log.
 - search_boards: Full-text-style search across board titles, node titles/context, and thread bodies. Use when looking for any past mention of a topic — saves the user re-explaining context.
 - reset_unanswered_posts: Force the unanswered-user-post counter for THIS session to zero. post_to_node already zeroes the counter (bundled-reply pattern), so you rarely need this — it's an escape hatch for "yield without posting" turns (e.g. the user explicitly told you not to mirror this turn).
-- report_bg_task_done: Tell the broker that one or more background Bash tasks have finished, so the BG marker in the UI clears. Call this immediately whenever you see a `<task-notification status="completed" task-id="...">` system message — pass the task-id values. Bundling multiple ids in one call is fine.
+- report_bg_task_done: Tell the broker that one or more background Bash tasks have finished, so the BG marker in the UI clears. Call this immediately whenever you see a <task-notification status="completed" task-id="..."> system message — pass the task-id values. Bundling multiple ids in one call is fine.
 - request_improvement: Submit a concrete friction point to REQUESTS.md for the user to review
 
 PAST DISCUSSIONS ARE QUERYABLE (read tools):
