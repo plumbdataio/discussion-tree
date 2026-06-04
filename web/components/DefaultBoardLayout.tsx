@@ -72,21 +72,30 @@ export function DefaultBoardLayout({
   useEffect(() => {
     const el = threadRef.current;
     if (!el) return;
-    // Initial snap to bottom. The single-pass version stopped one render
-    // short on real conversations because markdown images, code blocks,
-    // and async font swaps grow the thread height AFTER the first paint
-    // — the scrollTop computed here was still correct relative to the
-    // height at that instant. Re-pin a few times across the next ~600ms
-    // so late content hydration also lands us at the actual bottom.
+    // Initial snap to bottom. Markdown images, code blocks, async font
+    // swaps, and content-visibility:auto rows that hydrate as they
+    // enter the viewport all keep growing the thread height after the
+    // first paint — a one-shot pin lands shy of the real bottom.
+    // We pin once, then keep re-pinning whenever the thread or any of
+    // its children resize, but only while the user is still near the
+    // bottom (within ~150px). The moment they scroll up to read, we
+    // stop chasing so we don't fight them.
     const pin = () => {
-      el.lastElementChild?.scrollIntoView({ block: "end" });
+      el.scrollTop = Number.MAX_SAFE_INTEGER;
     };
     pin();
-    const raf = requestAnimationFrame(pin);
+    const ro = new ResizeObserver(() => {
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distance < 150) pin();
+    });
+    ro.observe(el);
+    Array.from(el.children).forEach((c) => ro.observe(c));
+    // Also re-pin on a couple of late timers to catch growth that
+    // doesn't trigger ResizeObserver (e.g. the very first paint).
     const t1 = window.setTimeout(pin, 200);
-    const t2 = window.setTimeout(pin, 600);
+    const t2 = window.setTimeout(pin, 1000);
     return () => {
-      cancelAnimationFrame(raf);
+      ro.disconnect();
       clearTimeout(t1);
       clearTimeout(t2);
     };
