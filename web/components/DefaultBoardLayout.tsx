@@ -69,39 +69,24 @@ export function DefaultBoardLayout({
     });
   };
 
-  // True while the user has deliberately scrolled away from the bottom.
-  // Flips back to false once they return within ~30px of the bottom,
-  // so a scroll-down gesture re-engages auto-pinning.
-  const detachedRef = useRef(false);
-
   useEffect(() => {
     const el = threadRef.current;
     if (!el) return;
-    // Reset the detached flag when the effect re-runs (= new message
-    // arrived or a tentative submission was placed). The user clearly
-    // wants to see new activity, so the auto-pin should be re-armed.
-    detachedRef.current = false;
+    // Plan B (simplified): pin once on mount and once at +200ms and
+    // +1000ms to catch image / font hydration, then stop. Anything the
+    // user does after that point is theirs to control — including a
+    // small gap at the bottom they can close with the ScrollToBottom
+    // button. The earlier ResizeObserver-based "keep chasing the
+    // bottom" pattern fought the user every time content-visibility
+    // hydration grew the thread, which felt like being yanked back
+    // every time they tried to scroll up.
     const pin = () => {
-      if (detachedRef.current) return;
       el.scrollTop = Number.MAX_SAFE_INTEGER;
     };
     pin();
-    const onScroll = () => {
-      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (distance > 80) detachedRef.current = true;
-      else if (distance < 30) detachedRef.current = false;
-    };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    const ro = new ResizeObserver(() => {
-      if (!detachedRef.current) pin();
-    });
-    ro.observe(el);
-    Array.from(el.children).forEach((c) => ro.observe(c));
     const t1 = window.setTimeout(pin, 200);
     const t2 = window.setTimeout(pin, 1000);
     return () => {
-      ro.disconnect();
-      el.removeEventListener("scroll", onScroll);
       clearTimeout(t1);
       clearTimeout(t2);
     };
