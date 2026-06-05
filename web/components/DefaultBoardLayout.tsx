@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { BoardView, Node, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
@@ -69,21 +69,31 @@ export function DefaultBoardLayout({
     });
   };
 
-  // CSS does the heavy lifting (flex-direction: column-reverse pins
-  // the visual bottom + the browser's scroll anchoring keeps it
-  // there). The one thing CSS can't guarantee is the FIRST paint when
-  // content-visibility:auto placeholders are still resolving — the
-  // engine sometimes lands on a stable scroll position that's a few
-  // messages above the bottom (the unhydrated placeholders below
-  // count toward scrollHeight and bias the initial position). A
-  // single useLayoutEffect-time `scrollTop = 0` on mount snaps the
-  // view to the visual bottom BEFORE the first paint, after which
-  // anchoring takes over. We deliberately don't re-run this on
-  // thread updates — re-running was the whole "JS chase" failure
-  // mode the rewrite escaped.
-  useLayoutEffect(() => {
+  // Snap the FIRST DOM child (= the visual bottom under
+  // column-reverse: tentativeText if any, else the newest message)
+  // to the viewport's bottom on mount. scrollIntoView is used in
+  // place of `scrollTop = …` because the two scrollTop conventions
+  // for column-reverse containers (zero-at-bottom on some engines,
+  // zero-at-top on others) make raw scrollTop assignments unreliable
+  // — scrollIntoView always means "align this element with the
+  // requested edge of the viewport," semantics-free.
+  //
+  // Two passes (immediate + next animation frame) because
+  // content-visibility:auto placeholders take a frame to settle
+  // their actual height; the first call lands us in the right
+  // ballpark, the rAF call corrects after layout finishes. After
+  // that, CSS scroll anchoring keeps the bottom pinned as new
+  // messages arrive — no further chase needed.
+  useEffect(() => {
     const el = threadRef.current;
-    if (el) el.scrollTop = 0;
+    if (!el) return;
+    const snap = () => {
+      const first = el.firstElementChild as HTMLElement | null;
+      first?.scrollIntoView({ block: "end" });
+    };
+    snap();
+    const raf = requestAnimationFrame(snap);
+    return () => cancelAnimationFrame(raf);
   }, []);
 
   const handleImageFiles = async (files: File[]) => {
