@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { BoardView, Node, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
 import { MessageModal } from "./MessageModal.tsx";
-import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
 import { ThreadMessage } from "./ThreadMessage.tsx";
 import { extractImageFiles, uploadImage } from "../utils/api.ts";
 import { useDraft } from "../utils/drafts.ts";
@@ -47,7 +46,6 @@ export function DefaultBoardLayout({
   const [uploading, setUploading] = useState(false);
   const [tentativeText, setTentativeText] = useState<string | null>(null);
   const [expandedMsg, setExpandedMsg] = useState<ThreadItem | null>(null);
-  const threadRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useMarkReadOnVisible(rootRef, myThread);
@@ -69,28 +67,14 @@ export function DefaultBoardLayout({
     });
   };
 
-  useEffect(() => {
-    const el = threadRef.current;
-    if (!el) return;
-    // Initial snap to bottom. The single-pass version stopped one render
-    // short on real conversations because markdown images, code blocks,
-    // and async font swaps grow the thread height AFTER the first paint
-    // — the scrollTop computed here was still correct relative to the
-    // height at that instant. Re-pin a few times across the next ~600ms
-    // so late content hydration also lands us at the actual bottom.
-    const pin = () => {
-      el.scrollTop = el.scrollHeight;
-    };
-    pin();
-    const raf = requestAnimationFrame(pin);
-    const t1 = window.setTimeout(pin, 200);
-    const t2 = window.setTimeout(pin, 600);
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, [myThread.length, tentativeText]);
+  // No useEffect for scroll: the thread container uses
+  // `flex-direction: column-reverse` (see .default-board-thread in
+  // style.css), which means the browser's anchored-scrolling heuristic
+  // pins the visual bottom in place automatically. As long as the user
+  // is "at bottom" (scrollTop near 0 in reverse coords) new messages
+  // grow the list upward without moving the view; once they scroll up
+  // to read history, nothing yanks them back. No JS chase, no pin
+  // loop, no iOS i32 surprises.
 
   const handleImageFiles = async (files: File[]) => {
     if (files.length === 0) return;
@@ -184,17 +168,13 @@ export function DefaultBoardLayout({
       <div className="default-board-context md-body">
         <MDView text={t("default_board.welcome_message")} />
       </div>
-      <div className="default-board-thread" ref={threadRef}>
-        {myThread.map((it) => (
-          <ThreadMessage
-            key={it.id}
-            item={it}
-            boardId={data.board.id}
-            nodeId={node.id}
-            sessionId={ownerSessionId}
-            onExpand={openExpandedMsg}
-          />
-        ))}
+      {/* column-reverse: the first DOM child renders at the visual
+          bottom. So tentativeText (= the optimistic in-flight message)
+          comes first in source order, then myThread iterated newest →
+          oldest. The result on screen is oldest at top, newest at
+          bottom, exactly like before — but the browser's anchor
+          behaviour keeps the bottom in view without any JS. */}
+      <div className="default-board-thread">
         {tentativeText && (
           <div className="thread-msg from-user pending">
             <span className="who">
@@ -204,7 +184,16 @@ export function DefaultBoardLayout({
             <MDView text={tentativeText} />
           </div>
         )}
-        <ScrollToBottomButton scrollRef={threadRef} />
+        {[...myThread].reverse().map((it) => (
+          <ThreadMessage
+            key={it.id}
+            item={it}
+            boardId={data.board.id}
+            nodeId={node.id}
+            sessionId={ownerSessionId}
+            onExpand={openExpandedMsg}
+          />
+        ))}
       </div>
       <div className="default-board-input">
         <textarea

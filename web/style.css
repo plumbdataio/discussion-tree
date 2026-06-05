@@ -1115,10 +1115,20 @@ a.session-name:hover {
   min-height: 0;
   overflow-y: auto;
   display: flex;
-  flex-direction: column;
+  /* column-reverse + DOM source ordered (tentative-first, then
+     newest→oldest of myThread) yields the same visible order as
+     before (oldest at top, newest at bottom) WITHOUT any JS scroll
+     pinning. Browsers anchor the scroll position to the bottom of
+     the column when the user is at the bottom, so adding new
+     messages doesn't move the view; scrolling up to read history is
+     fully respected because nothing tries to drag the view back
+     down. Works the same on Chrome, Firefox, and iOS Safari. */
+  flex-direction: column-reverse;
   gap: 8px;
   padding: 4px 2px;
   scrollbar-width: none;
+  /* iOS Safari momentum scroll for nested overflow containers. */
+  -webkit-overflow-scrolling: touch;
 }
 .default-board-thread::-webkit-scrollbar {
   display: none;
