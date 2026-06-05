@@ -82,9 +82,11 @@ export function ItemCard({
   }, []);
 
   // column-reverse + scroll-anchoring keeps the visual bottom pinned
-  // once mounted; this hook just makes sure the FIRST paint and the
-  // next few hydration frames also land there.
-  useSnapToBottom(threadRef, { reversed: true });
+  // once mounted; this hook makes sure the first paint + the next
+  // few hydration frames land there, and re-snaps when the user
+  // themself starts a post (tentativeText flip) so their own
+  // submission is visible.
+  useSnapToBottom(threadRef, { reversed: true, deps: [tentativeText] });
 
   const handleImageFiles = async (files: File[]) => {
     if (files.length === 0) return;

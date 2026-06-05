@@ -470,7 +470,14 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
         <Sidebar currentBoardId={boardId} />
         <div className="board-container">
           {data.board.is_default ? (
+            // key={data.board.id} forces a fresh mount whenever the
+            // user navigates between default boards (e.g. pd ↔ zc
+            // general). Without it, React keeps the same
+            // DefaultBoardLayout instance across the nav and its
+            // mount-time scroll snap never re-runs, leaving the user
+            // staring at the top of the new board's thread.
             <DefaultBoardLayout
+              key={data.board.id}
               data={data}
               ownerAlive={ownerAlive}
               onSubmit={handleSubmit}

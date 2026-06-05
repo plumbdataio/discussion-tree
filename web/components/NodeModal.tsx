@@ -50,8 +50,12 @@ export function NodeModal({
   // which would need a layout refactor. For now we stick with the
   // classic "scrollTop = scrollHeight" approach, just hardened with
   // the multi-pass mount snap so hydration / scroll-restoration
-  // can't strand the modal mid-thread.
-  useSnapToBottom(threadRef, { deps: [threadItems.length] });
+  // can't strand the modal mid-thread. tentativeText is in deps so
+  // the user's own submission scrolls into view even if they were
+  // browsing higher up.
+  useSnapToBottom(threadRef, {
+    deps: [threadItems.length, tentativeText],
+  });
 
   const handleImageFiles = async (files: File[]) => {
     if (files.length === 0) return;
