@@ -93,5 +93,15 @@ function App() {
   );
 }
 
+// Stop the browser from restoring nested scroll positions on
+// reload. The default board's thread is the only place this would
+// be visible (everything else opens fresh) and there auto-restore
+// fights the column-reverse "snap to bottom on mount" so the user
+// sees a different scroll position on every reload. Manual lets
+// our own mount-time scrollIntoView own the initial position.
+if ("scrollRestoration" in history) {
+  history.scrollRestoration = "manual";
+}
+
 const root = createRoot(document.getElementById("root")!);
 root.render(<App />);

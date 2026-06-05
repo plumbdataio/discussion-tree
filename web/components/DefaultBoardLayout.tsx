@@ -78,12 +78,13 @@ export function DefaultBoardLayout({
   // — scrollIntoView always means "align this element with the
   // requested edge of the viewport," semantics-free.
   //
-  // Two passes (immediate + next animation frame) because
-  // content-visibility:auto placeholders take a frame to settle
-  // their actual height; the first call lands us in the right
-  // ballpark, the rAF call corrects after layout finishes. After
-  // that, CSS scroll anchoring keeps the bottom pinned as new
-  // messages arrive — no further chase needed.
+  // Snap multiple times across the first ~600ms of mount because
+  // content-visibility:auto placeholders settle their heights over a
+  // few frames AND iOS occasionally restores a stale scroll position
+  // from a prior visit before we get to it. Bounded window — these
+  // fire on mount only, no thread-update dependency, so it's not
+  // chase behaviour (the user can scroll up at any point after the
+  // 600ms grace and nothing yanks them back).
   useEffect(() => {
     const el = threadRef.current;
     if (!el) return;
@@ -93,7 +94,15 @@ export function DefaultBoardLayout({
     };
     snap();
     const raf = requestAnimationFrame(snap);
-    return () => cancelAnimationFrame(raf);
+    const t1 = window.setTimeout(snap, 100);
+    const t2 = window.setTimeout(snap, 300);
+    const t3 = window.setTimeout(snap, 600);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
   }, []);
 
   const handleImageFiles = async (files: File[]) => {
