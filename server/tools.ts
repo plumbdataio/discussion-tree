@@ -461,6 +461,86 @@ export const TOOLS = [
       required: ["title", "blocker"],
     },
   },
+  {
+    name: "record_decision",
+    description:
+      "Append a decision to a decision-checklist node as a new checklist item (status=pending). Use this whenever a node settles to a verdict (adopted / agreed / resolved / rejected): capture the decision as a short, verifiable acceptance-criterion-style line (\"X であること。背景: …\") so the board accumulates an implementation checklist for later verification. The target node_id MUST be a node already flagged as a checklist node (is_checklist=1) — checklist nodes are NOT auto-created. Optionally pass source_node_id to link the item back to the node where the decision was made.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        board_id: {
+          type: "string" as const,
+          description: "Board that contains the checklist node.",
+        },
+        node_id: {
+          type: "string" as const,
+          description: "The is_checklist node to append the decision to.",
+        },
+        summary: {
+          type: "string" as const,
+          description:
+            "The decision as a verifiable acceptance-criterion line (2-3 sentences: what to check + why).",
+        },
+        source_node_id: {
+          type: "string" as const,
+          description:
+            "Optional: the node where this decision was made (renders as a link from the item).",
+        },
+      },
+      required: ["board_id", "node_id", "summary"],
+    },
+  },
+  {
+    name: "update_decision",
+    description:
+      "Update a checklist item: change its status, edit the summary, and/or set a drop reason. status is one of pending / in-progress / done / dropped. status=dropped REQUIRES a non-empty drop_reason (the broker rejects the call otherwise); moving off dropped clears the reason. The checklist UI is read-only, so this tool is the only way to change an item.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        item_id: {
+          type: "number" as const,
+          description: "The checklist item id to update.",
+        },
+        status: {
+          type: "string" as const,
+          description: "New status: pending | in-progress | done | dropped.",
+        },
+        summary: {
+          type: "string" as const,
+          description: "Optional: replacement summary text.",
+        },
+        drop_reason: {
+          type: "string" as const,
+          description:
+            "Required when status=dropped: why the decision was abandoned.",
+        },
+      },
+      required: ["item_id"],
+    },
+  },
+  {
+    name: "mark_checklist_node",
+    description:
+      "Flag an existing node as a decision-checklist node (is_checklist=1) so record_decision can append items to it. Checklist nodes are ordinary nodes (created with add_item) that you deliberately turn into a checklist — they are NEVER auto-created. Place the checklist node leftmost under its concern by convention. Pass is_checklist=false to turn it back into a normal node.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        board_id: {
+          type: "string" as const,
+          description: "Board containing the node.",
+        },
+        node_id: {
+          type: "string" as const,
+          description: "The node to flag as a checklist node.",
+        },
+        is_checklist: {
+          type: "boolean" as const,
+          description: "Default true. Pass false to unflag.",
+        },
+      },
+      required: ["board_id", "node_id"],
+    },
+  },
 ];
 
 function textResult(text: string, isError = false) {
@@ -935,6 +1015,86 @@ export async function dispatchToolCall(
           `BG task counter reset; cleared ${res.cleared} ${
             res.cleared === 1 ? "entry" : "entries"
           }.`,
+        );
+      }
+
+      case "record_decision": {
+        const a = args as {
+          board_id: string;
+          node_id: string;
+          summary: string;
+          source_node_id?: string;
+        };
+        const res = await brokerFetch<{
+          ok: boolean;
+          item_id?: number;
+          error?: string;
+        }>("/record-decision", {
+          board_id: a.board_id,
+          node_id: a.node_id,
+          summary: a.summary,
+          source_node_id: a.source_node_id ?? null,
+        });
+        if (!res?.ok) {
+          return textResult(
+            `record_decision failed: ${res?.error ?? "unknown error"}`,
+            true,
+          );
+        }
+        return textResult(
+          `Decision recorded as checklist item #${res.item_id} (status=pending).`,
+        );
+      }
+
+      case "update_decision": {
+        const a = args as {
+          item_id: number;
+          status?: string;
+          summary?: string;
+          drop_reason?: string;
+        };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/update-decision",
+          {
+            item_id: a.item_id,
+            status: a.status,
+            summary: a.summary,
+            drop_reason: a.drop_reason,
+          },
+        );
+        if (!res?.ok) {
+          return textResult(
+            `update_decision failed: ${res?.error ?? "unknown error"}`,
+            true,
+          );
+        }
+        return textResult(`Checklist item #${a.item_id} updated.`);
+      }
+
+      case "mark_checklist_node": {
+        const a = args as {
+          board_id: string;
+          node_id: string;
+          is_checklist?: boolean;
+        };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/set-node-checklist",
+          {
+            board_id: a.board_id,
+            node_id: a.node_id,
+            is_checklist: a.is_checklist,
+          },
+        );
+        if (!res?.ok) {
+          return textResult(
+            `mark_checklist_node failed: ${res?.error ?? "unknown error"}`,
+            true,
+          );
+        }
+        return textResult(
+          a.is_checklist === false
+            ? `Node ${a.node_id} is no longer a checklist node.`
+            : `Node ${a.node_id} is now a checklist node; use record_decision to add items.`,
         );
       }
 

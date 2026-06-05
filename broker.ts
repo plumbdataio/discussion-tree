@@ -22,6 +22,7 @@ import {
   startActivityWatchdog,
 } from "./broker/activity.ts";
 import { routes as boardsRoutes } from "./broker/boards.ts";
+import { routes as checklistRoutes } from "./broker/checklist.ts";
 import { routes as favoritesRoutes } from "./broker/favorites.ts";
 import { routes as feedbackRoutes } from "./broker/feedback.ts";
 import { routes as globalBannerRoutes } from "./broker/global-banner.ts";
@@ -58,6 +59,7 @@ type RouteHandler = (body: any) => unknown | Promise<unknown>;
 const POST_ROUTES: Record<string, RouteHandler> = {
   ...sessionsRoutes,
   ...boardsRoutes,
+  ...checklistRoutes,
   ...nodesRoutes,
   ...threadsRoutes,
   ...activityRoutes,

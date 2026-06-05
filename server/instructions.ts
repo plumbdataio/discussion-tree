@@ -53,6 +53,15 @@ Status is an ITEM-level concept. Mark items resolved / adopted / rejected / etc 
 BOARD-STATUS ROLLUP FEEDBACK:
 When a post_to_node / set_node_status / add_concern / add_item / delete_node call changes the board's auto-rollup status, the tool response includes a "Board <id> status rolled up: <from> → <to>" line. Watch for it: when a board flips to "settled" it means every item on that board has landed on a verdict — proactively tell the user the board is fully settled (and, if appropriate, that the downstream work it was gating can now proceed). A flip back to "discussing" means something re-opened.
 
+DECISION CHECKLIST (record decisions as you settle them):
+Some boards carry one or more "decision-checklist" nodes — ordinary nodes flagged is_checklist=1 that ALSO hold a checklist_items array (visible in get_board). They turn a board's decisions into an implementation checklist you can verify against AFTER the work is done. The UI renders them strictly read-only; the ONLY way to change them is the two tools below.
+
+When a node's decision lands (you set its status to adopted / agreed / resolved / rejected) AND the board has a checklist node, ALSO call record_decision(board_id, node_id=<the checklist node>, summary, source_node_id=<the node that just settled>) in the same turn. Write the summary as a short, verifiable acceptance-criterion line ("X であること。背景: …" — 2-3 sentences: what to check + why) so a later reviewer can confirm each item was actually implemented. Keep items granular: one decision per item.
+
+Item status ∈ pending / in-progress / done / dropped, changed only via update_decision(item_id, status?, summary?, drop_reason?). status=dropped REQUIRES a non-empty drop_reason (the broker rejects it otherwise); moving off dropped clears the reason. "The board's work is truly finished" means every checklist item is done (or dropped with a reason) — not merely that the nodes settled.
+
+If a board has NO checklist node, none of this applies — only record decisions when a checklist node exists. Do NOT auto-create checklist nodes; they are made deliberately by the user or on explicit request. To create one: add_item a normal node, then mark_checklist_node(board_id, node_id) to flag it (place it leftmost under its concern).
+
 FRICTION REPORTING:
 If you find yourself wanting to express something the current tools/UI don't support — e.g., a kind of node, a workflow, a metadata field, a rendering that would help the user — call request_improvement with concrete details. The user reviews accumulated requests in REQUESTS.md and decides which to implement. Only log when you actually couldn't express something you needed; do not speculate or wishlist.
 
@@ -134,6 +143,9 @@ Available tools:
 - report_bg_task_done: Tell the broker that one or more background Bash tasks have finished, so the BG marker in the UI clears. Call this immediately whenever you see a <task-notification status="completed" task-id="..."> system message — pass the task-id values. Bundling multiple ids in one call is fine.
 - clear_bg_tasks: Reset this session's BG marker counter to zero in one shot. Fallback for when the count is stale — you missed some completed-notifications so report_bg_task_done never cleared them, but you're confident no background tasks are still running. The user can also clear it by clicking the BG chip in the UI.
 - request_improvement: Submit a concrete friction point to REQUESTS.md for the user to review
+- record_decision: Append a settled decision to a checklist node as a new checklist item (status=pending). Call when a node settles to a verdict AND the board has a checklist node; write the summary as a verifiable "〜であること" acceptance criterion.
+- update_decision: Change a checklist item's status / summary / drop_reason. status=dropped requires drop_reason. The checklist UI is read-only, so this is the only way to edit an item.
+- mark_checklist_node: Flag an existing node as a checklist node (is_checklist=1) so record_decision can target it. Checklist nodes are never auto-created — make a normal node with add_item, then flag it.
 
 PAST DISCUSSIONS ARE QUERYABLE (read tools):
 Boards aren't write-only logs — they're a persistent record this session and its siblings can READ. When the user references something from a previous discussion ("what did we decide about X?", "the board where we settled on Y"), use list_boards / search_boards to find it and get_board to pull the actual content back into context. Don't ask the user to re-explain history that's already on a board.
