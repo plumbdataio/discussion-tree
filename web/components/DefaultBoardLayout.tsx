@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { BoardView, Node, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
@@ -9,7 +9,6 @@ import { extractImageFiles, uploadImage } from "../utils/api.ts";
 import { useDraft } from "../utils/drafts.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useSettings } from "../utils/settings.ts";
-import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 
 // Default conversation board: a single fixed item, no concern column / no
 // items-row chrome. The whole main pane becomes one tall thread with a
@@ -70,7 +69,31 @@ export function DefaultBoardLayout({
     });
   };
 
-  useSnapToBottom(threadRef, { reversed: true });
+  // Inline (not via useSnapToBottom) on this one component because
+  // routing the snap through the hook regressed the general board's
+  // initial render on iOS — the engine landed on the visual top
+  // every reload. Same 5-pass snap (immediate + rAF + 100/300/600ms)
+  // as the working 10b4e51 baseline, kept here verbatim while the
+  // other surfaces use the hook.
+  useEffect(() => {
+    const el = threadRef.current;
+    if (!el) return;
+    const snap = () => {
+      const first = el.firstElementChild as HTMLElement | null;
+      first?.scrollIntoView({ block: "end" });
+    };
+    snap();
+    const raf = requestAnimationFrame(snap);
+    const t1 = window.setTimeout(snap, 100);
+    const t2 = window.setTimeout(snap, 300);
+    const t3 = window.setTimeout(snap, 600);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, []);
 
   const handleImageFiles = async (files: File[]) => {
     if (files.length === 0) return;
