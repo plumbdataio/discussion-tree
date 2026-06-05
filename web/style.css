@@ -3901,6 +3901,40 @@ button.secondary {
 .checklist-expand:hover {
   color: var(--text);
 }
+/* Header action cluster: sort controls + expand button. */
+.checklist-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.checklist-sort {
+  display: inline-flex;
+  gap: 2px;
+}
+.checklist-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.checklist-sort-btn:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.checklist-sort-btn.active {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: #a78bfa;
+  color: #7c3aed;
+}
 .checklist-card-context {
   font-size: 12px;
   color: var(--muted);
@@ -3955,17 +3989,21 @@ button.secondary {
   color: var(--muted);
   margin-top: 2px;
 }
+/* Status is identified by BOTH icon shape (above) AND colour: done=green,
+   pending=orange, in-progress=blue, dropped=light grey. The node's purple
+   left-accent / wash marks it as a checklist; these per-item colours mark
+   each item's state. (Supersedes the earlier all-purple glyph treatment.) */
 .checklist-status-done .checklist-glyph {
-  color: #7c3aed;
+  color: #16a34a;
 }
 .checklist-status-in-progress .checklist-glyph {
-  color: #a78bfa;
+  color: #2563eb;
 }
 .checklist-status-pending .checklist-glyph {
-  color: #c4b5fd;
+  color: #ea580c;
 }
 .checklist-status-dropped .checklist-glyph {
-  color: var(--muted);
+  color: #9ca3af;
 }
 .checklist-status-dropped {
   opacity: 0.55;
