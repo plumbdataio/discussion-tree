@@ -19,6 +19,8 @@
     "no_boards": "(no boards)",
     "unread_dot_title": "{{count}} unread",
     "needs_reply_title": "{{count}} awaiting your reply",
+    "scheduled_send_title": "Message scheduled to send at {{time}}",
+    "scheduled_send_aria": "scheduled send",
     "inactive_label": "Inactive ({{count}})",
     "toggle_label": "Toggle sidebar",
     "filter_label": "Show",

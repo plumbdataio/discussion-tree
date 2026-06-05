@@ -34,6 +34,19 @@ export function bgTaskCountForSession(sessionId: string): number {
   return bgTasks.get(sessionId)?.size ?? 0;
 }
 
+// Scheduled-send markers: broker session_id → ISO fire time of a message an
+// external scheduler intends to send to that session later. The broker never
+// sends anything itself; this is purely advisory state so the sidebar can
+// show a "scheduled send" marker (paper-plane + clock). Set via
+// /set-session-schedule-marker, cleared via /clear-session-schedule-marker
+// (on send or cancel). In-memory only — a marker is transient by nature and
+// not worth persisting across a broker restart.
+const scheduledSendAt = new Map<string, string>();
+
+export function scheduledSendAtForSession(sessionId: string): string | null {
+  return scheduledSendAt.get(sessionId) ?? null;
+}
+
 function broadcastActivity(sessionId: string, entry: Activity | null) {
   broadcastToAll({ type: "activity", session_id: sessionId, activity: entry });
 }
@@ -288,6 +301,45 @@ export function handleClearActivitiesForSessions(body: {
   return { ok: true, cleared };
 }
 
+// Register a scheduled-send marker for a set of sessions. Generic utility:
+// an external scheduler that intends to deliver a message to these sessions
+// at `fire_at` calls this so the sidebar can surface the pending send.
+export function handleSetScheduleMarker(body: {
+  session_ids?: string[];
+  fire_at?: string;
+}): { ok: boolean; set: number; error?: string } {
+  if (!Array.isArray(body.session_ids) || !body.fire_at) {
+    return {
+      ok: false,
+      set: 0,
+      error: "session_ids array and fire_at required",
+    };
+  }
+  let set = 0;
+  for (const sid of body.session_ids) {
+    scheduledSendAt.set(sid, body.fire_at);
+    set++;
+  }
+  if (set > 0) broadcastToAll({ type: "schedule-marker-update" });
+  return { ok: true, set };
+}
+
+// Clear scheduled-send markers (the message went out, or the schedule was
+// cancelled). Silently ignores sessions that had no marker.
+export function handleClearScheduleMarker(body: {
+  session_ids?: string[];
+}): { ok: boolean; cleared: number; error?: string } {
+  if (!Array.isArray(body.session_ids)) {
+    return { ok: false, cleared: 0, error: "session_ids array required" };
+  }
+  let cleared = 0;
+  for (const sid of body.session_ids) {
+    if (scheduledSendAt.delete(sid)) cleared++;
+  }
+  if (cleared > 0) broadcastToAll({ type: "schedule-marker-update" });
+  return { ok: true, cleared };
+}
+
 export const routes = {
   "/set-activity": handleSetActivity,
   "/heartbeat-tool": handleHeartbeatTool,
@@ -298,6 +350,8 @@ export const routes = {
   "/bg-task-start": handleBgTaskStart,
   "/bg-task-done": handleBgTaskDone,
   "/bg-task-clear-session": handleBgTaskClearSession,
+  "/set-session-schedule-marker": handleSetScheduleMarker,
+  "/clear-session-schedule-marker": handleClearScheduleMarker,
 };
 
 // Watchdog — used to auto-clear stale "working" entries after

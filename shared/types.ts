@@ -338,6 +338,12 @@ export interface SessionListItem {
   // seen reported done. Frontend renders a BG marker next to the
   // working spinner whenever this is > 0.
   bg_task_count?: number;
+  // ISO timestamp of a message scheduled to be sent to this session at a
+  // future time, if one is queued. An external scheduler registers it via
+  // /set-session-schedule-marker; the broker itself sends nothing — this is
+  // advisory UI state so the sidebar can show a "scheduled send" marker.
+  // Cleared once the message goes out or the schedule is cancelled.
+  scheduled_send_at?: string | null;
   boards: BoardListItem[];
   archived_boards?: BoardListItem[];
 }

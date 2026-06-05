@@ -19,6 +19,8 @@
     "no_boards": "(ボードなし)",
     "unread_dot_title": "未読 {{count}} 件",
     "needs_reply_title": "返答求む {{count}} 件",
+    "scheduled_send_title": "{{time}} に送信予約あり",
+    "scheduled_send_aria": "送信予約あり",
     "inactive_label": "非アクティブ ({{count}})",
     "toggle_label": "サイドバーを開閉",
     "filter_label": "表示",

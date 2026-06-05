@@ -236,6 +236,12 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           // cheap enough.
           fetchBoard();
           return;
+        } else if (msg.type === "schedule-marker-update") {
+          // A scheduled-send marker was set or cleared — it rides on the
+          // sidebar's /api/sessions payload (scheduled_send_at), so just
+          // nudge the sidebar to refetch. No board-level data depends on it.
+          window.dispatchEvent(new Event("pd-sidebar-refresh"));
+          return;
         } else if (msg.type === "favorite-added" && msg.favorite) {
           // Update the local anchor store; don't trigger a board re-fetch.
           applyFavoriteAdded(msg.favorite);

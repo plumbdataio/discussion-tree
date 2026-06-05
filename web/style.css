@@ -661,6 +661,31 @@ body {
   }
 }
 
+/* Scheduled-send marker — a paper plane with a small clock tucked into its
+   bottom-right corner. Shown next to the activity / BG indicators when a
+   session has a message queued to go out at a future time (e.g. a deferred
+   auto-resume). Advisory only — not interactive. */
+.session-schedule-indicator {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+  margin-left: 4px;
+  color: #2563eb;
+  cursor: help;
+}
+.session-schedule-indicator .session-schedule-clock {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  color: #d97706;
+  /* A small disc the colour of the sidebar so the clock reads cleanly
+     instead of merging into the plane's strokes behind it. */
+  background: var(--panel);
+  border-radius: 50%;
+  padding: 0.5px;
+}
+
 /* Compact at-a-glance counts shown only when a session is collapsed. One
    tiny chip per board status with a non-zero count; colour matches the
    sb-status-* pill family but tightened down to a single number. */

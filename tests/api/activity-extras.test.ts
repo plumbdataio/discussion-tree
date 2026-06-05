@@ -171,3 +171,57 @@ describe("heartbeat-tool / clear-tool-activity (cc_session_id-driven)", () => {
     expect(r.json.error).toContain("session_ids");
   });
 });
+
+describe("session schedule markers (/set|clear-session-schedule-marker)", () => {
+  test("set surfaces scheduled_send_at on /api/sessions, clear removes it", async () => {
+    const sid = await registerSession(broker.url);
+    await attachCC(broker.url, sid);
+    const fireAt = "2026-06-05T13:30:00.000Z";
+
+    const set = await post<{ ok: boolean; set: number }>(
+      `${broker.url}/set-session-schedule-marker`,
+      { session_ids: [sid], fire_at: fireAt },
+    );
+    expect(set.json.ok).toBe(true);
+    expect(set.json.set).toBe(1);
+
+    const after = await get<{
+      sessions: { id: string; scheduled_send_at: string | null }[];
+    }>(`${broker.url}/api/sessions`);
+    expect(
+      after.json.sessions.find((s) => s.id === sid)?.scheduled_send_at,
+    ).toBe(fireAt);
+
+    const clear = await post<{ ok: boolean; cleared: number }>(
+      `${broker.url}/clear-session-schedule-marker`,
+      { session_ids: [sid] },
+    );
+    expect(clear.json.ok).toBe(true);
+    expect(clear.json.cleared).toBe(1);
+
+    const after2 = await get<{
+      sessions: { id: string; scheduled_send_at: string | null }[];
+    }>(`${broker.url}/api/sessions`);
+    expect(
+      after2.json.sessions.find((s) => s.id === sid)?.scheduled_send_at ?? null,
+    ).toBeNull();
+  });
+
+  test("/set-session-schedule-marker rejects a missing fire_at", async () => {
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/set-session-schedule-marker`,
+      { session_ids: ["s_whatever"] },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toContain("fire_at");
+  });
+
+  test("/clear-session-schedule-marker rejects a non-array body", async () => {
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/clear-session-schedule-marker`,
+      { session_ids: "nope" },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toContain("session_ids");
+  });
+});

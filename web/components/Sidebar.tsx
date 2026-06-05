@@ -2,12 +2,14 @@ import React, { useEffect, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
+  Clock,
   Cog,
   Filter,
   GripVertical,
   Menu,
   MessageCircle,
   RefreshCw,
+  Send,
   Settings,
 } from "lucide-react";
 import { HelpBubbleIcon } from "./HelpBubbleIcon.tsx";
@@ -48,6 +50,17 @@ function applyOrder(
     if (!used.has(s.id)) result.push(s);
   }
   return result;
+}
+
+// Format a scheduled-send ISO timestamp to a short local clock time for the
+// sidebar marker tooltip. Falls back to the raw string if it doesn't parse.
+function formatScheduleTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 type DropPosition = "before" | "after";
@@ -228,6 +241,22 @@ function SessionItem({
             <Cog size={14} strokeWidth={2.25} />
             <span className="session-bg-count">{s.bg_task_count}</span>
           </button>
+        )}
+        {s.scheduled_send_at && (
+          <span
+            className="session-schedule-indicator"
+            title={t("sidebar.scheduled_send_title", {
+              time: formatScheduleTime(s.scheduled_send_at),
+            })}
+            aria-label={t("sidebar.scheduled_send_aria")}
+          >
+            <Send size={13} strokeWidth={2} />
+            <Clock
+              className="session-schedule-clock"
+              size={9}
+              strokeWidth={3}
+            />
+          </span>
         )}
         {draggable && (
           <span className="session-drag-handle" aria-hidden="true">
