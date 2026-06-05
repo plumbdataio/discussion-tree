@@ -4,7 +4,7 @@
 // decision under a node flagged is_checklist=1.
 
 import { isSettledNodeStatus } from "../shared/types.ts";
-import { db, insertPending } from "./db.ts";
+import { db, insertPending, recomputeBoardStatus } from "./db.ts";
 import { broadcast } from "./ws.ts";
 
 const insertItem = db.prepare(
@@ -126,6 +126,16 @@ export function handleUpdateDecision(body: {
 
   updateItem.run(nextSummary, nextStatus, nextReason, body.item_id);
   broadcast(cur.board_id, { type: "structure-update" });
+  // An item reaching done/dropped can complete a settled board (see
+  // recomputeBoardStatus). Re-derive + broadcast the board status so the
+  // sidebar / header reflect a completion without waiting for a node change.
+  const boardStatus = recomputeBoardStatus(cur.board_id);
+  if (boardStatus) {
+    broadcast(cur.board_id, {
+      type: "board-status-update",
+      status: boardStatus,
+    });
+  }
   return { ok: true };
 }
 

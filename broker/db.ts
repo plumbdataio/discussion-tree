@@ -379,6 +379,30 @@ export function recomputeBoardStatus(boardId: string): BoardStatus | null {
     );
     target = allSettled ? "settled" : "discussing";
   }
+  // Promote a settled board to "completed" once its checklist is fully
+  // resolved — every checklist item done or dropped. Auto-derived like
+  // settled, but "completed" is NOT in AUTO_BOARD_STATUSES, so the next
+  // recompute returns early at the guard above: it promotes once and then
+  // freezes (no auto-demote even if an item later reopens). A board with no
+  // checklist node, or an empty checklist, never auto-completes.
+  if (target === "settled") {
+    const checklistNode = db
+      .prepare(
+        "SELECT id FROM nodes WHERE board_id = ? AND is_checklist = 1 AND deleted_at IS NULL LIMIT 1",
+      )
+      .get(boardId) as { id: string } | undefined;
+    if (checklistNode) {
+      const clItems = db
+        .prepare("SELECT status FROM checklist_items WHERE board_id = ?")
+        .all(boardId) as { status: string }[];
+      if (
+        clItems.length > 0 &&
+        clItems.every((i) => i.status === "done" || i.status === "dropped")
+      ) {
+        target = "completed";
+      }
+    }
+  }
   if (cur.status !== target) {
     db.run("UPDATE boards SET status = ? WHERE id = ?", [target, boardId]);
   }

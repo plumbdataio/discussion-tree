@@ -253,3 +253,59 @@ describe("settled injection (checklist boards roll up)", () => {
     expect(boardLevel).toBeFalsy();
   });
 });
+
+describe("board auto-completion (checklist fully resolved)", () => {
+  async function boardStatus(bid: string): Promise<string> {
+    const v = await get<any>(`${broker.url}/api/board/${bid}`);
+    return v.json.board.status;
+  }
+
+  test("a settled checklist board completes once every item is done/dropped", async () => {
+    const c = await post<{ board_id: string }>(`${broker.url}/create-board`, {
+      session_id: sessionId,
+      structure: {
+        title: "DONE",
+        concerns: [
+          {
+            id: "c5",
+            title: "C5",
+            items: [
+              { id: "cl3", title: "Checklist" },
+              { id: "dec3", title: "Decision" },
+            ],
+          },
+        ],
+      },
+    });
+    const bid = c.json.board_id;
+    await post(`${broker.url}/set-node-checklist`, {
+      board_id: bid,
+      node_id: "cl3",
+    });
+    const rec = await post<{ item_id: number }>(
+      `${broker.url}/record-decision`,
+      { board_id: bid, node_id: "cl3", summary: "X であること" },
+    );
+    const itemId = rec.json.item_id;
+    // Settle both nodes — board rolls up to settled, but the checklist item
+    // is still pending, so it must NOT complete yet.
+    await post(`${broker.url}/set-node-status`, {
+      board_id: bid,
+      node_id: "cl3",
+      status: "adopted",
+    });
+    await post(`${broker.url}/set-node-status`, {
+      board_id: bid,
+      node_id: "dec3",
+      status: "adopted",
+    });
+    expect(await boardStatus(bid)).toBe("settled");
+
+    // Resolve the last checklist item → board auto-completes.
+    await post(`${broker.url}/update-decision`, {
+      item_id: itemId,
+      status: "done",
+    });
+    expect(await boardStatus(bid)).toBe("completed");
+  });
+});
