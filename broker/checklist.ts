@@ -33,6 +33,9 @@ const selectBoardOwnerTitle = db.prepare(
 const selectNodeTitle = db.prepare(
   `SELECT title FROM nodes WHERE board_id = ? AND id = ?`,
 );
+const selectThreadCount = db.prepare(
+  `SELECT COUNT(*) AS c FROM thread_items WHERE board_id = ? AND node_id = ?`,
+);
 
 const VALID_STATUS = new Set(["pending", "in-progress", "done", "dropped"]);
 
@@ -153,7 +156,22 @@ export function handleSetNodeChecklist(body: {
   }
   const node = selectNode.get(board_id, node_id) as { id: string } | undefined;
   if (!node) return { ok: false, error: "node not found" };
-  setNodeChecklist.run(body.is_checklist === false ? 0 : 1, board_id, node_id);
+  const promoting = body.is_checklist !== false;
+  if (promoting) {
+    // The read-only checklist UI (ChecklistCard) renders title / context /
+    // checklist_items but NOT the node's conversation thread. Flagging a node
+    // that already has messages would hide them in the UI (they stay in the
+    // DB / get_board, just aren't shown) — a footgun. Refuse; the caller
+    // should make a FRESH node with add_item and flag that instead.
+    const tc = selectThreadCount.get(board_id, node_id) as { c: number };
+    if (tc.c > 0) {
+      return {
+        ok: false,
+        error: `node has ${tc.c} conversation message(s) that the read-only checklist UI does not render — flagging it would hide them. Create a fresh node with add_item and flag THAT as the checklist node instead.`,
+      };
+    }
+  }
+  setNodeChecklist.run(promoting ? 1 : 0, board_id, node_id);
   broadcast(board_id, { type: "structure-update" });
   return { ok: true };
 }

@@ -308,4 +308,30 @@ describe("board auto-completion (checklist fully resolved)", () => {
     });
     expect(await boardStatus(bid)).toBe("completed");
   });
+
+  test("mark_checklist_node refuses a node that already has a conversation thread", async () => {
+    const c = await post<{ board_id: string }>(`${broker.url}/create-board`, {
+      session_id: sessionId,
+      structure: {
+        title: "G",
+        concerns: [
+          { id: "c6", title: "C6", items: [{ id: "conv", title: "Has thread" }] },
+        ],
+      },
+    });
+    const bid = c.json.board_id;
+    // Give the node a conversation thread.
+    await post(`${broker.url}/post-to-node`, {
+      board_id: bid,
+      node_id: "conv",
+      message: "a message",
+      status: "discussing",
+    });
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/set-node-checklist`,
+      { board_id: bid, node_id: "conv" },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toContain("conversation");
+  });
 });
