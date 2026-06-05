@@ -2364,6 +2364,24 @@ body.concern-resizing * {
   border-radius: 4px;
 }
 
+/* Default board (general) gets long fast — hundreds of thread items
+   on a single tall thread. content-visibility: auto lets the browser
+   skip paint + layout for off-screen messages without removing them
+   from the DOM (so Cmd+F search still finds them); contain-intrinsic-
+   size gives the browser a height estimate while a row is skipped.
+
+   This is SAFE to combine with column-reverse ONLY because
+   .default-board-thread sets overflow-anchor: none. With the default
+   scroll anchoring on, content-visibility's estimated→real height
+   swaps for rows entering/leaving the viewport would be "corrected"
+   into the scroll position and the view would jump; with anchoring
+   off, scrollTop's numeric value is preserved, so the height churn
+   stays purely off-screen and never moves the user. */
+.default-board-thread .thread-msg {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 100px;
+}
+
 /* Per-board node-status filter — small trigger chip in the board
    header that opens a popover with one checkbox per NodeStatus.
    Filter state is persisted in localStorage by useNodeStatusFilter,
