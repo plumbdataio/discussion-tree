@@ -3562,6 +3562,22 @@ button.secondary {
   transform: translateY(-1px);
 }
 
+/* Reversed variant: the default board's thread is column-reverse, so
+   the button can't live inside the thread (it would land at the visual
+   top, not the bottom). DefaultBoardLayout renders it as a sibling of
+   the thread, and this rule pulls it back to the lower-right corner
+   anchored to .default-board (position: relative). Bottom offset
+   leaves room above .default-board-input so the button never sits on
+   top of the textarea. */
+.scroll-to-bottom.is-reversed {
+  position: absolute;
+  bottom: 150px;
+  right: 12px;
+  margin: 0;
+  align-self: auto;
+  z-index: 4;
+}
+
 /* Modal backdrop is already a translucent black, so no override needed. */
 
 /* --- Board structure-request trigger + modal ----------------------------- */

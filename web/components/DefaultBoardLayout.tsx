@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { BoardView, Node, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
 import { MessageModal } from "./MessageModal.tsx";
+import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
 import { ThreadMessage } from "./ThreadMessage.tsx";
 import { extractImageFiles, uploadImage } from "../utils/api.ts";
 import { useDraft } from "../utils/drafts.ts";
@@ -47,6 +48,7 @@ export function DefaultBoardLayout({
   const [tentativeText, setTentativeText] = useState<string | null>(null);
   const [expandedMsg, setExpandedMsg] = useState<ThreadItem | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
 
   useMarkReadOnVisible(rootRef, myThread);
 
@@ -174,7 +176,7 @@ export function DefaultBoardLayout({
           oldest. The result on screen is oldest at top, newest at
           bottom, exactly like before — but the browser's anchor
           behaviour keeps the bottom in view without any JS. */}
-      <div className="default-board-thread">
+      <div className="default-board-thread" ref={threadRef}>
         {tentativeText && (
           <div className="thread-msg from-user pending">
             <span className="who">
@@ -195,6 +197,13 @@ export function DefaultBoardLayout({
           />
         ))}
       </div>
+      {/* Floating ▼ goes OUTSIDE the thread because the thread is
+          column-reverse — making it a thread child would either put it
+          at the top of the visible column or fight the flex order.
+          Positioned by the `.scroll-to-bottom.is-reversed` rule
+          relative to .default-board (which is position: relative). */}
+      <ScrollToBottomButton scrollRef={threadRef} reversed />
+
       <div className="default-board-input">
         <textarea
           className="answer-input"

@@ -6,10 +6,18 @@ import { ChevronDown } from "lucide-react";
 // the latest message. Re-evaluates on scroll, on container resize, and
 // on every immediate child resize so newly-arrived markdown / image
 // content also flips the button on.
+//
+// `reversed` flips the coordinate convention for callers whose scroll
+// container is laid out with `flex-direction: column-reverse` (e.g. the
+// default board): the visual bottom of the column is scrollTop == 0,
+// and scrolling up *increases* scrollTop. The button still says "go to
+// the latest message," it just measures and jumps the other way.
 function ScrollToBottomButtonImpl({
   scrollRef,
+  reversed = false,
 }: {
   scrollRef: React.RefObject<HTMLElement | null>;
+  reversed?: boolean;
 }) {
   const [show, setShow] = useState(false);
 
@@ -17,11 +25,13 @@ function ScrollToBottomButtonImpl({
     const el = scrollRef.current;
     if (!el) return;
     const check = () => {
-      // Hide once the last message is at least partially in view. Empirically
-      // ~100px below the viewport bottom is when the latest message's first
-      // line starts to peek in; further down would risk hinting "there's more"
-      // when actually the user has already started reading the last entry.
-      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 100;
+      // Hide once the latest message is at least partially in view.
+      // ~100px slack: as soon as the entry starts peeking in, the
+      // button hides so it doesn't fake a "more below" hint while the
+      // user is reading the last entry.
+      const atBottom = reversed
+        ? el.scrollTop <= 100
+        : el.scrollTop + el.clientHeight >= el.scrollHeight - 100;
       setShow((cur) => (cur === !atBottom ? cur : !atBottom));
     };
     check();
@@ -33,18 +43,20 @@ function ScrollToBottomButtonImpl({
       el.removeEventListener("scroll", check);
       ro.disconnect();
     };
-  }, [scrollRef]);
+  }, [scrollRef, reversed]);
 
   if (!show) return null;
   return (
     <button
       type="button"
-      className="scroll-to-bottom"
+      className={`scroll-to-bottom${reversed ? " is-reversed" : ""}`}
       aria-label="一番下までスクロール"
       title="一番下まで"
       onClick={() => {
         const el = scrollRef.current;
-        if (el) el.scrollTop = el.scrollHeight;
+        if (!el) return;
+        // Reversed coords: bottom = 0. Non-reversed: bottom = scrollHeight.
+        el.scrollTop = reversed ? 0 : el.scrollHeight;
       }}
     >
       <ChevronDown size={16} strokeWidth={2} />
