@@ -1,5 +1,5 @@
 import type { DependencyList, RefObject } from "react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 // Snap a scroll container to its visual bottom and re-snap a few
 // times across the first ~600ms so that content-visibility:auto
@@ -85,17 +85,46 @@ export function useSnapToBottom(
       clearTimeout(t3);
     };
   }, deps);
+  // Track the last user-intent scroll position via wheel / touch /
+  // keyboard. We deliberately do NOT listen to "scroll" because CSS
+  // scroll anchoring moves the scrollTop in response to layout
+  // changes — those movements are not user intent, and reading
+  // scrollTop directly inside the followOnNew effect would catch
+  // the anchoring-shifted value (already off the bottom) instead
+  // of where the user really was when the new content arrived.
+  // Default true: on mount the user is "at the bottom" because
+  // that's where we put them.
+  const wasNearBottomRef = useRef(true);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const recalc = () => {
+      wasNearBottomRef.current = reversed
+        ? Math.abs(el.scrollTop) <= 100
+        : el.scrollTop + el.clientHeight >= el.scrollHeight - 100;
+    };
+    recalc();
+    el.addEventListener("wheel", recalc, { passive: true });
+    el.addEventListener("touchmove", recalc, { passive: true });
+    el.addEventListener("keydown", recalc, { passive: true });
+    return () => {
+      el.removeEventListener("wheel", recalc);
+      el.removeEventListener("touchmove", recalc);
+      el.removeEventListener("keydown", recalc);
+    };
+  }, [ref, reversed]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!followOnNew) return;
-    const el = ref.current;
-    if (!el) return;
-    // "near bottom" guard so a user who scrolled up to read history
-    // isn't yanked back when new messages arrive.
-    const nearBottom = reversed
-      ? Math.abs(el.scrollTop) <= 100
-      : el.scrollTop + el.clientHeight >= el.scrollHeight - 100;
-    if (!nearBottom) return;
+    if (!wasNearBottomRef.current) return;
     snap();
+    // Snap once more after layout settles, then keep our "user is
+    // at the bottom" state truthful so the next followOnNew tick
+    // doesn't skip on a stale read.
+    const raf = requestAnimationFrame(() => {
+      snap();
+      wasNearBottomRef.current = true;
+    });
+    return () => cancelAnimationFrame(raf);
   }, followOnNew ?? []);
 }
