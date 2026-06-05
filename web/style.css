@@ -2065,6 +2065,19 @@ body.concern-resizing * {
      pill a few pixels above the rest of the chips. Re-anchor it to
      center alignment so all the header chips share a baseline. */
   align-self: center;
+  /* Keep the badge to a single line with a bounded width. A long tool
+     name (e.g. mcp__chrome-devtools__take_snapshot) would otherwise
+     wrap the badge text, grow the header's height, then shrink it back
+     when the activity clears — the flicker the user found distracting.
+     Now the message ellipsizes instead and the header height is fixed. */
+  flex-wrap: nowrap;
+  max-width: 280px;
+}
+.header .activity-msg {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* per-state color variations on the activity badge.
