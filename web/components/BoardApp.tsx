@@ -226,9 +226,15 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           window.dispatchEvent(new Event("pd-sidebar-refresh"));
           return;
         } else if (msg.type === "bg-tasks-update") {
-          // BG marker rides on the same sidebar-poll pipe — nudge it
-          // to refetch /api/sessions which now carries bg_task_count.
+          // BG marker rides on the same sidebar-poll pipe — nudge the
+          // sidebar to refetch /api/sessions (carries bg_task_count).
           window.dispatchEvent(new Event("pd-sidebar-refresh"));
+          // The board header ALSO shows owner_bg_task_count, so refetch
+          // the board too — otherwise clearing the counter (or any
+          // change) leaves the header chip stale until a manual reload.
+          // bg-tasks-update is infrequent, so a full board refetch is
+          // cheap enough.
+          fetchBoard();
           return;
         } else if (msg.type === "favorite-added" && msg.favorite) {
           // Update the local anchor store; don't trigger a board re-fetch.
@@ -399,13 +405,24 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
         )}
         {headerActivity && <ActivityBadge activity={headerActivity} />}
         {(data.owner_bg_task_count ?? 0) > 0 && (
-          <span
+          <button
+            type="button"
             className="header-bg-indicator"
-            title={`background tasks: ${data.owner_bg_task_count}`}
+            title={`background tasks: ${data.owner_bg_task_count} — click to clear`}
+            aria-label={`clear ${data.owner_bg_task_count} background task marker(s)`}
+            onClick={() => {
+              fetch("/bg-task-clear-session", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ session_id: data.board.session_id }),
+              }).catch(() => {
+                /* best-effort; the WS broadcast updates the count */
+              });
+            }}
           >
             <Cog size={14} strokeWidth={2.25} />
             <span className="header-bg-count">{data.owner_bg_task_count}</span>
-          </span>
+          </button>
         )}
         <ContextMeter usage={data.owner_context_usage} prefix="Context: " />
         {!data.board.is_default && (

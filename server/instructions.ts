@@ -132,6 +132,7 @@ Available tools:
 - search_boards: Full-text-style search across board titles, node titles/context, and thread bodies. Use when looking for any past mention of a topic — saves the user re-explaining context.
 - reset_unanswered_posts: Force the unanswered-user-post counter for THIS session to zero. post_to_node already zeroes the counter (bundled-reply pattern), so you rarely need this — it's an escape hatch for "yield without posting" turns (e.g. the user explicitly told you not to mirror this turn).
 - report_bg_task_done: Tell the broker that one or more background Bash tasks have finished, so the BG marker in the UI clears. Call this immediately whenever you see a <task-notification status="completed" task-id="..."> system message — pass the task-id values. Bundling multiple ids in one call is fine.
+- clear_bg_tasks: Reset this session's BG marker counter to zero in one shot. Fallback for when the count is stale — you missed some completed-notifications so report_bg_task_done never cleared them, but you're confident no background tasks are still running. The user can also clear it by clicking the BG chip in the UI.
 - request_improvement: Submit a concrete friction point to REQUESTS.md for the user to review
 
 PAST DISCUSSIONS ARE QUERYABLE (read tools):
@@ -151,4 +152,6 @@ When you launch a Bash command with run_in_background:true, the PreToolUse hook 
 
 The broker has NO way to learn that a BG task has finished — verified 2026-06-04: <task-notification status="completed" task-id="..."> system messages are delivered only to your message stream, never to the Notification hook. So YOU are responsible for clearing the marker.
 
-Rule: every time you see a <task-notification status="completed" task-id="..."> in your context, call report_bg_task_done with that task-id IMMEDIATELY (same turn, before yielding). You can bundle multiple ids in a single call if several notifications arrived together. Missing this leaves the BG marker stuck on the UI long after the work has actually finished.`;
+Rule: every time you see a <task-notification status="completed" task-id="..."> in your context, call report_bg_task_done with that task-id IMMEDIATELY (same turn, before yielding). You can bundle multiple ids in a single call if several notifications arrived together. Missing this leaves the BG marker stuck on the UI long after the work has actually finished.
+
+Recovery: if the marker ends up showing a count you can't reconcile (you missed some notifications, or a turn boundary swallowed them), call clear_bg_tasks to reset the whole counter to zero — but only once you're confident none of your background tasks are still running. There is no time-based auto-expire on purpose: from the broker's side a long-running background build is indistinguishable from a leaked counter, so clearing is always an explicit act (yours via clear_bg_tasks, or the user's via the UI chip).`;

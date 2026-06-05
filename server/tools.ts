@@ -425,6 +425,15 @@ export const TOOLS = [
     },
   },
   {
+    name: "clear_bg_tasks",
+    description:
+      "Reset the background-task counter for your session to zero. Use this as a fallback when the BG marker in the UI shows a stale count — e.g. you missed some `<task-notification status=\"completed\">` messages so report_bg_task_done never cleared them, but you are now confident none of your background Bash tasks are still running. Unlike report_bg_task_done (which clears specific task-ids), this clears ALL of them at once. The user can also clear it themselves by clicking the BG marker chip in the UI.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+    },
+  },
+  {
     name: "request_improvement",
     description:
       "Submit a concrete friction point about discussion-tree-mcp itself to the user's review queue (REQUESTS.md). Use this when you wanted to express something the current tools/UI did not support — a missing node kind, an unsupported workflow, a rendering gap. The user reviews accumulated requests and decides which to implement. Be specific about the actual situation; do not speculate.",
@@ -910,6 +919,22 @@ export async function dispatchToolCall(
         }
         return textResult(
           `BG tasks cleared: ${res.cleared}; remaining in-flight: ${res.remaining}`,
+        );
+      }
+
+      case "clear_bg_tasks": {
+        const sessionId = ensureSession();
+        const res = await brokerFetch<{ ok: boolean; cleared: number }>(
+          "/bg-task-clear-session",
+          { session_id: sessionId },
+        );
+        if (!res?.ok) {
+          return textResult("clear_bg_tasks failed", true);
+        }
+        return textResult(
+          `BG task counter reset; cleared ${res.cleared} ${
+            res.cleared === 1 ? "entry" : "entries"
+          }.`,
         );
       }
 

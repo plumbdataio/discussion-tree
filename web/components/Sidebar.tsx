@@ -208,14 +208,26 @@ function SessionItem({
           </span>
         )}
         {(s.bg_task_count ?? 0) > 0 && (
-          <span
+          <button
+            type="button"
             className="session-bg-indicator"
-            title={`background tasks: ${s.bg_task_count}`}
-            aria-label={`background tasks: ${s.bg_task_count}`}
+            title={`background tasks: ${s.bg_task_count} — click to clear`}
+            aria-label={`clear ${s.bg_task_count} background task marker(s)`}
+            onClick={(e) => {
+              // Don't let the click bubble into the session-row nav.
+              e.stopPropagation();
+              fetch("/bg-task-clear-session", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ session_id: s.id }),
+              }).catch(() => {
+                /* best-effort; the WS broadcast updates the count */
+              });
+            }}
           >
             <Cog size={14} strokeWidth={2.25} />
             <span className="session-bg-count">{s.bg_task_count}</span>
-          </span>
+          </button>
         )}
         {draggable && (
           <span className="session-drag-handle" aria-hidden="true">

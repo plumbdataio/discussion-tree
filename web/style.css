@@ -626,6 +626,11 @@ body {
   align-items: center;
   gap: 2px;
   font-size: 11px;
+  /* These are <button>s (click to clear a stale BG counter). Inherit
+     the surrounding font and flatten the line box so they look like
+     the chips they replaced, not default form controls. */
+  font-family: inherit;
+  line-height: 1;
   color: #7c2d12;
   background: #fef3c7;
   border: 1px solid #fcd34d;
@@ -633,6 +638,12 @@ body {
   padding: 1px 5px;
   margin-left: 4px;
   font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.session-bg-indicator:hover,
+.header-bg-indicator:hover {
+  background: #fde68a;
+  border-color: #f59e0b;
 }
 .session-bg-indicator svg,
 .header-bg-indicator svg {

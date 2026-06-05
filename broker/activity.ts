@@ -235,6 +235,37 @@ export function handleBgTaskDone(body: {
   return { ok: true, cleared, remaining: bgTasks.get(sessionId)?.size ?? 0 };
 }
 
+// Clear ALL in-flight BG tasks for one session at once. Two callers:
+//   - the UI "clear" affordance on the BG marker chip (the user clicked
+//     it because the count is obviously stale)
+//   - the clear_bg_tasks MCP tool (the agent knows its background work
+//     is all done and wants to reset a counter that report_bg_task_done
+//     missed)
+//
+// We deliberately do NOT auto-expire BG tasks by age. From the broker's
+// side a long-running background build is indistinguishable from a
+// leaked counter, and the user previously had us no-op exactly this kind
+// of time-based badge watchdog (see startActivityWatchdog below) because
+// it cleared badges that were still relevant. Manual clear only — zero
+// false positives.
+export function handleBgTaskClearSession(body: {
+  session_id?: string;
+  cc_session_id?: string;
+}): { ok: boolean; cleared: number; error?: string } {
+  let sessionId: string | null = body.session_id ?? null;
+  if (!sessionId && body.cc_session_id) {
+    sessionId = lookupAliveSessionByCcId(body.cc_session_id);
+  }
+  if (!sessionId) {
+    return { ok: false, cleared: 0, error: "session not found" };
+  }
+  const set = bgTasks.get(sessionId);
+  const cleared = set?.size ?? 0;
+  bgTasks.delete(sessionId);
+  broadcastBgTasks(sessionId);
+  return { ok: true, cleared };
+}
+
 // Bulk clear for a set of sessions. Used when an external tool wants
 // to silence every spinner across a group of CCs at once (e.g. a
 // scheduled "observation mode" where the user wants the badges
@@ -266,6 +297,7 @@ export const routes = {
   "/blocked-on-user-clear": handleBlockedOnUserClear,
   "/bg-task-start": handleBgTaskStart,
   "/bg-task-done": handleBgTaskDone,
+  "/bg-task-clear-session": handleBgTaskClearSession,
 };
 
 // Watchdog — used to auto-clear stale "working" entries after
