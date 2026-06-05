@@ -61,6 +61,19 @@ body {
   gap: 16px;
 }
 
+/* Right-anchored action cluster. margin-left:auto soaks up all the free
+   space between the left (display) group and the buttons, so the buttons
+   stay pinned to the right edge and the volatile Working / BG indicators
+   to its left only grow/shrink the gap — never push the buttons around.
+   On narrow widths where the header overflows and scrolls, the auto margin
+   collapses to 0 and the row simply scrolls as before. */
+.header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
 .header h1 {
   margin: 0;
   font-size: 18px;

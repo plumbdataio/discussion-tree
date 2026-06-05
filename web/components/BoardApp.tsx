@@ -409,47 +409,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
             {t("header.board_meta_closed")}
           </span>
         )}
-        {headerActivity && <ActivityBadge activity={headerActivity} />}
-        {(data.owner_bg_task_count ?? 0) > 0 && (
-          <button
-            type="button"
-            className="header-bg-indicator"
-            title={`background tasks: ${data.owner_bg_task_count} — click to clear`}
-            aria-label={`clear ${data.owner_bg_task_count} background task marker(s)`}
-            onClick={() => {
-              fetch("/bg-task-clear-session", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ session_id: data.board.session_id }),
-              }).catch(() => {
-                /* best-effort; the WS broadcast updates the count */
-              });
-            }}
-          >
-            <Cog size={14} strokeWidth={2.25} />
-            <span className="header-bg-count">{data.owner_bg_task_count}</span>
-          </button>
-        )}
         <ContextMeter usage={data.owner_context_usage} prefix="Context: " />
-        {!data.board.is_default && (
-          <NodeStatusFilterButton boardId={boardId ?? ""} />
-        )}
-        {!data.board.is_default && (
-          <button
-            type="button"
-            className={
-              "board-request-trigger" +
-              (logUnreadCount > 0 ? " has-unread" : "")
-            }
-            onClick={() => setStructureRequestOpen(true)}
-            title={t("structure_request.trigger_title")}
-            aria-label={t("structure_request.trigger_title")}
-          >
-            <Wand2 size={14} strokeWidth={1.75} />
-            <span>{t("structure_request.trigger_label")}</span>
-            {logUnreadCount > 0 && <span className="unread-dot" />}
-          </button>
-        )}
         {!ownerAlive && (
           <span
             className="owner-warning"
@@ -458,40 +418,87 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
             {t("header.owner_warning")}
           </span>
         )}
-        {(() => {
-          const unread = Object.values(data.threads)
-            .flat()
-            .filter((it) => it.source === "cc" && !it.read_at).length;
-          if (unread === 0) return null;
-          return (
+        {/* Working / activity badge sits at the right end of the LEFT
+            (display) cluster. The action buttons live in .header-right,
+            which is right-anchored (margin-left:auto). So when Working or
+            the BG marker appears/disappears, only the gap between the two
+            groups resizes — the buttons never shift left-then-right. */}
+        {headerActivity && <ActivityBadge activity={headerActivity} />}
+        <div className="header-right">
+          {(data.owner_bg_task_count ?? 0) > 0 && (
             <button
               type="button"
-              className="mark-all-read"
-              title={t("header.unread_count_title", { count: unread })}
+              className="header-bg-indicator"
+              title={`background tasks: ${data.owner_bg_task_count} — click to clear`}
+              aria-label={`clear ${data.owner_bg_task_count} background task marker(s)`}
               onClick={() => {
-                if (
-                  !window.confirm(
-                    t("header.unread_confirm", { count: unread }),
-                  )
-                )
-                  return;
-                fetch("/mark-board-read", {
+                fetch("/bg-task-clear-session", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ board_id: data.board.id }),
-                })
-                  .then(() => fetchBoard())
-                  .catch(() => alert(t("header.mark_all_read_failed")));
+                  body: JSON.stringify({ session_id: data.board.session_id }),
+                }).catch(() => {
+                  /* best-effort; the WS broadcast updates the count */
+                });
               }}
             >
-              {t("header.unread_count_button", { count: unread })}
+              <Cog size={14} strokeWidth={2.25} />
+              <span className="header-bg-count">{data.owner_bg_task_count}</span>
             </button>
-          );
-        })()}
-        <span className="ws-status">
-          <span className={`ws-dot ${wsConnected ? "connected" : ""}`} />
-          {wsConnected ? t("header.live") : t("header.offline")}
-        </span>
+          )}
+          {!data.board.is_default && (
+            <NodeStatusFilterButton boardId={boardId ?? ""} />
+          )}
+          {!data.board.is_default && (
+            <button
+              type="button"
+              className={
+                "board-request-trigger" +
+                (logUnreadCount > 0 ? " has-unread" : "")
+              }
+              onClick={() => setStructureRequestOpen(true)}
+              title={t("structure_request.trigger_title")}
+              aria-label={t("structure_request.trigger_title")}
+            >
+              <Wand2 size={14} strokeWidth={1.75} />
+              <span>{t("structure_request.trigger_label")}</span>
+              {logUnreadCount > 0 && <span className="unread-dot" />}
+            </button>
+          )}
+          {(() => {
+            const unread = Object.values(data.threads)
+              .flat()
+              .filter((it) => it.source === "cc" && !it.read_at).length;
+            if (unread === 0) return null;
+            return (
+              <button
+                type="button"
+                className="mark-all-read"
+                title={t("header.unread_count_title", { count: unread })}
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      t("header.unread_confirm", { count: unread }),
+                    )
+                  )
+                    return;
+                  fetch("/mark-board-read", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ board_id: data.board.id }),
+                  })
+                    .then(() => fetchBoard())
+                    .catch(() => alert(t("header.mark_all_read_failed")));
+                }}
+              >
+                {t("header.unread_count_button", { count: unread })}
+              </button>
+            );
+          })()}
+          <span className="ws-status">
+            <span className={`ws-dot ${wsConnected ? "connected" : ""}`} />
+            {wsConnected ? t("header.live") : t("header.offline")}
+          </span>
+        </div>
       </header>
       <div className="app-body">
         <Sidebar currentBoardId={boardId} />
