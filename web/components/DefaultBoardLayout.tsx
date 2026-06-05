@@ -71,11 +71,17 @@ export function DefaultBoardLayout({
   };
 
   // Snap on mount AND whenever the user kicks off their own post
-  // (tentativeText becomes truthy). The tentativeText dep is what
-  // restores "scroll to my new message after I send it" — without
-  // it, mount-only snap never re-runs and the user's submission can
-  // appear off-screen if they were scrolled up.
-  useSnapToBottom(threadRef, { reversed: true, deps: [tentativeText] });
+  // (tentativeText becomes truthy). followOnNew = myThread.length
+  // hand-rolls the "follow new messages if I'm already at the
+  // bottom" behaviour because Chrome's CSS scroll-anchoring under
+  // column-reverse sometimes refuses to follow new content — the
+  // hook's near-bottom guard preserves the "scroll up to read
+  // history without being yanked back" behaviour.
+  useSnapToBottom(threadRef, {
+    reversed: true,
+    deps: [tentativeText],
+    followOnNew: [myThread.length],
+  });
 
   const handleImageFiles = async (files: File[]) => {
     if (files.length === 0) return;

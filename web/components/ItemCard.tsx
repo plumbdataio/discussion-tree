@@ -83,10 +83,16 @@ export function ItemCard({
 
   // column-reverse + scroll-anchoring keeps the visual bottom pinned
   // once mounted; this hook makes sure the first paint + the next
-  // few hydration frames land there, and re-snaps when the user
-  // themself starts a post (tentativeText flip) so their own
-  // submission is visible.
-  useSnapToBottom(threadRef, { reversed: true, deps: [tentativeText] });
+  // few hydration frames land there, re-snaps when the user starts
+  // their own post (tentativeText flip), and follows incoming
+  // messages when the user is already near the bottom (followOnNew)
+  // because Chrome's CSS scroll-anchoring under column-reverse can
+  // refuse to do the follow on its own.
+  useSnapToBottom(threadRef, {
+    reversed: true,
+    deps: [tentativeText],
+    followOnNew: [myThread.length],
+  });
 
   const handleImageFiles = async (files: File[]) => {
     if (files.length === 0) return;
