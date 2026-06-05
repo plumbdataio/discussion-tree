@@ -29,8 +29,15 @@ function ScrollToBottomButtonImpl({
       // ~100px slack: as soon as the entry starts peeking in, the
       // button hides so it doesn't fake a "more below" hint while the
       // user is reading the last entry.
+      //
+      // For `reversed`, scrollTop semantics under flex-direction:
+      // column-reverse vary across engines — Chrome/Safari keep
+      // scrollTop = 0 at the visual bottom and grow positive as the
+      // user scrolls up, while Firefox uses negative values for the
+      // same direction. Math.abs lets the single check work either
+      // way: "near the visual bottom" iff |scrollTop| is small.
       const atBottom = reversed
-        ? el.scrollTop <= 100
+        ? Math.abs(el.scrollTop) <= 100
         : el.scrollTop + el.clientHeight >= el.scrollHeight - 100;
       setShow((cur) => (cur === !atBottom ? cur : !atBottom));
     };
