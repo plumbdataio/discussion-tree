@@ -70,7 +70,7 @@ export function BoardStructureRequestModal({
   const logRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = logRef.current;
-    if (el) el.lastElementChild?.scrollIntoView({ block: "end" });
+    if (el) el.scrollTop = el.scrollHeight;
   }, [logThread.length]);
 
   // Mark log-node Claude responses read whenever the modal is open and

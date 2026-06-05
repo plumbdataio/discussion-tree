@@ -106,7 +106,7 @@ export function AnchorListModal({
     const el = bodyRef.current;
     if (!el) return;
     if (sortDir === "asc") {
-      el.lastElementChild?.scrollIntoView({ block: "end" });
+      el.scrollTop = el.scrollHeight;
     } else {
       el.scrollTop = 0;
     }

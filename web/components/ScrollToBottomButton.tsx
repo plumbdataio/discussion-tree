@@ -44,27 +44,7 @@ function ScrollToBottomButtonImpl({
       title="一番下まで"
       onClick={() => {
         const el = scrollRef.current;
-        if (!el) return;
-        // content-visibility:auto means off-screen rows render with a
-        // 100px intrinsic-size placeholder; jumping to the bottom in
-        // one go only reaches the bottom of that placeholder height.
-        // As the rows about to enter the viewport hydrate they grow
-        // and the real bottom drifts down. Re-pin a few times across
-        // the next ~400ms so the user sees a single smooth jump.
-        const pin = () => {
-          // 1e9, not Number.MAX_SAFE_INTEGER: iOS Safari clamps scrollTop
-          // through an i32 path and snaps 2^53 back to 0, sending the user
-          // to the very top instead of the bottom. 1e9 stays inside int32
-          // and is bigger than any realistic scrollHeight.
-          el.scrollTop = 1e9;
-        };
-        pin();
-        requestAnimationFrame(() => {
-          pin();
-          requestAnimationFrame(pin);
-        });
-        setTimeout(pin, 100);
-        setTimeout(pin, 300);
+        if (el) el.scrollTop = el.scrollHeight;
       }}
     >
       <ChevronDown size={16} strokeWidth={2} />

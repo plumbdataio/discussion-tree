@@ -45,7 +45,7 @@ export function NodeModal({
 
   useEffect(() => {
     const el = threadRef.current;
-    if (el) el.lastElementChild?.scrollIntoView({ block: "end" });
+    if (el) el.scrollTop = el.scrollHeight;
   }, [threadItems.length]);
 
   const handleImageFiles = async (files: File[]) => {

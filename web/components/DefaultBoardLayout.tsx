@@ -72,36 +72,23 @@ export function DefaultBoardLayout({
   useEffect(() => {
     const el = threadRef.current;
     if (!el) return;
-    // Plan B (simplified): pin once on mount and once at +200ms and
-    // +1000ms to catch image / font hydration, then stop. Anything the
-    // user does after that point is theirs to control — including a
-    // small gap at the bottom they can close with the ScrollToBottom
-    // button. The earlier ResizeObserver-based "keep chasing the
-    // bottom" pattern fought the user every time content-visibility
-    // hydration grew the thread, which felt like being yanked back
-    // every time they tried to scroll up.
+    // Initial snap to bottom. The single-pass version stopped one render
+    // short on real conversations because markdown images, code blocks,
+    // and async font swaps grow the thread height AFTER the first paint
+    // — the scrollTop computed here was still correct relative to the
+    // height at that instant. Re-pin a few times across the next ~600ms
+    // so late content hydration also lands us at the actual bottom.
     const pin = () => {
-      // iOS Safari clamps scrollTop assignments through an i32 path; passing
-      // Number.MAX_SAFE_INTEGER (≈ 2^53) trips that and snaps scroll back to
-      // 0 instead of saturating to scrollHeight, which is why mobile users
-      // saw the thread stuck at the top. 1e9 is well above any realistic
-      // thread height and stays inside int32, so both WebKit and Blink
-      // saturate normally.
-      el.scrollTop = 1e9;
+      el.scrollTop = el.scrollHeight;
     };
     pin();
-    // Re-pin whenever the thread's children resize during the first
-    // 2.5s after mount — image / font / content-visibility hydration
-    // all fire inside that window and steadily grow the height.
-    // After the grace period we disconnect, so the user's own
-    // scrolling from that point onward is never overridden.
-    const ro = new ResizeObserver(() => pin());
-    ro.observe(el);
-    Array.from(el.children).forEach((c) => ro.observe(c));
-    const stop = window.setTimeout(() => ro.disconnect(), 2500);
+    const raf = requestAnimationFrame(pin);
+    const t1 = window.setTimeout(pin, 200);
+    const t2 = window.setTimeout(pin, 600);
     return () => {
-      ro.disconnect();
-      clearTimeout(stop);
+      cancelAnimationFrame(raf);
+      clearTimeout(t1);
+      clearTimeout(t2);
     };
   }, [myThread.length, tentativeText]);
 
