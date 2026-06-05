@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { BoardView, Node, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
@@ -9,6 +9,7 @@ import { extractImageFiles, uploadImage } from "../utils/api.ts";
 import { useDraft } from "../utils/drafts.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useSettings } from "../utils/settings.ts";
+import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 
 // Default conversation board: a single fixed item, no concern column / no
 // items-row chrome. The whole main pane becomes one tall thread with a
@@ -69,41 +70,7 @@ export function DefaultBoardLayout({
     });
   };
 
-  // Snap the FIRST DOM child (= the visual bottom under
-  // column-reverse: tentativeText if any, else the newest message)
-  // to the viewport's bottom on mount. scrollIntoView is used in
-  // place of `scrollTop = …` because the two scrollTop conventions
-  // for column-reverse containers (zero-at-bottom on some engines,
-  // zero-at-top on others) make raw scrollTop assignments unreliable
-  // — scrollIntoView always means "align this element with the
-  // requested edge of the viewport," semantics-free.
-  //
-  // Snap multiple times across the first ~600ms of mount because
-  // content-visibility:auto placeholders settle their heights over a
-  // few frames AND iOS occasionally restores a stale scroll position
-  // from a prior visit before we get to it. Bounded window — these
-  // fire on mount only, no thread-update dependency, so it's not
-  // chase behaviour (the user can scroll up at any point after the
-  // 600ms grace and nothing yanks them back).
-  useEffect(() => {
-    const el = threadRef.current;
-    if (!el) return;
-    const snap = () => {
-      const first = el.firstElementChild as HTMLElement | null;
-      first?.scrollIntoView({ block: "end" });
-    };
-    snap();
-    const raf = requestAnimationFrame(snap);
-    const t1 = window.setTimeout(snap, 100);
-    const t2 = window.setTimeout(snap, 300);
-    const t3 = window.setTimeout(snap, 600);
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-    };
-  }, []);
+  useSnapToBottom(threadRef, { reversed: true });
 
   const handleImageFiles = async (files: File[]) => {
     if (files.length === 0) return;

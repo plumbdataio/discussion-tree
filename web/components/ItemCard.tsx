@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { Maximize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Activity, Node, ThreadItem } from "../../shared/types.ts";
@@ -13,6 +13,7 @@ import { useDraft } from "../utils/drafts.ts";
 import { getBoardIdFromUrl } from "../utils/url.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useSettings } from "../utils/settings.ts";
+import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 
 export function ItemCard({
   node,
@@ -80,12 +81,10 @@ export function ItemCard({
     setExpandedMsg(it);
   }, []);
 
-  useEffect(() => {
-    const el = threadRef.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
-    }
-  }, [myThread.length]);
+  // column-reverse + scroll-anchoring keeps the visual bottom pinned
+  // once mounted; this hook just makes sure the FIRST paint and the
+  // next few hydration frames also land there.
+  useSnapToBottom(threadRef, { reversed: true });
 
   const handleImageFiles = async (files: File[]) => {
     if (files.length === 0) return;
@@ -201,18 +200,13 @@ export function ItemCard({
           card and the input row stays anchored to the bottom regardless
           of whether messages exist yet (= matches mobile's behaviour,
           and avoids the per-card jitter where empty threads pulled the
-          input up to the title). */}
+          input up to the title).
+
+          column-reverse: tentativeText is the first DOM child (= visual
+          bottom under reverse), then myThread iterated newest→oldest,
+          giving the same on-screen order as before with the browser's
+          anchored-scrolling holding the bottom in place. */}
       <div className="thread" ref={threadRef}>
-        {myThread.map((it) => (
-          <ThreadMessage
-            key={it.id}
-            item={it}
-            boardId={node.board_id}
-            nodeId={node.id}
-            sessionId={ownerSessionId}
-            onExpand={openExpandedMsg}
-          />
-        ))}
         {tentativeText && (
           <div className="thread-msg from-user pending">
             <span className="who">
@@ -222,8 +216,18 @@ export function ItemCard({
             <MDView text={tentativeText} />
           </div>
         )}
-        <ScrollToBottomButton scrollRef={threadRef} />
+        {[...myThread].reverse().map((it) => (
+          <ThreadMessage
+            key={it.id}
+            item={it}
+            boardId={node.board_id}
+            nodeId={node.id}
+            sessionId={ownerSessionId}
+            onExpand={openExpandedMsg}
+          />
+        ))}
       </div>
+      <ScrollToBottomButton scrollRef={threadRef} reversed />
 
       <div className="input-row">
         <textarea

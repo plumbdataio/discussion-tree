@@ -10,6 +10,7 @@ import { getBoardIdFromUrl } from "../utils/url.ts";
 import { extractImageFiles, uploadImage } from "../utils/api.ts";
 import { useDraft } from "../utils/drafts.ts";
 import { formatThreadTimestamp } from "../utils/format.ts";
+import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 
 export function NodeModal({
   node,
@@ -43,10 +44,14 @@ export function NodeModal({
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  useEffect(() => {
-    const el = threadRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [threadItems.length]);
+  // Non-reversed because .node-modal-scroll holds both the context
+  // block and the thread in one scroll container — flipping that to
+  // column-reverse would place the context at the visual bottom,
+  // which would need a layout refactor. For now we stick with the
+  // classic "scrollTop = scrollHeight" approach, just hardened with
+  // the multi-pass mount snap so hydration / scroll-restoration
+  // can't strand the modal mid-thread.
+  useSnapToBottom(threadRef, { deps: [threadItems.length] });
 
   const handleImageFiles = async (files: File[]) => {
     if (files.length === 0) return;

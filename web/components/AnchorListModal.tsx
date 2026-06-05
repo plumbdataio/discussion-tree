@@ -13,6 +13,7 @@ import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { MDView } from "./MDView.tsx";
 import { showToast } from "./Toast.tsx";
 import { formatThreadTimestamp } from "../utils/format.ts";
+import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 
 const LS_FILTER_SESSION = "dt-anchor-filter-session";
 const LS_SORT_DIR = "dt-anchor-sort-dir";
@@ -97,20 +98,15 @@ export function AnchorListModal({
     return filtered;
   }, [all, filterSession, sortDir]);
 
-  // Match the conversational thread convention: when the newest items
-  // are at the bottom (= ascending sort), open the modal already
-  // scrolled to the bottom so the user lands on the latest pin
-  // without flicking. Reset to top on descending sort, since that
-  // puts the newest items up there.
-  useEffect(() => {
-    const el = bodyRef.current;
-    if (!el) return;
-    if (sortDir === "asc") {
-      el.scrollTop = el.scrollHeight;
-    } else {
-      el.scrollTop = 0;
-    }
-  }, [sortDir, visible.length]);
+  // Match the conversational thread convention: ascending sort puts
+  // the newest pin at the bottom and we open already scrolled there;
+  // descending sort puts it at the top, so we land at the top.
+  // useSnapToBottom does the multi-pass snap so layout / async row
+  // hydration can't strand us in the middle on slow renders.
+  useSnapToBottom(bodyRef, {
+    to: sortDir === "asc" ? "end" : "start",
+    deps: [sortDir, visible.length],
+  });
 
   const sessionName = (sid: string): string => {
     const s = sessions.find((x) => x.id === sid);

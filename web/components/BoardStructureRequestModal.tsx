@@ -10,6 +10,7 @@ import {
   uploadImage,
 } from "../utils/api.ts";
 import { translateError } from "../utils/errors.ts";
+import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 
 // Free-text modal for asking the CC to restructure a board (add a concern,
 // add an item under an existing concern, rename, etc). The submission rides
@@ -67,11 +68,10 @@ export function BoardStructureRequestModal({
 
   // Auto-pin the log thread to the bottom when entries arrive so the
   // latest request/response pair is visible without scrolling.
+  // List-style (not chat), so non-reversed: classic scrollTop =
+  // scrollHeight, hardened with multi-pass mount snap.
   const logRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = logRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [logThread.length]);
+  useSnapToBottom(logRef, { deps: [logThread.length] });
 
   // Mark log-node Claude responses read whenever the modal is open and
   // unread items are visible. Re-runs when the thread grows (a new

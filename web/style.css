@@ -1920,6 +1920,15 @@ body.concern-resizing * {
      reclaims space and pushes context to scroll internally. */
   min-height: 200px;
   overflow-y: auto;
+  /* column-reverse so the visual bottom is held by the browser's
+     scroll-anchoring heuristic without a JS chase — same trick the
+     default board uses. JSX renders tentative-first then newest→
+     oldest so the on-screen order matches what users expect. */
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 6px;
+  /* iOS Safari momentum scrolling inside this nested overflow box. */
+  -webkit-overflow-scrolling: touch;
   /* Code blocks (`<pre>`) request their content's intrinsic width as
      min-content. Without horizontal clipping here, a long `--build-arg ...`
      line widens the thread and breaks out of the item-card's 360px slot,
@@ -2615,6 +2624,10 @@ body.concern-resizing * {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* iOS Safari momentum scrolling. List view, not chat, so the
+     direction stays as-is — sort order is expressed through the
+     row ordering, not via column-reverse. */
+  -webkit-overflow-scrolling: touch;
   background: #fbfdfc; /* subtle warm-green tint so the list reads as a
                           distinct surface from the underlying board */
 }
@@ -2964,6 +2977,12 @@ body.concern-resizing * {
   min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
+  /* iOS Safari momentum scrolling for the nested scroll container.
+     Non-reversed here: the context block and thread live together
+     in this same scroll surface, so flipping to column-reverse
+     would put the context at the visual bottom — needs a layout
+     refactor we haven't done. */
+  -webkit-overflow-scrolling: touch;
 }
 
 .node-modal-input {
@@ -3685,6 +3704,8 @@ button.secondary {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* iOS Safari momentum scrolling. */
+  -webkit-overflow-scrolling: touch;
   padding: 4px 2px;
 }
 .modal-structure-history-thread .thread-msg {
