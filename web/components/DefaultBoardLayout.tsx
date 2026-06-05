@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { BoardView, Node, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
@@ -69,14 +69,22 @@ export function DefaultBoardLayout({
     });
   };
 
-  // No useEffect for scroll: the thread container uses
-  // `flex-direction: column-reverse` (see .default-board-thread in
-  // style.css), which means the browser's anchored-scrolling heuristic
-  // pins the visual bottom in place automatically. As long as the user
-  // is "at bottom" (scrollTop near 0 in reverse coords) new messages
-  // grow the list upward without moving the view; once they scroll up
-  // to read history, nothing yanks them back. No JS chase, no pin
-  // loop, no iOS i32 surprises.
+  // CSS does the heavy lifting (flex-direction: column-reverse pins
+  // the visual bottom + the browser's scroll anchoring keeps it
+  // there). The one thing CSS can't guarantee is the FIRST paint when
+  // content-visibility:auto placeholders are still resolving — the
+  // engine sometimes lands on a stable scroll position that's a few
+  // messages above the bottom (the unhydrated placeholders below
+  // count toward scrollHeight and bias the initial position). A
+  // single useLayoutEffect-time `scrollTop = 0` on mount snaps the
+  // view to the visual bottom BEFORE the first paint, after which
+  // anchoring takes over. We deliberately don't re-run this on
+  // thread updates — re-running was the whole "JS chase" failure
+  // mode the rewrite escaped.
+  useLayoutEffect(() => {
+    const el = threadRef.current;
+    if (el) el.scrollTop = 0;
+  }, []);
 
   const handleImageFiles = async (files: File[]) => {
     if (files.length === 0) return;
