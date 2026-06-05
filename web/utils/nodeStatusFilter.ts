@@ -1,15 +1,19 @@
 // Local-state hook for per-board node status filtering. Mirrors the
 // sidebar's BoardStatusFilter shape but at the node level — UI shows
 // only items whose status the user has left enabled. State is
-// persisted to localStorage under a single key shared across all
-// boards so the user's filter selection follows them around. Default
-// is "everything visible" so a first-time user sees the full board.
+// persisted to localStorage under a PER-BOARD key (the board id is
+// part of the key) so each board remembers its own filter
+// independently. Default is "everything visible" so a board the user
+// hasn't filtered yet shows in full.
 
 import { useEffect, useState } from "react";
 import { NODE_STATUSES } from "./constants.ts";
 import type { NodeStatus } from "../../shared/types.ts";
 
-const LS_KEY = "dt-node-status-filter";
+const LS_PREFIX = "dt-node-status-filter:";
+function lsKey(boardId: string): string {
+  return LS_PREFIX + boardId;
+}
 
 export type NodeStatusFilter = Record<NodeStatus, boolean>;
 
@@ -19,9 +23,9 @@ function defaultFilter(): NodeStatusFilter {
   return out;
 }
 
-function readLS(): NodeStatusFilter {
+function readLS(boardId: string): NodeStatusFilter {
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(lsKey(boardId));
     if (!raw) return defaultFilter();
     const parsed = JSON.parse(raw) as Partial<NodeStatusFilter>;
     const out = defaultFilter();
@@ -34,28 +38,29 @@ function readLS(): NodeStatusFilter {
   }
 }
 
-function writeLS(value: NodeStatusFilter) {
+function writeLS(boardId: string, value: NodeStatusFilter) {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(value));
+    localStorage.setItem(lsKey(boardId), JSON.stringify(value));
   } catch {
     /* private mode etc */
   }
 }
 
-// Single-tab subscriber set so the toggle in the header and any other
-// observer (concerns layout) stay in sync without prop drilling.
+// Per-board cache + a single subscriber set. notify() wakes every
+// observer; each one re-reads its own board's slice, so a cross-board
+// notification is harmless — a page only ever renders one board's
+// filter at a time, so the extra re-render is a no-op for everyone
+// looking at a different board.
+const cachedByBoard = new Map<string, NodeStatusFilter>();
 const listeners = new Set<() => void>();
-let cached: NodeStatusFilter | null = null;
 
 function notify() {
   for (const l of listeners) l();
 }
 
-export function useNodeStatusFilter(): [
-  NodeStatusFilter,
-  (status: NodeStatus, value: boolean) => void,
-  () => void,
-] {
+export function useNodeStatusFilter(
+  boardId: string,
+): [NodeStatusFilter, (status: NodeStatus, value: boolean) => void, () => void] {
   const [, force] = useState(0);
   useEffect(() => {
     const fn = () => force((n) => n + 1);
@@ -64,15 +69,21 @@ export function useNodeStatusFilter(): [
       listeners.delete(fn);
     };
   }, []);
-  if (!cached) cached = readLS();
+  let cached = cachedByBoard.get(boardId);
+  if (!cached) {
+    cached = readLS(boardId);
+    cachedByBoard.set(boardId, cached);
+  }
   const setOne = (status: NodeStatus, value: boolean) => {
-    cached = { ...cached!, [status]: value };
-    writeLS(cached);
+    const next = { ...cached!, [status]: value };
+    cachedByBoard.set(boardId, next);
+    writeLS(boardId, next);
     notify();
   };
   const reset = () => {
-    cached = defaultFilter();
-    writeLS(cached);
+    const next = defaultFilter();
+    cachedByBoard.set(boardId, next);
+    writeLS(boardId, next);
     notify();
   };
   return [cached, setOne, reset];

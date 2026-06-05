@@ -57,8 +57,10 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   const [wsEpoch, setWsEpoch] = useState(0);
   // Per-status node filter — read here so the hook order is stable
   // across the early-return branches below. The downstream filtering
-  // happens after `data` is known to be present.
-  const [nodeStatusFilter] = useNodeStatusFilter();
+  // happens after `data` is known to be present. Keyed by boardId so
+  // each board keeps its own filter (boardId is the URL board id, the
+  // same value the NodeStatusFilterButton below is keyed on).
+  const [nodeStatusFilter] = useNodeStatusFilter(boardId ?? "");
 
   const fetchBoard = useCallback(async () => {
     if (!boardId) return;
@@ -406,7 +408,9 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           </span>
         )}
         <ContextMeter usage={data.owner_context_usage} prefix="Context: " />
-        {!data.board.is_default && <NodeStatusFilterButton />}
+        {!data.board.is_default && (
+          <NodeStatusFilterButton boardId={boardId ?? ""} />
+        )}
         {!data.board.is_default && (
           <button
             type="button"

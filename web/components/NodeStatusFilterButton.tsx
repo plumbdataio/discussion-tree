@@ -5,13 +5,14 @@ import { NODE_STATUSES } from "../utils/constants.ts";
 import { useNodeStatusFilter } from "../utils/nodeStatusFilter.ts";
 
 // Board-view header trigger that drops down a per-status checkbox
-// popover. Filter state is module-shared via useNodeStatusFilter so
-// the items rendered by ConcernColumn / ItemCard pick up the change
-// without prop drilling. Lives next to the structure-request button
-// in the BoardApp header (skipped on the default board).
-export function NodeStatusFilterButton() {
+// popover. Filter state is per-board (keyed by boardId) via
+// useNodeStatusFilter so the items rendered by ConcernColumn /
+// ItemCard pick up the change without prop drilling, and each board
+// remembers its own selection. Lives next to the structure-request
+// button in the BoardApp header (skipped on the default board).
+export function NodeStatusFilterButton({ boardId }: { boardId: string }) {
   const { t } = useTranslation();
-  const [filter, setOne, reset] = useNodeStatusFilter();
+  const [filter, setOne, reset] = useNodeStatusFilter(boardId);
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
