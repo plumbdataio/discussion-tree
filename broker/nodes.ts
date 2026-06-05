@@ -14,7 +14,7 @@ import {
   updateNodeStatus,
 } from "./db.ts";
 import { broadcast } from "./ws.ts";
-import { onBoardSettled } from "./checklist.ts";
+import { onBoardSettled, onNodeSettled } from "./checklist.ts";
 import {
   DEFAULT_BOARD_LOCKED_ERROR,
   isDefaultBoard,
@@ -220,6 +220,9 @@ export function handleSetNodeStatus(body: any) {
       node_id: body.node_id,
       source: "system",
     });
+    // Per-node checklist nudge (no-op unless the board has a checklist node
+    // and the new status is a verdict).
+    onNodeSettled(body.board_id, body.node_id, body.status);
   }
   const boardChange = syncBoardStatus(body.board_id);
   return withBoardStatusChange({ ok: true }, boardChange);

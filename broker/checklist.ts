@@ -3,6 +3,7 @@
 // update_decision MCP tools. Each row in checklist_items is one tracked
 // decision under a node flagged is_checklist=1.
 
+import { isSettledNodeStatus } from "../shared/types.ts";
 import { db, insertPending } from "./db.ts";
 import { broadcast } from "./ws.ts";
 
@@ -28,6 +29,9 @@ const selectChecklistNodeOnBoard = db.prepare(
 );
 const selectBoardOwnerTitle = db.prepare(
   `SELECT session_id, title FROM boards WHERE id = ?`,
+);
+const selectNodeTitle = db.prepare(
+  `SELECT title FROM nodes WHERE board_id = ? AND id = ?`,
 );
 
 const VALID_STATUS = new Set(["pending", "in-progress", "done", "dropped"]);
@@ -173,6 +177,46 @@ export function onBoardSettled(boardId: string): void {
     text,
     new Date().toISOString(),
     "checklist_settled",
+  );
+}
+
+// Fire when an individual node lands on a verdict (adopted / agreed /
+// resolved / rejected / done) on a board that carries a checklist node:
+// remind the owner to record THAT decision into the checklist now. The
+// board-level onBoardSettled (above) is the final reconciliation; this is the
+// incremental nudge as each decision lands. Same dedicated-kind / no-counter
+// delivery. Skips the checklist node settling on itself. Wording is
+// intentionally simple — tune in operation.
+export function onNodeSettled(
+  boardId: string,
+  nodeId: string,
+  status: string,
+): void {
+  if (!isSettledNodeStatus(status)) return;
+  const cn = selectChecklistNodeOnBoard.get(boardId) as
+    | { id: string }
+    | undefined;
+  if (!cn) return; // no checklist node on this board
+  if (cn.id === nodeId) return; // the checklist node settling isn't a "record this" event
+  const board = selectBoardOwnerTitle.get(boardId) as
+    | { session_id: string }
+    | undefined;
+  if (!board) return;
+  const node = selectNodeTitle.get(boardId, nodeId) as
+    | { title: string }
+    | undefined;
+  const title = node?.title ?? nodeId;
+  const text =
+    `[discussion-tree] ノード「${title}」の決定が確定しました。` +
+    `この決定を record_decision(board_id="${boardId}", node_id="${cn.id}", summary=<「〜であること」型の検証可能な1行>, source_node_id="${nodeId}") でチェックリストに反映してください。`;
+  insertPending.run(
+    board.session_id,
+    boardId,
+    cn.id,
+    "",
+    text,
+    new Date().toISOString(),
+    "checklist_node_settled",
   );
 }
 

@@ -19,7 +19,7 @@ import {
   updateNodeStatus,
 } from "./db.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
-import { onBoardSettled } from "./checklist.ts";
+import { onBoardSettled, onNodeSettled } from "./checklist.ts";
 import { SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
 import { buildNodePath } from "./helpers.ts";
 import { ensureBoardLogNode } from "./structure-log.ts";
@@ -133,6 +133,8 @@ export function handlePostToNode(body: any) {
       node_id: body.node_id,
       status: body.status,
     });
+    // Per-node checklist nudge (no-op unless the board has a checklist node).
+    onNodeSettled(body.board_id, body.node_id, body.status);
   }
   const boardChange = syncBoardStatus(body.board_id);
   return boardChange

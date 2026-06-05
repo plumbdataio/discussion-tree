@@ -206,4 +206,50 @@ describe("settled injection (checklist boards roll up)", () => {
     );
     expect(reminder).toBeFalsy();
   });
+
+  test("settling ONE node on a checklist board queues a per-node nudge, not the board-level one yet", async () => {
+    const c = await post<{ board_id: string }>(`${broker.url}/create-board`, {
+      session_id: sessionId,
+      structure: {
+        title: "L2",
+        concerns: [
+          {
+            id: "c4",
+            title: "C4",
+            items: [
+              { id: "cl2", title: "Checklist" },
+              { id: "dec1", title: "Decision 1" },
+              { id: "dec2", title: "Decision 2" },
+            ],
+          },
+        ],
+      },
+    });
+    const bid = c.json.board_id;
+    await post(`${broker.url}/set-node-checklist`, {
+      board_id: bid,
+      node_id: "cl2",
+    });
+    // Settle one decision; the board is NOT fully settled (cl2 + dec2 pending).
+    await post(`${broker.url}/set-node-status`, {
+      board_id: bid,
+      node_id: "dec1",
+      status: "adopted",
+    });
+    const poll = await post<{ messages: any[] }>(
+      `${broker.url}/poll-messages`,
+      { session_id: sessionId },
+    );
+    const nudge = poll.json.messages.find(
+      (m) => m.kind === "checklist_node_settled" && m.board_id === bid,
+    );
+    expect(nudge).toBeTruthy();
+    expect(nudge.node_id).toBe("cl2");
+    expect(nudge.text).toContain("record_decision");
+    // No board-level reminder yet — the board hasn't settled.
+    const boardLevel = poll.json.messages.find(
+      (m) => m.kind === "checklist_settled" && m.board_id === bid,
+    );
+    expect(boardLevel).toBeFalsy();
+  });
 });

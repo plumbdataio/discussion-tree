@@ -5,7 +5,7 @@ import {
   ChevronDown,
   ChevronUp,
   Maximize2,
-  MinusSquare,
+  RefreshCw,
   Square,
   X,
   XSquare,
@@ -26,7 +26,7 @@ const STATUS_ICON: Record<
   React.ComponentType<{ size?: number; strokeWidth?: number }>
 > = {
   done: CheckSquare,
-  "in-progress": MinusSquare,
+  "in-progress": RefreshCw,
   pending: Square,
   dropped: XSquare,
 };
