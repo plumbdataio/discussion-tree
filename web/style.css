@@ -3825,7 +3825,7 @@ button.secondary {
 .checklist-card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-left: 4px solid #16a34a;
+  border-left: 4px solid #a78bfa;
   border-radius: 8px;
   padding: 12px 14px;
   /* Wider than ordinary item cards (360px) so the checklist reads as a
@@ -3871,10 +3871,16 @@ button.secondary {
 .checklist-items {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* Pastel-purple wash + top/bottom borders so the checklist reads as a
+     distinct block separated from the node's context text above it. */
+  background: rgba(139, 92, 246, 0.06);
+  border-top: 1px solid rgba(139, 92, 246, 0.28);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.28);
+  border-radius: 4px;
 }
 .checklist-item {
   display: flex;
@@ -3890,8 +3896,10 @@ button.secondary {
 }
 .checklist-glyph {
   flex: 0 0 auto;
-  font-size: 14px;
-  line-height: 1.4;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  margin-top: 1px;
 }
 .checklist-item-body {
   flex: 1 1 auto;
@@ -3910,12 +3918,15 @@ button.secondary {
   margin-top: 2px;
 }
 .checklist-status-done .checklist-glyph {
-  color: #16a34a;
+  color: #7c3aed;
 }
 .checklist-status-in-progress .checklist-glyph {
-  color: #2563eb;
+  color: #a78bfa;
 }
 .checklist-status-pending .checklist-glyph {
+  color: #c4b5fd;
+}
+.checklist-status-dropped .checklist-glyph {
   color: var(--muted);
 }
 .checklist-status-dropped {

@@ -1,18 +1,28 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Maximize2, X } from "lucide-react";
+import {
+  CheckSquare,
+  Maximize2,
+  MinusSquare,
+  Square,
+  X,
+  XSquare,
+} from "lucide-react";
 import type { ChecklistItemStatus, Node } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
 
 // Read-only renderer for a decision-checklist node (is_checklist=1). The
 // node's checklist_items are mutated only through CC tools — this surface
-// just displays them. The status glyph is a display indicator, NOT a
+// just displays them. The status icon is a display indicator, NOT a
 // clickable toggle (UI is deliberately read-only per the design decision).
-const STATUS_GLYPH: Record<ChecklistItemStatus, string> = {
-  done: "☑",
-  "in-progress": "◐",
-  pending: "☐",
-  dropped: "⊘",
+const STATUS_ICON: Record<
+  ChecklistItemStatus,
+  React.ComponentType<{ size?: number; strokeWidth?: number }>
+> = {
+  done: CheckSquare,
+  "in-progress": MinusSquare,
+  pending: Square,
+  dropped: XSquare,
 };
 
 function ChecklistBody({ node }: { node: Node }) {
@@ -22,7 +32,9 @@ function ChecklistBody({ node }: { node: Node }) {
   }
   return (
     <ul className="checklist-items">
-      {items.map((it) => (
+      {items.map((it) => {
+        const Icon = STATUS_ICON[it.status] ?? Square;
+        return (
         <li
           key={it.id}
           className={`checklist-item checklist-status-${it.status}`}
@@ -32,7 +44,7 @@ function ChecklistBody({ node }: { node: Node }) {
             aria-label={it.status}
             title={it.status}
           >
-            {STATUS_GLYPH[it.status] ?? "☐"}
+            <Icon size={17} strokeWidth={2} />
           </span>
           <span className="checklist-item-body">
             <MDView className="checklist-summary" text={it.summary} />
@@ -43,7 +55,8 @@ function ChecklistBody({ node }: { node: Node }) {
             )}
           </span>
         </li>
-      ))}
+        );
+      })}
     </ul>
   );
 }
