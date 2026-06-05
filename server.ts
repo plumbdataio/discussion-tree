@@ -131,13 +131,45 @@ async function main() {
     await notifyAttachFailure();
   }
 
-  const pollTimer = setInterval(() => pollAndPushMessages(mcp), POLL_INTERVAL_MS);
+  // Declared up front so the heartbeat's orphan guard (below) can invoke
+  // cleanup; the timer handles are assigned just after.
+  let pollTimer: ReturnType<typeof setInterval>;
+  let heartbeatTimer: ReturnType<typeof setInterval>;
+
+  const cleanup = async () => {
+    clearInterval(pollTimer);
+    clearInterval(heartbeatTimer);
+    const sid = getSessionId();
+    if (sid) {
+      try {
+        await brokerFetch("/unregister", { session_id: sid });
+        log("Unregistered from broker");
+      } catch {
+        /* best effort */
+      }
+    }
+    process.exit(0);
+  };
+
+  pollTimer = setInterval(() => pollAndPushMessages(mcp), POLL_INTERVAL_MS);
   // Heartbeat doubles as a self-healing tick: the broker echoes back the
   // current cc_session_id binding on every /heartbeat, so we get a cheap
   // signal for free. If it's null (auto-attach never succeeded OR was
   // wiped by some broker state reset) we re-try the bind once per tick.
   // On the happy path this is one extra null check + nothing else.
-  const heartbeatTimer = setInterval(async () => {
+  heartbeatTimer = setInterval(async () => {
+    // Orphan guard: if our parent Claude Code process exits, we get
+    // reparented to init (process.ppid becomes 1) and never receive
+    // SIGINT/SIGTERM, so the cleanup below would never run. Without this
+    // we'd linger as a zombie MCP server — heartbeating forever, keeping a
+    // dead session "alive" in the broker (cluttering the sidebar) and
+    // leaking memory. Detect the orphaning and shut ourselves down so the
+    // session drops to alive=0 on its own.
+    if (process.ppid === 1) {
+      log("Parent CC exited (ppid=1); shutting down orphaned MCP server");
+      await cleanup();
+      return;
+    }
     const sid = getSessionId();
     if (!sid) return;
     try {
@@ -158,21 +190,6 @@ async function main() {
       /* non-critical — broker may be momentarily unreachable */
     }
   }, HEARTBEAT_INTERVAL_MS);
-
-  const cleanup = async () => {
-    clearInterval(pollTimer);
-    clearInterval(heartbeatTimer);
-    const sid = getSessionId();
-    if (sid) {
-      try {
-        await brokerFetch("/unregister", { session_id: sid });
-        log("Unregistered from broker");
-      } catch {
-        /* best effort */
-      }
-    }
-    process.exit(0);
-  };
 
   process.on("SIGINT", cleanup);
   process.on("SIGTERM", cleanup);
