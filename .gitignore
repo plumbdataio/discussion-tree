@@ -6,6 +6,12 @@ node_modules/
 *.db-wal
 *.db-shm
 
+# TypeScript incremental build cache — regenerated on every `tsc` run, never
+# meaningful to commit. (package-lock.json is deliberately NOT ignored: this
+# is a Bun project — bun.lock is the lockfile — so a stray npm lockfile
+# appearing in git status is a useful signal that npm got run by mistake.)
+tsconfig.tsbuildinfo
+
 # Scratch / pre-publish workspace (e.g. backups of the prior .git history
 # stashed during the public-release rebrand). Never committed.
 .tmp/
