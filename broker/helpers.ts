@@ -4,11 +4,18 @@
 
 import { randomBytes } from "node:crypto";
 
-import type { Board, Node, NodeInput, ThreadItem } from "../shared/types.ts";
+import type {
+  Board,
+  ChecklistItem,
+  Node,
+  NodeInput,
+  ThreadItem,
+} from "../shared/types.ts";
 import {
   db,
   insertNode,
   selectBoard,
+  selectChecklistItemsByNode,
   selectMaxPosChild,
   selectMaxPosRoot,
   selectNodesByBoard,
@@ -98,6 +105,17 @@ export function getBoardView(boardId: string) {
   // exist before we read nodes. No-op for default boards. Idempotent.
   ensureBoardLogNode(boardId);
   const nodes = selectNodesByBoard.all(boardId) as Node[];
+  // Attach the checklist_items array to any decision-checklist node so the
+  // frontend can render the list without a second round-trip. Ordinary
+  // nodes are left untouched (the property stays absent).
+  for (const n of nodes) {
+    if (n.is_checklist) {
+      n.checklist_items = selectChecklistItemsByNode.all(
+        boardId,
+        n.id,
+      ) as ChecklistItem[];
+    }
+  }
   const threads = selectThreadsByBoard.all(boardId) as ThreadItem[];
   const threadsByNode: Record<string, ThreadItem[]> = {};
   for (const t of threads) {

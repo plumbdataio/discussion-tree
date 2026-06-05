@@ -111,6 +111,13 @@ safeAlter("ALTER TABLE nodes ADD COLUMN deleted_at TEXT");
 // must never be deletable / movable / reorderable by the user or by
 // Claude, because the rest of the system assumes they're always there.
 safeAlter("ALTER TABLE nodes ADD COLUMN is_log INTEGER NOT NULL DEFAULT 0");
+// Marks a node as a decision-checklist node: a normal node (title /
+// context / thread / status all work as usual) that ALSO carries a list
+// of checklist_items — the decision-tracking property. Rendered read-only
+// in the UI; items are mutated only through CC tools.
+safeAlter(
+  "ALTER TABLE nodes ADD COLUMN is_checklist INTEGER NOT NULL DEFAULT 0",
+);
 
 db.run(`
   CREATE TABLE IF NOT EXISTS thread_items (
@@ -183,6 +190,29 @@ db.run(
   `CREATE INDEX IF NOT EXISTS favorites_by_thread_item ON favorites(thread_item_id)`,
 );
 
+// Decision-checklist items. Each row is one decision tracked under a node
+// flagged is_checklist=1. status ∈ pending | in-progress | done | dropped;
+// drop_reason is required (enforced at the tool layer) when status='dropped'.
+// source_node_id optionally links back to the node where the decision was
+// made. Mutated only through CC tools (record_decision / update_decision) —
+// the UI renders these read-only.
+db.run(`
+  CREATE TABLE IF NOT EXISTS checklist_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    board_id TEXT NOT NULL,
+    node_id TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    drop_reason TEXT,
+    source_node_id TEXT,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  )
+`);
+db.run(
+  `CREATE INDEX IF NOT EXISTS checklist_items_by_node ON checklist_items(board_id, node_id, position)`,
+);
+
 // --- Prepared statements ---
 //
 // IMPORTANT: there are intentionally NO DELETE FROM statements anywhere.
@@ -224,6 +254,9 @@ export const bumpStatusToDiscussing = db.prepare(
 );
 export const selectNodesByBoard = db.prepare(
   `SELECT * FROM nodes WHERE board_id = ? AND deleted_at IS NULL ORDER BY position`,
+);
+export const selectChecklistItemsByNode = db.prepare(
+  `SELECT * FROM checklist_items WHERE board_id = ? AND node_id = ? ORDER BY position ASC, id ASC`,
 );
 export const selectMaxPosRoot = db.prepare(
   `SELECT MAX(position) AS max_pos FROM nodes WHERE board_id = ? AND parent_id IS NULL`,

@@ -88,6 +88,33 @@ export interface Node {
   // beneath it. Frontends should render these with a localized title and
   // hide structural-mutation affordances (delete / drag-reorder / etc).
   is_log?: number;
+  // 1 = a decision-checklist node: a normal node that ALSO carries a
+  // checklist_items array (decisions tracked toward implementation). The
+  // UI renders the items read-only; they're mutated only via CC tools.
+  is_checklist?: number;
+  // Populated by the broker only for is_checklist nodes — the tracked
+  // decisions, ordered by position. Absent on ordinary nodes.
+  checklist_items?: ChecklistItem[];
+}
+
+export type ChecklistItemStatus =
+  | "pending"
+  | "in-progress"
+  | "done"
+  | "dropped";
+
+export interface ChecklistItem {
+  id: number;
+  board_id: string;
+  node_id: string;
+  summary: string;
+  status: ChecklistItemStatus;
+  // Required when status === "dropped" (enforced at the tool layer).
+  drop_reason?: string | null;
+  // Optional link back to the node where the decision was made.
+  source_node_id?: string | null;
+  position: number;
+  created_at: string;
 }
 
 export interface ThreadItem {

@@ -3,6 +3,7 @@ import { Maximize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Activity, Node, ThreadItem } from "../../shared/types.ts";
 import { ConcernPreviewModal } from "./ConcernPreviewModal.tsx";
+import { ChecklistCard } from "./ChecklistCard.tsx";
 import { ItemCard } from "./ItemCard.tsx";
 import { MDView } from "./MDView.tsx";
 import { useConcernHeight } from "../utils/concernHeight.ts";
@@ -115,19 +116,23 @@ export function ConcernColumn({
             onDoubleClick={() => setOverrideHeight(null)}
           />
           <div className={`items-row ${items.length === 1 ? "single" : ""}`}>
-            {items.map((item) => (
-              <ItemCard
-                key={item.id}
-                node={item}
-                childrenByParent={childrenByParent}
-                threads={threads}
-                flashingNodes={flashingNodes}
-                activity={activity}
-                ownerAlive={ownerAlive}
-                ownerSessionId={ownerSessionId}
-                onSubmit={onSubmit}
-              />
-            ))}
+            {items.map((item) =>
+              item.is_checklist ? (
+                <ChecklistCard key={item.id} node={item} />
+              ) : (
+                <ItemCard
+                  key={item.id}
+                  node={item}
+                  childrenByParent={childrenByParent}
+                  threads={threads}
+                  flashingNodes={flashingNodes}
+                  activity={activity}
+                  ownerAlive={ownerAlive}
+                  ownerSessionId={ownerSessionId}
+                  onSubmit={onSubmit}
+                />
+              ),
+            )}
           </div>
         </>
       )}
