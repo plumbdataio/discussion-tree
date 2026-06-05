@@ -70,18 +70,11 @@ export function DefaultBoardLayout({
     });
   };
 
-  // Snap on mount AND whenever the user kicks off their own post
-  // (tentativeText becomes truthy). followOnNew = myThread.length
-  // hand-rolls the "follow new messages if I'm already at the
-  // bottom" behaviour because Chrome's CSS scroll-anchoring under
-  // column-reverse sometimes refuses to follow new content — the
-  // hook's near-bottom guard preserves the "scroll up to read
-  // history without being yanked back" behaviour.
-  useSnapToBottom(threadRef, {
-    reversed: true,
-    deps: [tentativeText],
-    followOnNew: [myThread.length],
-  });
+  // Snap to the bottom on mount and when the user starts their own
+  // post (tentativeText flip). Following incoming messages while at
+  // the bottom, and staying put when scrolled up, is handled by
+  // column-reverse in CSS — no JS follow loop needed.
+  useSnapToBottom(threadRef, { reversed: true, deps: [tentativeText] });
 
   const handleImageFiles = async (files: File[]) => {
     if (files.length === 0) return;

@@ -81,18 +81,10 @@ export function ItemCard({
     setExpandedMsg(it);
   }, []);
 
-  // column-reverse + scroll-anchoring keeps the visual bottom pinned
-  // once mounted; this hook makes sure the first paint + the next
-  // few hydration frames land there, re-snaps when the user starts
-  // their own post (tentativeText flip), and follows incoming
-  // messages when the user is already near the bottom (followOnNew)
-  // because Chrome's CSS scroll-anchoring under column-reverse can
-  // refuse to do the follow on its own.
-  useSnapToBottom(threadRef, {
-    reversed: true,
-    deps: [tentativeText],
-    followOnNew: [myThread.length],
-  });
+  // Snap to the bottom on mount and when the user starts their own
+  // post. Following new messages / staying put on scroll-up is
+  // handled by column-reverse in CSS.
+  useSnapToBottom(threadRef, { reversed: true, deps: [tentativeText] });
 
   const handleImageFiles = async (files: File[]) => {
     if (files.length === 0) return;
