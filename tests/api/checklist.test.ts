@@ -136,3 +136,74 @@ describe("decision checklist (record / update / mark)", () => {
     expect(r.json.error).toContain("invalid status");
   });
 });
+
+describe("settled injection (checklist boards roll up)", () => {
+  test("settling a board WITH a checklist node queues a checklist_settled reminder", async () => {
+    const c = await post<{ board_id: string }>(`${broker.url}/create-board`, {
+      session_id: sessionId,
+      structure: {
+        title: "S",
+        concerns: [
+          {
+            id: "c2",
+            title: "C2",
+            items: [
+              { id: "cl", title: "Checklist" },
+              { id: "d1", title: "Decision" },
+            ],
+          },
+        ],
+      },
+    });
+    const bid = c.json.board_id;
+    await post(`${broker.url}/set-node-checklist`, {
+      board_id: bid,
+      node_id: "cl",
+    });
+    await post(`${broker.url}/set-node-status`, {
+      board_id: bid,
+      node_id: "cl",
+      status: "adopted",
+    });
+    const r = await post<{ board_status_changed?: { to: string } }>(
+      `${broker.url}/set-node-status`,
+      { board_id: bid, node_id: "d1", status: "adopted" },
+    );
+    expect(r.json.board_status_changed?.to).toBe("settled");
+
+    const poll = await post<{ messages: any[] }>(
+      `${broker.url}/poll-messages`,
+      { session_id: sessionId },
+    );
+    const reminder = poll.json.messages.find(
+      (m) => m.kind === "checklist_settled" && m.board_id === bid,
+    );
+    expect(reminder).toBeTruthy();
+    expect(reminder.node_id).toBe("cl");
+    expect(reminder.text).toContain("settled");
+  });
+
+  test("settling a board WITHOUT a checklist node queues no reminder", async () => {
+    const c = await post<{ board_id: string }>(`${broker.url}/create-board`, {
+      session_id: sessionId,
+      structure: {
+        title: "N",
+        concerns: [{ id: "c3", title: "C3", items: [{ id: "x1", title: "X" }] }],
+      },
+    });
+    const bid = c.json.board_id;
+    await post(`${broker.url}/set-node-status`, {
+      board_id: bid,
+      node_id: "x1",
+      status: "adopted",
+    });
+    const poll = await post<{ messages: any[] }>(
+      `${broker.url}/poll-messages`,
+      { session_id: sessionId },
+    );
+    const reminder = poll.json.messages.find(
+      (m) => m.kind === "checklist_settled" && m.board_id === bid,
+    );
+    expect(reminder).toBeFalsy();
+  });
+});

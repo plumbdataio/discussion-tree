@@ -14,6 +14,7 @@ import {
   updateNodeStatus,
 } from "./db.ts";
 import { broadcast } from "./ws.ts";
+import { onBoardSettled } from "./checklist.ts";
 import {
   DEFAULT_BOARD_LOCKED_ERROR,
   isDefaultBoard,
@@ -50,6 +51,9 @@ function syncBoardStatus(
   if (!next) return null;
   broadcast(boardId, { type: "board-status-update", status: next });
   if (before && before.status !== next) {
+    // A board carrying a checklist node just landed on a verdict — nudge the
+    // owner to reconcile the checklist + leave a memory pointer.
+    if (next === "settled") onBoardSettled(boardId);
     return { from: before.status, to: next };
   }
   return null;

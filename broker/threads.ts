@@ -19,6 +19,7 @@ import {
   updateNodeStatus,
 } from "./db.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
+import { onBoardSettled } from "./checklist.ts";
 import { SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
 import { buildNodePath } from "./helpers.ts";
 import { ensureBoardLogNode } from "./structure-log.ts";
@@ -38,6 +39,7 @@ function syncBoardStatus(
   if (!next) return null;
   broadcast(boardId, { type: "board-status-update", status: next });
   if (before && before.status !== next) {
+    if (next === "settled") onBoardSettled(boardId);
     return { from: before.status, to: next };
   }
   return null;

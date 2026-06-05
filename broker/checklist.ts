@@ -3,7 +3,7 @@
 // update_decision MCP tools. Each row in checklist_items is one tracked
 // decision under a node flagged is_checklist=1.
 
-import { db } from "./db.ts";
+import { db, insertPending } from "./db.ts";
 import { broadcast } from "./ws.ts";
 
 const insertItem = db.prepare(
@@ -22,6 +22,12 @@ const selectNode = db.prepare(
 );
 const setNodeChecklist = db.prepare(
   `UPDATE nodes SET is_checklist = ? WHERE board_id = ? AND id = ? AND deleted_at IS NULL`,
+);
+const selectChecklistNodeOnBoard = db.prepare(
+  `SELECT id FROM nodes WHERE board_id = ? AND is_checklist = 1 AND deleted_at IS NULL ORDER BY position LIMIT 1`,
+);
+const selectBoardOwnerTitle = db.prepare(
+  `SELECT session_id, title FROM boards WHERE id = ?`,
 );
 
 const VALID_STATUS = new Set(["pending", "in-progress", "done", "dropped"]);
@@ -136,6 +142,38 @@ export function handleSetNodeChecklist(body: {
   setNodeChecklist.run(body.is_checklist === false ? 0 : 1, board_id, node_id);
   broadcast(board_id, { type: "structure-update" });
   return { ok: true };
+}
+
+// Fire-once when a board that carries a checklist node rolls up to "settled":
+// remind the owner session to reconcile the checklist and leave a memory
+// pointer (so the link survives a compact). Called from syncBoardStatus on a
+// genuine transition INTO settled. Delivered as a pending_message with a
+// dedicated kind so poll.ts pushes it as a plain channel note (no UI-mirror
+// reminder appended) and WITHOUT bumping the unanswered-post counter
+// (insertPending alone doesn't touch it — only handleSubmitAnswer does).
+export function onBoardSettled(boardId: string): void {
+  const cn = selectChecklistNodeOnBoard.get(boardId) as
+    | { id: string }
+    | undefined;
+  if (!cn) return; // no checklist node on this board — nothing to remind about
+  const board = selectBoardOwnerTitle.get(boardId) as
+    | { session_id: string; title: string }
+    | undefined;
+  if (!board) return;
+  const text =
+    `[discussion-tree] このボード「${board.title}」が settled になりました。\n` +
+    `1. チェックリストノード(${cn.id})に、この議論で決まったことが record_decision で全て反映されているか最終確認を。\n` +
+    `2. 今後、別のボードや general でこのチェックリストの管理対象に当たる話が出たら、必ず ${cn.id} に追加すること。\n` +
+    `3. 以降 discussion-tree 側の自動リマインダは効きません(特に compact を跨ぐと board ごと忘れます)。必要なら「${board.title}のチェックリストは ${boardId}/${cn.id} にあり」とメモリに簡潔な pointer を残すこと。`;
+  insertPending.run(
+    board.session_id,
+    boardId,
+    cn.id,
+    "", // node_path — not a user reply, no path needed
+    text,
+    new Date().toISOString(),
+    "checklist_settled",
+  );
 }
 
 export const routes = {
