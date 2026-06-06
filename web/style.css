@@ -3847,14 +3847,16 @@ button.secondary {
    the auto-zoom never triggers. We deliberately do NOT set viewport
    maximum-scale — that would kill pinch-zoom entirely; this keeps it. */
 @media (max-width: 768px) {
-  /* Match the per-field selectors' specificity (e.g. textarea.answer-input
-     sets 13px) so this actually wins; bare `textarea` would lose to it. */
+  /* iOS zooms on focus of any field < 16px. Several fields set 13/14px via
+     compound selectors (e.g. .node-modal-input .answer-input,
+     .default-board-input .answer-input) that out-specify a plain selector, so
+     force 16px with !important to cover every textarea / input / select
+     wherever it's nested. We deliberately do NOT set viewport maximum-scale,
+     so pinch-zoom still works. */
   textarea,
   input,
-  select,
-  textarea.answer-input,
-  .modal-textarea {
-    font-size: 16px;
+  select {
+    font-size: 16px !important;
   }
 }
 
