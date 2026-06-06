@@ -11,6 +11,11 @@ import {
 } from "../utils/api.ts";
 import { translateError } from "../utils/errors.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
+import { useDraft } from "../utils/drafts.ts";
+
+// Synthetic node id for the board-level structure-request draft (it isn't
+// tied to any one node), so the in-flight request survives a reload / nav.
+const STRUCTURE_DRAFT_NODE = "__structure_request__";
 
 // Free-text modal for asking the CC to restructure a board (add a concern,
 // add an item under an existing concern, rename, etc). The submission rides
@@ -33,7 +38,9 @@ export function BoardStructureRequestModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const [text, setText] = useState("");
+  // localStorage-backed so a long structure request isn't lost on reload /
+  // accidental close (same persistence the per-node reply textareas get).
+  const [text, setText, clearText] = useDraft(boardId, STRUCTURE_DRAFT_NODE);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -154,6 +161,7 @@ export function BoardStructureRequestModal({
         return;
       }
       setSending(false);
+      clearText();
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

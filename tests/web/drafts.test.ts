@@ -182,4 +182,43 @@ describe("useDraft", () => {
     a.unmount();
     b.unmount();
   });
+
+  // Same-tab live sync: the node-modal preview and the underlying ItemCard
+  // share a (board, node) draft and must stay in step without a reload.
+  describe("live sync across instances on the same key", () => {
+    test("an update in one instance shows in a sibling instance", async () => {
+      const a = await mountUseDraft("bd", "shared");
+      const b = await mountUseDraft("bd", "shared");
+      await act(async () => {
+        a.out.api![1]("typed in the preview");
+      });
+      expect(b.out.api![0]).toBe("typed in the preview");
+      a.unmount();
+      b.unmount();
+    });
+
+    test("clear() in one instance empties the sibling", async () => {
+      localStorage.setItem(KEY("bd", "shared"), "seed");
+      const a = await mountUseDraft("bd", "shared");
+      const b = await mountUseDraft("bd", "shared");
+      expect(b.out.api![0]).toBe("seed");
+      await act(async () => {
+        a.out.api![2]();
+      });
+      expect(b.out.api![0]).toBe("");
+      a.unmount();
+      b.unmount();
+    });
+
+    test("instances on different keys do not cross-sync", async () => {
+      const a = await mountUseDraft("bd", "n1");
+      const b = await mountUseDraft("bd", "n2");
+      await act(async () => {
+        a.out.api![1]("only n1");
+      });
+      expect(b.out.api![0]).toBe("");
+      a.unmount();
+      b.unmount();
+    });
+  });
 });

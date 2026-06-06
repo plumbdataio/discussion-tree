@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Filter } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { NODE_STATUSES } from "../utils/constants.ts";
@@ -10,17 +11,49 @@ import { useNodeStatusFilter } from "../utils/nodeStatusFilter.ts";
 // ItemCard pick up the change without prop drilling, and each board
 // remembers its own selection. Lives next to the structure-request
 // button in the BoardApp header (skipped on the default board).
+//
+// The popover is portaled to <body> with fixed positioning: on mobile the
+// header is a horizontal scroll container (overflow-x:auto forces overflow-y
+// to clip), so an in-flow absolute popover would be cut off below the header
+// edge. Portaling escapes both that clip and any header stacking context.
 export function NodeStatusFilterButton({ boardId }: { boardId: string }) {
   const { t } = useTranslation();
   const [filter, setOne, reset] = useNodeStatusFilter(boardId);
   const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  // Position the portaled popover under the trigger, clamped into the
+  // viewport. Re-run on open and whenever the page scrolls / resizes (the
+  // header itself scrolls horizontally on mobile, moving the trigger).
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const el = triggerRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const width = 220;
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+      setPos({ top: r.bottom + 6, left });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
-      if (!wrapperRef.current) return;
-      if (!wrapperRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      // Clicks inside the trigger OR the portaled popover keep it open.
+      if (triggerRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -38,8 +71,9 @@ export function NodeStatusFilterButton({ boardId }: { boardId: string }) {
   const isFiltered = enabledCount < total;
 
   return (
-    <div className="node-status-filter" ref={wrapperRef}>
+    <div className="node-status-filter">
       <button
+        ref={triggerRef}
         type="button"
         className={
           "node-status-filter-trigger" + (isFiltered ? " is-filtered" : "")
@@ -57,36 +91,44 @@ export function NodeStatusFilterButton({ boardId }: { boardId: string }) {
           })}
         </span>
       </button>
-      {open && (
-        <div className="node-status-filter-popover" role="dialog">
-          <div className="node-status-filter-list">
-            {NODE_STATUSES.map((s) => (
-              <label key={s} className="node-status-filter-row">
-                <input
-                  type="checkbox"
-                  checked={filter[s] !== false}
-                  onChange={(e) => setOne(s, e.target.checked)}
-                />
-                <span className={`node-status-filter-label status-${s}`}>
-                  {t([`node_status.${s}`, s])}
-                </span>
-              </label>
-            ))}
-          </div>
-          {isFiltered && (
-            <button
-              type="button"
-              className="node-status-filter-reset"
-              onClick={() => {
-                reset();
-                setOpen(false);
-              }}
-            >
-              {t("node_status_filter.reset")}
-            </button>
-          )}
-        </div>
-      )}
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            className="node-status-filter-popover is-portaled"
+            role="dialog"
+            style={{ top: pos.top, left: pos.left }}
+          >
+            <div className="node-status-filter-list">
+              {NODE_STATUSES.map((s) => (
+                <label key={s} className="node-status-filter-row">
+                  <input
+                    type="checkbox"
+                    checked={filter[s] !== false}
+                    onChange={(e) => setOne(s, e.target.checked)}
+                  />
+                  <span className={`node-status-filter-label status-${s}`}>
+                    {t([`node_status.${s}`, s])}
+                  </span>
+                </label>
+              ))}
+            </div>
+            {isFiltered && (
+              <button
+                type="button"
+                className="node-status-filter-reset"
+                onClick={() => {
+                  reset();
+                  setOpen(false);
+                }}
+              >
+                {t("node_status_filter.reset")}
+              </button>
+            )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

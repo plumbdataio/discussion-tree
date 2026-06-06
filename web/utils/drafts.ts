@@ -6,9 +6,24 @@
 import { useEffect, useRef, useState } from "react";
 
 const PREFIX = "dt-draft";
+// Same-tab live sync: when one useDraft instance edits, siblings bound to the
+// same (board, node) key update immediately (e.g. the node-modal preview and
+// the underlying ItemCard share a draft — typing in one must show in the
+// other without a reload). localStorage's own `storage` event only fires in
+// OTHER tabs, so we broadcast within the tab ourselves.
+const SYNC_EVENT = "dt-draft-sync";
 
 function key(boardId: string, nodeId: string): string {
   return `${PREFIX}:${boardId}:${nodeId}`;
+}
+
+function broadcast(k: string, value: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { key: k, value } }));
+  } catch {
+    /* ignore */
+  }
 }
 
 function read(boardId: string, nodeId: string): string {
@@ -57,6 +72,10 @@ export function useDraft(
   nodeId: string,
 ): [string, DraftSetter, () => void] {
   const [value, setValue] = useState<string>(() => read(boardId, nodeId));
+  // Mirror the latest value in a ref so the sync listener can skip its own
+  // broadcasts (and no-ops) without re-subscribing on every keystroke.
+  const valueRef = useRef(value);
+  valueRef.current = value;
   // Re-hydrate when the (board, node) changes — typical when a parent
   // remounts the textarea for a different node without a full route swap.
   const lastKey = useRef(key(boardId, nodeId));
@@ -111,17 +130,30 @@ export function useDraft(
     };
   }, []);
 
+  // Same-tab live sync: adopt a sibling instance's edit for the same key.
+  // The originator's own broadcast is skipped (value already matches its ref).
+  useEffect(() => {
+    const k = key(boardId, nodeId);
+    const onSync = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { key: string; value: string };
+      if (!detail || detail.key !== k) return;
+      if (detail.value === valueRef.current) return;
+      valueRef.current = detail.value;
+      setValue(detail.value);
+    };
+    window.addEventListener(SYNC_EVENT, onSync);
+    return () => window.removeEventListener(SYNC_EVENT, onSync);
+  }, [boardId, nodeId]);
+
   const update = (next: string | ((prev: string) => string)) => {
-    setValue((cur) => {
-      const resolved = typeof next === "function" ? next(cur) : next;
-      pendingWrite.current = { boardId, nodeId, value: resolved };
-      if (writeTimer.current) clearTimeout(writeTimer.current);
-      writeTimer.current = setTimeout(
-        () => flushRef.current(),
-        WRITE_DEBOUNCE_MS,
-      );
-      return resolved;
-    });
+    const resolved =
+      typeof next === "function" ? next(valueRef.current) : next;
+    valueRef.current = resolved;
+    setValue(resolved);
+    pendingWrite.current = { boardId, nodeId, value: resolved };
+    if (writeTimer.current) clearTimeout(writeTimer.current);
+    writeTimer.current = setTimeout(() => flushRef.current(), WRITE_DEBOUNCE_MS);
+    broadcast(key(boardId, nodeId), resolved);
   };
   const clear = () => {
     if (writeTimer.current) {
@@ -129,8 +161,10 @@ export function useDraft(
       writeTimer.current = null;
     }
     pendingWrite.current = null;
+    valueRef.current = "";
     setValue("");
     clearDraft(boardId, nodeId);
+    broadcast(key(boardId, nodeId), "");
   };
   return [value, update, clear];
 }
