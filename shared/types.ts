@@ -173,6 +173,10 @@ export interface PendingMessage {
   text: string;
   created_at: string;
   kind?: string | null;
+  // thread_items.id of the user reply materialized for this message at
+  // delivery (user_input_relay only) — surfaced to CC as channel meta
+  // message_id. NULL for structure-requests / plain notes.
+  thread_item_id?: number | null;
 }
 
 // Broker request/response types.

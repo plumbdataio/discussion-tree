@@ -162,6 +162,11 @@ safeAlter(
 safeAlter(
   "ALTER TABLE pending_messages ADD COLUMN cancelled INTEGER NOT NULL DEFAULT 0",
 );
+// For user_input_relay, /poll-messages materializes the user's reply into its
+// node thread AT delivery and stamps the new thread_items.id here, so the
+// channel push can surface it to CC as message_id (lets a reply reference the
+// exact human message). NULL for structure-requests / plain notes.
+safeAlter("ALTER TABLE pending_messages ADD COLUMN thread_item_id INTEGER");
 
 // Anchors (= per-session pinned thread items). The "favorites" name is the
 // implementation-level term; user-facing UI calls these "anchors" / 「アンカー」.
@@ -333,6 +338,11 @@ export const selectPending = db.prepare(
 );
 export const markDelivered = db.prepare(
   `UPDATE pending_messages SET delivered = 1 WHERE id = ?`,
+);
+// Links a pending message to the thread_items row created for it at delivery
+// (see handlePollMessages), so message_id can ride the channel push.
+export const setPendingThreadItem = db.prepare(
+  `UPDATE pending_messages SET thread_item_id = ? WHERE id = ?`,
 );
 
 // --- Board status auto-rollup ---

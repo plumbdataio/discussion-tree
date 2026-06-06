@@ -16,6 +16,7 @@ import {
   recomputeBoardStatus,
   selectBoard,
   selectPending,
+  setPendingThreadItem,
   updateNodeStatus,
 } from "./db.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
@@ -89,14 +90,16 @@ export function handlePostToNode(body: any) {
   }
 
   // 1. CC message goes in first so it appears before any status_change in
-  //    the timeline.
-  insertThread.run(
+  //    the timeline. Keep its row id — returned as message_id so the caller
+  //    can reference this exact post later (e.g. as a checklist source).
+  const inserted = insertThread.run(
     body.board_id,
     body.node_id,
     "cc",
     body.message,
     new Date().toISOString(),
   );
+  const messageId = Number(inserted.lastInsertRowid);
 
   // 2. Status update + transition log (only when the status actually changed).
   let statusChanged = false;
@@ -138,8 +141,8 @@ export function handlePostToNode(body: any) {
   }
   const boardChange = syncBoardStatus(body.board_id);
   return boardChange
-    ? { ok: true, board_status_changed: boardChange }
-    : { ok: true };
+    ? { ok: true, message_id: messageId, board_status_changed: boardChange }
+    : { ok: true, message_id: messageId };
 }
 
 export async function handleSubmitAnswer(body: any): Promise<
@@ -202,11 +205,11 @@ export async function handleSubmitAnswer(body: any): Promise<
   // Poll until /poll-messages flips delivered=1, or we time out.
   const deadline = Date.now() + SUBMIT_DELIVERY_TIMEOUT_MS;
   const checkDelivered = db.prepare(
-    "SELECT delivered FROM pending_messages WHERE id = ?",
+    "SELECT delivered, thread_item_id FROM pending_messages WHERE id = ?",
   );
   while (Date.now() < deadline) {
     const row = checkDelivered.get(pendingId) as
-      | { delivered: number }
+      | { delivered: number; thread_item_id: number | null }
       | null;
     if (row?.delivered === 1) {
       // Bump the owning session's unanswered-user-post counter. Counts both
@@ -235,9 +238,14 @@ export async function handleSubmitAnswer(body: any): Promise<
         }
         return { ok: true };
       }
-      // Delivered: NOW persist into the public thread + broadcast so every
-      // connected client (incl. the submitter) sees the real message.
-      insertThread.run(body.board_id, body.node_id, "user", body.text, now);
+      // Delivered: handlePollMessages already materialized the user's reply
+      // into the thread at the delivery moment (so its id could ride the
+      // channel push as message_id). Fallback-insert only if that somehow
+      // didn't happen. Either way we broadcast below so every connected
+      // client (incl. the submitter) sees the real message.
+      if (row.thread_item_id == null) {
+        insertThread.run(body.board_id, body.node_id, "user", body.text, now);
+      }
       // A user reply pulls the node back into 'discussing' from 'pending' or
       // 'needs-reply'. Capture the old status first so we can log the
       // transition + broadcast a status-update (otherwise the sidebar's
@@ -282,8 +290,11 @@ export async function handleSubmitAnswer(body: any): Promise<
   }
 
   // Timeout: mark cancelled so a late MCP poll won't deliver a stale message
-  // the user has likely retried by hand.
-  db.run("UPDATE pending_messages SET cancelled = 1 WHERE id = ?", [
+  // the user has likely retried by hand. Guard on delivered=0 so a delivery
+  // that landed at the buzzer (poll ran, thread item + message_id created) is
+  // not clobbered. No thread-item cleanup needed: the row is only created at
+  // delivery, so a timed-out (never-delivered) message left none behind.
+  db.run("UPDATE pending_messages SET cancelled = 1 WHERE id = ? AND delivered = 0", [
     pendingId,
   ]);
   return {
@@ -295,7 +306,29 @@ export async function handleSubmitAnswer(body: any): Promise<
 
 export function handlePollMessages(body: any) {
   const messages = selectPending.all(body.session_id) as any[];
-  for (const m of messages) markDelivered.run(m.id);
+  for (const m of messages) {
+    const kind = m.kind ?? "user_input_relay";
+    // Materialize a user reply into its node's thread AT delivery and capture
+    // the new thread_items.id, so it can ride this poll's channel push as
+    // message_id (lets CC reference the exact human message). Only
+    // user_input_relay: structure-requests mirror onto the board log node in
+    // handleSubmitAnswer, and checklist/feedback notes are plain notes with no
+    // thread item. handleSubmitAnswer, on seeing delivered=1, broadcasts and
+    // bumps node status off this same row (and falls back to inserting the
+    // thread item if for any reason this didn't run).
+    if (kind === "user_input_relay" && m.node_id) {
+      const r = insertThread.run(
+        m.board_id,
+        m.node_id,
+        "user",
+        m.text,
+        m.created_at,
+      );
+      m.thread_item_id = Number(r.lastInsertRowid);
+      setPendingThreadItem.run(m.thread_item_id, m.id);
+    }
+    markDelivered.run(m.id);
+  }
   return { messages };
 }
 

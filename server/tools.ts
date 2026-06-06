@@ -662,7 +662,11 @@ export async function dispatchToolCall(
           status: string;
         };
         const res = await brokerFetch<
-          BoardStatusChangeResponse & { ok?: boolean; error?: string }
+          BoardStatusChangeResponse & {
+            ok?: boolean;
+            error?: string;
+            message_id?: number;
+          }
         >("/post-to-node", {
           session_id: sessionId,
           board_id: a.board_id,
@@ -673,8 +677,12 @@ export async function dispatchToolCall(
         if (res && res.ok === false) {
           return textResult(res.error ?? "post_to_node failed", true);
         }
+        // Surface message_id so you can reference this exact post later (e.g.
+        // as a checklist source via record_decision sources=[{kind:"message", id}]).
+        const idNote =
+          res?.message_id != null ? `, message_id=${res.message_id}` : "";
         return textResult(
-          `Posted to node ${a.node_id} (board ${a.board_id}, status=${a.status})` +
+          `Posted to node ${a.node_id} (board ${a.board_id}, status=${a.status}${idNote})` +
             boardStatusChangeNote(a.board_id, res),
         );
       }

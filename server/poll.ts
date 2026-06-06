@@ -97,6 +97,10 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
             node_id: msg.node_id,
             node_path: msg.node_path,
             sent_at: msg.created_at,
+            // thread_items.id of this user message — lets a reply reference
+            // the exact human message (e.g. as a checklist source). Present
+            // for user_input_relay; undefined for structure-requests / notes.
+            message_id: msg.thread_item_id ?? undefined,
           },
         },
       });
