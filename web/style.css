@@ -4037,6 +4037,79 @@ button.secondary {
 .checklist-status-dropped .checklist-summary {
   text-decoration: line-through;
 }
+
+/* Source citations (where the decision was made). A trailing toggle on each
+   item with sources expands an inline list of links — a message jumps to the
+   exact thread item, a node / board opens its board. */
+.checklist-source-toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 1px;
+  padding: 1px 4px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  color: #7c3aed;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.32);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.checklist-source-toggle:hover,
+.checklist-source-toggle.open {
+  background: rgba(139, 92, 246, 0.2);
+}
+.checklist-source-count {
+  font-variant-numeric: tabular-nums;
+}
+.checklist-sources {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.checklist-source-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 6px;
+  font-size: 11px;
+  text-align: left;
+  color: var(--text);
+  text-decoration: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.checklist-source-row:hover {
+  border-color: rgba(139, 92, 246, 0.5);
+  background: rgba(139, 92, 246, 0.08);
+}
+.checklist-source-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: #7c3aed;
+}
+.checklist-source-label {
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+.checklist-source-ref {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
 .checklist-empty {
   color: var(--muted);
   font-size: 12px;

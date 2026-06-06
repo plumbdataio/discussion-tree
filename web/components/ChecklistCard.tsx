@@ -4,7 +4,11 @@ import {
   CheckSquare,
   ChevronDown,
   ChevronUp,
+  LayoutGrid,
+  Link2,
   Maximize2,
+  MessageSquare,
+  Network,
   RefreshCw,
   Square,
   X,
@@ -12,10 +16,13 @@ import {
 } from "lucide-react";
 import type {
   ChecklistItem,
+  ChecklistItemSource,
   ChecklistItemStatus,
+  ChecklistSourceKind,
   Node,
 } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
+import { jumpToAnchor } from "../utils/anchorJump.ts";
 
 // Read-only renderer for a decision-checklist node (is_checklist=1). The
 // node's checklist_items are mutated only through CC tools — this surface
@@ -30,6 +37,78 @@ const STATUS_ICON: Record<
   pending: Square,
   dropped: XSquare,
 };
+
+// Source kind → icon + label. A source cites where the decision was made:
+// a whole board, a node, or a specific message.
+const SOURCE_ICON: Record<
+  ChecklistSourceKind,
+  React.ComponentType<{ size?: number; strokeWidth?: number }>
+> = {
+  board: LayoutGrid,
+  node: Network,
+  message: MessageSquare,
+};
+const SOURCE_LABEL: Record<ChecklistSourceKind, string> = {
+  board: "ボード",
+  node: "ノード",
+  message: "メッセージ",
+};
+
+// One source row inside the expanded list. A message jumps straight to that
+// thread item (via the anchor-jump channel); a node / board is a plain SPA
+// link the global interceptor handles (so Cmd-click still opens a new tab).
+function SourceRow({ source }: { source: ChecklistItemSource }) {
+  const kind = (source.kind in SOURCE_ICON ? source.kind : "node") as
+    | ChecklistSourceKind;
+  const Icon = SOURCE_ICON[kind];
+  const label = SOURCE_LABEL[kind];
+  const ref = (
+    <>
+      <span className="checklist-source-icon" aria-hidden="true">
+        <Icon size={13} strokeWidth={2} />
+      </span>
+      <span className="checklist-source-label">{label}</span>
+      <span className="checklist-source-ref" title={source.ref_id}>
+        {source.ref_id}
+      </span>
+    </>
+  );
+  if (kind === "message") {
+    return (
+      <button
+        type="button"
+        className={`checklist-source-row checklist-source-${kind}`}
+        onClick={() => jumpToAnchor(source.board_id, Number(source.ref_id))}
+        title="このメッセージへ移動"
+      >
+        {ref}
+      </button>
+    );
+  }
+  const href =
+    kind === "board" ? `/board/${source.ref_id}` : `/board/${source.board_id}`;
+  return (
+    <a
+      className={`checklist-source-row checklist-source-${kind}`}
+      href={href}
+      title={kind === "board" ? "このボードを開く" : "このノードのボードを開く"}
+    >
+      {ref}
+    </a>
+  );
+}
+
+function SourceList({ sources }: { sources: ChecklistItemSource[] }) {
+  return (
+    <ul className="checklist-sources">
+      {sources.map((s) => (
+        <li key={s.id}>
+          <SourceRow source={s} />
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 // Status sort rank — ascending groups "not yet checked" (pending →
 // in-progress) first, then done, then dropped. Distinct from position
@@ -146,6 +225,8 @@ function SortControls({
 
 function ChecklistBody({ node, sort }: { node: Node; sort: Sort }) {
   const items = node.checklist_items ?? [];
+  // Which item's source list is expanded (one at a time per body instance).
+  const [openSources, setOpenSources] = useState<number | null>(null);
   if (items.length === 0) {
     return <div className="checklist-empty">まだ項目がありません</div>;
   }
@@ -154,6 +235,8 @@ function ChecklistBody({ node, sort }: { node: Node; sort: Sort }) {
     <ul className="checklist-items">
       {ordered.map((it) => {
         const Icon = STATUS_ICON[it.status] ?? Square;
+        const sources = it.sources ?? [];
+        const open = openSources === it.id;
         return (
           <li
             key={it.id}
@@ -173,7 +256,21 @@ function ChecklistBody({ node, sort }: { node: Node; sort: Sort }) {
                   却下理由: {it.drop_reason}
                 </span>
               )}
+              {open && sources.length > 0 && <SourceList sources={sources} />}
             </span>
+            {sources.length > 0 && (
+              <button
+                type="button"
+                className={"checklist-source-toggle" + (open ? " open" : "")}
+                aria-expanded={open}
+                aria-label={`出典 ${sources.length} 件`}
+                title={`出典 ${sources.length} 件`}
+                onClick={() => setOpenSources(open ? null : it.id)}
+              >
+                <Link2 size={13} strokeWidth={2} />
+                <span className="checklist-source-count">{sources.length}</span>
+              </button>
+            )}
           </li>
         );
       })}
