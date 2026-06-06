@@ -4,6 +4,21 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>discussion-tree</title>
+    <!-- Launch as a standalone web app when added to the iOS/Android home
+         screen, so tapping the icon reuses the single app window instead of
+         spawning a new Safari tab each time. (iOS only reads these at
+         "Add to Home Screen" time — an existing icon must be re-added.) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="discussion-tree" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="theme-color" content="#a855f7" />
+    <!-- The manifest <link> is injected at runtime (see frontend.tsx) because
+         the Bun HTML bundler tries to resolve a build-time href; the manifest
+         is served dynamically by the broker at /manifest.webmanifest. -->
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>

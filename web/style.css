@@ -3841,6 +3841,23 @@ button.secondary {
   box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.18);
 }
 
+/* iOS Safari auto-zooms the page when you focus a text field whose font is
+   smaller than 16px, and recovering with pinch is fiddly (overshoot drops you
+   on the tab switcher). Bump every focusable field to 16px on small screens so
+   the auto-zoom never triggers. We deliberately do NOT set viewport
+   maximum-scale — that would kill pinch-zoom entirely; this keeps it. */
+@media (max-width: 768px) {
+  /* Match the per-field selectors' specificity (e.g. textarea.answer-input
+     sets 13px) so this actually wins; bare `textarea` would lose to it. */
+  textarea,
+  input,
+  select,
+  textarea.answer-input,
+  .modal-textarea {
+    font-size: 16px;
+  }
+}
+
 .modal-error {
   color: #dc2626;
   font-size: 13px;

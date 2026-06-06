@@ -111,6 +111,23 @@ const server = Bun.serve({
       return Response.json({ status: "ok" });
     }
 
+    // Web app manifest — display:standalone is what makes the home-screen
+    // icon open in its own single-instance window (no duplicate Safari tabs).
+    if (req.method === "GET" && path === "/manifest.webmanifest") {
+      return new Response(
+        JSON.stringify({
+          name: "discussion-tree",
+          short_name: "dt",
+          start_url: "/",
+          scope: "/",
+          display: "standalone",
+          background_color: "#ffffff",
+          theme_color: "#a855f7",
+        }),
+        { headers: { "content-type": "application/manifest+json" } },
+      );
+    }
+
     if (req.method === "GET" && path.startsWith("/api/board/")) {
       const id = path.slice("/api/board/".length);
       const view = getBoardView(id);

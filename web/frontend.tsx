@@ -103,5 +103,17 @@ if ("scrollRestoration" in history) {
   history.scrollRestoration = "manual";
 }
 
+// Point at the web app manifest (served dynamically by the broker). Injected
+// here rather than in index.html so the Bun HTML bundler doesn't try to
+// resolve it as a build-time asset. display:standalone in the manifest, plus
+// the apple-mobile-web-app meta tags, make the home-screen icon open as a
+// single-instance app instead of spawning a new Safari tab each tap.
+if (typeof document !== "undefined" && !document.querySelector("link[rel=manifest]")) {
+  const link = document.createElement("link");
+  link.rel = "manifest";
+  link.href = "/manifest.webmanifest";
+  document.head.appendChild(link);
+}
+
 const root = createRoot(document.getElementById("root")!);
 root.render(<App />);
