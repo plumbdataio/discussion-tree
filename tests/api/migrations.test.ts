@@ -2,7 +2,13 @@ import { describe, test, expect } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { startBroker, post, registerSession } from "../harness/broker-harness.ts";
+import {
+  startBroker,
+  post,
+  get,
+  registerSession,
+  attachCC,
+} from "../harness/broker-harness.ts";
 
 describe("migrations are idempotent across broker restarts", () => {
   test("starting twice on the same DB does not error or lose data", async () => {
@@ -29,6 +35,50 @@ describe("migrations are idempotent across broker restarts", () => {
         session_id: sid,
       });
       expect(r.json.ok).toBe(true);
+
+      // The checklist + sources schema (added later) must work after a
+      // second migration pass on an existing DB.
+      await attachCC(second.url, sid);
+      const c = await post<{ board_id: string }>(
+        `${second.url}/create-board`,
+        {
+          session_id: sid,
+          structure: {
+            title: "Mig",
+            concerns: [
+              {
+                id: "c1",
+                title: "C1",
+                items: [
+                  { id: "cl", title: "Checklist" },
+                  { id: "dec", title: "Decision" },
+                ],
+              },
+            ],
+          },
+        },
+      );
+      const bid = c.json.board_id;
+      await post(`${second.url}/set-node-checklist`, {
+        board_id: bid,
+        node_id: "cl",
+      });
+      const rec = await post<{ ok: boolean; item_id: number }>(
+        `${second.url}/record-decision`,
+        {
+          board_id: bid,
+          node_id: "cl",
+          summary: "survives a re-migration",
+          sources: [{ kind: "node", id: "dec" }],
+        },
+      );
+      expect(rec.json.ok).toBe(true);
+      const v = await get<any>(`${second.url}/api/board/${bid}`);
+      const item = v.json.nodes
+        .find((n: any) => n.id === "cl")
+        .checklist_items.find((i: any) => i.id === rec.json.item_id);
+      expect(item.sources).toHaveLength(1);
+      expect(item.sources[0].kind).toBe("node");
     } finally {
       await second.kill();
       rmSync(homeA, { recursive: true, force: true });
