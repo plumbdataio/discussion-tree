@@ -4,7 +4,12 @@
 // decision under a node flagged is_checklist=1.
 
 import { isSettledNodeStatus } from "../shared/types.ts";
-import { db, insertPending, recomputeBoardStatus } from "./db.ts";
+import {
+  db,
+  insertChecklistSource,
+  insertPending,
+  recomputeBoardStatus,
+} from "./db.ts";
 import { broadcast } from "./ws.ts";
 
 const insertItem = db.prepare(
@@ -39,6 +44,64 @@ const selectThreadCount = db.prepare(
 
 const VALID_STATUS = new Set(["pending", "in-progress", "done", "dropped"]);
 
+const VALID_SOURCE_KIND = new Set(["board", "node", "message"]);
+const selectBoardExists = db.prepare(`SELECT 1 AS x FROM boards WHERE id = ?`);
+const selectNodeExists = db.prepare(
+  `SELECT 1 AS x FROM nodes WHERE board_id = ? AND id = ? AND deleted_at IS NULL`,
+);
+const selectThreadItemBoard = db.prepare(
+  `SELECT board_id FROM thread_items WHERE id = ?`,
+);
+
+type SourceInput = { kind?: string; id?: string | number; board?: string };
+type ResolvedSource = { kind: string; ref_id: string; board_id: string };
+
+// Validate + resolve each source ref to its owning board up-front, so a
+// record_decision writes nothing if any ref is bad (catches typos). A ref is
+// the lowest-level pointer only; node ids aren't globally unique so a node ref
+// resolves on `board` if given, else the checklist item's own board (cite a
+// message — globally unique — or a board for cross-board references).
+function resolveSources(
+  itemBoardId: string,
+  raw: SourceInput[],
+): { ok: true; resolved: ResolvedSource[] } | { ok: false; error: string } {
+  const resolved: ResolvedSource[] = [];
+  for (const s of raw) {
+    const kind = String(s.kind ?? "").trim();
+    const refId = String(s.id ?? "").trim();
+    if (!VALID_SOURCE_KIND.has(kind)) {
+      return {
+        ok: false,
+        error: `invalid source kind '${kind}' (expected board|node|message)`,
+      };
+    }
+    if (!refId) return { ok: false, error: "source id is required" };
+    if (kind === "board") {
+      if (!selectBoardExists.get(refId)) {
+        return { ok: false, error: `source board not found: ${refId}` };
+      }
+      resolved.push({ kind, ref_id: refId, board_id: refId });
+    } else if (kind === "node") {
+      const boardId = s.board ? String(s.board) : itemBoardId;
+      if (!selectNodeExists.get(boardId, refId)) {
+        return {
+          ok: false,
+          error: `source node not found: ${refId} on board ${boardId}`,
+        };
+      }
+      resolved.push({ kind, ref_id: refId, board_id: boardId });
+    } else {
+      // message: ref_id is a globally-unique thread_items.id; derive its board.
+      const row = selectThreadItemBoard.get(Number(refId)) as
+        | { board_id: string }
+        | undefined;
+      if (!row) return { ok: false, error: `source message not found: ${refId}` };
+      resolved.push({ kind, ref_id: refId, board_id: row.board_id });
+    }
+  }
+  return { ok: true, resolved };
+}
+
 // Append a decision to a checklist node as a new pending item. The node must
 // exist on the board and be flagged is_checklist=1 (created via a normal
 // node + the is_checklist property) — we don't auto-create checklist nodes.
@@ -47,6 +110,7 @@ export function handleRecordDecision(body: {
   node_id?: string;
   summary?: string;
   source_node_id?: string | null;
+  sources?: SourceInput[];
 }): { ok: boolean; item_id?: number; error?: string } {
   const { board_id, node_id } = body;
   const summary = body.summary?.trim();
@@ -64,9 +128,21 @@ export function handleRecordDecision(body: {
         "node is not a checklist node (is_checklist=0). Flag a node as a checklist node first.",
     };
   }
+  // Structured sources take precedence; source_node_id is a node shorthand.
+  // Resolve before writing anything so a bad ref leaves no orphan item.
+  const rawSources: SourceInput[] =
+    Array.isArray(body.sources) && body.sources.length > 0
+      ? body.sources
+      : body.source_node_id
+        ? [{ kind: "node", id: body.source_node_id }]
+        : [];
+  const resolution = resolveSources(board_id, rawSources);
+  if (!resolution.ok) return { ok: false, error: resolution.error };
+
   const pos =
     (((selectMaxPos.get(board_id, node_id) as { m: number | null }).m) ?? -1) +
     1;
+  const now = new Date().toISOString();
   const res = insertItem.run(
     board_id,
     node_id,
@@ -75,10 +151,14 @@ export function handleRecordDecision(body: {
     null,
     body.source_node_id ?? null,
     pos,
-    new Date().toISOString(),
+    now,
   );
+  const itemId = Number(res.lastInsertRowid);
+  resolution.resolved.forEach((s, i) => {
+    insertChecklistSource.run(itemId, s.board_id, s.kind, s.ref_id, i, now);
+  });
   broadcast(board_id, { type: "structure-update" });
-  return { ok: true, item_id: Number(res.lastInsertRowid) };
+  return { ok: true, item_id: itemId };
 }
 
 // Update a checklist item: change status, edit the summary, and/or set a
@@ -236,7 +316,8 @@ export function onNodeSettled(
   const title = node?.title ?? nodeId;
   const text =
     `[discussion-tree] ノード「${title}」の決定が確定しました。` +
-    `この決定を record_decision(board_id="${boardId}", node_id="${cn.id}", summary=<「〜であること」型の検証可能な1行>, source_node_id="${nodeId}") でチェックリストに反映してください。`;
+    `この決定を record_decision(board_id="${boardId}", node_id="${cn.id}", summary=<「〜であること」型の検証可能な1行>, sources=[{kind:"node", id:"${nodeId}"}]) でチェックリストに反映してください。` +
+    `出典(sources)は最下層の参照だけでよく、kind は board/node/message から選べます(特定メッセージを引くなら post_to_node の戻り値や受信メタの message_id を {kind:"message", id:<その id>} で指定)。`;
   insertPending.run(
     board.session_id,
     boardId,

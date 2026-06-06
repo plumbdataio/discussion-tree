@@ -218,6 +218,42 @@ db.run(
   `CREATE INDEX IF NOT EXISTS checklist_items_by_node ON checklist_items(board_id, node_id, position)`,
 );
 
+// Sources for a checklist item — where the decision was actually made. One row
+// per reference, so a single item can cite several places (a general-board
+// chat, a node, a specific message). Each ref is one lowest-level pointer:
+//   kind='board'   → ref_id = boards.id        (board_id = that same board)
+//   kind='node'    → ref_id = nodes.id         (board_id = that node's board)
+//   kind='message' → ref_id = thread_items.id  (board_id = that message's board)
+// board_id is resolved + stored at insert so the UI can build a link without
+// re-deriving it. Supersedes the single checklist_items.source_node_id
+// shorthand (kept for backward compat and backfilled just below).
+db.run(`
+  CREATE TABLE IF NOT EXISTS checklist_item_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id INTEGER NOT NULL,
+    board_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    ref_id TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  )
+`);
+db.run(
+  `CREATE INDEX IF NOT EXISTS checklist_item_sources_by_item ON checklist_item_sources(item_id, position)`,
+);
+// One-time backfill: turn every legacy source_node_id into a node source row.
+// Idempotent — skips items that already have any source row — so it's safe to
+// run on every boot.
+db.run(`
+  INSERT INTO checklist_item_sources (item_id, board_id, kind, ref_id, position, created_at)
+  SELECT ci.id, ci.board_id, 'node', ci.source_node_id, 0, ci.created_at
+  FROM checklist_items ci
+  WHERE ci.source_node_id IS NOT NULL AND ci.source_node_id != ''
+    AND NOT EXISTS (
+      SELECT 1 FROM checklist_item_sources s WHERE s.item_id = ci.id
+    )
+`);
+
 // --- Prepared statements ---
 //
 // IMPORTANT: there are intentionally NO DELETE FROM statements anywhere.
@@ -262,6 +298,12 @@ export const selectNodesByBoard = db.prepare(
 );
 export const selectChecklistItemsByNode = db.prepare(
   `SELECT * FROM checklist_items WHERE board_id = ? AND node_id = ? ORDER BY position ASC, id ASC`,
+);
+export const insertChecklistSource = db.prepare(
+  `INSERT INTO checklist_item_sources (item_id, board_id, kind, ref_id, position, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+);
+export const selectChecklistSourcesByItem = db.prepare(
+  `SELECT * FROM checklist_item_sources WHERE item_id = ? ORDER BY position ASC, id ASC`,
 );
 export const selectMaxPosRoot = db.prepare(
   `SELECT MAX(position) AS max_pos FROM nodes WHERE board_id = ? AND parent_id IS NULL`,

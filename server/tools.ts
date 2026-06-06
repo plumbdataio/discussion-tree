@@ -464,7 +464,7 @@ export const TOOLS = [
   {
     name: "record_decision",
     description:
-      "Append a decision to a decision-checklist node as a new checklist item (status=pending). Use this whenever a node settles to a verdict (adopted / agreed / resolved / rejected): capture the decision as a short, verifiable acceptance-criterion-style line (\"X であること。背景: …\") so the board accumulates an implementation checklist for later verification. The target node_id MUST be a node already flagged as a checklist node (is_checklist=1) — checklist nodes are NOT auto-created. Optionally pass source_node_id to link the item back to the node where the decision was made.",
+      "Append a decision to a decision-checklist node as a new checklist item (status=pending). Use this whenever a node settles to a verdict (adopted / agreed / resolved / rejected): capture the decision as a short, verifiable acceptance-criterion-style line (\"X であること。背景: …\") so the board accumulates an implementation checklist for later verification. The target node_id MUST be a node already flagged as a checklist node (is_checklist=1) — checklist nodes are NOT auto-created. Cite where the decision was made via `sources` (preferred): an array of lowest-level pointers, each {kind, id} where kind is board | node | message. A message id is a thread_items.id — get one from post_to_node's returned message_id (your own post) or a received channel message's meta.message_id (a human reply). For a node on a different board, add board:\"bd_…\". (source_node_id is the legacy single-node shorthand, still accepted.)",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -481,10 +481,24 @@ export const TOOLS = [
           description:
             "The decision as a verifiable acceptance-criterion line (2-3 sentences: what to check + why).",
         },
+        sources: {
+          type: "array" as const,
+          description:
+            "Where this decision was made: lowest-level references only. Each item is {kind, id} with kind = board | node | message (board=boards.id, node=nodes.id, message=thread_items.id). Add board:\"bd_…\" on a node ref that lives on another board.",
+          items: {
+            type: "object" as const,
+            properties: {
+              kind: { type: "string" as const },
+              id: { type: "string" as const },
+              board: { type: "string" as const },
+            },
+            required: ["kind", "id"],
+          },
+        },
         source_node_id: {
           type: "string" as const,
           description:
-            "Optional: the node where this decision was made (renders as a link from the item).",
+            "Legacy shorthand for sources=[{kind:'node', id}] — the node where this decision was made.",
         },
       },
       required: ["board_id", "node_id", "summary"],
@@ -1032,6 +1046,7 @@ export async function dispatchToolCall(
           node_id: string;
           summary: string;
           source_node_id?: string;
+          sources?: { kind: string; id: string; board?: string }[];
         };
         const res = await brokerFetch<{
           ok: boolean;
@@ -1042,6 +1057,7 @@ export async function dispatchToolCall(
           node_id: a.node_id,
           summary: a.summary,
           source_node_id: a.source_node_id ?? null,
+          sources: a.sources,
         });
         if (!res?.ok) {
           return textResult(

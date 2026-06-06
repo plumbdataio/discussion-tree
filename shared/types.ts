@@ -103,6 +103,23 @@ export type ChecklistItemStatus =
   | "done"
   | "dropped";
 
+// A checklist source points at the lowest-level place a decision was made.
+// node ids aren't globally unique, so board_id is stored alongside to resolve
+// them (and to let the UI build a link directly).
+export type ChecklistSourceKind = "board" | "node" | "message";
+
+export interface ChecklistItemSource {
+  id: number;
+  item_id: number;
+  board_id: string;
+  kind: ChecklistSourceKind;
+  // boards.id (kind=board) | nodes.id (kind=node) | thread_items.id as a
+  // string (kind=message).
+  ref_id: string;
+  position: number;
+  created_at: string;
+}
+
 export interface ChecklistItem {
   id: number;
   board_id: string;
@@ -111,8 +128,12 @@ export interface ChecklistItem {
   status: ChecklistItemStatus;
   // Required when status === "dropped" (enforced at the tool layer).
   drop_reason?: string | null;
-  // Optional link back to the node where the decision was made.
+  // Legacy single-node shorthand. Superseded by `sources`; still written for
+  // backward compat and backfilled into sources as kind=node.
   source_node_id?: string | null;
+  // Structured citations of where the decision was made (0..N). Attached by
+  // getBoardView for is_checklist nodes.
+  sources?: ChecklistItemSource[];
   position: number;
   created_at: string;
 }

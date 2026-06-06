@@ -7,6 +7,7 @@ import { randomBytes } from "node:crypto";
 import type {
   Board,
   ChecklistItem,
+  ChecklistItemSource,
   Node,
   NodeInput,
   ThreadItem,
@@ -16,6 +17,7 @@ import {
   insertNode,
   selectBoard,
   selectChecklistItemsByNode,
+  selectChecklistSourcesByItem,
   selectMaxPosChild,
   selectMaxPosRoot,
   selectNodesByBoard,
@@ -110,10 +112,17 @@ export function getBoardView(boardId: string) {
   // nodes are left untouched (the property stays absent).
   for (const n of nodes) {
     if (n.is_checklist) {
-      n.checklist_items = selectChecklistItemsByNode.all(
+      const items = selectChecklistItemsByNode.all(
         boardId,
         n.id,
       ) as ChecklistItem[];
+      // Attach each item's structured sources (where the decision was made).
+      for (const it of items) {
+        it.sources = selectChecklistSourcesByItem.all(
+          it.id,
+        ) as ChecklistItemSource[];
+      }
+      n.checklist_items = items;
     }
   }
   const threads = selectThreadsByBoard.all(boardId) as ThreadItem[];
