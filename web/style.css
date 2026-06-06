@@ -1945,6 +1945,32 @@ body.concern-resizing * {
   display: none;
 }
 
+/* Checklist nodes render as .checklist-card (not .item-card) but must sit in
+   the tree exactly like an item: same slot width so the left edge aligns with
+   the concern + sibling cards, same vertical drop-line connector up to the
+   horizontal bar. Without this the checklist card (which is wider by default)
+   stuck out to the left and had no connector. */
+.items-row > .checklist-card {
+  flex: 0 0 360px;
+  width: 360px;
+  min-width: 0;
+  max-width: 360px;
+  position: relative;
+}
+.items-row > .checklist-card::before {
+  content: "";
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 18px;
+  background: var(--border-strong);
+}
+.items-row.single > .checklist-card::before {
+  display: none;
+}
+
 .item-card {
   background: var(--panel);
   border: 1px solid var(--border);
