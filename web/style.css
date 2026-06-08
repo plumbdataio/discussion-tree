@@ -4307,3 +4307,291 @@ button.secondary {
   font-size: 14px;
 }
 
+
+/* ===================================================================
+   Maps (divergent-discussion mind-map view)
+   A React Flow canvas + a right-hand general-chat panel. Reuses the
+   .app / .header / .sidebar shell; everything below is map-specific.
+   =================================================================== */
+
+.map-main {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+.map-canvas {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  background: var(--bg);
+}
+/* React Flow paints its own surface; let our theme bg show through and
+   strip the default node chrome so our .map-card owns the whole box. */
+.react-flow__node-mapCard {
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  width: 100%;
+  height: 100%;
+}
+.react-flow__node-mapCard.selected .map-card {
+  box-shadow: 0 0 0 2px var(--accent), 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+/* --- A map node card: title -> context -> thread -> input --- */
+.map-card {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 2px solid var(--border-strong);
+  background: var(--panel);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+.map-card-title {
+  flex: 0 0 auto;
+  padding: 9px 11px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.35;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  user-select: text;
+  cursor: text;
+  white-space: pre-wrap;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.map-card-kind {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+  align-self: flex-start;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+.map-card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 7px 9px;
+  user-select: text;
+}
+.map-card-context {
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 9px;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+.map-card-context .md-body p { margin: 0.25em 0; }
+.map-card-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* Compact thread bubbles inside the card (ThreadMessage compact mode). */
+.map-card-thread .thread-msg {
+  margin: 0;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.map-card-thread .thread-msg .who { font-size: 9px; }
+.map-card-input {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  padding: 6px 8px;
+  border-top: 1px dashed var(--border);
+}
+.map-node-input {
+  flex: 1;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  resize: none;
+  min-height: 32px;
+  max-height: 120px;
+  font-family: inherit;
+  background: var(--panel);
+  color: var(--text);
+}
+/* Per-node send button: hidden on desktop (⌘Enter sends), shown on mobile. */
+.map-node-send {
+  display: none;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.map-node-send:disabled { background: var(--border-strong); cursor: default; }
+
+/* Node kind = at-a-glance border colour (st-ibis). */
+.map-card.kind-question { border-color: #f59e0b; }
+.map-card.kind-question .map-card-kind { background: #f59e0b; }
+.map-card.kind-idea { border-color: #2563eb; }
+.map-card.kind-idea .map-card-kind { background: #2563eb; }
+.map-card.kind-research { border-color: #7c3aed; }
+.map-card.kind-research .map-card-kind { background: #7c3aed; }
+.map-card.kind-selection { border-color: #10b981; }
+.map-card.kind-selection .map-card-kind { background: #10b981; }
+.map-card.kind-note { border-color: #9ca3af; }
+.map-card.kind-note .map-card-kind { background: #9ca3af; }
+
+/* --- Right-hand general chat panel --- */
+.map-chat {
+  width: 340px;
+  flex: 0 0 340px;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  min-height: 0;
+}
+.map-chat-head {
+  flex: 0 0 auto;
+  padding: 11px 13px;
+  font-weight: 700;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--accent);
+}
+.map-chat-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 12px;
+  min-height: 0;
+}
+.map-chat-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0 0 10px;
+}
+.map-chat-input {
+  flex: 0 0 auto;
+  padding: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.map-chat-input textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font-size: 14px;
+  resize: vertical;
+  min-height: 54px;
+  font-family: inherit;
+  background: var(--panel);
+  color: var(--text);
+}
+.map-chat-send-row { display: flex; justify-content: flex-end; }
+.map-chat-send-row button {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.map-chat-send-row button:disabled { background: var(--border-strong); cursor: default; }
+
+/* Header map badge + empty/loading state. */
+.map-title-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 2px 9px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.map-missing {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* --- Sidebar: map list (distinct from boards) --- */
+ul.maps {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+}
+ul.maps li { margin: 0; }
+ul.maps li.current .sidebar-map-link { background: var(--cc); }
+.sidebar-map-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--text);
+  font-size: 13px;
+}
+.sidebar-map-link:hover { background: var(--bg); }
+.sidebar-map-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sidebar-map-icon { flex: 0 0 auto; color: var(--accent); }
+.sidebar-map-count {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--bg);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+
+@media (max-width: 768px) {
+  /* Stack canvas over chat on narrow screens; surface the per-node send
+     button (no ⌘Enter on mobile). */
+  .map-main { flex-direction: column; }
+  .map-chat {
+    width: 100%;
+    flex: 0 0 45%;
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+  .map-node-send { display: inline-block; }
+}

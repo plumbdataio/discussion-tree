@@ -15,3 +15,10 @@ export function getSessionIdFromUrl(
   const m = pathname.match(/^\/session\/([^/]+)/);
   return m ? m[1] : null;
 }
+
+export function getMapIdFromUrl(
+  pathname: string = window.location.pathname,
+): string | null {
+  const m = pathname.match(/^\/map\/([^/]+)/);
+  return m ? m[1] : null;
+}

@@ -162,6 +162,85 @@ export interface ThreadItem {
   read_at?: string | null;
 }
 
+// --- Maps (divergent-discussion mind-map) ---
+//
+// A map is the divergence-phase surface that feeds a board (the convergence /
+// decision phase). It's a general graph — nodes connect 1-to-many /
+// many-to-many or stay isolated, and relations are drawn as explicit edges.
+// Node content (title + context) mirrors a dt node so the same card renders
+// it; a node's thread lives in thread_items keyed by board_id = map_id.
+
+// kind is the at-a-glance type cue (drawn as the card's border colour).
+// "research" is the AI's own node (where it drops what it looked up).
+// "selection" is reserved (the choose-an-option node) — surfaces later when
+// the converge/synthesize phase is built.
+export type MapNodeKind =
+  | "question"
+  | "idea"
+  | "research"
+  | "note"
+  | "selection";
+
+export interface Map {
+  id: string;
+  session_id: string;
+  title: string;
+  created_at: string;
+  archived?: number;
+  deleted_at?: string | null;
+}
+
+export interface MapNode {
+  map_id: string;
+  id: string;
+  title: string;
+  context: string;
+  kind: MapNodeKind;
+  x: number;
+  y: number;
+  // Optional persisted size (the user can resize a card; null = card default).
+  w?: number | null;
+  h?: number | null;
+  created_at: string;
+  deleted_at?: string | null;
+}
+
+export interface MapEdge {
+  map_id: string;
+  id: string;
+  from_id: string;
+  to_id: string;
+  created_at: string;
+  deleted_at?: string | null;
+}
+
+// The whole-map general chat lives under this synthetic node_id (mirrors how
+// board structure-requests use "__board__"). Every other thread is keyed by a
+// real map_nodes.id.
+export const MAP_GENERAL_NODE = "__general__";
+
+export interface MapView {
+  map: Map;
+  nodes: MapNode[];
+  edges: MapEdge[];
+  // node_id -> thread items. The map-wide chat is under MAP_GENERAL_NODE.
+  threads: Record<string, ThreadItem[]>;
+  activity?: Activity | null;
+  owner_alive?: boolean;
+  owner_session_name?: string | null;
+  owner_context_usage?: { remaining_pct: number; set_at: string } | null;
+  owner_bg_task_count?: number;
+}
+
+// Lightweight sidebar entry (mirrors BoardListItem).
+export interface MapListItem {
+  id: string;
+  title: string;
+  archived?: number;
+  node_count: number;
+  unread_count?: number;
+}
+
 // Global banner (= a single message shown at the top of every page).
 // Used for cross-session announcements that need to interrupt the user
 // regardless of which board they're on. Stored in-memory on the
@@ -385,6 +464,9 @@ export interface SessionListItem {
   scheduled_send_at?: string | null;
   boards: BoardListItem[];
   archived_boards?: BoardListItem[];
+  // Divergent-discussion maps owned by this session (sidebar lists them with
+  // a distinct icon so board vs map is clear at a glance).
+  maps?: MapListItem[];
 }
 
 export interface SetSessionNameRequest {

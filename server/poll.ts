@@ -82,6 +82,14 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
         reminderParts.push(
           `[discussion-tree] The user submitted a STRUCTURE-CHANGE request for board "${msg.board_id}". Interpret the message above as instructions to modify the board's structure: use add_concern, add_item, update_node, move_node, reorder_node, or delete_node as appropriate. Apply the changes, then append a SHORT SUMMARY of what you did (or chose NOT to do, with reason) to that board's dedicated audit-trail node — to find it, call get_board(board_id="${msg.board_id}") and look for the item node with is_log=1 (titled "Structure changes" under the "Board log" concern). Post your summary there via post_to_node. The user's original request is already auto-recorded on that same log node, so your post pairs with it. Do NOT post into any user content node, and do NOT treat this as a normal thread reply.`,
         );
+      } else if (kind === "map_chat" && msg.board_id) {
+        const target =
+          msg.node_id && msg.node_id !== "__general__"
+            ? `map node "${msg.node_id}"`
+            : `the map-wide general chat`;
+        reminderParts.push(
+          `[discussion-tree] This is a MAP message (${target}) on map "${msg.board_id}". First call get_map(map_id="${msg.board_id}") to see the current graph (the user may have dragged / connected / deleted nodes since you last looked — those edits are silent). Then RESPOND BY GROWING THE MAP: add_map_node / connect_map_nodes / update_map_node as the conversation calls for, and mirror any conversational reply with post_to_map_node(map_id="${msg.board_id}", node_id="${msg.node_id || "__general__"}", message=<reply>). Keep it incremental — a few nodes at a time, not a giant pre-built graph.`,
+        );
       }
       const content =
         reminderParts.length > 0
@@ -109,6 +117,11 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
             ...(msg.thread_item_id != null
               ? { message_id: String(msg.thread_item_id) }
               : {}),
+            // For map_chat, board_id IS the map_id; surface it under its own
+            // key too so the meta reads unambiguously. String, per the
+            // channel-meta constraint (a non-string value silently kills all
+            // channel delivery).
+            ...(kind === "map_chat" ? { map_id: String(msg.board_id) } : {}),
           },
         },
       });

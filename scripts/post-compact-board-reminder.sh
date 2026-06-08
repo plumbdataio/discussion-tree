@@ -39,6 +39,14 @@ Do NOT respond based on assumptions, pattern-matching to other boards,
 or the topic that dominated the conversation right before the compact.
 Different boards usually discuss completely different things — mixing
 them up confuses the user badly.
+
+The same applies to MAPS (the divergence-graph view): your mental
+picture of a map's nodes / edges / positions is stale after a compact,
+AND the user's structural edits (drags, new/removed edges, deleted
+nodes) are silent by design. So when a <channel ... kind="map_chat">
+message arrives, ALWAYS call get_map(map_id=<that id>) to reload the
+current graph before you add nodes, draw edges, or reply — never act on
+a remembered shape of the map.
 EOF
 
 # Count-only unfinished-checklist nudge. A compact wipes the working memory of

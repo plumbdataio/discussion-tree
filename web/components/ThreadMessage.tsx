@@ -25,6 +25,7 @@ function ThreadMessageImpl({
   nodeId,
   sessionId,
   enableAnchor = true,
+  compact = false,
   onExpand,
 }: {
   item: ThreadItem;
@@ -32,6 +33,11 @@ function ThreadMessageImpl({
   nodeId?: string;
   sessionId?: string;
   enableAnchor?: boolean;
+  // Map node cards are tight on space: hide the timestamp + expand button +
+  // anchor so the bubble is just who-label + markdown body (per the map v1
+  // "no bookmark / no timestamp / no status" requirement). Defaults off, so
+  // every existing board call site is unchanged.
+  compact?: boolean;
   onExpand: (item: ThreadItem) => void;
 }) {
   const { t } = useTranslation();
@@ -49,7 +55,7 @@ function ThreadMessageImpl({
   }
 
   const isUnread = item.source === "cc" && !item.read_at;
-  const showAnchor = enableAnchor && boardId && nodeId && sessionId;
+  const showAnchor = !compact && enableAnchor && boardId && nodeId && sessionId;
 
   const handleAnchor = async () => {
     if (!showAnchor) return;
@@ -82,18 +88,22 @@ function ThreadMessageImpl({
           <Leaf size={18} strokeWidth={isPinned ? 2.5 : 1.75} />
         </button>
       )}
-      <button
-        className="msg-expand"
-        title={t("item_card.expand_message")}
-        onClick={() => onExpand(item)}
-      >
-        <Maximize2 size={12} strokeWidth={1.75} />
-      </button>
+      {!compact && (
+        <button
+          className="msg-expand"
+          title={t("item_card.expand_message")}
+          onClick={() => onExpand(item)}
+        >
+          <Maximize2 size={12} strokeWidth={1.75} />
+        </button>
+      )}
       <span className="who">
         {item.source === "user" ? t("item_card.you") : t("item_card.claude")}
-        <span className="thread-msg-time" title={item.created_at}>
-          {formatThreadTimestamp(item.created_at)}
-        </span>
+        {!compact && (
+          <span className="thread-msg-time" title={item.created_at}>
+            {formatThreadTimestamp(item.created_at)}
+          </span>
+        )}
       </span>
       <MDView text={item.text} />
     </div>
@@ -121,5 +131,6 @@ export const ThreadMessage = React.memo(
     prev.nodeId === next.nodeId &&
     prev.sessionId === next.sessionId &&
     prev.enableAnchor === next.enableAnchor &&
+    prev.compact === next.compact &&
     prev.onExpand === next.onExpand,
 );

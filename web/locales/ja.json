@@ -24,7 +24,8 @@
     "inactive_label": "非アクティブ ({{count}})",
     "toggle_label": "サイドバーを開閉",
     "filter_label": "表示",
-    "filter_summary": "{{visible}} / {{total}}"
+    "filter_summary": "{{visible}} / {{total}}",
+    "map_node_count": "{{count}} 個のノード"
   },
   "session_dashboard": {
     "back_to_top": "← トップへ戻る",
@@ -201,5 +202,28 @@
     "concern_title": "会話",
     "item_title": "会話",
     "welcome_message": "ここでの投稿は CC への直接メッセージとして届きます。"
+  },
+  "map": {
+    "badge": "マップ",
+    "badge_title": "発散議論マップ(ボードの前段の発散フェーズ)",
+    "not_found": "マップが見つかりません",
+    "loading": "読み込み中…",
+    "general_chat": "全体チャット(マップ全体)",
+    "general_chat_note": "ここに送ると、地図を維持している Claude に届きます。応答は地図の変化(ノードの増減)として返ってきます。",
+    "chat_placeholder": "マップ全体について送る…(Enter で改行 / ⌘Enter で送信)",
+    "node_input_placeholder": "このノードに送る…(⌘Enter で送信)",
+    "input_disabled": "CC が接続されていません — 送信できません",
+    "send": "送信",
+    "uploading": "アップロード中…",
+    "send_failed": "送信に失敗しました",
+    "image_failed": "画像のアップロードに失敗しました",
+    "untitled": "(無題)",
+    "kind": {
+      "question": "Question",
+      "idea": "Idea",
+      "research": "Research",
+      "note": "Note",
+      "selection": "Selection"
+    }
   }
 }

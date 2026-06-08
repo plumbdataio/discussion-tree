@@ -316,7 +316,10 @@ export function handlePollMessages(body: any) {
     // thread item. handleSubmitAnswer, on seeing delivered=1, broadcasts and
     // bumps node status off this same row (and falls back to inserting the
     // thread item if for any reason this didn't run).
-    if (kind === "user_input_relay" && m.node_id) {
+    // map_chat is the map equivalent: board_id holds the map_id, node_id is a
+    // map node id (or MAP_GENERAL_NODE). It rides the same thread_items table,
+    // so materializing here gives its reply a message_id on the channel push.
+    if ((kind === "user_input_relay" || kind === "map_chat") && m.node_id) {
       const r = insertThread.run(
         m.board_id,
         m.node_id,

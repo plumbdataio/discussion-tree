@@ -25,6 +25,53 @@ export function postBoardStructureRequest(boardId: string, text: string) {
   });
 }
 
+// --- Maps ---
+// The map's general chat + per-node inputs post here. Blocking on the broker
+// (mirrors /submit-answer): resolves once the owning CC polls. node_id
+// "__general__" (or omitted) targets the map-wide chat.
+export function postMapChat(mapId: string, nodeId: string, text: string) {
+  return fetch("/map-chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ map_id: mapId, node_id: nodeId, text }),
+  });
+}
+
+// Persist a node's position/size after a drag/resize. SILENT in the pull
+// model — the broker records it and broadcasts to other browsers, but does
+// not push to the CC (it re-reads on next act).
+export function postMapMoveNode(
+  mapId: string,
+  nodeId: string,
+  x: number,
+  y: number,
+  w?: number,
+  h?: number,
+) {
+  return fetch("/map-move-node", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ map_id: mapId, node_id: nodeId, x, y, w, h }),
+  });
+}
+
+// The human draws an edge in the UI → persist it. Also silent (pull model).
+export function postMapConnect(mapId: string, fromId: string, toId: string) {
+  return fetch("/map-connect", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ map_id: mapId, from_id: fromId, to_id: toId }),
+  });
+}
+
+export function postMapDisconnect(mapId: string, edgeId: string) {
+  return fetch("/map-disconnect", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ map_id: mapId, edge_id: edgeId }),
+  });
+}
+
 export async function uploadImage(
   file: File,
   boardId: string,

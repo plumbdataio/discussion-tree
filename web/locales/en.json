@@ -24,7 +24,8 @@
     "inactive_label": "Inactive ({{count}})",
     "toggle_label": "Toggle sidebar",
     "filter_label": "Show",
-    "filter_summary": "{{visible}} / {{total}}"
+    "filter_summary": "{{visible}} / {{total}}",
+    "map_node_count": "{{count}} nodes"
   },
   "session_dashboard": {
     "back_to_top": "← Back to top",
@@ -201,5 +202,28 @@
     "concern_title": "Conversation",
     "item_title": "Conversation",
     "welcome_message": "Posts here are delivered as direct messages to Claude Code."
+  },
+  "map": {
+    "badge": "Map",
+    "badge_title": "Divergent-discussion map (the divergence phase before a board)",
+    "not_found": "Map not found",
+    "loading": "Loading…",
+    "general_chat": "General chat (whole map)",
+    "general_chat_note": "Messages here reach Claude, who maintains the map. Responses come back as changes to the map (nodes added / removed).",
+    "chat_placeholder": "Message about the whole map… (Enter for newline / ⌘Enter to send)",
+    "node_input_placeholder": "Message this node… (⌘Enter to send)",
+    "input_disabled": "CC is not attached — cannot post",
+    "send": "Send",
+    "uploading": "Uploading…",
+    "send_failed": "Failed to send",
+    "image_failed": "Image upload failed",
+    "untitled": "(untitled)",
+    "kind": {
+      "question": "Question",
+      "idea": "Idea",
+      "research": "Research",
+      "note": "Note",
+      "selection": "Selection"
+    }
   }
 }

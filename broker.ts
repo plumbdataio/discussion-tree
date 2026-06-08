@@ -26,12 +26,7 @@ import { routes as checklistRoutes } from "./broker/checklist.ts";
 import { routes as favoritesRoutes } from "./broker/favorites.ts";
 import { routes as feedbackRoutes } from "./broker/feedback.ts";
 import { routes as globalBannerRoutes } from "./broker/global-banner.ts";
-import {
-  routes as mapDemoRoutes,
-  getMapState,
-  MAP_DEMO_HTML,
-  MAP_DEMO_RF_HTML,
-} from "./broker/mapdemo.ts";
+import { routes as mapRoutes, getMapView } from "./broker/maps.ts";
 import { getBoardView } from "./broker/helpers.ts";
 import { routes as nodesRoutes } from "./broker/nodes.ts";
 import { initPower, routes as powerRoutes } from "./broker/power.ts";
@@ -76,7 +71,7 @@ const POST_ROUTES: Record<string, RouteHandler> = {
   ...contextUsageRoutes,
   ...favoritesRoutes,
   ...globalBannerRoutes,
-  ...mapDemoRoutes,
+  ...mapRoutes,
 };
 
 // --- HTTP + WebSocket server ---
@@ -101,6 +96,7 @@ const server = Bun.serve({
     "/": indexHtml,
     "/board/:id": indexHtml,
     "/session/:id": indexHtml,
+    "/map/:id": indexHtml,
   },
   async fetch(req, server) {
     const url = new URL(req.url);
@@ -146,21 +142,13 @@ const server = Bun.serve({
       return Response.json(handleListSessions());
     }
 
-    // Divergent-discussion mind-map demo (feature spike). Standalone page +
-    // its current state. The page renders with tldraw from a CDN, so it needs
-    // no Bun bundling; Claude grows the map via POST /map/op.
-    if (req.method === "GET" && path === "/map-demo") {
-      return new Response(MAP_DEMO_HTML, {
-        headers: { "content-type": "text/html; charset=utf-8" },
-      });
-    }
-    if (req.method === "GET" && path === "/map-demo-rf") {
-      return new Response(MAP_DEMO_RF_HTML, {
-        headers: { "content-type": "text/html; charset=utf-8" },
-      });
-    }
-    if (req.method === "GET" && path === "/api/map-demo") {
-      return Response.json(getMapState());
+    // Divergent-discussion map read API — the map view (/map/:id, served by
+    // the SPA above) fetches this and subscribes to /ws/<map_id> for updates.
+    if (req.method === "GET" && path.startsWith("/api/map/")) {
+      const id = path.slice("/api/map/".length);
+      const view = getMapView(id);
+      if (!view) return Response.json({ error: "Not found" }, { status: 404 });
+      return Response.json(view);
     }
 
     if (req.method === "GET" && path.startsWith("/uploads/")) {

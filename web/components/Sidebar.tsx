@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Send,
   Settings,
+  Share2,
 } from "lucide-react";
 import { HelpBubbleIcon } from "./HelpBubbleIcon.tsx";
 import { useTranslation } from "react-i18next";
@@ -71,6 +72,7 @@ type DropPosition = "before" | "after";
 type SessionItemProps = {
   s: SessionListItem;
   currentBoardId: string | null;
+  currentMapId: string | null;
   filter: BoardStatusFilter;
   inactive: boolean;
   collapsed: boolean;
@@ -90,6 +92,7 @@ type SessionItemProps = {
 function SessionItem({
   s,
   currentBoardId,
+  currentMapId,
   filter,
   inactive,
   collapsed,
@@ -374,14 +377,63 @@ function SessionItem({
             })}
           </ul>
         ))}
+      {/* Maps (divergence surface) owned by this session. Distinct icon +
+          list so "board vs map" reads at a glance. */}
+      {!collapsed && (s.maps?.length ?? 0) > 0 && (
+        <ul className="maps">
+          {s.maps!.map((m) => {
+            const hasUnread = (m.unread_count ?? 0) > 0;
+            return (
+              <li
+                key={m.id}
+                className={
+                  (m.id === currentMapId ? "current " : "") +
+                  (hasUnread ? "has-unread" : "")
+                }
+              >
+                <a href={"/map/" + m.id} className="sidebar-map-link">
+                  <span className="sidebar-map-title">
+                    <Share2
+                      className="sidebar-map-icon"
+                      size={13}
+                      strokeWidth={1.75}
+                    />
+                    {m.title}
+                  </span>
+                  {hasUnread && (
+                    <span
+                      className="sidebar-unread-dot"
+                      title={t("sidebar.unread_dot_title", {
+                        count: m.unread_count,
+                      })}
+                    />
+                  )}
+                  {!hasUnread && (
+                    <span
+                      className="sidebar-map-count"
+                      title={t("sidebar.map_node_count", {
+                        count: m.node_count,
+                      })}
+                    >
+                      {m.node_count}
+                    </span>
+                  )}
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
 
 export function Sidebar({
   currentBoardId,
+  currentMapId = null,
 }: {
   currentBoardId: string | null;
+  currentMapId?: string | null;
 }) {
   const { t } = useTranslation();
   const [settings, updateSettings] = useSettings();
@@ -627,6 +679,7 @@ export function Sidebar({
             key={s.id}
             s={s}
             currentBoardId={currentBoardId}
+            currentMapId={currentMapId}
             filter={filter}
             inactive={false}
             collapsed={!!settings.collapsedSessions[s.id]}
@@ -666,6 +719,7 @@ export function Sidebar({
                   key={s.id}
                   s={s}
                   currentBoardId={currentBoardId}
+                  currentMapId={currentMapId}
                   filter={filter}
                   inactive
                   collapsed={!!settings.collapsedSessions[s.id]}

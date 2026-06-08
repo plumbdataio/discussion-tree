@@ -555,6 +555,174 @@ export const TOOLS = [
       required: ["board_id", "node_id"],
     },
   },
+
+  // --- Maps (divergent-discussion mind-map) ---
+  // A map is the DIVERGENCE-phase surface that precedes a board (the
+  // convergence / decision phase). It's a general graph: nodes connect
+  // 1-to-many / many-to-many or stay isolated, and relations are explicit
+  // edges. YOU build the content (create nodes with title + context, draw
+  // edges); the HUMAN owns layout (drag) + association (drawing edges) in the
+  // UI. Their drags / edge-draws are SILENT (pull model) — re-read with
+  // get_map before you act on structure. Only chat (general + per-node)
+  // arrives over the channel (kind=map_chat).
+  {
+    name: "create_map",
+    description:
+      "Create a divergent-discussion MAP — a free-form graph for the exploration phase BEFORE a decision is structured into a board. Use when the user wants to think out loud across branching, not-yet-settled topics (the user usually asks; you can also offer one when a discussion is clearly diverging). Returns a URL. Maps are NOT auto-created. You grow the map by adding nodes / edges; the user arranges layout and draws links in the UI.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        title: { type: "string" as const, description: "Short map title." },
+        nodes: {
+          type: "array" as const,
+          description:
+            "Optional seed nodes. Each: { title, context?, kind?, parent? } — parent is another seed node's id to auto-draw a branch.",
+          items: {
+            type: "object" as const,
+            properties: {
+              id: { type: "string" as const },
+              title: { type: "string" as const },
+              context: { type: "string" as const },
+              kind: {
+                type: "string" as const,
+                enum: ["question", "idea", "research", "note", "selection"],
+              },
+              parent: { type: "string" as const },
+            },
+          },
+        },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "add_map_node",
+    description:
+      "Add one node to a map. The node renders as a card (title = headline, context = markdown body) coloured by kind. kind: question (an open question) | idea (a proposal) | research (YOUR findings — the AI node) | note (neutral) | selection (reserved). Pass parent = an existing node id to BOTH place the new node beside it AND draw an edge from parent → new (build a branch in one call). You never supply coordinates — the broker places the card and the user drags it where they like (the position is then remembered).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        map_id: { type: "string" as const },
+        title: { type: "string" as const, description: "Short headline." },
+        context: {
+          type: "string" as const,
+          description: "Markdown body (the detail). Optional.",
+        },
+        kind: {
+          type: "string" as const,
+          enum: ["question", "idea", "research", "note", "selection"],
+        },
+        parent: {
+          type: "string" as const,
+          description:
+            "Optional existing node id — draws an edge parent → new and places the card next to it.",
+        },
+      },
+      required: ["map_id", "title"],
+    },
+  },
+  {
+    name: "update_map_node",
+    description:
+      "Edit a map node's title / context / kind. Position and size are owned by the user (set in the UI), so they're not editable here.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        map_id: { type: "string" as const },
+        node_id: { type: "string" as const },
+        title: { type: "string" as const },
+        context: { type: "string" as const },
+        kind: {
+          type: "string" as const,
+          enum: ["question", "idea", "research", "note", "selection"],
+        },
+      },
+      required: ["map_id", "node_id"],
+    },
+  },
+  {
+    name: "delete_map_node",
+    description:
+      "Logically delete a map node (it disappears from the canvas; its messages + touching edges are kept in the DB so nothing dangles). Use when a branch is abandoned.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        map_id: { type: "string" as const },
+        node_id: { type: "string" as const },
+      },
+      required: ["map_id", "node_id"],
+    },
+  },
+  {
+    name: "connect_map_nodes",
+    description:
+      "Draw a directed edge from_id → to_id (explicit relation). The map is a general graph: a node can have many parents and many children, or none. Duplicate edges are ignored.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        map_id: { type: "string" as const },
+        from_id: { type: "string" as const },
+        to_id: { type: "string" as const },
+      },
+      required: ["map_id", "from_id", "to_id"],
+    },
+  },
+  {
+    name: "disconnect_map_nodes",
+    description:
+      "Remove an edge by its edge_id (logical delete). Get edge ids from get_map.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        map_id: { type: "string" as const },
+        edge_id: { type: "string" as const },
+      },
+      required: ["map_id", "edge_id"],
+    },
+  },
+  {
+    name: "post_to_map_node",
+    description:
+      "Post YOUR reply into a map node's thread (or the map-wide general chat). Mirror your CLI reply here so it shows on the card, exactly like post_to_node mirrors onto a board node. Omit node_id (or pass \"__general__\") to post into the general chat panel. Returns message_id.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        map_id: { type: "string" as const },
+        node_id: {
+          type: "string" as const,
+          description:
+            'Map node id, or "__general__" / omit for the map-wide chat.',
+        },
+        message: { type: "string" as const },
+      },
+      required: ["map_id", "message"],
+    },
+  },
+  {
+    name: "get_map",
+    description:
+      "Load a map's full state: nodes (with positions + kind), edges, and every node's thread. ALWAYS call this before acting on map structure — the user may have dragged / connected / deleted things since you last looked (their structural edits are silent by design).",
+    inputSchema: {
+      type: "object" as const,
+      properties: { map_id: { type: "string" as const } },
+      required: ["map_id"],
+    },
+  },
+  {
+    name: "list_maps",
+    description: "List the divergent-discussion maps owned by this session.",
+    inputSchema: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "search_maps",
+    description:
+      "Search this session's maps by substring across map titles, node titles/contexts, and message bodies. Use to recall an earlier exploration.",
+    inputSchema: {
+      type: "object" as const,
+      properties: { query: { type: "string" as const } },
+      required: ["query"],
+    },
+  },
 ];
 
 function textResult(text: string, isError = false) {
@@ -1143,6 +1311,165 @@ export async function dispatchToolCall(
         return textResult(
           `Improvement request logged to ${res.file}\n(User will review and decide whether to implement.)`,
         );
+      }
+
+      // --- Maps ---
+      case "create_map": {
+        const sessionId = ensureSession();
+        const a = args as { title: string; nodes?: any[] };
+        const res = await brokerFetch<{
+          ok: boolean;
+          map_id?: string;
+          url?: string;
+          error?: string;
+        }>("/create-map", {
+          session_id: sessionId,
+          title: a.title,
+          nodes: a.nodes,
+        });
+        if (!res.ok) return textResult(res.error ?? "create_map failed", true);
+        return textResult(
+          `Map created: ${res.map_id}\nURL: ${res.url}\n\nShare the URL. You grow the map with add_map_node / connect_map_nodes; the user arranges layout and draws links in the UI. Their structural edits are silent — call get_map before acting on structure.`,
+        );
+      }
+
+      case "add_map_node": {
+        ensureSession();
+        const a = args as {
+          map_id: string;
+          title: string;
+          context?: string;
+          kind?: string;
+          parent?: string;
+        };
+        const res = await brokerFetch<{
+          ok: boolean;
+          node_id?: string;
+          error?: string;
+        }>("/map-add-node", {
+          map_id: a.map_id,
+          node: {
+            title: a.title,
+            context: a.context,
+            kind: a.kind,
+            parent: a.parent,
+          },
+        });
+        if (!res.ok) return textResult(res.error ?? "add_map_node failed", true);
+        return textResult(`Map node added: ${res.node_id}`);
+      }
+
+      case "update_map_node": {
+        ensureSession();
+        const a = args as {
+          map_id: string;
+          node_id: string;
+          title?: string;
+          context?: string;
+          kind?: string;
+        };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/map-update-node",
+          a,
+        );
+        if (!res.ok)
+          return textResult(res.error ?? "update_map_node failed", true);
+        return textResult(`Map node ${a.node_id} updated.`);
+      }
+
+      case "delete_map_node": {
+        ensureSession();
+        const a = args as { map_id: string; node_id: string };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/map-delete-node",
+          a,
+        );
+        if (!res.ok)
+          return textResult(res.error ?? "delete_map_node failed", true);
+        return textResult(`Map node ${a.node_id} deleted (logical).`);
+      }
+
+      case "connect_map_nodes": {
+        ensureSession();
+        const a = args as { map_id: string; from_id: string; to_id: string };
+        const res = await brokerFetch<{
+          ok: boolean;
+          edge_id?: string;
+          existed?: boolean;
+          error?: string;
+        }>("/map-connect", a);
+        if (!res.ok)
+          return textResult(res.error ?? "connect_map_nodes failed", true);
+        return textResult(
+          res.existed
+            ? `Edge already existed: ${res.edge_id}`
+            : `Edge drawn: ${a.from_id} → ${a.to_id} (${res.edge_id})`,
+        );
+      }
+
+      case "disconnect_map_nodes": {
+        ensureSession();
+        const a = args as { map_id: string; edge_id: string };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/map-disconnect",
+          a,
+        );
+        if (!res.ok)
+          return textResult(res.error ?? "disconnect_map_nodes failed", true);
+        return textResult(`Edge ${a.edge_id} removed.`);
+      }
+
+      case "post_to_map_node": {
+        ensureSession();
+        const a = args as {
+          map_id: string;
+          node_id?: string;
+          message: string;
+        };
+        const res = await brokerFetch<{
+          ok: boolean;
+          message_id?: number;
+          error?: string;
+        }>("/map-post", a);
+        if (!res.ok)
+          return textResult(res.error ?? "post_to_map_node failed", true);
+        return textResult(
+          `Posted to map node ${a.node_id ?? "__general__"} (message_id=${res.message_id}).`,
+        );
+      }
+
+      case "get_map": {
+        ensureSession();
+        const a = args as { map_id: string };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/get-map",
+          a,
+        );
+        if (!res.ok) return textResult(res.error ?? "get_map failed", true);
+        return textResult(JSON.stringify(res, null, 2));
+      }
+
+      case "list_maps": {
+        const sessionId = ensureSession();
+        const res = await brokerFetch<{
+          ok: boolean;
+          maps?: any[];
+          error?: string;
+        }>("/list-maps", { session_id: sessionId });
+        if (!res.ok) return textResult(res.error ?? "list_maps failed", true);
+        return textResult(JSON.stringify(res.maps, null, 2));
+      }
+
+      case "search_maps": {
+        const sessionId = ensureSession();
+        const a = args as { query: string };
+        const res = await brokerFetch<{
+          ok: boolean;
+          matches?: any[];
+          error?: string;
+        }>("/search-maps", { session_id: sessionId, query: a.query });
+        if (!res.ok) return textResult(res.error ?? "search_maps failed", true);
+        return textResult(JSON.stringify(res.matches, null, 2));
       }
 
       default:

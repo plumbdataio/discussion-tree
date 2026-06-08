@@ -254,6 +254,69 @@ db.run(`
     )
 `);
 
+// --- Maps (divergent-discussion mind-map) ---
+//
+// A "map" is the divergence-phase counterpart to a "board" (the convergence /
+// decision phase). Deliberately a SEPARATE domain from boards/nodes so the two
+// terminologies stay cleanly split (a map is a general graph: 1-to-many /
+// many-to-many / isolated nodes, edges drawn explicitly), while the message
+// layer is REUSED: a map node's thread lives in thread_items keyed by
+// board_id = map_id, node_id = map_nodes.id (or "__general__" for the map-wide
+// chat). thread_items rows for a map never collide with board stats because no
+// `boards` row carries a map_id. Node delete is LOGICAL (deleted_at) so the
+// node's messages / edges never dangle.
+db.run(`
+  CREATE TABLE IF NOT EXISTS maps (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    archived INTEGER NOT NULL DEFAULT 0,
+    deleted_at TEXT
+  )
+`);
+// Map nodes carry their own free-form position (x/y) and optional persisted
+// size (w/h) because the layout is spatial + stable (no auto-relayout — the
+// place the user drags a node to is remembered). kind ∈ question | idea |
+// research | note (selection reserved). title + context mirror a dt node so
+// the same card components render it.
+db.run(`
+  CREATE TABLE IF NOT EXISTS map_nodes (
+    map_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    context TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT 'idea',
+    x REAL NOT NULL DEFAULT 0,
+    y REAL NOT NULL DEFAULT 0,
+    w REAL,
+    h REAL,
+    created_at TEXT NOT NULL,
+    deleted_at TEXT,
+    PRIMARY KEY (map_id, id)
+  )
+`);
+db.run(
+  `CREATE INDEX IF NOT EXISTS map_nodes_by_map ON map_nodes(map_id)`,
+);
+// Directed edges. Both the human (drawing in the UI) and the AI (connect tool)
+// create these; delete is logical so an edge whose endpoint node was logically
+// deleted can still be reasoned about. from_id/to_id reference map_nodes.id.
+db.run(`
+  CREATE TABLE IF NOT EXISTS map_edges (
+    map_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    from_id TEXT NOT NULL,
+    to_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    deleted_at TEXT,
+    PRIMARY KEY (map_id, id)
+  )
+`);
+db.run(
+  `CREATE INDEX IF NOT EXISTS map_edges_by_map ON map_edges(map_id)`,
+);
+
 // --- Prepared statements ---
 //
 // IMPORTANT: there are intentionally NO DELETE FROM statements anywhere.
@@ -385,6 +448,53 @@ export const markDelivered = db.prepare(
 // (see handlePollMessages), so message_id can ride the channel push.
 export const setPendingThreadItem = db.prepare(
   `UPDATE pending_messages SET thread_item_id = ? WHERE id = ?`,
+);
+
+// --- Map prepared statements ---
+export const insertMap = db.prepare(
+  `INSERT INTO maps (id, session_id, title, created_at) VALUES (?, ?, ?, ?)`,
+);
+export const selectMap = db.prepare(
+  `SELECT * FROM maps WHERE id = ? AND deleted_at IS NULL`,
+);
+export const selectMapsBySession = db.prepare(
+  `SELECT * FROM maps WHERE session_id = ? AND deleted_at IS NULL ORDER BY created_at`,
+);
+export const renameMap = db.prepare(
+  `UPDATE maps SET title = ? WHERE id = ?`,
+);
+export const archiveMapStmt = db.prepare(
+  `UPDATE maps SET archived = ? WHERE id = ?`,
+);
+export const insertMapNode = db.prepare(
+  `INSERT INTO map_nodes (map_id, id, title, context, kind, x, y, w, h, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+);
+export const selectMapNode = db.prepare(
+  `SELECT * FROM map_nodes WHERE map_id = ? AND id = ? AND deleted_at IS NULL`,
+);
+export const selectMapNodesByMap = db.prepare(
+  `SELECT * FROM map_nodes WHERE map_id = ? AND deleted_at IS NULL ORDER BY created_at`,
+);
+export const updateMapNodeContent = db.prepare(
+  `UPDATE map_nodes SET title = ?, context = ?, kind = ? WHERE map_id = ? AND id = ?`,
+);
+export const updateMapNodePos = db.prepare(
+  `UPDATE map_nodes SET x = ?, y = ?, w = ?, h = ? WHERE map_id = ? AND id = ?`,
+);
+export const softDeleteMapNode = db.prepare(
+  `UPDATE map_nodes SET deleted_at = ? WHERE map_id = ? AND id = ?`,
+);
+export const insertMapEdge = db.prepare(
+  `INSERT INTO map_edges (map_id, id, from_id, to_id, created_at) VALUES (?, ?, ?, ?, ?)`,
+);
+export const selectMapEdgesByMap = db.prepare(
+  `SELECT * FROM map_edges WHERE map_id = ? AND deleted_at IS NULL ORDER BY created_at`,
+);
+export const selectMapEdgeByPair = db.prepare(
+  `SELECT * FROM map_edges WHERE map_id = ? AND from_id = ? AND to_id = ? AND deleted_at IS NULL`,
+);
+export const softDeleteMapEdge = db.prepare(
+  `UPDATE map_edges SET deleted_at = ? WHERE map_id = ? AND id = ?`,
 );
 
 // --- Board status auto-rollup ---

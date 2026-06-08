@@ -366,6 +366,36 @@ export function handleListSessions() {
     // self-healing fallback for tabs that miss a WS frame.
     const activity = activities.get(s.id) ?? null;
     const context_usage = getContextUsage(s.id);
+    // Maps (divergence surface) owned by this session. node_count + unread are
+    // computed cheaply; map messages live in thread_items keyed by the map_id.
+    const mapRows = db
+      .prepare(
+        "SELECT id, title, archived FROM maps WHERE session_id = ? AND deleted_at IS NULL AND archived = 0 ORDER BY created_at",
+      )
+      .all(s.id) as { id: string; title: string; archived: number }[];
+    const maps = mapRows.map((m) => {
+      const nodeCount = (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS cnt FROM map_nodes WHERE map_id = ? AND deleted_at IS NULL",
+          )
+          .get(m.id) as { cnt: number }
+      ).cnt;
+      const unread = (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS cnt FROM thread_items WHERE board_id = ? AND read_at IS NULL AND source = 'cc'",
+          )
+          .get(m.id) as { cnt: number }
+      ).cnt;
+      return {
+        id: m.id,
+        title: m.title,
+        archived: m.archived,
+        node_count: nodeCount,
+        unread_count: unread,
+      };
+    });
     return {
       id: s.id,
       name: s.name,
@@ -378,6 +408,7 @@ export function handleListSessions() {
       scheduled_send_at: scheduledSendAtForSession(s.id),
       boards: enrichBoards(activeBoards),
       archived_boards: enrichBoards(archivedBoards),
+      maps,
     };
   };
 
