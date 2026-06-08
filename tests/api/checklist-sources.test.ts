@@ -181,4 +181,72 @@ describe("checklist sources", () => {
     const it = (await items()).find((i) => i.id === r.json.item_id)!;
     expect(it.sources).toEqual([]);
   });
+
+  describe("node ref resolved by global uniqueness (no board hint)", () => {
+    async function makeBoard(title: string, nodeId: string): Promise<string> {
+      const c = await post<{ board_id: string }>(`${broker.url}/create-board`, {
+        session_id: sessionId,
+        structure: {
+          title,
+          concerns: [
+            { id: `${title}-c`, title: "C", items: [{ id: nodeId, title: nodeId }] },
+          ],
+        },
+      });
+      return c.json.board_id;
+    }
+
+    test("a node id unique across boards auto-resolves to its board", async () => {
+      const other = await makeBoard("Lonely", "lonelynode");
+      const r = await post<{ ok: boolean; item_id: number }>(
+        `${broker.url}/record-decision`,
+        {
+          board_id: boardId,
+          node_id: "cl",
+          summary: "cross-board unique であること",
+          sources: [{ kind: "node", id: "lonelynode" }],
+        },
+      );
+      expect(r.json.ok).toBe(true);
+      const it = (await items()).find((i) => i.id === r.json.item_id)!;
+      expect(it.sources).toHaveLength(1);
+      // Auto-filled to the OTHER board, not the checklist's board.
+      expect(it.sources[0].board_id).toBe(other);
+    });
+
+    test("a node id on multiple boards is rejected without a board hint, and no item is created", async () => {
+      await makeBoard("DupA", "dupnode");
+      await makeBoard("DupB", "dupnode");
+      const before = (await items()).length;
+      const r = await post<{ ok: boolean; error?: string }>(
+        `${broker.url}/record-decision`,
+        {
+          board_id: boardId,
+          node_id: "cl",
+          summary: "should not persist",
+          sources: [{ kind: "node", id: "dupnode" }],
+        },
+      );
+      expect(r.json.ok).toBe(false);
+      expect(r.json.error).toContain("exists on");
+      expect((await items()).length).toBe(before);
+    });
+
+    test("a colliding node id resolves when board is specified", async () => {
+      const a = await makeBoard("DupC", "dupnode2");
+      await makeBoard("DupD", "dupnode2");
+      const r = await post<{ ok: boolean; item_id: number }>(
+        `${broker.url}/record-decision`,
+        {
+          board_id: boardId,
+          node_id: "cl",
+          summary: "disambiguated であること",
+          sources: [{ kind: "node", id: "dupnode2", board: a }],
+        },
+      );
+      expect(r.json.ok).toBe(true);
+      const it = (await items()).find((i) => i.id === r.json.item_id)!;
+      expect(it.sources[0].board_id).toBe(a);
+    });
+  });
 });

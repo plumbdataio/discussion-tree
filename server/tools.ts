@@ -464,7 +464,7 @@ export const TOOLS = [
   {
     name: "record_decision",
     description:
-      "Append a decision to a decision-checklist node as a new checklist item (status=pending). Use this whenever a node settles to a verdict (adopted / agreed / resolved / rejected): capture the decision as a short, verifiable acceptance-criterion-style line (\"X であること。背景: …\") so the board accumulates an implementation checklist for later verification. The target node_id MUST be a node already flagged as a checklist node (is_checklist=1) — checklist nodes are NOT auto-created. Cite where the decision was made via `sources` (preferred): an array of lowest-level pointers, each {kind, id} where kind is board | node | message. A message id is a thread_items.id — get one from post_to_node's returned message_id (your own post) or a received channel message's meta.message_id (a human reply). For a node on a different board, add board:\"bd_…\". (source_node_id is the legacy single-node shorthand, still accepted.)",
+      "Append a decision to a decision-checklist node as a new checklist item (status=pending). Use this whenever a node settles to a verdict (adopted / agreed / resolved / rejected): capture the decision as a short, verifiable acceptance-criterion-style line (\"X であること。背景: …\") so the board accumulates an implementation checklist for later verification. The target node_id MUST be a node already flagged as a checklist node (is_checklist=1) — checklist nodes are NOT auto-created. Cite where the decision was made via `sources` (preferred): an array of lowest-level pointers, each {kind, id} where kind is board | node | message. A message id is a thread_items.id — get one from post_to_node's returned message_id (your own post) or a received channel message's meta.message_id (a human reply). For a node ref, board is optional — it is auto-resolved when the node id is unique across all boards, and only required (board:\"bd_…\") when that id exists on more than one board. (source_node_id is the legacy single-node shorthand, still accepted.)",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -484,7 +484,7 @@ export const TOOLS = [
         sources: {
           type: "array" as const,
           description:
-            "Where this decision was made: lowest-level references only. Each item is {kind, id} with kind = board | node | message (board=boards.id, node=nodes.id, message=thread_items.id). Add board:\"bd_…\" on a node ref that lives on another board.",
+            "Where this decision was made: lowest-level references only. Each item is {kind, id} with kind = board | node | message (board=boards.id, node=nodes.id, message=thread_items.id). For node refs, board is optional (auto-resolved when the id is unique across boards; required only on collision).",
           items: {
             type: "object" as const,
             properties: {

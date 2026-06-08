@@ -49,6 +49,9 @@ const selectBoardExists = db.prepare(`SELECT 1 AS x FROM boards WHERE id = ?`);
 const selectNodeExists = db.prepare(
   `SELECT 1 AS x FROM nodes WHERE board_id = ? AND id = ? AND deleted_at IS NULL`,
 );
+const selectNodeBoards = db.prepare(
+  `SELECT board_id FROM nodes WHERE id = ? AND deleted_at IS NULL`,
+);
 const selectThreadItemBoard = db.prepare(
   `SELECT board_id FROM thread_items WHERE id = ?`,
 );
@@ -58,11 +61,14 @@ type ResolvedSource = { kind: string; ref_id: string; board_id: string };
 
 // Validate + resolve each source ref to its owning board up-front, so a
 // record_decision writes nothing if any ref is bad (catches typos). A ref is
-// the lowest-level pointer only; node ids aren't globally unique so a node ref
-// resolves on `board` if given, else the checklist item's own board (cite a
-// message — globally unique — or a board for cross-board references).
+// the lowest-level pointer only. board ids and message ids (thread_items.id)
+// are globally unique. node ids are NOT, so a node ref resolves by global
+// uniqueness: `board` disambiguates when given; without it we auto-fill the
+// board when the id exists on exactly one board, and reject when it collides
+// across boards (the caller must then specify board). The resolved board_id is
+// stored, so the citation stays unambiguous even if a same-id node appears on
+// another board later.
 function resolveSources(
-  itemBoardId: string,
   raw: SourceInput[],
 ): { ok: true; resolved: ResolvedSource[] } | { ok: false; error: string } {
   const resolved: ResolvedSource[] = [];
@@ -82,14 +88,28 @@ function resolveSources(
       }
       resolved.push({ kind, ref_id: refId, board_id: refId });
     } else if (kind === "node") {
-      const boardId = s.board ? String(s.board) : itemBoardId;
-      if (!selectNodeExists.get(boardId, refId)) {
-        return {
-          ok: false,
-          error: `source node not found: ${refId} on board ${boardId}`,
-        };
+      if (s.board) {
+        const boardId = String(s.board);
+        if (!selectNodeExists.get(boardId, refId)) {
+          return {
+            ok: false,
+            error: `source node not found: ${refId} on board ${boardId}`,
+          };
+        }
+        resolved.push({ kind, ref_id: refId, board_id: boardId });
+      } else {
+        const boards = selectNodeBoards.all(refId) as { board_id: string }[];
+        if (boards.length === 0) {
+          return { ok: false, error: `source node not found: ${refId}` };
+        }
+        if (boards.length > 1) {
+          return {
+            ok: false,
+            error: `source node id '${refId}' exists on ${boards.length} boards — can't uniquely identify it; specify board to disambiguate (sources=[{kind:"node", id:"${refId}", board:"bd_..."}])`,
+          };
+        }
+        resolved.push({ kind, ref_id: refId, board_id: boards[0].board_id });
       }
-      resolved.push({ kind, ref_id: refId, board_id: boardId });
     } else {
       // message: ref_id is a globally-unique thread_items.id; derive its board.
       const row = selectThreadItemBoard.get(Number(refId)) as
@@ -136,7 +156,7 @@ export function handleRecordDecision(body: {
       : body.source_node_id
         ? [{ kind: "node", id: body.source_node_id }]
         : [];
-  const resolution = resolveSources(board_id, rawSources);
+  const resolution = resolveSources(rawSources);
   if (!resolution.ok) return { ok: false, error: resolution.error };
 
   const pos =
@@ -316,8 +336,8 @@ export function onNodeSettled(
   const title = node?.title ?? nodeId;
   const text =
     `[discussion-tree] ノード「${title}」の決定が確定しました。` +
-    `この決定を record_decision(board_id="${boardId}", node_id="${cn.id}", summary=<「〜であること」型の検証可能な1行>, sources=[{kind:"node", id:"${nodeId}"}]) でチェックリストに反映してください。` +
-    `出典(sources)は最下層の参照だけでよく、kind は board/node/message から選べます(特定メッセージを引くなら post_to_node の戻り値や受信メタの message_id を {kind:"message", id:<その id>} で指定)。`;
+    `この決定を record_decision(board_id="${boardId}", node_id="${cn.id}", summary=<「〜であること」型の検証可能な1行>, sources=[{kind:"node", id:"${nodeId}", board:"${boardId}"}]) でチェックリストに反映してください。` +
+    `出典(sources)は最下層の参照だけでよく、kind は board/node/message から選べます。node の board は省略可(全ボードで一意なら自動補完、衝突する時だけ要指定)。特定メッセージを引くなら post_to_node の戻り値や受信メタの message_id を {kind:"message", id:<その id>} で指定。`;
   insertPending.run(
     board.session_id,
     boardId,
