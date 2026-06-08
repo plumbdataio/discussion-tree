@@ -95,6 +95,14 @@ export function handleAttachCCSession(body: any) {
       `UPDATE favorites SET session_id = ? WHERE session_id IN (${placeholders})`,
       [sessionId, ...deadIds],
     );
+    // Maps follow the same reclaim path. Without this, a CC restart orphans
+    // every map: list_maps (keyed by the new session id) finds none, and
+    // /map-chat rejects submissions because the recorded owner session is now
+    // dead. A map's owner is the CC's logical identity, not the broker row.
+    db.run(
+      `UPDATE maps SET session_id = ? WHERE session_id IN (${placeholders})`,
+      [sessionId, ...deadIds],
+    );
     reclaimed.boards = b.changes;
     reclaimed.messages = m.changes;
 
@@ -128,6 +136,10 @@ export function handleAttachCCSession(body: any) {
       );
       const m = db.run(
         `UPDATE pending_messages SET session_id = ? WHERE delivered = 0 AND session_id IN (${placeholders})`,
+        [sessionId, ...orphanIds],
+      );
+      db.run(
+        `UPDATE maps SET session_id = ? WHERE session_id IN (${placeholders})`,
         [sessionId, ...orphanIds],
       );
       reclaimed.orphan_boards = b.changes;
@@ -242,6 +254,10 @@ export function handleListSessions() {
              SELECT 1 FROM boards b
              WHERE b.session_id = sessions.id AND b.archived = 0
            )
+           OR EXISTS (
+             SELECT 1 FROM maps m
+             WHERE m.session_id = sessions.id AND m.deleted_at IS NULL
+           )
          )
        ORDER BY registered_at`,
     )
@@ -259,13 +275,19 @@ export function handleListSessions() {
       `SELECT id, pid, cwd, name, alive, cc_session_id
        FROM sessions
        WHERE alive = 0
-         AND EXISTS (
-           SELECT 1 FROM boards b
-           WHERE b.session_id = sessions.id AND b.archived = 0
-             AND (
-               b.is_default = 0
-               OR EXISTS (SELECT 1 FROM thread_items t WHERE t.board_id = b.id)
-             )
+         AND (
+           EXISTS (
+             SELECT 1 FROM boards b
+             WHERE b.session_id = sessions.id AND b.archived = 0
+               AND (
+                 b.is_default = 0
+                 OR EXISTS (SELECT 1 FROM thread_items t WHERE t.board_id = b.id)
+               )
+           )
+           OR EXISTS (
+             SELECT 1 FROM maps m
+             WHERE m.session_id = sessions.id AND m.deleted_at IS NULL
+           )
          )
        ORDER BY last_seen DESC`,
     )

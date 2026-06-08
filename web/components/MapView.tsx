@@ -37,6 +37,7 @@ import { Sidebar } from "./Sidebar.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
 import { ThreadMessage } from "./ThreadMessage.tsx";
 import { useDraft } from "../utils/drafts.ts";
+import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import {
   extractImageFiles,
   postMapChat,
@@ -374,6 +375,10 @@ function MapGeneralChat({
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // Auto-read the general chat's CC messages while the panel is on screen
+  // (same visible-dwell as board cards; map messages are thread_items).
+  useMarkReadOnVisible(bodyRef, thread);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
@@ -419,7 +424,7 @@ function MapGeneralChat({
   return (
     <aside className="map-chat">
       <div className="map-chat-head">{t("map.general_chat")}</div>
-      <div className="map-chat-body">
+      <div className="map-chat-body" ref={bodyRef}>
         <p className="map-chat-note">{t("map.general_chat_note")}</p>
         {thread.map((it) => (
           <ThreadMessage

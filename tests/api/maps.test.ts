@@ -342,4 +342,96 @@ describe("maps — list + search", () => {
     // No board carries the map_id.
     expect(me.boards.some((b: any) => b.id === mapId)).toBe(false);
   });
+
+  test("marking a map's cc message read clears its sidebar unread dot", async () => {
+    const mapId = await createMap("markread");
+    await addNode(mapId, { title: "n" });
+    const posted = await post<{ message_id: number }>(`${broker.url}/map-post`, {
+      map_id: mapId,
+      message: "unread cc message",
+    });
+    let sessions = await get<any>(`${broker.url}/api/sessions`);
+    let m = sessions.json.sessions
+      .find((s: any) => s.id === sessionId)
+      .maps.find((x: any) => x.id === mapId);
+    expect(m.unread_count).toBe(1);
+    // Map messages are thread_items, so the existing endpoint clears them.
+    await post(`${broker.url}/mark-thread-items-read`, {
+      thread_item_ids: [posted.json.message_id],
+    });
+    sessions = await get<any>(`${broker.url}/api/sessions`);
+    m = sessions.json.sessions
+      .find((s: any) => s.id === sessionId)
+      .maps.find((x: any) => x.id === mapId);
+    expect(m.unread_count).toBe(0);
+  });
+});
+
+describe("maps — lifecycle (reclaim + sidebar survival)", () => {
+  test("a map is reclaimed by the new session after a CC restart", async () => {
+    const cwd = "/tmp/pd-maplife";
+    const ccId = `cc-maplife-${Math.random().toString(36).slice(2, 8)}`;
+    const a = await registerSession(broker.url, cwd);
+    await attachCC(broker.url, a, ccId);
+    const mapId = (
+      await post<{ map_id: string }>(`${broker.url}/create-map`, {
+        session_id: a,
+        title: "lifemap",
+      })
+    ).json.map_id;
+    await post(`${broker.url}/map-add-node`, {
+      map_id: mapId,
+      node: { title: "n" },
+    });
+    // The CC dies...
+    await post(`${broker.url}/unregister`, { session_id: a });
+    // ...and restarts: a fresh broker session, same cc_session_id.
+    const b = await registerSession(broker.url, cwd);
+    await attachCC(broker.url, b, ccId);
+    // The map now belongs to the new session (reclaimed alongside boards).
+    const lmB = await post<{ maps: any[] }>(`${broker.url}/list-maps`, {
+      session_id: b,
+    });
+    expect(lmB.json.maps.some((m) => m.id === mapId)).toBe(true);
+    // ...and not to the dead one.
+    const lmA = await post<{ maps: any[] }>(`${broker.url}/list-maps`, {
+      session_id: a,
+    });
+    expect(lmA.json.maps.some((m) => m.id === mapId)).toBe(false);
+    // /map-chat no longer hits "no_recipient" (owner is the live new session).
+    const chat = post<{ ok: boolean; reason?: string }>(
+      `${broker.url}/map-chat`,
+      { map_id: mapId, text: "still reachable?" },
+    );
+    await new Promise((r) => setTimeout(r, 120));
+    await post(`${broker.url}/poll-messages`, { session_id: b });
+    const res = await chat;
+    expect(res.json.ok).toBe(true);
+  });
+
+  test("a map-only session survives in the inactive sidebar list", async () => {
+    const cwd = "/tmp/pd-maponly";
+    const ccId = `cc-maponly-${Math.random().toString(36).slice(2, 8)}`;
+    const c = await registerSession(broker.url, cwd);
+    await attachCC(broker.url, c, ccId); // creates an EMPTY default board
+    const mapId = (
+      await post<{ map_id: string }>(`${broker.url}/create-map`, {
+        session_id: c,
+        title: "only-a-map",
+      })
+    ).json.map_id;
+    await post(`${broker.url}/map-add-node`, {
+      map_id: mapId,
+      node: { title: "n" },
+    });
+    // The session goes inactive. Its only content is the map (the default
+    // board is empty), so without the maps-aware selector it would vanish.
+    await post(`${broker.url}/unregister`, { session_id: c });
+    const sessions = await get<any>(`${broker.url}/api/sessions`);
+    const inactive = sessions.json.inactive_sessions.find(
+      (s: any) => s.id === c,
+    );
+    expect(inactive).toBeTruthy();
+    expect(inactive.maps.some((m: any) => m.id === mapId)).toBe(true);
+  });
 });

@@ -15,6 +15,7 @@ import type { MapNodeKind, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
 import { ThreadMessage } from "./ThreadMessage.tsx";
 import { useDraft } from "../utils/drafts.ts";
+import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import {
   extractImageFiles,
   postMapChat,
@@ -146,15 +147,22 @@ function MapNodeImpl(props: NodeProps) {
   const ctx = useContext(MapContext);
   const data = props.data as unknown as MapNodeData;
   const kind = data.kind || "idea";
+  const cardRef = useRef<HTMLDivElement>(null);
   const sizeRef = useRef<{ w: number; h: number; x: number; y: number }>({
     w: 0,
     h: 0,
     x: 0,
     y: 0,
   });
+  // Same visible-dwell auto-read as a board node card: while the card is on
+  // screen for VISIBLE_DURATION_MS, mark its unread CC messages read (map
+  // messages are thread_items, so /mark-thread-items-read clears them + the
+  // sidebar unread dot). React Flow transforms the node, but getBoundingClientRect
+  // still reports screen coords, so visibility detection works inside the canvas.
+  useMarkReadOnVisible(cardRef, data.messages);
 
   return (
-    <div className={`map-card kind-${kind}`}>
+    <div ref={cardRef} className={`map-card kind-${kind}`}>
       <NodeResizer
         minWidth={240}
         minHeight={160}
