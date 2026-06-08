@@ -10,8 +10,15 @@
 // parent, never coordinates.
 
 import { broadcast } from "./ws.ts";
+import { insertPending, selectBoard } from "./db.ts";
 
 const CHANNEL = "map-demo";
+// PoC: the map's right-side general chat routes user messages to whichever CC
+// session owns this board, via the normal pending-message channel. Hardcoded
+// to the feature's design board for the spike (its owner is the dt session
+// running this work). kind="map_chat" so poll.ts pushes it as a plain note
+// (no UI-mirror reminder, no unanswered-counter bump).
+const MAP_CHAT_BOARD = "bd_a1c660ba6aa03e09dde6f6bb8ff08edc";
 
 type MapNode = {
   id: string;
@@ -134,8 +141,32 @@ export function getMapState() {
   return snapshot();
 }
 
+// The map's right-side general chat. Enqueues the user's message to the
+// board-owning CC session via the normal channel (kind="map_chat"), so the
+// session running this map work receives it like any other UI submission and
+// can respond by growing the map.
+function handleMapChat(body: any): unknown {
+  const text = String(body?.text ?? "").trim();
+  if (!text) return { ok: false, error: "text required" };
+  const board = selectBoard.get(MAP_CHAT_BOARD) as
+    | { session_id: string }
+    | undefined;
+  if (!board) return { ok: false, error: "chat board not found" };
+  insertPending.run(
+    board.session_id,
+    MAP_CHAT_BOARD,
+    "map-chat",
+    "発散議論 mindmap > 全体チャット",
+    text,
+    new Date().toISOString(),
+    "map_chat",
+  );
+  return { ok: true };
+}
+
 export const routes = {
   "/map/op": handleMapOp,
+  "/map/chat": handleMapChat,
 };
 
 // --- Standalone page (tldraw via CDN, no bundler involvement) ---
@@ -328,6 +359,7 @@ export const MAP_DEMO_RF_HTML = `<!doctype html>
   .chat-head { padding:10px 12px; font-weight:700; border-bottom:1px solid #eee; background:#faf5ff; color:#6d28d9; }
   .chat-body { flex:1; overflow:auto; padding:12px; }
   .chat-note { color:#6b7280; font-size:12px; }
+  .chat-msg { margin-top:8px; padding:7px 10px; background:#eef2ff; border:1px solid #e0e7ff; border-radius:8px; font-size:13px; color:#1e293b; white-space:pre-wrap; }
   .chat-input { padding:10px; border-top:1px solid #eee; }
   .chat-input input { width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #c4c4c4; border-radius:8px; font-size:16px; }
   .card { width:200px; border-radius:10px; border:2px solid; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.08); overflow:hidden; }
@@ -380,6 +412,10 @@ function App() {
   const data = st[0], setData = st[1];
   const rf = React.useRef(null);
   const didFit = React.useRef(false);
+  const ms = React.useState([]);   // local echo of messages the user sent me
+  const msgs = ms[0], setMsgs = ms[1];
+  const iv = React.useState("");
+  const input = iv[0], setInput = iv[1];
 
   React.useEffect(function(){
     function apply(state){
@@ -404,6 +440,14 @@ function App() {
     fetch("/map/op", { method:"POST", headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({ action:"update", id: node.id, x: Math.round(node.position.x), y: Math.round(node.position.y) }) }).catch(function(){});
   }
+  function send(){
+    const t = input.trim();
+    if (!t) return;
+    setMsgs(function(m){ return m.concat([t]); });
+    setInput("");
+    fetch("/map/chat", { method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ text: t }) }).catch(function(){});
+  }
 
   return h("div", { className:"wrap" },
     h("div", { className:"canvas" },
@@ -417,9 +461,16 @@ function App() {
     h("aside", { className:"chat" },
       h("div", { className:"chat-head" }, "general チャット (マップ全体)"),
       h("div", { className:"chat-body" },
-        h("p", { className:"chat-note" }, "ここにマップ全体に対する議論スレッドが入ります (PoC: レイアウト確認用)。各ノードのカードは、それ自身のスレッド/履歴を内側に持てます — それが React Flow を選ぶ理由 (ノード = リッチな React 部品)。")
+        h("p", { className:"chat-note" }, "ここに送ると、地図を維持している私 (Claude) に届きます。私は応答を地図の変化 (ノードの増減) として返します。"),
+        msgs.map(function(m, i){ return h("div", { key:i, className:"chat-msg" }, m); })
       ),
-      h("div", { className:"chat-input" }, h("input", { placeholder:"マップ全体にメッセージ…", disabled:true }))
+      h("div", { className:"chat-input" },
+        h("input", {
+          value: input, placeholder:"私にメッセージ… (Enter で送信)",
+          onChange: function(e){ setInput(e.target.value); },
+          onKeyDown: function(e){ if (e.key === "Enter") send(); },
+        })
+      )
     )
   );
 }
