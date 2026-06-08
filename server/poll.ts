@@ -91,18 +91,24 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
         method: "notifications/claude/channel",
         params: {
           content,
-          // IMPORTANT: keep meta to the fields the channel mechanism is known
-          // to accept. Adding an extra key here (we tried message_id) makes the
-          // notification fail to push — silently killing ALL channel delivery
-          // for that CC. The human message's id is surfaced another way (the
-          // broker stores it; a reply can fetch it via get_board) rather than
-          // riding this meta. Do NOT add fields without verifying delivery.
+          // CHANNEL META CONSTRAINT: every value here must be a STRING. A
+          // first cut surfaced message_id as a NUMBER and that silently killed
+          // ALL channel delivery for any freshly-restarted CC (the broker still
+          // marked messages delivered, so they were lost). The custom keys
+          // node_path / sent_at prove extra KEYS are fine — it was the non-
+          // string value that broke it. So message_id rides along, stringified.
+          // thread_items.id of this user message — lets a reply cite the exact
+          // human message (sources=[{kind:"message", id:<message_id>}]). Present
+          // for user_input_relay; omitted for structure-requests / notes.
           meta: {
             kind,
             board_id: msg.board_id,
             node_id: msg.node_id,
             node_path: msg.node_path,
             sent_at: msg.created_at,
+            ...(msg.thread_item_id != null
+              ? { message_id: String(msg.thread_item_id) }
+              : {}),
           },
         },
       });
