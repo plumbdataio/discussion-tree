@@ -54,47 +54,85 @@ const SOURCE_LABEL: Record<ChecklistSourceKind, string> = {
   message: "メッセージ",
 };
 
-// One source row inside the expanded list. A message jumps straight to that
-// thread item (via the anchor-jump channel); a node / board is a plain SPA
-// link the global interceptor handles (so Cmd-click still opens a new tab).
-function SourceRow({ source }: { source: ChecklistItemSource }) {
-  const kind = (source.kind in SOURCE_ICON ? source.kind : "node") as
-    | ChecklistSourceKind;
-  const Icon = SOURCE_ICON[kind];
-  const label = SOURCE_LABEL[kind];
-  const ref = (
-    <>
-      <span className="checklist-source-icon" aria-hidden="true">
-        <Icon size={13} strokeWidth={2} />
-      </span>
-      <span className="checklist-source-label">{label}</span>
-      <span className="checklist-source-ref" title={source.ref_id}>
-        {source.ref_id}
-      </span>
-    </>
-  );
+function whoLabel(source?: string): string | null {
+  if (source === "cc") return "CC";
+  if (source === "user") return "あなた";
+  if (source === "system") return "システム";
+  return source ?? null;
+}
+
+// The action that opens a source: a message jumps straight to that thread item
+// (via the anchor-jump channel); a node / board is a plain SPA link the global
+// interceptor handles (so Cmd-click still opens a new tab). Kept as a single
+// interactive element so the preview content (which may contain markdown
+// links) isn't nested inside another link/button.
+function SourceAction({
+  source,
+  kind,
+}: {
+  source: ChecklistItemSource;
+  kind: ChecklistSourceKind;
+}) {
   if (kind === "message") {
     return (
       <button
         type="button"
-        className={`checklist-source-row checklist-source-${kind}`}
+        className="checklist-source-open"
         onClick={() => jumpToAnchor(source.board_id, Number(source.ref_id))}
-        title="このメッセージへ移動"
       >
-        {ref}
+        このメッセージへ移動
       </button>
     );
   }
   const href =
     kind === "board" ? `/board/${source.ref_id}` : `/board/${source.board_id}`;
   return (
-    <a
-      className={`checklist-source-row checklist-source-${kind}`}
-      href={href}
-      title={kind === "board" ? "このボードを開く" : "このノードのボードを開く"}
-    >
-      {ref}
+    <a className="checklist-source-open" href={href}>
+      {kind === "board" ? "このボードを開く" : "このノードのボードを開く"}
     </a>
+  );
+}
+
+// One source inside the modal: the cited content (title / message body) plus
+// where it lives and an action to open it.
+function SourceRow({ source }: { source: ChecklistItemSource }) {
+  const kind = (source.kind in SOURCE_ICON ? source.kind : "node") as
+    | ChecklistSourceKind;
+  const Icon = SOURCE_ICON[kind];
+  const label = SOURCE_LABEL[kind];
+  const p = source.preview;
+  const who = whoLabel(p?.source);
+  return (
+    <div className={`checklist-source-row checklist-source-${kind}`}>
+      <div className="checklist-source-head">
+        <span className="checklist-source-icon" aria-hidden="true">
+          <Icon size={13} strokeWidth={2} />
+        </span>
+        <span className="checklist-source-label">{label}</span>
+        {who && <span className="checklist-source-who">{who}</span>}
+        {kind !== "board" && p?.board_title && (
+          <span className="checklist-source-board" title={p.board_title}>
+            {p.board_title}
+          </span>
+        )}
+        <span className="checklist-source-ref" title={source.ref_id}>
+          {source.ref_id}
+        </span>
+      </div>
+      {p?.missing ? (
+        <div className="checklist-source-missing">参照先が見つかりません</div>
+      ) : (
+        <>
+          {p?.title && <div className="checklist-source-name">{p.title}</div>}
+          {p?.text && (
+            <MDView className="checklist-source-preview" text={p.text} />
+          )}
+        </>
+      )}
+      <div className="checklist-source-actions">
+        <SourceAction source={source} kind={kind} />
+      </div>
+    </div>
   );
 }
 

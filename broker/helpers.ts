@@ -8,9 +8,11 @@ import type {
   Board,
   ChecklistItem,
   ChecklistItemSource,
+  ChecklistSourcePreview,
   Node,
   NodeInput,
   ThreadItem,
+  ThreadSource,
 } from "../shared/types.ts";
 import {
   db,
@@ -100,6 +102,41 @@ export function structureHasSubItems(structure: any): boolean {
   return false;
 }
 
+// --- Checklist source previews ---
+// Resolve what a source points at so the UI can show the cited content, not
+// just a link. Read-only; results are attached to the source, never stored.
+const previewBoard = db.prepare(`SELECT title FROM boards WHERE id = ?`);
+const previewNode = db.prepare(
+  `SELECT title, context FROM nodes WHERE board_id = ? AND id = ? AND deleted_at IS NULL`,
+);
+const previewMessage = db.prepare(
+  `SELECT text, source FROM thread_items WHERE id = ?`,
+);
+
+function buildSourcePreview(s: ChecklistItemSource): ChecklistSourcePreview {
+  const boardRow = previewBoard.get(s.board_id) as { title: string } | undefined;
+  const board_title = boardRow?.title;
+  if (s.kind === "board") {
+    const b = previewBoard.get(s.ref_id) as { title: string } | undefined;
+    return b ? { title: b.title } : { missing: true };
+  }
+  if (s.kind === "node") {
+    const n = previewNode.get(s.board_id, s.ref_id) as
+      | { title: string; context: string | null }
+      | undefined;
+    return n
+      ? { title: n.title, text: n.context || undefined, board_title }
+      : { missing: true, board_title };
+  }
+  // message: ref_id is a thread_items.id
+  const m = previewMessage.get(Number(s.ref_id)) as
+    | { text: string; source: string }
+    | undefined;
+  return m
+    ? { text: m.text, source: m.source as ThreadSource, board_title }
+    : { missing: true, board_title };
+}
+
 export function getBoardView(boardId: string) {
   const board = selectBoard.get(boardId) as Board | null;
   if (!board) return null;
@@ -116,11 +153,14 @@ export function getBoardView(boardId: string) {
         boardId,
         n.id,
       ) as ChecklistItem[];
-      // Attach each item's structured sources (where the decision was made).
+      // Attach each item's structured sources (where the decision was made),
+      // each enriched with a preview of the cited content.
       for (const it of items) {
-        it.sources = selectChecklistSourcesByItem.all(
+        const sources = selectChecklistSourcesByItem.all(
           it.id,
         ) as ChecklistItemSource[];
+        for (const s of sources) s.preview = buildSourcePreview(s);
+        it.sources = sources;
       }
       n.checklist_items = items;
     }

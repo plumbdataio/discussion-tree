@@ -108,6 +108,18 @@ export type ChecklistItemStatus =
 // them (and to let the UI build a link directly).
 export type ChecklistSourceKind = "board" | "node" | "message";
 
+// A short preview of what a source points at, resolved by getBoardView so the
+// UI can show the cited content (not just a link). Fields are filled per kind:
+// board → title; node → title + text(=context); message → text(=body) + source
+// (who said it). board_title gives the surrounding board for node / message.
+export interface ChecklistSourcePreview {
+  title?: string;
+  text?: string;
+  source?: ThreadSource;
+  board_title?: string;
+  missing?: boolean; // the referenced entity no longer exists
+}
+
 export interface ChecklistItemSource {
   id: number;
   item_id: number;
@@ -118,6 +130,8 @@ export interface ChecklistItemSource {
   ref_id: string;
   position: number;
   created_at: string;
+  // Attached by getBoardView (read-side only; not stored).
+  preview?: ChecklistSourcePreview;
 }
 
 export interface ChecklistItem {

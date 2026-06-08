@@ -114,8 +114,9 @@ describe("ChecklistCard source citations", () => {
     expect(modal).toBeTruthy();
     expect(m.host.querySelector(".checklist-source-row")).toBeNull();
     const row = modal!.querySelector(".checklist-source-row") as HTMLElement;
-    expect(row.tagName).toBe("A");
-    expect(row.getAttribute("href")).toBe("/board/bd_x");
+    const action = row.querySelector(".checklist-source-open") as HTMLElement;
+    expect(action.tagName).toBe("A");
+    expect(action.getAttribute("href")).toBe("/board/bd_x");
     expect(row.textContent).toContain("ノード");
     expect(row.textContent).toContain("dec");
     await m.unmount();
@@ -143,14 +144,49 @@ describe("ChecklistCard source citations", () => {
     const rows = modal.querySelectorAll(".checklist-source-row");
     expect(rows.length).toBe(2);
     // board → link to itself
-    expect(rows[0].tagName).toBe("A");
-    expect(rows[0].getAttribute("href")).toBe("/board/bd_other");
+    const a0 = rows[0].querySelector(".checklist-source-open") as HTMLElement;
+    expect(a0.tagName).toBe("A");
+    expect(a0.getAttribute("href")).toBe("/board/bd_other");
     expect(rows[0].textContent).toContain("ボード");
     // message → button (no href, jumps via anchor channel)
-    expect(rows[1].tagName).toBe("BUTTON");
-    expect(rows[1].getAttribute("href")).toBeNull();
+    const a1 = rows[1].querySelector(".checklist-source-open") as HTMLElement;
+    expect(a1.tagName).toBe("BUTTON");
+    expect(a1.getAttribute("href")).toBeNull();
     expect(rows[1].textContent).toContain("メッセージ");
     expect(rows[1].textContent).toContain("99");
+    await m.unmount();
+  });
+
+  test("a source preview shows the cited content + who said it", async () => {
+    const n = node([
+      item({
+        id: 1,
+        position: 0,
+        sources: [
+          src({
+            id: 10,
+            kind: "message",
+            ref_id: "99",
+            board_id: "bd_msg",
+            preview: { text: "the cited body", source: "user", board_title: "会話" },
+          }),
+        ],
+      }),
+    ]);
+    const m = await mount(n);
+    const toggle = m.host.querySelector(
+      ".checklist-source-toggle",
+    ) as HTMLElement;
+    await act(async () => {
+      toggle.click();
+    });
+    const modal = document.querySelector(".checklist-sources-modal")!;
+    expect(
+      modal.querySelector(".checklist-source-preview")?.textContent,
+    ).toContain("the cited body");
+    expect(
+      modal.querySelector(".checklist-source-who")?.textContent,
+    ).toContain("あなた");
     await m.unmount();
   });
 
