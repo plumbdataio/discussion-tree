@@ -74,10 +74,23 @@ body {
   gap: 16px;
 }
 
+/* No header child may wrap — a wrapping title / breadcrumb is what grew the
+   header to a second line (and made it jitter as the Working badge appeared /
+   disappeared and changed the title's available width). Long text truncates
+   with an ellipsis instead of wrapping. (The Working badge already nowraps +
+   ellipsizes via .activity-badge / .activity-msg.) */
+.header > * {
+  white-space: nowrap;
+}
 .header h1 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+  /* Shrink + ellipsis instead of wrap when space is tight (min-width:0 lets a
+     flex item shrink below its content width). */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .header .ws-status {
