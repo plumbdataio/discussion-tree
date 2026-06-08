@@ -48,10 +48,12 @@ function emit() {
 
 // Loose layout: a child sits to the right of its parent, fanned vertically by
 // how many children the parent already has. Roots stack down the left edge.
-const NODE_W = 200;
-const NODE_H = 70;
-const COL_GAP = 90;
-const ROW_GAP = 28;
+// Match the rendered card default (320x120) so the auto-layout doesn't overlap
+// siblings. The user can drag/resize afterwards (persisted).
+const NODE_W = 320;
+const NODE_H = 120;
+const COL_GAP = 140;
+const ROW_GAP = 56;
 let rootCount = 0;
 function place(parent: string | null): { x: number; y: number } {
   if (!parent || !nodes.has(parent)) {
@@ -152,11 +154,18 @@ function handleMapChat(body: any): unknown {
     | { session_id: string }
     | undefined;
   if (!board) return { ok: false, error: "chat board not found" };
+  // node_id lets a per-node textarea route to its node; default "map-chat" is
+  // the whole-map general chat.
+  const nodeId = body?.node_id ? String(body.node_id) : "map-chat";
+  const path =
+    nodeId === "map-chat"
+      ? "発散議論 mindmap > 全体チャット"
+      : "発散議論 mindmap > ノード " + nodeId;
   insertPending.run(
     board.session_id,
     MAP_CHAT_BOARD,
-    "map-chat",
-    "発散議論 mindmap > 全体チャット",
+    nodeId,
+    path,
     text,
     new Date().toISOString(),
     "map_chat",
@@ -365,10 +374,10 @@ export const MAP_DEMO_RF_HTML = `<!doctype html>
   .chat-send-row { display:flex; justify-content:flex-end; }
   .chat-send-row button { padding:6px 14px; border:none; border-radius:8px; background:#7c3aed; color:#fff; font-size:13px; font-weight:600; cursor:pointer; }
   .chat-send-row button:disabled { background:#c4b5fd; cursor:default; }
-  .card { width:200px; border-radius:10px; border:2px solid; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.08); overflow:hidden; }
-  .card-badge { font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:3px 8px; color:#fff; }
-  .card-text { padding:8px 10px; font-size:13px; color:#1a1a1a; }
-  .card-foot { padding:5px 10px; border-top:1px dashed #e5e7eb; font-size:11px; color:#9ca3af; }
+  .card { width:100%; height:100%; display:flex; flex-direction:column; border-radius:10px; border:2px solid; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.08); overflow:hidden; }
+  .card-title { flex:1 1 auto; min-height:0; overflow:auto; padding:8px 10px; font-size:13px; font-weight:600; color:#1a1a1a; line-height:1.45; user-select:text; cursor:text; white-space:pre-wrap; }
+  .card-input { flex:0 0 auto; padding:6px 8px; border-top:1px dashed #e5e7eb; }
+  .node-input { width:100%; box-sizing:border-box; border:1px solid #e5e7eb; border-radius:6px; padding:5px 7px; font-size:12px; resize:none; min-height:30px; font-family:inherit; }
   .kind-question { border-color:#f59e0b; } .kind-question .card-badge { background:#f59e0b; }
   .kind-idea { border-color:#2563eb; } .kind-idea .card-badge { background:#2563eb; }
   .kind-research { border-color:#7c3aed; } .kind-research .card-badge { background:#7c3aed; }
@@ -381,7 +390,7 @@ export const MAP_DEMO_RF_HTML = `<!doctype html>
 <script type="module">
 import React from "https://esm.sh/react@18.3.1";
 import { createRoot } from "https://esm.sh/react-dom@18.3.1/client";
-import { ReactFlow, Background, Controls, Handle, Position, applyNodeChanges }
+import { ReactFlow, Background, Controls, Handle, Position, applyNodeChanges, NodeResizer }
   from "https://esm.sh/@xyflow/react@12.3.5?deps=react@18.3.1,react-dom@18.3.1";
 
 const h = React.createElement;
@@ -390,11 +399,25 @@ const KIND_LABEL = { question:"Question", idea:"Idea", research:"Research", sele
 function CardNode(props) {
   const d = props.data;
   const kind = d.kind || "note";
+  const iv = React.useState("");
+  const val = iv[0], setVal = iv[1];
+  function sendNode(){
+    const t = val.trim();
+    if (!t) return;
+    setVal("");
+    fetch("/map/chat", { method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ text: t, node_id: props.id }) }).catch(function(){});
+  }
   return h("div", { className: "card kind-" + kind },
+    h(NodeResizer, { minWidth: 240, minHeight: 96, isVisible: !!props.selected }),
     h(Handle, { type:"target", position: Position.Left }),
-    h("div", { className:"card-badge" }, KIND_LABEL[kind] || kind),
-    h("div", { className:"card-text" }, d.text),
-    h("div", { className:"card-foot" }, "スレッド (このノードの履歴)"),
+    h("div", { className:"card-title nodrag" }, d.text),
+    h("div", { className:"card-input" },
+      h("textarea", { className:"nodrag nopan node-input", value: val, rows:1,
+        placeholder:"このノードに送る… (⌘Enter)",
+        onChange: function(e){ setVal(e.target.value); },
+        onKeyDown: function(e){ if ((e.metaKey||e.ctrlKey) && e.key==="Enter") sendNode(); } })
+    ),
     h(Handle, { type:"source", position: Position.Right })
   );
 }
@@ -402,7 +425,9 @@ const nodeTypes = { card: CardNode };
 
 function toFlow(state) {
   const nodes = state.nodes.map(function(n){
-    return { id:n.id, type:"card", position:{ x:n.x, y:n.y }, data:{ text:n.text, kind:n.kind } };
+    return { id:n.id, type:"card", position:{ x:n.x, y:n.y },
+      data:{ text:n.text, kind:n.kind },
+      style:{ width: (n.w || 320), height: (n.h || 120) } };
   });
   const edges = state.edges.map(function(e){
     return { id:e.id, source:e.from, target:e.to };
