@@ -360,8 +360,11 @@ export const MAP_DEMO_RF_HTML = `<!doctype html>
   .chat-body { flex:1; overflow:auto; padding:12px; }
   .chat-note { color:#6b7280; font-size:12px; }
   .chat-msg { margin-top:8px; padding:7px 10px; background:#eef2ff; border:1px solid #e0e7ff; border-radius:8px; font-size:13px; color:#1e293b; white-space:pre-wrap; }
-  .chat-input { padding:10px; border-top:1px solid #eee; }
-  .chat-input input { width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #c4c4c4; border-radius:8px; font-size:16px; }
+  .chat-input { padding:10px; border-top:1px solid #eee; display:flex; flex-direction:column; gap:6px; }
+  .chat-input textarea { width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #c4c4c4; border-radius:8px; font-size:16px; resize:vertical; min-height:54px; font-family:inherit; }
+  .chat-send-row { display:flex; justify-content:flex-end; }
+  .chat-send-row button { padding:6px 14px; border:none; border-radius:8px; background:#7c3aed; color:#fff; font-size:13px; font-weight:600; cursor:pointer; }
+  .chat-send-row button:disabled { background:#c4b5fd; cursor:default; }
   .card { width:200px; border-radius:10px; border:2px solid; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.08); overflow:hidden; }
   .card-badge { font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:3px 8px; color:#fff; }
   .card-text { padding:8px 10px; font-size:13px; color:#1a1a1a; }
@@ -465,11 +468,14 @@ function App() {
         msgs.map(function(m, i){ return h("div", { key:i, className:"chat-msg" }, m); })
       ),
       h("div", { className:"chat-input" },
-        h("input", {
-          value: input, placeholder:"私にメッセージ… (Enter で送信)",
+        h("textarea", {
+          value: input, placeholder:"私にメッセージ… (Enter で改行 / ⌘ Enter で送信)", rows: 2,
           onChange: function(e){ setInput(e.target.value); },
-          onKeyDown: function(e){ if (e.key === "Enter") send(); },
-        })
+          onKeyDown: function(e){ if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send(); },
+        }),
+        h("div", { className:"chat-send-row" },
+          h("button", { type:"button", disabled: !input.trim(), onClick: send }, "送信")
+        )
       )
     )
   );
