@@ -349,8 +349,48 @@ export function onNodeSettled(
   );
 }
 
+// Count of UNFINISHED decision checklists owned by the CC session — a
+// checklist node (is_checklist=1) on a non-archived board this session owns
+// that still has at least one item not done/dropped. Empty checklists (no
+// items) don't count: there's nothing outstanding to finish. Used by the
+// post-compact SessionStart hook to emit a COUNT-ONLY "you have N unfinished
+// checklists" nudge so a checklist isn't silently forgotten across a compact —
+// deliberately no detail / no per-item nag (that would be noise for a list the
+// user is content to leave parked). cc_session_id, not session_id: hooks only
+// know the CC side.
+const selectIncompleteChecklistCount = db.prepare(
+  `SELECT COUNT(*) AS c
+     FROM nodes n
+     JOIN boards b ON b.id = n.board_id
+    WHERE b.session_id = ?
+      AND b.archived = 0
+      AND n.is_checklist = 1
+      AND n.deleted_at IS NULL
+      AND EXISTS (
+        SELECT 1 FROM checklist_items ci
+         WHERE ci.board_id = n.board_id AND ci.node_id = n.id
+           AND ci.status NOT IN ('done', 'dropped')
+      )`,
+);
+const selectAliveSessionByCcId = db.prepare(
+  `SELECT id FROM sessions WHERE cc_session_id = ? AND alive = 1 ORDER BY last_seen DESC LIMIT 1`,
+);
+
+export function handleGetIncompleteChecklists(body: {
+  cc_session_id?: string;
+}): { ok: boolean; count: number } {
+  if (!body.cc_session_id) return { ok: false, count: 0 };
+  const session = selectAliveSessionByCcId.get(body.cc_session_id) as
+    | { id: string }
+    | undefined;
+  if (!session) return { ok: false, count: 0 };
+  const row = selectIncompleteChecklistCount.get(session.id) as { c: number };
+  return { ok: true, count: row.c };
+}
+
 export const routes = {
   "/record-decision": handleRecordDecision,
   "/update-decision": handleUpdateDecision,
   "/set-node-checklist": handleSetNodeChecklist,
+  "/get-incomplete-checklists": handleGetIncompleteChecklists,
 };
