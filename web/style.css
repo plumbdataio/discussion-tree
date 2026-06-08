@@ -2031,11 +2031,6 @@ body.concern-resizing * {
      messages off the bottom instead of following them. */
   display: flex;
   flex-direction: column-reverse;
-  /* Short threads (fewer messages than fill the box) would otherwise pile at
-     the bottom under column-reverse. flex-end packs them to the visual top
-     (flex-end = top under column-reverse). Once content overflows,
-     justify-content is ignored, so the bottom-pinning scroll is unaffected. */
-  justify-content: flex-end;
   overflow-anchor: none;
   gap: 6px;
   /* iOS Safari momentum scrolling inside this nested overflow box. */
@@ -2053,6 +2048,16 @@ body.concern-resizing * {
      more messages below the visible region. */
   scrollbar-width: thin;
   scrollbar-gutter: stable;
+}
+/* Top-align a short thread without breaking overflow scroll. An auto margin on
+   the main-start child (column-reverse → the visual BOTTOM, i.e. the newest /
+   tentative message) absorbs the free space when the thread is short, pushing
+   the messages to the visual top; when the thread overflows it resolves to 0,
+   so scrolling is untouched. This is the scroll-safe alternative to
+   justify-content:flex-end, which on a column-reverse scroll container clips
+   the overflow and makes the newest messages unreachable. */
+.item-card > .thread > :first-child {
+  margin-bottom: auto;
 }
 .item-card > .thread::-webkit-scrollbar {
   width: 6px;
