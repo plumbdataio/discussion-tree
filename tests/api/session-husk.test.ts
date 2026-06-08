@@ -74,3 +74,27 @@ describe("dead-session husk filtering", () => {
     expect(await inactiveIds()).toContain(s);
   });
 });
+
+describe("alive-session husk filtering", () => {
+  async function aliveIds(): Promise<string[]> {
+    const r = await get<any>(`${broker.url}/api/sessions`);
+    return (r.json.sessions ?? []).map((s: any) => s.id);
+  }
+
+  test("a bare registration (no board, no name) is NOT in the active list", async () => {
+    const s = await registerSession(broker.url, "/tmp/alive-husk-a");
+    expect(await aliveIds()).not.toContain(s);
+  });
+
+  test("a named alive session with no board IS in the active list", async () => {
+    const s = await registerSession(broker.url, "/tmp/alive-husk-b");
+    await post(`${broker.url}/set-session-name`, { session_id: s, name: "N" });
+    expect(await aliveIds()).toContain(s);
+  });
+
+  test("an attached alive session (default board) IS in the active list", async () => {
+    const s = await registerSession(broker.url, "/tmp/alive-husk-c");
+    await attachCC(broker.url, s);
+    expect(await aliveIds()).toContain(s);
+  });
+});

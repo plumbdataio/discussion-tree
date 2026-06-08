@@ -226,9 +226,24 @@ export function handleListSessions() {
     cc_session_id: string | null;
   };
 
+  // Hide alive husks: a bare registration (a CC whose SessionStart hook
+  // registered it but that never attached to DT) owns ZERO boards and clutters
+  // the active list forever while its pid lives. Show an alive session only if
+  // it has a name OR at least one non-archived board (attaching always creates
+  // the default board, so any genuinely-in-use session qualifies immediately).
   const aliveSessions = db
     .prepare(
-      "SELECT id, pid, cwd, name, alive, cc_session_id FROM sessions WHERE alive = 1 ORDER BY registered_at",
+      `SELECT id, pid, cwd, name, alive, cc_session_id
+       FROM sessions
+       WHERE alive = 1
+         AND (
+           name IS NOT NULL
+           OR EXISTS (
+             SELECT 1 FROM boards b
+             WHERE b.session_id = sessions.id AND b.archived = 0
+           )
+         )
+       ORDER BY registered_at`,
     )
     .all() as SessionRow[];
 

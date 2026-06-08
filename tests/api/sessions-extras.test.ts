@@ -47,6 +47,10 @@ describe("/api/sessions inactive list", () => {
   test("ordering: alive sessions appear in /api/sessions.sessions", async () => {
     const a = await registerSession(broker.url, "/tmp/alive-order-a");
     const b = await registerSession(broker.url, "/tmp/alive-order-b");
+    // A bare registration (no name, no board) is now hidden as a husk; give
+    // them names so they qualify for the active list.
+    await post(`${broker.url}/set-session-name`, { session_id: a, name: "A" });
+    await post(`${broker.url}/set-session-name`, { session_id: b, name: "B" });
     const r = await get<{ sessions: any[] }>(`${broker.url}/api/sessions`);
     const ids = r.json.sessions.map((s) => s.id);
     expect(ids).toContain(a);

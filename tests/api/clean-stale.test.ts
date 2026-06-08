@@ -55,6 +55,11 @@ describe("cleanStaleSessions sweep", () => {
       { pid: process.pid, cwd: "/tmp/clean-stale-live" },
     );
     const sid = reg.json.session_id;
+    // Give it a name so it isn't filtered out as a bare-registration husk —
+    // we want to test the sweep, not the husk filter. (A swept session goes
+    // alive=0 and, having no board, drops from BOTH lists, so its presence
+    // here still proves the sweep left it alone.)
+    await post(`${broker.url}/set-session-name`, { session_id: sid, name: "live" });
 
     await new Promise((r) => setTimeout(r, 350));
 
