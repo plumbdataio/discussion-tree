@@ -212,10 +212,16 @@ export function handleBgTaskStart(body: {
   return { ok: true, count: set.size };
 }
 
-// CC calls this through the report_bg_task_done MCP tool after seeing a
-// <task-notification status="completed" task-id=...> in its message
-// stream. Accepts a list so multiple completions seen on the same turn
-// can be cleared in one round-trip.
+// Clears one or more in-flight BG tasks by the tool_use_id they were
+// registered under (handleBgTaskStart). Two callers now:
+//   - the bg-task-reconcile Stop hook, which scrapes the transcript each turn
+//     end for completed <task-notification> blocks and clears their
+//     <tool-use-id> values automatically (the reliable path), and
+//   - the report_bg_task_done MCP tool (same-turn fast-path).
+// NOTE the completion notification carries BOTH a short <task-id> and the
+// <tool-use-id> — only the latter matches what we registered, so both callers
+// must send the tool_use_id. Accepts a list so several completions clear in
+// one round-trip; unknown ids are silently ignored (idempotent).
 export function handleBgTaskDone(body: {
   session_id?: string;
   cc_session_id?: string;

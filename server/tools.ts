@@ -410,7 +410,7 @@ export const TOOLS = [
   {
     name: "report_bg_task_done",
     description:
-      "Tell the broker that one or more background Bash tasks have finished, so the BG marker in the UI clears. Call this immediately whenever you see a `<task-notification status=\"completed\" task-id=\"...\">` system message in your context — pass the task-id values from those notifications. Bundling multiple ids into a single call is fine if you see several at once. The broker auto-registered each BG task when its PreToolUse hook fired, so you only have to handle the done side.",
+      "Optional fast-path to clear a background Bash task's BG marker immediately rather than waiting for the Stop hook (which auto-clears completed tasks from the transcript at every turn end). When you see a `<task-notification>` with `<status>completed</status>`, pass its `<tool-use-id>` (the `toolu_…` value — NOT the short `<task-id>`). The broker registered each BG task under that tool_use_id, so the short task-id will not match. Bundling several ids in one call is fine. Forgetting is no longer fatal — the Stop hook is the safety net.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -418,7 +418,7 @@ export const TOOLS = [
           type: "array" as const,
           items: { type: "string" as const },
           description:
-            "tool_use_id values from <task-notification status=\"completed\"> system messages (the task-id attribute). Pass them as-is; the broker matches by exact string.",
+            "The `<tool-use-id>` (toolu_…) values from completed `<task-notification>` blocks — NOT the short `<task-id>`. Pass them as-is; the broker matches by exact string against the tool_use_id it registered.",
         },
       },
       required: ["task_ids"],
