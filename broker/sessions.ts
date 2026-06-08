@@ -233,14 +233,25 @@ export function handleListSessions() {
     .all() as SessionRow[];
 
   // Inactive sessions are kept around (alive=0) so the user can browse
-  // historical conversations. Surface only those that own at least one
-  // non-archived board — empty husks aren't interesting.
+  // historical conversations. Surface only those that actually hold content:
+  // a non-default board, OR a default/general board that has at least one
+  // message. A CC that started and exited without ever conversing (in the CLI
+  // or DT) owns only its auto-created, empty default board — that's a husk and
+  // would otherwise linger in the sidebar after the stale sweep flips it to
+  // alive=0.
   const inactiveSessions = db
     .prepare(
       `SELECT id, pid, cwd, name, alive, cc_session_id
        FROM sessions
        WHERE alive = 0
-         AND id IN (SELECT DISTINCT session_id FROM boards WHERE archived = 0)
+         AND EXISTS (
+           SELECT 1 FROM boards b
+           WHERE b.session_id = sessions.id AND b.archived = 0
+             AND (
+               b.is_default = 0
+               OR EXISTS (SELECT 1 FROM thread_items t WHERE t.board_id = b.id)
+             )
+         )
        ORDER BY last_seen DESC`,
     )
     .all() as SessionRow[];

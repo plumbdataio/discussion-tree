@@ -425,8 +425,17 @@ describe("sessions", () => {
 
   test("/api/sessions splits alive vs inactive sessions", async () => {
     const sid = await registerSession(broker.url, "/tmp/inactive-cwd");
-    const ccId = await attachCC(broker.url, sid);
-    // attach-cc-session creates a default board → after unregister, this session has a non-archived board → inactive_sessions.
+    await attachCC(broker.url, sid);
+    // Give it real content (a non-default board) so it qualifies as an
+    // inactive session — a bare empty default board is treated as a husk and
+    // filtered out (see session-husk.test.ts).
+    await post(`${broker.url}/create-board`, {
+      session_id: sid,
+      structure: {
+        title: "Real",
+        concerns: [{ id: "c", title: "C", items: [{ id: "i", title: "I" }] }],
+      },
+    });
     await post(`${broker.url}/unregister`, { session_id: sid });
 
     const r = await get<{ sessions: any[]; inactive_sessions: any[] }>(
