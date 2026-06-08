@@ -23,7 +23,8 @@ const MAP_CHAT_BOARD = "bd_a1c660ba6aa03e09dde6f6bb8ff08edc";
 type MapMsg = { source: string; text: string };
 type MapNode = {
   id: string;
-  text: string;
+  title: string; // short punchy headline
+  text: string; // context / description (markdown)
   kind: string; // free label: question | idea | research | selection | note
   x: number;
   y: number;
@@ -75,6 +76,7 @@ function addNode(body: any): { ok: boolean; id?: string; error?: string } {
   const text = String(body.text ?? "").trim();
   if (!text) return { ok: false, error: "text required" };
   const kind = String(body.kind ?? "note");
+  const title = body.title != null ? String(body.title) : "";
   const parent =
     body.parent != null && nodes.has(String(body.parent))
       ? String(body.parent)
@@ -84,7 +86,7 @@ function addNode(body: any): { ok: boolean; id?: string; error?: string } {
     typeof body.x === "number" && typeof body.y === "number"
       ? { x: body.x, y: body.y }
       : place(parent);
-  nodes.set(id, { id, text, kind, x: pos.x, y: pos.y, parent });
+  nodes.set(id, { id, title, text, kind, x: pos.x, y: pos.y, parent });
   if (parent) {
     const eid = `${parent}->${id}`;
     edges.set(eid, { id: eid, from: parent, to: id });
@@ -410,8 +412,9 @@ export const MAP_DEMO_RF_HTML = `<!doctype html>
   .chat-send-row button { padding:6px 14px; border:none; border-radius:8px; background:#7c3aed; color:#fff; font-size:13px; font-weight:600; cursor:pointer; }
   .chat-send-row button:disabled { background:#c4b5fd; cursor:default; }
   .card { width:100%; height:100%; display:flex; flex-direction:column; border-radius:10px; border:2px solid; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.08); overflow:hidden; }
-  .card-title { flex:0 0 auto; padding:8px 10px; font-size:13px; font-weight:600; color:#1a1a1a; line-height:1.4; user-select:text; cursor:text; white-space:pre-wrap; border-bottom:1px solid #f1f5f9; }
-  .card-thread { flex:1 1 auto; min-height:0; overflow:auto; padding:6px 8px; user-select:text; }
+  .card-title { flex:0 0 auto; padding:9px 11px; font-size:14px; font-weight:700; color:#111827; line-height:1.35; user-select:text; cursor:text; white-space:pre-wrap; background:#f8fafc; border-bottom:1px solid #e5e7eb; }
+  .card-body { flex:1 1 auto; min-height:0; overflow:auto; padding:6px 8px; user-select:text; }
+  .card-context { font-size:12px; color:#374151; background:#fafafa; border:1px solid #f1f5f9; border-radius:6px; padding:5px 8px; margin-bottom:8px; line-height:1.5; }
   .msg { margin-bottom:7px; }
   .msg-who { font-size:9px; font-weight:700; color:#9ca3af; margin-bottom:1px; }
   .msg-md { font-size:12px; padding:5px 8px; border-radius:8px; background:#f3f4f6; }
@@ -454,13 +457,16 @@ function CardNode(props) {
   return h("div", { className: "card kind-" + kind },
     h(NodeResizer, { minWidth: 240, minHeight: 96, isVisible: !!props.selected }),
     h(Handle, { type:"target", position: Position.Left }),
-    h("div", { className:"card-title nodrag" }, d.text),
-    h("div", { className:"card-thread nodrag" }, (d.messages || []).map(function(m, i){
-      return h("div", { key:i, className:"msg msg-" + (m.source || "user") },
-        h("div", { className:"msg-who" }, m.source === "cc" ? "CC" : "あなた"),
-        h("div", { className:"msg-md md-body", dangerouslySetInnerHTML: { __html: marked.parse(m.text || "") } })
-      );
-    })),
+    h("div", { className:"card-title nodrag" }, d.title || "(無題)"),
+    h("div", { className:"card-body nodrag" },
+      d.context ? h("div", { className:"card-context md-body", dangerouslySetInnerHTML: { __html: marked.parse(d.context) } }) : null,
+      (d.messages || []).map(function(m, i){
+        return h("div", { key:i, className:"msg msg-" + (m.source || "user") },
+          h("div", { className:"msg-who" }, m.source === "cc" ? "CC" : "あなた"),
+          h("div", { className:"msg-md md-body", dangerouslySetInnerHTML: { __html: marked.parse(m.text || "") } })
+        );
+      })
+    ),
     h("div", { className:"card-input" },
       h("textarea", { className:"nodrag nopan node-input", value: val, rows:1,
         placeholder:"このノードに送る… (⌘Enter)",
@@ -475,7 +481,7 @@ const nodeTypes = { card: CardNode };
 function toFlow(state) {
   const nodes = state.nodes.map(function(n){
     return { id:n.id, type:"card", position:{ x:n.x, y:n.y },
-      data:{ text:n.text, kind:n.kind, messages: n.messages || [] },
+      data:{ title:n.title, context:n.text, kind:n.kind, messages: n.messages || [] },
       style:{ width: (n.w || 320), height: (n.h || 340) } };
   });
   const edges = state.edges.map(function(e){
