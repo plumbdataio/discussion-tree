@@ -164,29 +164,38 @@ import React from "https://esm.sh/react@18.3.1";
 import { createRoot } from "https://esm.sh/react-dom@18.3.1/client";
 import { Tldraw, toRichText, createShapeId } from "https://esm.sh/tldraw@3.13.1?deps=react@18.3.1,react-dom@18.3.1";
 
+// Node types (st-ibis): Question / Idea / Research(AI) / Selection. note/topic
+// are fallbacks. Colour is the at-a-glance type cue.
 const KIND_COLOR = {
-  topic: "violet", idea: "blue", question: "orange",
-  pro: "green", con: "red", decision: "black", note: "grey",
+  question: "orange", idea: "blue", research: "violet",
+  selection: "green", note: "grey", topic: "grey",
 };
 const NODE_W = 200, NODE_H = 70;
 
 let editor = null;
+let applying = false;      // true while we push broker state → ignore our own edits
+let didInitialFit = false; // fit the camera ONCE, then never hijack the user's view
 const shapeByNode = new Map(); // nodeId -> tldraw shapeId
+const nodeByShape = new Map(); // tldraw shapeId -> nodeId (reverse, for drag-save)
 const arrowByEdge = new Map(); // edgeId -> tldraw shapeId
-const nodeCenter = new Map();  // nodeId -> {x,y}
+const nodePos = new Map();      // nodeId -> {x,y} per the LATEST broker state
+const nodeCenter = new Map();   // nodeId -> {x,y} centre (for edge endpoints)
 
 function applyState(state) {
   if (!editor) return;
+  applying = true;
   editor.run(() => {
     const seen = new Set();
     for (const n of state.nodes) {
       seen.add(n.id);
+      nodePos.set(n.id, { x: n.x, y: n.y });
       nodeCenter.set(n.id, { x: n.x + NODE_W / 2, y: n.y + NODE_H / 2 });
       const color = KIND_COLOR[n.kind] || "grey";
       let sid = shapeByNode.get(n.id);
       if (!sid) {
         sid = createShapeId();
         shapeByNode.set(n.id, sid);
+        nodeByShape.set(sid, n.id);
         editor.createShape({
           id: sid, type: "geo", x: n.x, y: n.y,
           props: { geo: "rectangle", w: NODE_W, h: NODE_H, color, fill: "solid",
@@ -199,9 +208,12 @@ function applyState(state) {
       }
     }
     for (const [nid, sid] of [...shapeByNode]) {
-      if (!seen.has(nid)) { editor.deleteShape(sid); shapeByNode.delete(nid); nodeCenter.delete(nid); }
+      if (!seen.has(nid)) {
+        editor.deleteShape(sid); shapeByNode.delete(nid);
+        nodeByShape.delete(sid); nodeCenter.delete(nid); nodePos.delete(nid);
+      }
     }
-    // Rebuild edges as simple arrows between node centers.
+    // Rebuild edges as simple arrows between node centres.
     const seenE = new Set();
     for (const e of state.edges) {
       seenE.add(e.id);
@@ -221,8 +233,48 @@ function applyState(state) {
       if (!seenE.has(eid)) { editor.deleteShape(sid); arrowByEdge.delete(eid); }
     }
   });
-  // Keep everything in view as it grows.
-  try { editor.zoomToFit({ animation: { duration: 200 } }); } catch (e) {}
+  applying = false;
+  // Fit ONCE so existing content is visible; afterwards leave the camera to the
+  // user. Node coords never auto-relayout — only the user's drags move nodes,
+  // and those persist back to the broker (so "it was top-right" stays true).
+  if (!didInitialFit && state.nodes.length > 0) {
+    didInitialFit = true;
+    try { editor.zoomToFit({ animation: { duration: 200 } }); } catch (e) {}
+  }
+}
+
+// Persist the user's node drags back to the broker (shared source of truth), so
+// my next pull sees the layout the user arranged. Debounced per node. We detect
+// a genuine drag by comparing the shape's position to the last broker position
+// (nodePos): our own programmatic updates set them equal, so only real drags
+// differ — no echo loop even if the listener fires after applying resets.
+const saveTimers = new Map();
+function scheduleSave(nodeId, x, y) {
+  clearTimeout(saveTimers.get(nodeId));
+  saveTimers.set(nodeId, setTimeout(() => {
+    fetch("/map/op", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "update", id: nodeId, x: Math.round(x), y: Math.round(y) }),
+    }).catch(() => {});
+  }, 250));
+}
+function watchDrags() {
+  editor.store.listen((entry) => {
+    if (applying) return;
+    const upd = entry.changes && entry.changes.updated;
+    if (!upd) return;
+    for (const k in upd) {
+      const to = upd[k][1];
+      if (to && to.typeName === "shape" && to.type === "geo") {
+        const nodeId = nodeByShape.get(to.id);
+        if (!nodeId) continue;
+        const known = nodePos.get(nodeId);
+        if (!known || Math.abs(known.x - to.x) > 0.5 || Math.abs(known.y - to.y) > 0.5) {
+          scheduleSave(nodeId, to.x, to.y);
+        }
+      }
+    }
+  }, { scope: "document", source: "user" });
 }
 
 async function load() {
@@ -246,9 +298,133 @@ function connectWs() {
 
 createRoot(document.getElementById("root")).render(
   React.createElement(Tldraw, {
-    onMount: (ed) => { editor = ed; load(); connectWs(); },
+    onMount: (ed) => { editor = ed; watchDrags(); load(); connectWs(); },
   })
 );
+</script>
+</body>
+</html>`;
+
+// --- React Flow PoC (the "A" substrate the user leans toward) ---
+// Same backend (/api/map-demo + /ws/map-demo) as the tldraw page, rendered as a
+// React Flow graph: rich typed node cards + a right-side general-chat panel =
+// the crystallised UI image. Standalone, React Flow via CDN (no Bun bundling).
+// IMPORTANT: NO backtick characters anywhere inside this template literal — a
+// stray backtick terminates the string (learned the hard way). Use ' and " and
+// string concatenation only.
+export const MAP_DEMO_RF_HTML = `<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>発散議論 mindmap デモ (React Flow)</title>
+<link rel="stylesheet" href="https://esm.sh/@xyflow/react@12.3.5/dist/style.css" />
+<style>
+  html, body, #root { margin:0; height:100%; }
+  #root { position: fixed; inset: 0; }
+  .wrap { display:flex; height:100%; font: 14px/1.5 -apple-system, "Hiragino Sans", sans-serif; }
+  .canvas { flex:1; min-width:0; position:relative; }
+  .chat { width: 320px; flex:0 0 320px; border-left:1px solid #e2e2e2; display:flex; flex-direction:column; background:#fff; }
+  .chat-head { padding:10px 12px; font-weight:700; border-bottom:1px solid #eee; background:#faf5ff; color:#6d28d9; }
+  .chat-body { flex:1; overflow:auto; padding:12px; }
+  .chat-note { color:#6b7280; font-size:12px; }
+  .chat-input { padding:10px; border-top:1px solid #eee; }
+  .chat-input input { width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #c4c4c4; border-radius:8px; font-size:16px; }
+  .card { width:200px; border-radius:10px; border:2px solid; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.08); overflow:hidden; }
+  .card-badge { font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:3px 8px; color:#fff; }
+  .card-text { padding:8px 10px; font-size:13px; color:#1a1a1a; }
+  .card-foot { padding:5px 10px; border-top:1px dashed #e5e7eb; font-size:11px; color:#9ca3af; }
+  .kind-question { border-color:#f59e0b; } .kind-question .card-badge { background:#f59e0b; }
+  .kind-idea { border-color:#2563eb; } .kind-idea .card-badge { background:#2563eb; }
+  .kind-research { border-color:#7c3aed; } .kind-research .card-badge { background:#7c3aed; }
+  .kind-selection { border-color:#10b981; } .kind-selection .card-badge { background:#10b981; }
+  .kind-note, .kind-topic { border-color:#9ca3af; } .kind-note .card-badge, .kind-topic .card-badge { background:#9ca3af; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+import React from "https://esm.sh/react@18.3.1";
+import { createRoot } from "https://esm.sh/react-dom@18.3.1/client";
+import { ReactFlow, Background, Controls, Handle, Position, applyNodeChanges }
+  from "https://esm.sh/@xyflow/react@12.3.5?deps=react@18.3.1,react-dom@18.3.1";
+
+const h = React.createElement;
+const KIND_LABEL = { question:"Question", idea:"Idea", research:"Research", selection:"Selection", note:"Note", topic:"Topic" };
+
+function CardNode(props) {
+  const d = props.data;
+  const kind = d.kind || "note";
+  return h("div", { className: "card kind-" + kind },
+    h(Handle, { type:"target", position: Position.Left }),
+    h("div", { className:"card-badge" }, KIND_LABEL[kind] || kind),
+    h("div", { className:"card-text" }, d.text),
+    h("div", { className:"card-foot" }, "スレッド (このノードの履歴)"),
+    h(Handle, { type:"source", position: Position.Right })
+  );
+}
+const nodeTypes = { card: CardNode };
+
+function toFlow(state) {
+  const nodes = state.nodes.map(function(n){
+    return { id:n.id, type:"card", position:{ x:n.x, y:n.y }, data:{ text:n.text, kind:n.kind } };
+  });
+  const edges = state.edges.map(function(e){
+    return { id:e.id, source:e.from, target:e.to };
+  });
+  return { nodes: nodes, edges: edges };
+}
+
+function App() {
+  const st = React.useState({ nodes: [], edges: [] });
+  const data = st[0], setData = st[1];
+  const rf = React.useRef(null);
+  const didFit = React.useRef(false);
+
+  React.useEffect(function(){
+    function apply(state){
+      const f = toFlow(state);
+      setData(f);
+      if (!didFit.current && f.nodes.length > 0 && rf.current) {
+        didFit.current = true;
+        setTimeout(function(){ try { rf.current.fitView({ duration: 200, padding: 0.2 }); } catch(e){} }, 50);
+      }
+    }
+    fetch("/api/map-demo").then(function(r){ return r.json(); }).then(apply).catch(function(){});
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(proto + "://" + location.host + "/ws/map-demo");
+    ws.onmessage = function(ev){ try { const m = JSON.parse(ev.data); if (m.type === "map-update") apply(m.state); } catch(e){} };
+    return function(){ try { ws.close(); } catch(e){} };
+  }, []);
+
+  function onNodesChange(changes){
+    setData(function(d){ return { nodes: applyNodeChanges(changes, d.nodes), edges: d.edges }; });
+  }
+  function onNodeDragStop(evt, node){
+    fetch("/map/op", { method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ action:"update", id: node.id, x: Math.round(node.position.x), y: Math.round(node.position.y) }) }).catch(function(){});
+  }
+
+  return h("div", { className:"wrap" },
+    h("div", { className:"canvas" },
+      h(ReactFlow, {
+        nodes: data.nodes, edges: data.edges, nodeTypes: nodeTypes,
+        onNodesChange: onNodesChange, onNodeDragStop: onNodeDragStop,
+        onInit: function(inst){ rf.current = inst; },
+        proOptions: { hideAttribution: true }, minZoom: 0.2,
+      }, h(Background, null), h(Controls, null))
+    ),
+    h("aside", { className:"chat" },
+      h("div", { className:"chat-head" }, "general チャット (マップ全体)"),
+      h("div", { className:"chat-body" },
+        h("p", { className:"chat-note" }, "ここにマップ全体に対する議論スレッドが入ります (PoC: レイアウト確認用)。各ノードのカードは、それ自身のスレッド/履歴を内側に持てます — それが React Flow を選ぶ理由 (ノード = リッチな React 部品)。")
+      ),
+      h("div", { className:"chat-input" }, h("input", { placeholder:"マップ全体にメッセージ…", disabled:true }))
+    )
+  );
+}
+
+createRoot(document.getElementById("root")).render(h(App));
 </script>
 </body>
 </html>`;

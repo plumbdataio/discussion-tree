@@ -30,6 +30,7 @@ import {
   routes as mapDemoRoutes,
   getMapState,
   MAP_DEMO_HTML,
+  MAP_DEMO_RF_HTML,
 } from "./broker/mapdemo.ts";
 import { getBoardView } from "./broker/helpers.ts";
 import { routes as nodesRoutes } from "./broker/nodes.ts";
@@ -150,6 +151,11 @@ const server = Bun.serve({
     // no Bun bundling; Claude grows the map via POST /map/op.
     if (req.method === "GET" && path === "/map-demo") {
       return new Response(MAP_DEMO_HTML, {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+    if (req.method === "GET" && path === "/map-demo-rf") {
+      return new Response(MAP_DEMO_RF_HTML, {
         headers: { "content-type": "text/html; charset=utf-8" },
       });
     }
