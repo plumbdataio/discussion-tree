@@ -523,6 +523,11 @@ function App() {
     fetch("/map/op", { method:"POST", headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({ action:"update", id: node.id, x: Math.round(node.position.x), y: Math.round(node.position.y) }) }).catch(function(){});
   }
+  function onConnect(params){
+    if (!params || !params.source || !params.target) return;
+    fetch("/map/op", { method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ action:"connect", from: params.source, to: params.target }) }).catch(function(){});
+  }
   function send(){
     const t = input.trim();
     if (!t) return;
@@ -537,6 +542,7 @@ function App() {
       h(ReactFlow, {
         nodes: data.nodes, edges: data.edges, nodeTypes: nodeTypes,
         onNodesChange: onNodesChange, onNodeDragStop: onNodeDragStop,
+        onConnect: onConnect,
         onInit: function(inst){ rf.current = inst; },
         proOptions: { hideAttribution: true }, minZoom: 0.2,
       }, h(Background, null), h(Controls, null))
