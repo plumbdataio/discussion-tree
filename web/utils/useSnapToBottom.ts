@@ -27,11 +27,19 @@ import { useEffect } from "react";
 //             column-reverse.
 export function useSnapToBottom(
   ref: RefObject<HTMLElement | null>,
-  opts: { reversed?: boolean; to?: "end" | "start"; deps?: DependencyList } = {},
+  opts: {
+    reversed?: boolean;
+    to?: "end" | "start";
+    deps?: DependencyList;
+    // When false the snap is skipped entirely — e.g. a modal that opens
+    // scrolled to a specific message instead of the bottom.
+    enabled?: boolean;
+  } = {},
 ) {
-  const { reversed = false, to = "end", deps = [] } = opts;
+  const { reversed = false, to = "end", deps = [], enabled = true } = opts;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
+    if (!enabled) return;
     const el = ref.current;
     if (!el) return;
     const snap = () => {

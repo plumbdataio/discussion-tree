@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import type { Activity, Node, ThreadItem } from "../../shared/types.ts";
 import { ActivityBadge } from "./ActivityBadge.tsx";
 import { MDView } from "./MDView.tsx";
-import { MessageModal } from "./MessageModal.tsx";
 import { NodeModal } from "./NodeModal.tsx";
 import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
 import { ThreadMessage } from "./ThreadMessage.tsx";
@@ -48,8 +47,10 @@ export function ItemCard({
   // when the user clicks Send, cleared on success / failure. On failure we
   // also restore the text into the textarea so they can retry without retyping.
   const [tentativeText, setTentativeText] = useState<string | null>(null);
-  const [expandedMsg, setExpandedMsg] = useState<ThreadItem | null>(null);
+  // When a single message's expand button is clicked we open the WHOLE node
+  // (NodeModal) scrolled to that message — richer than a lone message preview.
   const [nodeExpanded, setNodeExpanded] = useState(false);
+  const [msgTarget, setMsgTarget] = useState<number | null>(null);
   const myThread = threads[node.id] ?? [];
   const threadRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -78,7 +79,8 @@ export function ItemCard({
   // Stable identity so memoized ThreadMessage doesn't re-render on every
   // parent re-render (i.e. every keystroke in the draft textarea).
   const openExpandedMsg = useCallback((it: ThreadItem) => {
-    setExpandedMsg(it);
+    setMsgTarget(it.id);
+    setNodeExpanded(true);
   }, []);
 
   // Snap to the bottom on mount and when the user starts their own
@@ -259,21 +261,17 @@ export function ItemCard({
         </div>
       </div>
 
-      {expandedMsg && (
-        <MessageModal
-          text={expandedMsg.text}
-          source={expandedMsg.source}
-          onClose={() => setExpandedMsg(null)}
-        />
-      )}
-
       {nodeExpanded && (
         <NodeModal
           node={node}
           threadItems={myThread}
           ownerAlive={ownerAlive}
           onSubmit={onSubmit}
-          onClose={() => setNodeExpanded(false)}
+          scrollToItemId={msgTarget}
+          onClose={() => {
+            setNodeExpanded(false);
+            setMsgTarget(null);
+          }}
         />
       )}
     </div>

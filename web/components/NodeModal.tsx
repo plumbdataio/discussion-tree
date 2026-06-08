@@ -18,12 +18,17 @@ export function NodeModal({
   ownerAlive,
   onSubmit,
   onClose,
+  scrollToItemId = null,
 }: {
   node: Node;
   threadItems: ThreadItem[];
   ownerAlive: boolean;
   onSubmit: (nodeId: string, text: string) => Promise<void>;
   onClose: () => void;
+  // When set, open scrolled to (and briefly flashing) this thread item
+  // instead of the bottom — used when a single message's expand button
+  // opens the whole node in context.
+  scrollToItemId?: number | null;
 }) {
   const { t } = useTranslation();
   const boardId = getBoardIdFromUrl() ?? "misc";
@@ -55,7 +60,25 @@ export function NodeModal({
   // browsing higher up.
   useSnapToBottom(threadRef, {
     deps: [threadItems.length, tentativeText],
+    // Skip the bottom-snap when opening targeted at a specific message.
+    enabled: !scrollToItemId,
   });
+
+  // When opened from a single message's expand button, scroll that message
+  // into view (centered) and flash it so the user finds it in the full thread.
+  useEffect(() => {
+    if (!scrollToItemId) return;
+    const root = threadRef.current;
+    if (!root) return;
+    const el = root.querySelector(
+      `[data-thread-item-id="${scrollToItemId}"]`,
+    ) as HTMLElement | null;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("thread-msg-flash");
+    const tid = setTimeout(() => el.classList.remove("thread-msg-flash"), 1600);
+    return () => clearTimeout(tid);
+  }, [scrollToItemId]);
 
   const handleImageFiles = async (files: File[]) => {
     if (files.length === 0) return;
@@ -168,7 +191,11 @@ export function NodeModal({
               {threadItems.map((it) => {
                 if (it.source === "system") {
                   return (
-                    <div key={it.id} className="thread-msg from-system">
+                    <div
+                      key={it.id}
+                      className="thread-msg from-system"
+                      data-thread-item-id={it.id}
+                    >
                       {renderSystemMessage(it.text)}
                     </div>
                   );
@@ -177,6 +204,7 @@ export function NodeModal({
                   <div
                     key={it.id}
                     className={`node-modal-msg from-${it.source}`}
+                    data-thread-item-id={it.id}
                   >
                     <div className="modal-who">
                       {it.source === "user" ? t("item_card.you") : t("item_card.claude")}

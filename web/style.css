@@ -2089,6 +2089,13 @@ body.concern-resizing * {
   animation: flash-pulse 1.6s ease-out;
 }
 
+/* Briefly highlight a thread message scrolled into view (e.g. when a single
+   message's expand button opens the whole node centered on that message). */
+.thread-msg-flash {
+  animation: flash-pulse 1.6s ease-out;
+  border-radius: 6px;
+}
+
 /* In-progress activity (sustained slow pulse — distinct from the brief flash). */
 @keyframes activity-blink {
   0%,
