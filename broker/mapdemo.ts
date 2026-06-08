@@ -51,9 +51,9 @@ function emit() {
 // Match the rendered card default (320x120) so the auto-layout doesn't overlap
 // siblings. The user can drag/resize afterwards (persisted).
 const NODE_W = 320;
-const NODE_H = 120;
+const NODE_H = 340;
 const COL_GAP = 140;
-const ROW_GAP = 56;
+const ROW_GAP = 44;
 let rootCount = 0;
 function place(parent: string | null): { x: number; y: number } {
   if (!parent || !nodes.has(parent)) {
@@ -427,7 +427,7 @@ function toFlow(state) {
   const nodes = state.nodes.map(function(n){
     return { id:n.id, type:"card", position:{ x:n.x, y:n.y },
       data:{ text:n.text, kind:n.kind },
-      style:{ width: (n.w || 320), height: (n.h || 120) } };
+      style:{ width: (n.w || 320), height: (n.h || 340) } };
   });
   const edges = state.edges.map(function(e){
     return { id:e.id, source:e.from, target:e.to };
