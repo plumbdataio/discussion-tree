@@ -1,16 +1,16 @@
 import { useEffect } from "react";
 import type { ThreadItem } from "../../shared/types.ts";
 import { useSettings } from "./settings.ts";
+import { TICK_MS, VISIBLE_DURATION_MS, VISIBLE_RATIO } from "./readTiming.ts";
 
 // Polling-based visibility tracker. We watch the CARD as a whole (not each
 // message) because in a long thread, older unread items get scrolled out of
 // the inner thread viewport — but if the user is actively looking at the
 // card, they've engaged with the conversation and we should clear the badge.
-// When the card is at least 40% visible in the viewport for 5 continuous
-// seconds, all unread CC messages in `items` are marked read at once.
-const VISIBLE_DURATION_MS = 5_000;
-const TICK_MS = 500;
-const VISIBLE_RATIO = 0.4;
+// When the card is at least VISIBLE_RATIO visible in the viewport for
+// VISIBLE_DURATION_MS continuous, all unread CC messages in `items` are marked
+// read at once. The timing constants are shared (readTiming.ts) so the
+// checklist-change auto-read clears with the exact same visible behaviour.
 
 export function useMarkReadOnVisible(
   cardRef: React.RefObject<HTMLElement | null>,
