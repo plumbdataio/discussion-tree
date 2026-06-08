@@ -94,7 +94,7 @@ describe("ChecklistCard source citations", () => {
     await m.unmount();
   });
 
-  test("a node source expands to a link to its board", async () => {
+  test("a node source opens a modal with a link to its board", async () => {
     const n = node([
       item({
         id: 1,
@@ -109,7 +109,11 @@ describe("ChecklistCard source citations", () => {
     await act(async () => {
       toggle.click();
     });
-    const row = m.host.querySelector(".checklist-source-row") as HTMLElement;
+    // The list opens in a modal portaled to <body>, not inline in the card.
+    const modal = document.querySelector(".checklist-sources-modal");
+    expect(modal).toBeTruthy();
+    expect(m.host.querySelector(".checklist-source-row")).toBeNull();
+    const row = modal!.querySelector(".checklist-source-row") as HTMLElement;
     expect(row.tagName).toBe("A");
     expect(row.getAttribute("href")).toBe("/board/bd_x");
     expect(row.textContent).toContain("ノード");
@@ -135,7 +139,8 @@ describe("ChecklistCard source citations", () => {
     await act(async () => {
       toggle.click();
     });
-    const rows = m.host.querySelectorAll(".checklist-source-row");
+    const modal = document.querySelector(".checklist-sources-modal")!;
+    const rows = modal.querySelectorAll(".checklist-source-row");
     expect(rows.length).toBe(2);
     // board → link to itself
     expect(rows[0].tagName).toBe("A");
@@ -149,7 +154,7 @@ describe("ChecklistCard source citations", () => {
     await m.unmount();
   });
 
-  test("toggling twice collapses the source list", async () => {
+  test("the close button dismisses the sources modal", async () => {
     const n = node([
       item({ id: 1, position: 0, sources: [src({ id: 10 })] }),
     ]);
@@ -160,11 +165,14 @@ describe("ChecklistCard source citations", () => {
     await act(async () => {
       toggle.click();
     });
-    expect(m.host.querySelector(".checklist-source-row")).toBeTruthy();
+    expect(document.querySelector(".checklist-sources-modal")).toBeTruthy();
+    const close = document.querySelector(
+      ".checklist-sources-modal .checklist-modal-close",
+    ) as HTMLElement;
     await act(async () => {
-      toggle.click();
+      close.click();
     });
-    expect(m.host.querySelector(".checklist-source-row")).toBeNull();
+    expect(document.querySelector(".checklist-sources-modal")).toBeNull();
     await m.unmount();
   });
 });

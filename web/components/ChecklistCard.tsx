@@ -225,56 +225,109 @@ function SortControls({
 
 function ChecklistBody({ node, sort }: { node: Node; sort: Sort }) {
   const items = node.checklist_items ?? [];
-  // Which item's source list is expanded (one at a time per body instance).
-  const [openSources, setOpenSources] = useState<number | null>(null);
+  // Which item's sources modal is open (one at a time per body instance). A
+  // modal — not an inline/popover — because the source list can grow and a
+  // small popover would feel cramped.
+  const [openId, setOpenId] = useState<number | null>(null);
+  useEffect(() => {
+    if (openId == null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenId(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openId]);
   if (items.length === 0) {
     return <div className="checklist-empty">まだ項目がありません</div>;
   }
   const ordered = sortItems(items, sort);
+  const openItem = openId == null ? null : items.find((i) => i.id === openId);
+  const openSources = openItem?.sources ?? [];
   return (
-    <ul className="checklist-items">
-      {ordered.map((it) => {
-        const Icon = STATUS_ICON[it.status] ?? Square;
-        const sources = it.sources ?? [];
-        const open = openSources === it.id;
-        return (
-          <li
-            key={it.id}
-            className={`checklist-item checklist-status-${it.status}`}
-          >
-            <span
-              className="checklist-glyph"
-              aria-label={it.status}
-              title={it.status}
+    <>
+      <ul className="checklist-items">
+        {ordered.map((it) => {
+          const Icon = STATUS_ICON[it.status] ?? Square;
+          const sources = it.sources ?? [];
+          return (
+            <li
+              key={it.id}
+              className={`checklist-item checklist-status-${it.status}`}
             >
-              <Icon size={17} strokeWidth={2} />
-            </span>
-            <span className="checklist-item-body">
-              <MDView className="checklist-summary" text={it.summary} />
-              {it.status === "dropped" && it.drop_reason && (
-                <span className="checklist-drop-reason">
-                  却下理由: {it.drop_reason}
-                </span>
-              )}
-              {open && sources.length > 0 && <SourceList sources={sources} />}
-            </span>
-            {sources.length > 0 && (
-              <button
-                type="button"
-                className={"checklist-source-toggle" + (open ? " open" : "")}
-                aria-expanded={open}
-                aria-label={`出典 ${sources.length} 件`}
-                title={`出典 ${sources.length} 件`}
-                onClick={() => setOpenSources(open ? null : it.id)}
+              <span
+                className="checklist-glyph"
+                aria-label={it.status}
+                title={it.status}
               >
-                <Link2 size={13} strokeWidth={2} />
-                <span className="checklist-source-count">{sources.length}</span>
-              </button>
-            )}
-          </li>
-        );
-      })}
-    </ul>
+                <Icon size={17} strokeWidth={2} />
+              </span>
+              <span className="checklist-item-body">
+                <MDView className="checklist-summary" text={it.summary} />
+                {it.status === "dropped" && it.drop_reason && (
+                  <span className="checklist-drop-reason">
+                    却下理由: {it.drop_reason}
+                  </span>
+                )}
+              </span>
+              {sources.length > 0 && (
+                <button
+                  type="button"
+                  className={
+                    "checklist-source-toggle" + (openId === it.id ? " open" : "")
+                  }
+                  aria-haspopup="dialog"
+                  aria-label={`出典 ${sources.length} 件を表示`}
+                  title={`出典 ${sources.length} 件を表示`}
+                  onClick={() => setOpenId(it.id)}
+                >
+                  <Link2 size={13} strokeWidth={2} />
+                  <span className="checklist-source-count">
+                    {sources.length}
+                  </span>
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {openItem &&
+        openSources.length > 0 &&
+        createPortal(
+          <div
+            className="modal-backdrop checklist-sources-backdrop"
+            onClick={() => setOpenId(null)}
+          >
+            <div
+              className="checklist-sources-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="出典"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="checklist-sources-modal-header">
+                <h3 className="checklist-sources-modal-title">
+                  出典 {openSources.length} 件
+                </h3>
+                <button
+                  type="button"
+                  className="checklist-modal-close"
+                  onClick={() => setOpenId(null)}
+                  aria-label="閉じる"
+                  title="閉じる"
+                >
+                  <X size={18} strokeWidth={1.75} />
+                </button>
+              </div>
+              <MDView
+                className="checklist-sources-modal-summary"
+                text={openItem.summary}
+              />
+              <SourceList sources={openSources} />
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 

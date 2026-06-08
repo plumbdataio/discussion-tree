@@ -4164,6 +4164,41 @@ button.secondary {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+/* Sources open in a modal (not an inline popover): the list can grow, and a
+   roomy panel reads better than a cramped tooltip. Sits above the whole-list
+   checklist modal (modal-backdrop is z 1000). */
+.checklist-sources-backdrop {
+  z-index: 1200;
+}
+.checklist-sources-modal {
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 16px 18px;
+  width: min(440px, 92vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+.checklist-sources-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.checklist-sources-modal-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.checklist-sources-modal-summary {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
 .checklist-empty {
   color: var(--muted);
   font-size: 12px;
