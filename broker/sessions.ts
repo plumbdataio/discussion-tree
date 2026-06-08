@@ -266,9 +266,14 @@ export function handleListSessions() {
     }[],
   ) =>
     rows.map((b) => {
+      // Count decision ITEMS only — concerns are category headers, not
+      // decisions, so counting them inflated the unsettled / total badge
+      // (e.g. an empty default board showed 2/2: its lone "conversation"
+      // concern + "main" item). Same kind='item' restriction as the unread
+      // count below.
       const stats = db
         .prepare(
-          "SELECT status, COUNT(*) AS cnt FROM nodes WHERE board_id = ? AND deleted_at IS NULL GROUP BY status",
+          "SELECT status, COUNT(*) AS cnt FROM nodes WHERE board_id = ? AND deleted_at IS NULL AND kind = 'item' GROUP BY status",
         )
         .all(b.id) as { status: string; cnt: number }[];
       const counts: Record<string, number> = {};
@@ -300,13 +305,18 @@ export function handleListSessions() {
              AND n.kind = 'item'`,
         )
         .get(b.id) as { cnt: number };
+      // The default/general board is a chat, not a decision board — the
+      // unsettled/total metric doesn't apply to it (its single "main" item is
+      // always pending/discussing). Zero it so an empty session doesn't read
+      // as "1 unsettled". Unread (new messages) is still tracked above.
+      const isDefault = b.is_default === 1;
       return {
         ...b,
         stats: {
-          open,
-          decided,
-          needs_reply: counts["needs-reply"] ?? 0,
-          total,
+          open: isDefault ? 0 : open,
+          decided: isDefault ? 0 : decided,
+          needs_reply: isDefault ? 0 : counts["needs-reply"] ?? 0,
+          total: isDefault ? 0 : total,
         },
         unread_count: unreadRow.cnt,
       };
