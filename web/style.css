@@ -1185,6 +1185,12 @@ a.session-name:hover {
      keeps the viewport glued to the bottom while the user is there,
      and leaves their position untouched once they scroll up. */
   flex-direction: column-reverse;
+  /* NOTE: deliberately NO justify-content:flex-end here (unlike the node
+     thread). The default/general board is a long-running chat that's
+     practically never short enough to bottom-pile, and it pairs
+     column-reverse with content-visibility:auto — the delicate combo we
+     spent a long time stabilising. Not worth reopening that for a case the
+     user never sees. */
   /* CRITICAL: turn OFF scroll anchoring. The browser's default
      (overflow-anchor: auto) tries to keep whatever element is
      on-screen fixed when the DOM changes — under column-reverse that
@@ -2025,6 +2031,11 @@ body.concern-resizing * {
      messages off the bottom instead of following them. */
   display: flex;
   flex-direction: column-reverse;
+  /* Short threads (fewer messages than fill the box) would otherwise pile at
+     the bottom under column-reverse. flex-end packs them to the visual top
+     (flex-end = top under column-reverse). Once content overflows,
+     justify-content is ignored, so the bottom-pinning scroll is unaffected. */
+  justify-content: flex-end;
   overflow-anchor: none;
   gap: 6px;
   /* iOS Safari momentum scrolling inside this nested overflow box. */
