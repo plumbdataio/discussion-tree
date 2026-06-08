@@ -29,27 +29,30 @@ import {
 let cachedSessions: SessionListItem[] | null = null;
 let cachedInactive: SessionListItem[] = [];
 
-// Apply the user's preferred ordering: ids listed in `order` come first in
-// the listed order, anything missing follows in the natural broker order.
+// Apply the user's preferred ordering. `order` is a list of cwds (NOT session
+// ids): the broker mints a fresh session row id on every CC restart, so an
+// id-keyed order would drop a restarted session to the bottom every time. cwd
+// is stable across restarts, so a session returns to its saved slot. Sessions
+// whose cwd is listed come first (in the listed order); the rest follow in
+// natural broker order. Stable for ties / unlisted (sessions sharing a cwd
+// stay in natural order).
 function applyOrder(
   sessions: SessionListItem[],
   order: string[],
 ): SessionListItem[] {
-  const byId = new Map<string, SessionListItem>();
-  for (const s of sessions) byId.set(s.id, s);
-  const used = new Set<string>();
-  const result: SessionListItem[] = [];
-  for (const id of order) {
-    const s = byId.get(id);
-    if (s) {
-      result.push(s);
-      used.add(id);
-    }
-  }
-  for (const s of sessions) {
-    if (!used.has(s.id)) result.push(s);
-  }
-  return result;
+  const rank = new Map<string, number>();
+  order.forEach((cwd, i) => {
+    if (!rank.has(cwd)) rank.set(cwd, i);
+  });
+  return sessions
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => {
+      const ra = rank.has(a.s.cwd) ? (rank.get(a.s.cwd) as number) : Infinity;
+      const rb = rank.has(b.s.cwd) ? (rank.get(b.s.cwd) as number) : Infinity;
+      if (ra !== rb) return ra - rb;
+      return a.i - b.i;
+    })
+    .map((x) => x.s);
 }
 
 // Format a scheduled-send ISO timestamp to a short local clock time for the
@@ -519,17 +522,19 @@ export function Sidebar({
     position: DropPosition,
   ) => {
     if (fromId === toId) return;
-    const ids = orderedActive.map((s) => s.id);
-    const fromIdx = ids.indexOf(fromId);
-    const toIdx = ids.indexOf(toId);
+    const arr = [...orderedActive];
+    const fromIdx = arr.findIndex((s) => s.id === fromId);
+    const toIdx = arr.findIndex((s) => s.id === toId);
     if (fromIdx < 0 || toIdx < 0) return;
-    ids.splice(fromIdx, 1);
+    const [moved] = arr.splice(fromIdx, 1);
     // After removing fromIdx, indices >= fromIdx are shifted left by one.
-    // Recompute the target index in the post-removal array.
     const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;
     const insertAt = position === "before" ? adjustedTo : adjustedTo + 1;
-    ids.splice(insertAt, 0, fromId);
-    updateSettings({ sessionOrder: ids });
+    arr.splice(insertAt, 0, moved);
+    // Persist by cwd (stable across CC restarts; the session row id is not).
+    const cwds: string[] = [];
+    for (const s of arr) if (!cwds.includes(s.cwd)) cwds.push(s.cwd);
+    updateSettings({ sessionOrder: cwds });
   };
 
   return (
