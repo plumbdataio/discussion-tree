@@ -31,6 +31,13 @@ body {
     sans-serif;
   font-size: 14px;
   line-height: 1.5;
+  /* iOS Safari defaults text-size-adjust to "auto", which can inflate
+     rendered glyphs while the textarea computes the caret advance from the
+     un-inflated metrics — the caret then drifts a few characters to the
+     right of the actual text (reported on iPhone). Pin it to 100% so glyphs
+     and caret share the same metrics. Harmless on every other browser. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 #root {
