@@ -54,8 +54,8 @@ function emit() {
 // siblings. The user can drag/resize afterwards (persisted).
 const NODE_W = 320;
 const NODE_H = 340;
-const COL_GAP = 140;
-const ROW_GAP = 44;
+const COL_GAP = 420;
+const ROW_GAP = 132;
 let rootCount = 0;
 function place(parent: string | null): { x: number; y: number } {
   if (!parent || !nodes.has(parent)) {
