@@ -20,13 +20,15 @@ const CHANNEL = "map-demo";
 // (no UI-mirror reminder, no unanswered-counter bump).
 const MAP_CHAT_BOARD = "bd_a1c660ba6aa03e09dde6f6bb8ff08edc";
 
+type MapMsg = { source: string; text: string };
 type MapNode = {
   id: string;
   text: string;
-  kind: string; // free label: topic | idea | question | pro | con | decision | note
+  kind: string; // free label: question | idea | research | selection | note
   x: number;
   y: number;
   parent: string | null;
+  messages?: MapMsg[]; // node-local thread (demo/fake for the PoC)
 };
 type MapEdge = { id: string; from: string; to: string };
 
@@ -91,6 +93,36 @@ function addNode(body: any): { ok: boolean; id?: string; error?: string } {
   return { ok: true, id };
 }
 
+// Generic conversational demo text (NOT client data) with markdown sprinkled
+// in, so the node-thread markdown rendering is visible. Alternating user / cc.
+const FAKE_USER = [
+  "ここ、まだ腑に落ちてないんだよね。何が引っかかってるかと言うと、**前提**が怪しい気がしてる。",
+  "具体的には `どのケース` で効くんだろう? 例が欲しい。",
+  "なるほど。でも既存の動線に乗らないと、結局浸透しない気がするな。",
+  "一旦これは保留で、先に別の論点から詰めたいかも。",
+  "その整理だと、A と B のどっちを軸に置くかが肝だね。",
+];
+const FAKE_CC = [
+  "承知です。論点を2つに分けます:\n\n- **A**: 既存作業の置換\n- **B**: 新規ワークフローの追加\n\nどちらを軸に置くかで答えが変わります。",
+  "おっしゃる通りで、ここは `個別ソース中心` の設計が弱点になります。横断には向きません。",
+  "では次のアクションを提案します:\n\n1. 現状の棚卸し\n2. 腑落ち度で仕分け\n3. 確定 / 再オープンを判定",
+  "確かにその懸念は妥当です。**鍵は『既存動線への埋め込み』**だと私も思います。",
+  "整理すると、いま決まっているのは `暫定` であって、再検討の余地があります。",
+];
+function fillDemoMessages(): void {
+  let off = 0;
+  for (const n of nodes.values()) {
+    const msgs: MapMsg[] = [];
+    for (let i = 0; i < 3; i++) {
+      msgs.push({ source: "user", text: FAKE_USER[(i + off) % FAKE_USER.length] });
+      msgs.push({ source: "cc", text: FAKE_CC[(i + off) % FAKE_CC.length] });
+    }
+    n.messages = msgs;
+    off++;
+  }
+  emit();
+}
+
 function handleMapOp(body: any): unknown {
   const action = String(body?.action ?? "");
   switch (action) {
@@ -133,6 +165,9 @@ function handleMapOp(body: any): unknown {
       seq = 0;
       rootCount = 0;
       emit();
+      return { ok: true };
+    case "demo_messages":
+      fillDemoMessages();
       return { ok: true };
     default:
       return { ok: false, error: `unknown action '${action}'` };
@@ -375,7 +410,14 @@ export const MAP_DEMO_RF_HTML = `<!doctype html>
   .chat-send-row button { padding:6px 14px; border:none; border-radius:8px; background:#7c3aed; color:#fff; font-size:13px; font-weight:600; cursor:pointer; }
   .chat-send-row button:disabled { background:#c4b5fd; cursor:default; }
   .card { width:100%; height:100%; display:flex; flex-direction:column; border-radius:10px; border:2px solid; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.08); overflow:hidden; }
-  .card-title { flex:1 1 auto; min-height:0; overflow:auto; padding:8px 10px; font-size:13px; font-weight:600; color:#1a1a1a; line-height:1.45; user-select:text; cursor:text; white-space:pre-wrap; }
+  .card-title { flex:0 0 auto; padding:8px 10px; font-size:13px; font-weight:600; color:#1a1a1a; line-height:1.4; user-select:text; cursor:text; white-space:pre-wrap; border-bottom:1px solid #f1f5f9; }
+  .card-thread { flex:1 1 auto; min-height:0; overflow:auto; padding:6px 8px; user-select:text; }
+  .msg { margin-bottom:7px; }
+  .msg-who { font-size:9px; font-weight:700; color:#9ca3af; margin-bottom:1px; }
+  .msg-md { font-size:12px; padding:5px 8px; border-radius:8px; background:#f3f4f6; }
+  .msg-cc .msg-md { background:#eff6ff; }
+  .msg-user .msg-md { background:#fefce8; }
+  .md-body p { margin:.25em 0; } .md-body ul, .md-body ol { margin:.25em 0; padding-left:1.2em; } .md-body code { background:#e5e7eb; padding:0 3px; border-radius:3px; font-size:11px; } .md-body strong { font-weight:700; }
   .card-input { flex:0 0 auto; padding:6px 8px; border-top:1px dashed #e5e7eb; }
   .node-input { width:100%; box-sizing:border-box; border:1px solid #e5e7eb; border-radius:6px; padding:5px 7px; font-size:12px; resize:none; min-height:30px; font-family:inherit; }
   .kind-question { border-color:#f59e0b; } .kind-question .card-badge { background:#f59e0b; }
@@ -392,6 +434,7 @@ import React from "https://esm.sh/react@18.3.1";
 import { createRoot } from "https://esm.sh/react-dom@18.3.1/client";
 import { ReactFlow, Background, Controls, Handle, Position, applyNodeChanges, NodeResizer }
   from "https://esm.sh/@xyflow/react@12.3.5?deps=react@18.3.1,react-dom@18.3.1";
+import { marked } from "https://esm.sh/marked@14";
 
 const h = React.createElement;
 const KIND_LABEL = { question:"Question", idea:"Idea", research:"Research", selection:"Selection", note:"Note", topic:"Topic" };
@@ -412,6 +455,12 @@ function CardNode(props) {
     h(NodeResizer, { minWidth: 240, minHeight: 96, isVisible: !!props.selected }),
     h(Handle, { type:"target", position: Position.Left }),
     h("div", { className:"card-title nodrag" }, d.text),
+    h("div", { className:"card-thread nodrag" }, (d.messages || []).map(function(m, i){
+      return h("div", { key:i, className:"msg msg-" + (m.source || "user") },
+        h("div", { className:"msg-who" }, m.source === "cc" ? "CC" : "あなた"),
+        h("div", { className:"msg-md md-body", dangerouslySetInnerHTML: { __html: marked.parse(m.text || "") } })
+      );
+    })),
     h("div", { className:"card-input" },
       h("textarea", { className:"nodrag nopan node-input", value: val, rows:1,
         placeholder:"このノードに送る… (⌘Enter)",
@@ -426,7 +475,7 @@ const nodeTypes = { card: CardNode };
 function toFlow(state) {
   const nodes = state.nodes.map(function(n){
     return { id:n.id, type:"card", position:{ x:n.x, y:n.y },
-      data:{ text:n.text, kind:n.kind },
+      data:{ text:n.text, kind:n.kind, messages: n.messages || [] },
       style:{ width: (n.w || 320), height: (n.h || 340) } };
   });
   const edges = state.edges.map(function(e){
