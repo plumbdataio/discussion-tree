@@ -211,7 +211,7 @@
     "not_found": "マップが見つかりません",
     "loading": "読み込み中…",
     "general_chat": "全体チャット(マップ全体)",
-    "general_chat_note": "ここに送ると、地図を維持している Claude に届きます。応答は地図の変化(ノードの増減)として返ってきます。",
+    "general_chat_note": "ここに送ると、地図を維持している Claude に届きます。Claude はこのチャットで返信したり、地図を更新(ノードの追加・接続・編集など)したりして応答します。",
     "chat_placeholder": "マップ全体について送る…(Enter で改行 / ⌘Enter で送信)",
     "node_input_placeholder": "このノードに送る…(⌘Enter で送信)",
     "input_disabled": "CC が接続されていません — 送信できません",

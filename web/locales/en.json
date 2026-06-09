@@ -211,7 +211,7 @@
     "not_found": "Map not found",
     "loading": "Loading…",
     "general_chat": "General chat (whole map)",
-    "general_chat_note": "Messages here reach Claude, who maintains the map. Responses come back as changes to the map (nodes added / removed).",
+    "general_chat_note": "Messages here reach Claude, who maintains the map. Claude responds either with a reply in this chat or by updating the map (adding / linking / editing nodes).",
     "chat_placeholder": "Message about the whole map… (Enter for newline / ⌘Enter to send)",
     "node_input_placeholder": "Message this node… (⌘Enter to send)",
     "input_disabled": "CC is not attached — cannot post",
