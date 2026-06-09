@@ -13,10 +13,7 @@
   "mcpServers": {
     "discussion-tree": {
       "command": "bun",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/server.ts"],
-      "env": {
-        "DISCUSSION_TREE_HOME": "${CLAUDE_PLUGIN_DATA}"
-      }
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server.ts"]
     }
   },
   "skills": ["./skills/"],

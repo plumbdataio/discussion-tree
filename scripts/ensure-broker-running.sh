@@ -19,12 +19,9 @@
 #     a port already in use, so a lost race is harmless — the second broker
 #     just exits.
 #   - Every failure path exits 0 so the hook can never block session start.
-#   - DISCUSSION_TREE_HOME is set to ${CLAUDE_PLUGIN_DATA} by hooks.json's env
-#     inheritance is NOT automatic for hooks, so we resolve it the same way the
-#     plugin.json MCP entry does: prefer an already-exported value, else fall
-#     back to the plugin data dir if CLAUDE_PLUGIN_DATA is present, else the
-#     stock default. This keeps the broker's state co-located with the MCP
-#     server's state across plugin updates.
+#   - State home: the stock default $HOME/.discussion-tree (overridable via
+#     DISCUSSION_TREE_HOME), matching the MCP server, the broker, and the other
+#     dt hooks so every component shares one home.
 
 set -u
 
@@ -49,15 +46,15 @@ fi
 broker="$root/broker.ts"
 [ -f "$broker" ] || exit 0
 
-# Match the MCP server's state dir: prefer an explicit DISCUSSION_TREE_HOME,
-# else the plugin's persistent data dir, else the stock default.
-if [ -n "${DISCUSSION_TREE_HOME:-}" ]; then
-  home="$DISCUSSION_TREE_HOME"
-elif [ -n "${CLAUDE_PLUGIN_DATA:-}" ]; then
-  home="$CLAUDE_PLUGIN_DATA"
-else
-  home="$HOME/.discussion-tree"
-fi
+# State dir: the stock default ($HOME/.discussion-tree) unless the user
+# explicitly exports DISCUSSION_TREE_HOME. We deliberately do NOT use
+# ${CLAUDE_PLUGIN_DATA} here: the MCP server, the broker, and the other dt
+# hooks (e.g. the attach-hint script) all default to $HOME/.discussion-tree,
+# so using the same default keeps every component reading/writing the SAME
+# home — otherwise auto-attach hint files and the broker's state dir diverge.
+# $HOME/.discussion-tree persists across plugin updates anyway (it is outside
+# the plugin cache).
+home="${DISCUSSION_TREE_HOME:-$HOME/.discussion-tree}"
 
 # bun must be on PATH. If it isn't, we can't launch — exit quietly; the user's
 # manual setup (if any) still applies.
