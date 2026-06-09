@@ -40,6 +40,11 @@ export interface MapCtx {
   mapId: string;
   sessionId: string;
   ownerAlive: boolean;
+  // When the canvas is locked, only structural mutation is frozen (position /
+  // size / edges). The card itself stays fully interactive (text select,
+  // scroll, type, preview), so the only thing the node needs to know is to
+  // hide its resize handles.
+  locked: boolean;
   // Persist a resize (the card's new size + position) — wired to NodeResizer.
   onResize: (
     nodeId: string,
@@ -215,7 +220,7 @@ function MapNodeImpl(props: NodeProps) {
       <NodeResizer
         minWidth={240}
         minHeight={160}
-        isVisible={!!props.selected}
+        isVisible={!!props.selected && !ctx?.locked}
         onResize={(_e, p) => {
           sizeRef.current = {
             w: p.width,

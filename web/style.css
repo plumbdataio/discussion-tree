@@ -4376,8 +4376,7 @@ button.secondary {
   flex-direction: column;
   gap: 3px;
 }
-/* Expand-whole-node button, top-right of the title. pointer-events:auto so it
-   still works when the canvas is locked (previewing is a read action). */
+/* Expand-whole-node button, top-right of the title. */
 .map-node-expand {
   position: absolute;
   top: 6px;
@@ -4394,7 +4393,6 @@ button.secondary {
   color: var(--text-muted);
   cursor: pointer;
   opacity: 0.5;
-  pointer-events: auto;
 }
 .map-node-expand:hover {
   opacity: 1;
@@ -4422,12 +4420,6 @@ button.secondary {
   overflow: auto;
   padding: 7px 9px;
   user-select: text;
-  /* When the canvas is LOCKED, React Flow sets pointer-events:none on the node
-     wrapper (no select/drag) — which would also kill scrolling inside this
-     thread. Re-enable it on just the scrollable body so a locked map is still
-     readable/scrollable (and the per-message expand still works). The body
-     already carries `nodrag`, so this never lets you drag the node by it. */
-  pointer-events: auto;
 }
 .map-card-context {
   font-size: 12px;
@@ -4459,11 +4451,6 @@ button.secondary {
   align-items: flex-end;
   padding: 6px 8px;
   border-top: 1px dashed var(--border);
-  /* Locking the canvas only freezes node position/size + edge editing — you
-     can still chat. The locked node is pointer-events:none, so (like the
-     thread body + expand button) re-enable it on the composer so messages
-     can still be sent while locked. */
-  pointer-events: auto;
 }
 .map-node-input {
   flex: 1;
