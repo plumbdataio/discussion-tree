@@ -4665,3 +4665,8 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
      backdrop/hamburger; hide it so the title row stays clean. */
   .sidebar-collapse-btn { display: none; }
 }
+
+/* The general-chat panel is block flow (not a flex thread with gap like the
+   board cards), so ThreadMessage rows had no separation. Add it back. */
+.map-chat-body .thread-msg { margin-bottom: 10px; }
+.map-chat-body .thread-msg:last-of-type { margin-bottom: 0; }
