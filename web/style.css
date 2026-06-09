@@ -4385,6 +4385,12 @@ button.secondary {
   overflow: auto;
   padding: 7px 9px;
   user-select: text;
+  /* When the canvas is LOCKED, React Flow sets pointer-events:none on the node
+     wrapper (no select/drag) — which would also kill scrolling inside this
+     thread. Re-enable it on just the scrollable body so a locked map is still
+     readable/scrollable (and the per-message expand still works). The body
+     already carries `nodrag`, so this never lets you drag the node by it. */
+  pointer-events: auto;
 }
 .map-card-context {
   font-size: 12px;
