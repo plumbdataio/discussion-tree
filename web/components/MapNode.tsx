@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import type { MapNodeKind, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
 import { ThreadMessage } from "./ThreadMessage.tsx";
+import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
 import { useDraft } from "../utils/drafts.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import {
@@ -148,6 +149,7 @@ function MapNodeImpl(props: NodeProps) {
   const data = props.data as unknown as MapNodeData;
   const kind = data.kind || "idea";
   const cardRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const sizeRef = useRef<{ w: number; h: number; x: number; y: number }>({
     w: 0,
     h: 0,
@@ -191,7 +193,7 @@ function MapNodeImpl(props: NodeProps) {
         <span className="map-card-kind">{t(`map.kind.${kind}`)}</span>
         {data.title || t("map.untitled")}
       </div>
-      <div className="map-card-body nodrag nowheel">
+      <div className="map-card-body nodrag nowheel" ref={bodyRef}>
         {data.context ? (
           <div className="map-card-context">
             <MDView text={data.context} />
@@ -210,6 +212,10 @@ function MapNodeImpl(props: NodeProps) {
             ))}
           </div>
         )}
+        {/* Same "jump to latest" affordance as a board node — shows only when
+            the bottom of the thread is scrolled out of view. Normal flow
+            (newest at the bottom), so NOT reversed. */}
+        <ScrollToBottomButton scrollRef={bodyRef} />
       </div>
       <MapCardComposer nodeId={props.id} />
     </div>
