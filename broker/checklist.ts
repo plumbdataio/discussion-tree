@@ -293,10 +293,10 @@ export function onBoardSettled(boardId: string): void {
     | undefined;
   if (!board) return;
   const text =
-    `[discussion-tree] このボード「${board.title}」が settled になりました。\n` +
-    `1. チェックリストノード(${cn.id})に、この議論で決まったことが record_decision で全て反映されているか最終確認を。\n` +
-    `2. 今後、別のボードや general でこのチェックリストの管理対象に当たる話が出たら、必ず ${cn.id} に追加すること。\n` +
-    `3. 以降 discussion-tree 側の自動リマインダは効きません(特に compact を跨ぐと board ごと忘れます)。必要なら「${board.title}のチェックリストは ${boardId}/${cn.id} にあり」とメモリに簡潔な pointer を残すこと。`;
+    `[discussion-tree] This board "${board.title}" is now settled.\n` +
+    `1. Do a final check that every decision reached in this discussion has been reflected into the checklist node (${cn.id}) via record_decision.\n` +
+    `2. From now on, whenever something that belongs to this checklist's scope comes up on another board or in general, always add it to ${cn.id}.\n` +
+    `3. The discussion-tree automatic reminders no longer fire after this (in particular, across a compact you forget about the board entirely). If needed, leave a concise pointer in memory like "the checklist for ${board.title} lives at ${boardId}/${cn.id}".`;
   insertPending.run(
     board.session_id,
     boardId,
@@ -335,9 +335,9 @@ export function onNodeSettled(
     | undefined;
   const title = node?.title ?? nodeId;
   const text =
-    `[discussion-tree] ノード「${title}」の決定が確定しました。` +
-    `この決定を record_decision(board_id="${boardId}", node_id="${cn.id}", summary=<「〜であること」型の検証可能な1行>, sources=[{kind:"node", id:"${nodeId}", board:"${boardId}"}]) でチェックリストに反映してください。` +
-    `出典(sources)は最下層の参照だけでよく、kind は board/node/message から選べます。node の board は省略可(全ボードで一意なら自動補完、衝突する時だけ要指定)。特定メッセージを引くなら post_to_node の戻り値や受信メタの message_id を {kind:"message", id:<その id>} で指定。`;
+    `[discussion-tree] The decision on node "${title}" is now settled. ` +
+    `Reflect this decision into the checklist via record_decision(board_id="${boardId}", node_id="${cn.id}", summary=<a verifiable one-liner in "X must hold" form>, sources=[{kind:"node", id:"${nodeId}", board:"${boardId}"}]). ` +
+    `For sources, the lowest-level reference is enough, and kind can be board/node/message. The board on a node ref is optional (auto-resolved when the id is unique across all boards; only required when it collides). To cite a specific message, pass {kind:"message", id:<that id>} using the return value of post_to_node or the message_id from the received meta.`;
   insertPending.run(
     board.session_id,
     boardId,

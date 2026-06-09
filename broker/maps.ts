@@ -331,7 +331,7 @@ export async function handleMapChat(body: any): Promise<
   }
   const nodeTitle =
     nodeId === MAP_GENERAL_NODE
-      ? "全体チャット"
+      ? "General chat"
       : ((selectMapNode.get(mapId, nodeId) as MapNode | undefined)?.title ||
         nodeId);
   const path = `${map.title} > ${nodeTitle}`;
