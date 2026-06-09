@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import {
   CheckSquare,
   ChevronDown,
@@ -48,16 +50,14 @@ const SOURCE_ICON: Record<
   node: Network,
   message: MessageSquare,
 };
-const SOURCE_LABEL: Record<ChecklistSourceKind, string> = {
-  board: "ボード",
-  node: "ノード",
-  message: "メッセージ",
-};
+function sourceKindLabel(kind: ChecklistSourceKind, t: TFunction): string {
+  return t(`checklist.source_kind_${kind}`);
+}
 
-function whoLabel(source?: string): string | null {
+function whoLabel(source: string | undefined, t: TFunction): string | null {
   if (source === "cc") return "CC";
-  if (source === "user") return "あなた";
-  if (source === "system") return "システム";
+  if (source === "user") return t("checklist.who_you");
+  if (source === "system") return t("checklist.who_system");
   return source ?? null;
 }
 
@@ -73,6 +73,7 @@ function SourceAction({
   source: ChecklistItemSource;
   kind: ChecklistSourceKind;
 }) {
+  const { t } = useTranslation();
   if (kind === "message") {
     return (
       <button
@@ -80,7 +81,7 @@ function SourceAction({
         className="checklist-source-open"
         onClick={() => jumpToAnchor(source.board_id, Number(source.ref_id))}
       >
-        このメッセージへ移動
+        {t("checklist.open_message")}
       </button>
     );
   }
@@ -88,7 +89,7 @@ function SourceAction({
     kind === "board" ? `/board/${source.ref_id}` : `/board/${source.board_id}`;
   return (
     <a className="checklist-source-open" href={href}>
-      {kind === "board" ? "このボードを開く" : "このノードのボードを開く"}
+      {kind === "board" ? t("checklist.open_board") : t("checklist.open_node_board")}
     </a>
   );
 }
@@ -96,12 +97,13 @@ function SourceAction({
 // One source inside the modal: the cited content (title / message body) plus
 // where it lives and an action to open it.
 function SourceRow({ source }: { source: ChecklistItemSource }) {
+  const { t } = useTranslation();
   const kind = (source.kind in SOURCE_ICON ? source.kind : "node") as
     | ChecklistSourceKind;
   const Icon = SOURCE_ICON[kind];
-  const label = SOURCE_LABEL[kind];
+  const label = sourceKindLabel(kind, t);
   const p = source.preview;
-  const who = whoLabel(p?.source);
+  const who = whoLabel(p?.source, t);
   return (
     <div className={`checklist-source-row checklist-source-${kind}`}>
       <div className="checklist-source-head">
@@ -120,7 +122,9 @@ function SourceRow({ source }: { source: ChecklistItemSource }) {
         </span>
       </div>
       {p?.missing ? (
-        <div className="checklist-source-missing">参照先が見つかりません</div>
+        <div className="checklist-source-missing">
+          {t("checklist.source_missing")}
+        </div>
       ) : (
         <>
           {p?.title && <div className="checklist-source-name">{p.title}</div>}
@@ -226,6 +230,7 @@ function SortControls({
   sort: Sort;
   update: (next: Sort) => void;
 }) {
+  const { t } = useTranslation();
   // Clicking the active field flips its direction; clicking the other field
   // switches to it (ascending).
   const onClick = (by: SortBy) => {
@@ -237,7 +242,11 @@ function SortControls({
   };
   const Arrow = sort.dir === "asc" ? ChevronUp : ChevronDown;
   return (
-    <div className="checklist-sort" role="group" aria-label="並べ替え">
+    <div
+      className="checklist-sort"
+      role="group"
+      aria-label={t("checklist.sort_group")}
+    >
       {(["position", "status"] as const).map((by) => {
         const active = sort.by === by;
         return (
@@ -248,11 +257,15 @@ function SortControls({
             onClick={() => onClick(by)}
             title={
               by === "position"
-                ? "配列順で並べ替え"
-                : "ステータス順で並べ替え"
+                ? t("checklist.sort_by_position")
+                : t("checklist.sort_by_status")
             }
           >
-            <span>{by === "position" ? "順序" : "状態"}</span>
+            <span>
+              {by === "position"
+                ? t("checklist.sort_position")
+                : t("checklist.sort_status")}
+            </span>
             {active && <Arrow size={12} strokeWidth={2.5} />}
           </button>
         );
@@ -262,6 +275,7 @@ function SortControls({
 }
 
 function ChecklistBody({ node, sort }: { node: Node; sort: Sort }) {
+  const { t } = useTranslation();
   const items = node.checklist_items ?? [];
   // Which item's sources modal is open (one at a time per body instance). A
   // modal — not an inline/popover — because the source list can grow and a
@@ -276,7 +290,7 @@ function ChecklistBody({ node, sort }: { node: Node; sort: Sort }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [openId]);
   if (items.length === 0) {
-    return <div className="checklist-empty">まだ項目がありません</div>;
+    return <div className="checklist-empty">{t("checklist.empty")}</div>;
   }
   const ordered = sortItems(items, sort);
   const openItem = openId == null ? null : items.find((i) => i.id === openId);
@@ -303,7 +317,7 @@ function ChecklistBody({ node, sort }: { node: Node; sort: Sort }) {
                 <MDView className="checklist-summary" text={it.summary} />
                 {it.status === "dropped" && it.drop_reason && (
                   <span className="checklist-drop-reason">
-                    却下理由: {it.drop_reason}
+                    {t("checklist.drop_reason", { reason: it.drop_reason })}
                   </span>
                 )}
               </span>
@@ -314,8 +328,10 @@ function ChecklistBody({ node, sort }: { node: Node; sort: Sort }) {
                     "checklist-source-toggle" + (openId === it.id ? " open" : "")
                   }
                   aria-haspopup="dialog"
-                  aria-label={`出典 ${sources.length} 件を表示`}
-                  title={`出典 ${sources.length} 件を表示`}
+                  aria-label={t("checklist.show_sources", {
+                    count: sources.length,
+                  })}
+                  title={t("checklist.show_sources", { count: sources.length })}
                   onClick={() => setOpenId(it.id)}
                 >
                   <Link2 size={13} strokeWidth={2} />
@@ -339,19 +355,19 @@ function ChecklistBody({ node, sort }: { node: Node; sort: Sort }) {
               className="checklist-sources-modal"
               role="dialog"
               aria-modal="true"
-              aria-label="出典"
+              aria-label={t("checklist.sources")}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="checklist-sources-modal-header">
                 <h3 className="checklist-sources-modal-title">
-                  出典 {openSources.length} 件
+                  {t("checklist.sources_count", { count: openSources.length })}
                 </h3>
                 <button
                   type="button"
                   className="checklist-modal-close"
                   onClick={() => setOpenId(null)}
-                  aria-label="閉じる"
-                  title="閉じる"
+                  aria-label={t("checklist.close")}
+                  title={t("checklist.close")}
                 >
                   <X size={18} strokeWidth={1.75} />
                 </button>
@@ -370,6 +386,7 @@ function ChecklistBody({ node, sort }: { node: Node; sort: Sort }) {
 }
 
 export function ChecklistCard({ node }: { node: Node }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [sort, updateSort] = useChecklistSort();
   useEffect(() => {
@@ -390,8 +407,8 @@ export function ChecklistCard({ node }: { node: Node }) {
           <button
             type="button"
             className="checklist-expand"
-            title="拡大表示"
-            aria-label="チェックリストを拡大表示"
+            title={t("checklist.expand")}
+            aria-label={t("checklist.expand_aria")}
             onClick={() => setExpanded(true)}
           >
             <Maximize2 size={14} strokeWidth={1.75} />
@@ -423,8 +440,8 @@ export function ChecklistCard({ node }: { node: Node }) {
                     type="button"
                     className="checklist-modal-close"
                     onClick={() => setExpanded(false)}
-                    aria-label="閉じる"
-                    title="閉じる"
+                    aria-label={t("checklist.close")}
+                    title={t("checklist.close")}
                   >
                     <X size={18} strokeWidth={1.75} />
                   </button>

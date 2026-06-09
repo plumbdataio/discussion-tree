@@ -1,5 +1,6 @@
 import "./happydom.ts";
-import { describe, test, expect, beforeEach } from "bun:test";
+import { describe, test, expect, beforeEach, beforeAll } from "bun:test";
+import i18n from "../../web/i18n.ts";
 import { ChecklistCard } from "../../web/components/ChecklistCard.tsx";
 import type {
   ChecklistItem,
@@ -72,6 +73,14 @@ async function mount(n: Node) {
 }
 
 describe("ChecklistCard source citations", () => {
+  beforeAll(async () => {
+    if (!i18n.isInitialized) {
+      await new Promise<void>((resolve) => {
+        i18n.on("initialized", () => resolve());
+      });
+    }
+    await i18n.changeLanguage("en");
+  });
   beforeEach(() => {
     localStorage.clear();
   });
@@ -117,7 +126,7 @@ describe("ChecklistCard source citations", () => {
     const action = row.querySelector(".checklist-source-open") as HTMLElement;
     expect(action.tagName).toBe("A");
     expect(action.getAttribute("href")).toBe("/board/bd_x");
-    expect(row.textContent).toContain("ノード");
+    expect(row.textContent).toContain("Node");
     expect(row.textContent).toContain("dec");
     await m.unmount();
   });
@@ -147,12 +156,12 @@ describe("ChecklistCard source citations", () => {
     const a0 = rows[0].querySelector(".checklist-source-open") as HTMLElement;
     expect(a0.tagName).toBe("A");
     expect(a0.getAttribute("href")).toBe("/board/bd_other");
-    expect(rows[0].textContent).toContain("ボード");
+    expect(rows[0].textContent).toContain("Board");
     // message → button (no href, jumps via anchor channel)
     const a1 = rows[1].querySelector(".checklist-source-open") as HTMLElement;
     expect(a1.tagName).toBe("BUTTON");
     expect(a1.getAttribute("href")).toBeNull();
-    expect(rows[1].textContent).toContain("メッセージ");
+    expect(rows[1].textContent).toContain("Message");
     expect(rows[1].textContent).toContain("99");
     await m.unmount();
   });
@@ -168,7 +177,7 @@ describe("ChecklistCard source citations", () => {
             kind: "message",
             ref_id: "99",
             board_id: "bd_msg",
-            preview: { text: "the cited body", source: "user", board_title: "会話" },
+            preview: { text: "the cited body", source: "user", board_title: "Conversation" },
           }),
         ],
       }),
@@ -186,7 +195,7 @@ describe("ChecklistCard source citations", () => {
     ).toContain("the cited body");
     expect(
       modal.querySelector(".checklist-source-who")?.textContent,
-    ).toContain("あなた");
+    ).toContain("You");
     await m.unmount();
   });
 
