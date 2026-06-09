@@ -768,18 +768,8 @@ export const TOOLS = [
   {
     name: "list_maps",
     description:
-      "List divergent-discussion maps. Default scope is this_session (only maps owned by your own CC session); pass scope='all' to also see maps owned by OTHER alive CC sessions on this machine — useful for handover / cross-session work, since any map is operable from any session given its map_id. Returns id, title, node_count, owning session_id + name, and a shareable url.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        scope: {
-          type: "string" as const,
-          enum: ["this_session", "all"],
-          description:
-            "this_session (default) = only your maps; all = include sibling sessions' maps.",
-        },
-      },
-    },
+      "List the divergent-discussion maps owned by this session (id, title, node_count, url).",
+    inputSchema: { type: "object" as const, properties: {} },
   },
   {
     name: "search_maps",
@@ -1546,12 +1536,11 @@ export async function dispatchToolCall(
 
       case "list_maps": {
         const sessionId = ensureSession();
-        const a = args as { scope?: "this_session" | "all" };
         const res = await brokerFetch<{
           ok: boolean;
           maps?: any[];
           error?: string;
-        }>("/list-maps", { session_id: sessionId, scope: a.scope });
+        }>("/list-maps", { session_id: sessionId });
         if (!res.ok) return textResult(res.error ?? "list_maps failed", true);
         return textResult(JSON.stringify(res.maps, null, 2));
       }

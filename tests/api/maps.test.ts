@@ -514,8 +514,8 @@ describe("maps — auto-placement avoids overlap", () => {
   });
 });
 
-describe("maps — list scope", () => {
-  test("scope='all' surfaces other alive sessions' maps; default does not", async () => {
+describe("maps — list is session-scoped (no cross-session discovery)", () => {
+  test("list_maps never shows another session's maps", async () => {
     const other = await registerSession(broker.url, "/tmp/pd-test-other");
     await attachCC(broker.url, other);
     const created = await post<{ ok: boolean; map_id: string }>(
@@ -523,19 +523,10 @@ describe("maps — list scope", () => {
       { session_id: other, title: "other session map" },
     );
     const oid = created.json.map_id;
-
     const mine = await post<{ maps: any[] }>(`${broker.url}/list-maps`, {
       session_id: sessionId,
     });
     expect(mine.json.maps.some((m) => m.id === oid)).toBe(false);
-
-    const all = await post<{ maps: any[] }>(`${broker.url}/list-maps`, {
-      session_id: sessionId,
-      scope: "all",
-    });
-    const found = all.json.maps.find((m) => m.id === oid);
-    expect(found).toBeTruthy();
-    expect(found.session_id).toBe(other);
   });
 });
 

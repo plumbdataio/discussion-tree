@@ -420,29 +420,13 @@ export function handleGetMap(body: any) {
 export function handleListMaps(body: any) {
   const sessionId = String(body?.session_id ?? "");
   if (!sessionId) return { ok: false, error: "session_id required" };
-  // Default = only this session's maps. scope='all' surfaces maps owned by any
-  // OTHER alive CC session on this machine (handover / cross-session work — a
-  // map is operable from any session given its map_id), mirroring list_boards.
-  const scope = body?.scope === "all" ? "all" : "this_session";
-  const where =
-    scope === "all"
-      ? "s.alive = 1 AND m.deleted_at IS NULL AND m.archived = 0"
-      : "m.session_id = ? AND m.deleted_at IS NULL AND m.archived = 0";
-  const params = scope === "all" ? [] : [sessionId];
+  // Only this session's maps. Cross-session discovery was deliberately dropped
+  // (noise) — find another session's map via peers / by asking the user.
   const maps = db
     .prepare(
-      `SELECT m.id, m.title, m.created_at, m.session_id, s.name AS session_name
-         FROM maps m JOIN sessions s ON s.id = m.session_id
-        WHERE ${where}
-        ORDER BY m.created_at`,
+      "SELECT id, title, created_at FROM maps WHERE session_id = ? AND deleted_at IS NULL AND archived = 0 ORDER BY created_at",
     )
-    .all(...params) as {
-    id: string;
-    title: string;
-    created_at: string;
-    session_id: string;
-    session_name: string | null;
-  }[];
+    .all(sessionId) as { id: string; title: string; created_at: string }[];
   const out = maps.map((m) => ({
     ...m,
     node_count: (
