@@ -487,3 +487,54 @@ describe("maps — apply_map_ops (batch)", () => {
     expect(view.json.nodes.length).toBe(2);
   });
 });
+
+describe("maps — auto-placement avoids overlap", () => {
+  const NODE_W = 320;
+  const NODE_H = 340;
+  const overlap = (a: any, b: any) =>
+    a.x < b.x + (b.w ?? NODE_W) &&
+    a.x + (a.w ?? NODE_W) > b.x &&
+    a.y < b.y + (b.h ?? NODE_H) &&
+    a.y + (a.h ?? NODE_H) > b.y;
+
+  test("two children of one parent don't land on top of each other", async () => {
+    const mapId = await createMap("placement");
+    const root = await addNode(mapId, { title: "root" });
+    const c1 = await addNode(mapId, { title: "c1", parent: root });
+    const c2 = await addNode(mapId, { title: "c2", parent: root });
+    const view = await get<any>(`${broker.url}/api/map/${mapId}`);
+    const byId = Object.fromEntries(
+      view.json.nodes.map((n: any) => [n.id, n]),
+    );
+    // both fan out to the right of the parent...
+    expect(byId[c1].x).toBeGreaterThan(byId[root].x);
+    expect(byId[c2].x).toBeGreaterThan(byId[root].x);
+    // ...but the second is nudged clear of the first (no overlap).
+    expect(overlap(byId[c1], byId[c2])).toBe(false);
+  });
+});
+
+describe("maps — list scope", () => {
+  test("scope='all' surfaces other alive sessions' maps; default does not", async () => {
+    const other = await registerSession(broker.url, "/tmp/pd-test-other");
+    await attachCC(broker.url, other);
+    const created = await post<{ ok: boolean; map_id: string }>(
+      `${broker.url}/create-map`,
+      { session_id: other, title: "other session map" },
+    );
+    const oid = created.json.map_id;
+
+    const mine = await post<{ maps: any[] }>(`${broker.url}/list-maps`, {
+      session_id: sessionId,
+    });
+    expect(mine.json.maps.some((m) => m.id === oid)).toBe(false);
+
+    const all = await post<{ maps: any[] }>(`${broker.url}/list-maps`, {
+      session_id: sessionId,
+      scope: "all",
+    });
+    const found = all.json.maps.find((m) => m.id === oid);
+    expect(found).toBeTruthy();
+    expect(found.session_id).toBe(other);
+  });
+});
