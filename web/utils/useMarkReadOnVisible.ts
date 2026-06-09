@@ -15,6 +15,12 @@ import { TICK_MS, VISIBLE_DURATION_MS, VISIBLE_RATIO } from "./readTiming.ts";
 export function useMarkReadOnVisible(
   cardRef: React.RefObject<HTMLElement | null>,
   items: ThreadItem[],
+  // An extra gate the caller can close to pause auto-read regardless of
+  // on-screen dwell. The map view passes `zoom >= threshold` here so a node
+  // that's merely parked on a zoomed-out overview canvas (where the message
+  // text isn't actually legible) is NOT silently marked read — the user must
+  // zoom in to it. Defaults open, so every board call site is unchanged.
+  gateOpen: boolean = true,
 ) {
   const [settings] = useSettings();
 
@@ -30,6 +36,9 @@ export function useMarkReadOnVisible(
     // User has opted out of auto-read; the manual "Mark read" button on each
     // card takes over.
     if (!settings.autoReadEnabled) return;
+    // Caller gate closed (e.g. map zoomed out below the legibility threshold):
+    // don't auto-read at all. Re-runs when gateOpen flips because it's a dep.
+    if (!gateOpen) return;
     if (unreadIds.length === 0) return;
     const card = cardRef.current;
     if (!card) return;
@@ -85,5 +94,5 @@ export function useMarkReadOnVisible(
     tick();
     const interval = setInterval(tick, TICK_MS);
     return () => clearInterval(interval);
-  }, [cardRef, dep, settings.autoReadEnabled]);
+  }, [cardRef, dep, settings.autoReadEnabled, gateOpen]);
 }

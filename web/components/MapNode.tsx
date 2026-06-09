@@ -7,8 +7,14 @@
 // Per the map v1 requirements the card omits bookmark / timestamp / status /
 // (desktop) send-button: ThreadMessage is reused in `compact` mode for that.
 
-import React, { createContext, useContext, useRef, useState } from "react";
-import { Handle, Position, NodeResizer } from "@xyflow/react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { Handle, Position, NodeResizer, useStore } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import { useTranslation } from "react-i18next";
 import type { MapNodeKind, ThreadItem } from "../../shared/types.ts";
@@ -18,6 +24,7 @@ import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
 import { MessageModal } from "./MessageModal.tsx";
 import { useDraft } from "../utils/drafts.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
+import { MAP_READ_ZOOM } from "../utils/readTiming.ts";
 import {
   extractImageFiles,
   postMapChat,
@@ -162,12 +169,34 @@ function MapNodeImpl(props: NodeProps) {
     x: 0,
     y: 0,
   });
-  // Same visible-dwell auto-read as a board node card: while the card is on
-  // screen for VISIBLE_DURATION_MS, mark its unread CC messages read (map
-  // messages are thread_items, so /mark-thread-items-read clears them + the
-  // sidebar unread dot). React Flow transforms the node, but getBoundingClientRect
-  // still reports screen coords, so visibility detection works inside the canvas.
-  useMarkReadOnVisible(cardRef, data.messages);
+  // 方針A — only auto-read when the canvas is zoomed in enough that the text is
+  // actually legible. Subscribe to a BOOLEAN derived from the zoom so the node
+  // re-renders only when it crosses the threshold, not on every pan/zoom tick.
+  const zoomGateOpen = useStore((s) => s.transform[2] >= MAP_READ_ZOOM);
+  // Same visible-dwell auto-read as a board node card, now gated on zoom: while
+  // the card is on screen for VISIBLE_DURATION_MS AND zoom ≥ threshold, mark its
+  // unread CC messages read (map messages are thread_items, so
+  // /mark-thread-items-read clears them + the sidebar unread dot).
+  useMarkReadOnVisible(cardRef, data.messages, zoomGateOpen);
+
+  // When this node has unread CC messages, scroll its thread to the OLDEST
+  // unread one so the user reads forward from where they left off (instead of
+  // landing at the latest). Runs when the unread set changes.
+  const oldestUnreadId = hasUnread
+    ? data.messages.find((m) => m.source === "cc" && !m.read_at)?.id
+    : undefined;
+  useEffect(() => {
+    if (oldestUnreadId == null) return;
+    const body = bodyRef.current;
+    if (!body) return;
+    const el = body.querySelector(
+      `[data-unread-id="${oldestUnreadId}"]`,
+    ) as HTMLElement | null;
+    if (!el) return;
+    // Scroll ONLY this card's thread container (not scrollIntoView, which could
+    // also nudge the React Flow canvas) so the oldest unread sits at the top.
+    body.scrollTop += el.getBoundingClientRect().top - body.getBoundingClientRect().top;
+  }, [oldestUnreadId]);
 
   return (
     <div

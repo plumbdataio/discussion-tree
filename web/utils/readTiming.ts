@@ -6,3 +6,8 @@
 export const VISIBLE_DURATION_MS = 5_000; // continuous on-screen time to clear
 export const TICK_MS = 500; // visibility poll interval
 export const VISIBLE_RATIO = 0.4; // fraction of the card that must be in view
+
+// Map-only: the canvas zoom must be at least this for a node's messages to
+// auto-read. Below it the user is on an overview where the text isn't legible,
+// so merely having an unread node parked on screen must NOT clear it.
+export const MAP_READ_ZOOM = 0.7;
