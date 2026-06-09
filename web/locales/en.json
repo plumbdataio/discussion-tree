@@ -229,6 +229,10 @@
     "expand": "Expand",
     "expand_aria": "Expand checklist"
   },
+  "scroll": {
+    "to_bottom": "Scroll to bottom",
+    "to_bottom_short": "To bottom"
+  },
   "map": {
     "badge": "Map",
     "badge_title": "Divergent-discussion map (the divergence phase before a board)",

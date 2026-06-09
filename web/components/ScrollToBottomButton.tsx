@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 // Renders a small floating ▼ button bottom-right of the given scroll
 // container WHEN the user is not already at the bottom. Click jumps to
@@ -19,6 +20,7 @@ function ScrollToBottomButtonImpl({
   scrollRef: React.RefObject<HTMLElement | null>;
   reversed?: boolean;
 }) {
+  const { t } = useTranslation();
   const [show, setShow] = useState(false);
 
   useEffect(() => {
@@ -57,8 +59,8 @@ function ScrollToBottomButtonImpl({
     <button
       type="button"
       className={`scroll-to-bottom${reversed ? " is-reversed" : ""}`}
-      aria-label="一番下までスクロール"
-      title="一番下まで"
+      aria-label={t("scroll.to_bottom")}
+      title={t("scroll.to_bottom_short")}
       onClick={() => {
         const el = scrollRef.current;
         if (!el) return;

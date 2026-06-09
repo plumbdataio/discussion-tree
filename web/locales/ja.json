@@ -229,6 +229,10 @@
     "expand": "拡大表示",
     "expand_aria": "チェックリストを拡大表示"
   },
+  "scroll": {
+    "to_bottom": "一番下までスクロール",
+    "to_bottom_short": "一番下まで"
+  },
   "map": {
     "badge": "マップ",
     "badge_title": "発散議論マップ(ボードの前段の発散フェーズ)",
