@@ -402,22 +402,17 @@ function SessionItem({
                     />
                     {m.title}
                   </span>
+                  {/* Navigate by the same red badge as boards: show the
+                      unread CC-message count, not the (meaningless) node
+                      count. Nothing when there's nothing new to look at. */}
                   {hasUnread && (
                     <span
-                      className="sidebar-unread-dot"
+                      className="sidebar-unread-count"
                       title={t("sidebar.unread_dot_title", {
                         count: m.unread_count,
                       })}
-                    />
-                  )}
-                  {!hasUnread && (
-                    <span
-                      className="sidebar-map-count"
-                      title={t("sidebar.map_node_count", {
-                        count: m.node_count,
-                      })}
                     >
-                      {m.node_count}
+                      {m.unread_count}
                     </span>
                   )}
                 </a>

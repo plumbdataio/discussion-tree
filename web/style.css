@@ -4670,3 +4670,23 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
    board cards), so ThreadMessage rows had no separation. Add it back. */
 .map-chat-body .thread-msg { margin-bottom: 10px; }
 .map-chat-body .thread-msg:last-of-type { margin-bottom: 0; }
+
+/* Map unread badge — same red number as a board's needs-reply badge, so the
+   user navigates maps by the same red-count cue they use for boards. */
+.sidebar-unread-count {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  background: #e11d48;
+  color: #fff;
+  margin-left: 6px;
+}
+.sidebar ul.maps li.has-unread .sidebar-map-title { font-weight: 600; }
