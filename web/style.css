@@ -4608,15 +4608,27 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel);
-  color: var(--muted);
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
   cursor: pointer;
 }
-.sidebar-collapse-btn:hover { background: var(--bg); color: var(--text); }
+.sidebar-collapse-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+/* Lucide SVGs are flex items here; without an explicit non-shrink the icon
+   collapsed to width:0 and looked invisible. Pin the size. */
+.sidebar-collapse-btn svg,
+.sidebar-reopen svg {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+}
 /* Floating reopen button — sits at the top-left where the sidebar used to be.
    Hidden by default; shown only on desktop when collapsed (see media query). */
 .sidebar-reopen {
@@ -4627,18 +4639,22 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
   top: 72px;
   left: 10px;
   z-index: 50;
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
   background: var(--panel);
-  color: var(--muted);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
   cursor: pointer;
 }
-.sidebar-reopen:hover { background: var(--bg); color: var(--text); }
+.sidebar-reopen:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
 @media (min-width: 769px) {
   /* Collapse only applies on desktop; the mobile drawer has its own toggle. */
   .sidebar.collapsed { display: none; }

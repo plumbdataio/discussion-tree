@@ -618,7 +618,7 @@ export function Sidebar({
           title={t("sidebar.expand_label")}
           onClick={() => updateSettings({ sidebarCollapsed: false })}
         >
-          <ChevronsRight size={18} strokeWidth={2} />
+          <ChevronsRight size={22} strokeWidth={2.25} />
         </button>
       )}
       <aside
@@ -658,7 +658,7 @@ export function Sidebar({
               setDrawerOpen(false);
             }}
           >
-            <ChevronsLeft size={16} strokeWidth={2} />
+            <ChevronsLeft size={22} strokeWidth={2.25} />
           </button>
         </div>
 
