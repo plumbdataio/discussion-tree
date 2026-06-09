@@ -39,7 +39,7 @@ async function fetchActiveBoardSummary(sessionId: string): Promise<string> {
     const list = active
       .map((b) => `${b.id} ("${b.title}", ${b.status})`)
       .join("; ");
-    return `Active option-decision boards in this session: ${list}. New decision points / option-presentations belong in add_concern or add_item on the relevant board — NOT in the CLI.`;
+    return `Other active boards here: ${list}. Put new decision points on the relevant board (add_concern / add_item), not the CLI.`;
   } catch {
     return "";
   }
@@ -75,7 +75,7 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
       const reminderParts: string[] = [];
       if (kind === "user_input_relay" && msg.board_id && msg.node_id) {
         reminderParts.push(
-          `[discussion-tree] Mirror your reply into the UI thread by calling post_to_node(board_id="${msg.board_id}", node_id="${msg.node_id}", message=<your reply>, status=<discussing|adopted|rejected|agreed|resolved|needs-reply|done>) IN ADDITION to your normal CLI response.`,
+          `[discussion-tree] Also mirror your reply via post_to_node(board_id="${msg.board_id}", node_id="${msg.node_id}", status=…).`,
         );
         if (activeBoardLine) reminderParts.push(activeBoardLine);
       } else if (kind === "board_structure_request" && msg.board_id) {
@@ -88,7 +88,7 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
             ? `map node "${msg.node_id}"`
             : `the map-wide general chat`;
         reminderParts.push(
-          `[discussion-tree] This is a MAP message (${target}) on map "${msg.board_id}". First call get_map(map_id="${msg.board_id}") to see the current graph (the user may have dragged / connected / deleted nodes since you last looked — those edits are silent). Then RESPOND BY GROWING THE MAP: add_map_node / connect_map_nodes / update_map_node as the conversation calls for, and mirror any conversational reply with post_to_map_node(map_id="${msg.board_id}", node_id="${msg.node_id || "__general__"}", message=<reply>). Keep it incremental — a few nodes at a time, not a giant pre-built graph.`,
+          `[discussion-tree] Map message (${target}). Call get_map(map_id="${msg.board_id}") first — structure edits are silent — then grow the map (add_map_node / connect_map_nodes / update_map_node) and/or reply via post_to_map_node(map_id="${msg.board_id}", node_id="${msg.node_id || "__general__"}"). Incremental, a few nodes at a time.`,
         );
       }
       const content =
