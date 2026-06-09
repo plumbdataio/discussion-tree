@@ -168,6 +168,71 @@ describe("maps — CRUD + graph", () => {
     expect(gm.json.nodes.length).toBe(2);
   });
 
+  test("/map-restore un-deletes a node (undo of a node delete)", async () => {
+    const mapId = await createMap("restore-node");
+    const a = await addNode(mapId, { title: "a" });
+    await post(`${broker.url}/map-delete-node`, { map_id: mapId, node_id: a });
+    let view = await get<any>(`${broker.url}/api/map/${mapId}`);
+    expect(view.json.nodes.length).toBe(0);
+    const r = await post<{ ok: boolean; restored_nodes: number }>(
+      `${broker.url}/map-restore`,
+      { map_id: mapId, node_ids: [a] },
+    );
+    expect(r.json.ok).toBe(true);
+    expect(r.json.restored_nodes).toBe(1);
+    view = await get<any>(`${broker.url}/api/map/${mapId}`);
+    expect(view.json.nodes.map((n: any) => n.id)).toEqual([a]);
+  });
+
+  test("/map-restore brings a node back together with its incident edge", async () => {
+    const mapId = await createMap("restore-node-edge");
+    const a = await addNode(mapId, { title: "a" });
+    const b = await addNode(mapId, { title: "b", parent: a });
+    let view = await get<any>(`${broker.url}/api/map/${mapId}`);
+    const edgeId = view.json.edges[0].id;
+    // Mirror the UI onDelete: deleting a node also removes its connected edge.
+    await post(`${broker.url}/map-delete-node`, { map_id: mapId, node_id: b });
+    await post(`${broker.url}/map-disconnect`, { map_id: mapId, edge_id: edgeId });
+    view = await get<any>(`${broker.url}/api/map/${mapId}`);
+    expect(view.json.nodes.map((n: any) => n.id)).toEqual([a]);
+    expect(view.json.edges.length).toBe(0);
+    // Undo: restore node + edge atomically.
+    const r = await post<{
+      ok: boolean;
+      restored_nodes: number;
+      restored_edges: number;
+    }>(`${broker.url}/map-restore`, {
+      map_id: mapId,
+      node_ids: [b],
+      edge_ids: [edgeId],
+    });
+    expect(r.json.ok).toBe(true);
+    expect(r.json.restored_nodes).toBe(1);
+    expect(r.json.restored_edges).toBe(1);
+    view = await get<any>(`${broker.url}/api/map/${mapId}`);
+    expect(view.json.nodes.map((n: any) => n.id).sort()).toEqual([a, b].sort());
+    expect(view.json.edges.length).toBe(1);
+  });
+
+  test("/map-restore un-deletes an edge (undo of an edge delete)", async () => {
+    const mapId = await createMap("restore-edge");
+    const a = await addNode(mapId, { title: "a" });
+    await addNode(mapId, { title: "b", parent: a });
+    let view = await get<any>(`${broker.url}/api/map/${mapId}`);
+    const edgeId = view.json.edges[0].id;
+    await post(`${broker.url}/map-disconnect`, { map_id: mapId, edge_id: edgeId });
+    view = await get<any>(`${broker.url}/api/map/${mapId}`);
+    expect(view.json.edges.length).toBe(0);
+    const r = await post<{ ok: boolean; restored_edges: number }>(
+      `${broker.url}/map-restore`,
+      { map_id: mapId, edge_ids: [edgeId] },
+    );
+    expect(r.json.ok).toBe(true);
+    expect(r.json.restored_edges).toBe(1);
+    view = await get<any>(`${broker.url}/api/map/${mapId}`);
+    expect(view.json.edges.length).toBe(1);
+  });
+
   test("update_map_node edits content; kind normalized", async () => {
     const mapId = await createMap("update");
     const n = await addNode(mapId, { title: "old", context: "old ctx" });

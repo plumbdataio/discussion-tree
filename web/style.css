@@ -2693,6 +2693,27 @@ body.concern-resizing * {
   color: #991b1b;
   border-color: #fecaca;
 }
+/* A toast carrying an action (e.g. "Undo") lays its message and button in a
+   row, with the button visually separated. */
+.toast:has(.toast-action) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.toast-action {
+  flex: 0 0 auto;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.toast-action:hover {
+  background: rgba(30, 64, 175, 0.1);
+}
 @keyframes toast-in {
   from {
     opacity: 0;

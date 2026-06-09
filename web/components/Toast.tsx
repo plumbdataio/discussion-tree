@@ -8,10 +8,15 @@ const TOAST_TTL_MS = 3000;
 
 export type ToastTone = "ok" | "error";
 
+// An optional inline button (e.g. "Undo" after a delete). Clicking it runs
+// onClick and dismisses the toast.
+export type ToastAction = { label: string; onClick: () => void };
+
 type Toast = {
   id: number;
   message: string;
   tone: ToastTone;
+  action?: ToastAction;
 };
 
 const toasts: Toast[] = [];
@@ -22,17 +27,26 @@ function notify() {
   for (const l of listeners) l();
 }
 
-export function showToast(message: string, tone: ToastTone = "ok"): void {
+function dismiss(id: number) {
+  const i = toasts.findIndex((t) => t.id === id);
+  if (i >= 0) {
+    toasts.splice(i, 1);
+    notify();
+  }
+}
+
+// A toast with an action button lingers longer so the user can reach for it.
+const TOAST_TTL_ACTION_MS = 6000;
+
+export function showToast(
+  message: string,
+  tone: ToastTone = "ok",
+  action?: ToastAction,
+): void {
   const id = nextId++;
-  toasts.push({ id, message, tone });
+  toasts.push({ id, message, tone, action });
   notify();
-  setTimeout(() => {
-    const i = toasts.findIndex((t) => t.id === id);
-    if (i >= 0) {
-      toasts.splice(i, 1);
-      notify();
-    }
-  }, TOAST_TTL_MS);
+  setTimeout(() => dismiss(id), action ? TOAST_TTL_ACTION_MS : TOAST_TTL_MS);
 }
 
 // Single mount point in frontend.tsx. Positions itself top-right via
@@ -50,7 +64,19 @@ export function ToastContainer() {
     <div className="toast-container" aria-live="polite">
       {toasts.map((t) => (
         <div key={t.id} className={`toast toast-${t.tone}`} role="status">
-          {t.message}
+          <span className="toast-msg">{t.message}</span>
+          {t.action && (
+            <button
+              type="button"
+              className="toast-action"
+              onClick={() => {
+                t.action!.onClick();
+                dismiss(t.id);
+              }}
+            >
+              {t.action.label}
+            </button>
+          )}
         </div>
       ))}
     </div>

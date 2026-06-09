@@ -496,6 +496,15 @@ export const selectMapEdgeByPair = db.prepare(
 export const softDeleteMapEdge = db.prepare(
   `UPDATE map_edges SET deleted_at = ? WHERE map_id = ? AND id = ?`,
 );
+// Undo for an accidental delete: clear deleted_at so the node/edge is live
+// again. Because delete is logical, the row (and its messages) was never gone
+// — restoring is just flipping the tombstone back off.
+export const restoreMapNode = db.prepare(
+  `UPDATE map_nodes SET deleted_at = NULL WHERE map_id = ? AND id = ?`,
+);
+export const restoreMapEdge = db.prepare(
+  `UPDATE map_edges SET deleted_at = NULL WHERE map_id = ? AND id = ?`,
+);
 
 // --- Board status auto-rollup ---
 //

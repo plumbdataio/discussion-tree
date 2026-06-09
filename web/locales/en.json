@@ -251,6 +251,10 @@
     "expand_node": "Expand node",
     "lock": "Lock (freeze position / size / edge editing)",
     "unlock": "Unlock (L)",
+    "deleted_node": "Deleted \"{{title}}\"",
+    "deleted_edge": "Deleted link",
+    "undo_delete": "Undo",
+    "restored": "Restored",
     "kind": {
       "question": "Question",
       "idea": "Idea",

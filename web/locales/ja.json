@@ -251,6 +251,10 @@
     "expand_node": "ノード全体を拡大表示",
     "lock": "ロック(位置・サイズ・エッジ編集を固定)",
     "unlock": "ロック解除(L)",
+    "deleted_node": "「{{title}}」を削除しました",
+    "deleted_edge": "リンクを削除しました",
+    "undo_delete": "元に戻す",
+    "restored": "元に戻しました",
     "kind": {
       "question": "Question",
       "idea": "Idea",

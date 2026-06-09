@@ -34,6 +34,8 @@ import {
   selectMapNodesByMap,
   selectThreadsByBoard,
   setPendingThreadItem,
+  restoreMapEdge,
+  restoreMapNode,
   softDeleteMapEdge,
   softDeleteMapNode,
   updateMapNodeContent,
@@ -253,6 +255,21 @@ export function handleDisconnectMap(body: any) {
   softDeleteMapEdge.run(new Date().toISOString(), mapId, edgeId);
   emit(mapId);
   return { ok: true };
+}
+
+// Undo a delete: un-tombstone the given nodes and/or edges in one shot (so a
+// node deleted together with its incident edges comes back whole). One emit at
+// the end → the canvas refetches once. Restoring is safe because delete was
+// logical — the rows were only hidden, never removed.
+export function handleRestoreMap(body: any) {
+  const mapId = String(body?.map_id ?? "");
+  if (!selectMap.get(mapId)) return { ok: false, error: "map not found" };
+  const nodeIds = Array.isArray(body?.node_ids) ? body.node_ids : [];
+  const edgeIds = Array.isArray(body?.edge_ids) ? body.edge_ids : [];
+  for (const id of nodeIds) restoreMapNode.run(mapId, String(id));
+  for (const id of edgeIds) restoreMapEdge.run(mapId, String(id));
+  emit(mapId);
+  return { ok: true, restored_nodes: nodeIds.length, restored_edges: edgeIds.length };
 }
 
 export function handleRenameMap(body: any) {
@@ -602,6 +619,7 @@ export const routes = {
   "/map-delete-node": handleDeleteMapNode,
   "/map-connect": handleConnectMap,
   "/map-disconnect": handleDisconnectMap,
+  "/map-restore": handleRestoreMap,
   "/map-rename": handleRenameMap,
   "/map-archive": handleArchiveMap,
   "/map-post": handlePostToMapNode,

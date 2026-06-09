@@ -72,6 +72,32 @@ export function postMapDisconnect(mapId: string, edgeId: string) {
   });
 }
 
+// Logical-delete a node from the UI (Backspace/Delete). The row + its messages
+// stay in the DB so the delete can be undone; getMapView just hides it.
+export function postMapDeleteNode(mapId: string, nodeId: string) {
+  return fetch("/map-delete-node", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ map_id: mapId, node_id: nodeId }),
+  });
+}
+
+// Undo a delete: un-tombstone the given nodes and/or edges in one call.
+export function postMapRestore(
+  mapId: string,
+  opts: { nodeIds?: string[]; edgeIds?: string[] },
+) {
+  return fetch("/map-restore", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      map_id: mapId,
+      node_ids: opts.nodeIds ?? [],
+      edge_ids: opts.edgeIds ?? [],
+    }),
+  });
+}
+
 export async function uploadImage(
   file: File,
   boardId: string,
