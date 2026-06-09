@@ -593,28 +593,8 @@ export function handleApplyMapOps(body: any) {
   };
 }
 
-// Take ownership of a map for this session (handover): redirect future user
-// submissions + any undelivered map_chat messages to the claiming session.
-// Mirrors attach_to_board for boards. A map is operable from any session, so
-// after a list_maps(scope='all') you can claim one a dead predecessor owned.
-export function handleClaimMap(body: any) {
-  const mapId = String(body?.map_id ?? "");
-  const sessionId = String(body?.session_id ?? "");
-  if (!sessionId) return { ok: false, error: "session_id required" };
-  if (!selectMap.get(mapId)) return { ok: false, error: "map not found" };
-  db.run("UPDATE maps SET session_id = ? WHERE id = ?", [sessionId, mapId]);
-  // map_chat pending messages carry board_id = map_id.
-  db.run(
-    "UPDATE pending_messages SET session_id = ? WHERE delivered = 0 AND board_id = ?",
-    [sessionId, mapId],
-  );
-  emit(mapId);
-  return { ok: true, map_id: mapId };
-}
-
 export const routes = {
   "/create-map": handleCreateMap,
-  "/claim-map": handleClaimMap,
   "/map-apply-ops": handleApplyMapOps,
   "/map-add-node": handleAddMapNode,
   "/map-update-node": handleUpdateMapNode,

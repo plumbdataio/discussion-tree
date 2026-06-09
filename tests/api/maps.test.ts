@@ -530,35 +530,3 @@ describe("maps — list is session-scoped (no cross-session discovery)", () => {
   });
 });
 
-describe("maps — handover", () => {
-  test("claim_map reassigns a map to the claiming session", async () => {
-    const other = await registerSession(broker.url, "/tmp/pd-test-claim");
-    await attachCC(broker.url, other);
-    const created = await post<{ ok: boolean; map_id: string }>(
-      `${broker.url}/create-map`,
-      { session_id: other, title: "to be claimed" },
-    );
-    const mid = created.json.map_id;
-
-    const claim = await post<{ ok: boolean }>(`${broker.url}/claim-map`, {
-      session_id: sessionId,
-      map_id: mid,
-    });
-    expect(claim.json.ok).toBe(true);
-
-    // Now it appears under the claiming session's own (default-scope) list.
-    const mine = await post<{ maps: any[] }>(`${broker.url}/list-maps`, {
-      session_id: sessionId,
-    });
-    expect(mine.json.maps.some((m) => m.id === mid)).toBe(true);
-  });
-
-  test("claim_map rejects an unknown map", async () => {
-    const r = await post<{ ok: boolean; error?: string }>(
-      `${broker.url}/claim-map`,
-      { session_id: sessionId, map_id: "map_does_not_exist" },
-    );
-    expect(r.json.ok).toBe(false);
-    expect(r.json.error).toMatch(/not found/i);
-  });
-});
