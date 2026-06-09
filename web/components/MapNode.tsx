@@ -15,6 +15,7 @@ import type { MapNodeKind, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
 import { ThreadMessage } from "./ThreadMessage.tsx";
 import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
+import { MessageModal } from "./MessageModal.tsx";
 import { useDraft } from "../utils/drafts.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import {
@@ -49,7 +50,6 @@ export interface MapNodeData {
   messages: ThreadItem[];
 }
 
-const noopExpand = () => {};
 
 function MapCardComposer({ nodeId }: { nodeId: string }) {
   const { t } = useTranslation();
@@ -153,6 +153,7 @@ function MapNodeImpl(props: NodeProps) {
   const hasUnread = data.messages.some(
     (m) => m.source === "cc" && !m.read_at,
   );
+  const [expandedMsg, setExpandedMsg] = useState<ThreadItem | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const sizeRef = useRef<{ w: number; h: number; x: number; y: number }>({
@@ -215,7 +216,7 @@ function MapNodeImpl(props: NodeProps) {
                 item={m}
                 compact
                 enableAnchor={false}
-                onExpand={noopExpand}
+                onExpand={setExpandedMsg}
               />
             ))}
           </div>
@@ -226,6 +227,13 @@ function MapNodeImpl(props: NodeProps) {
         <ScrollToBottomButton scrollRef={bodyRef} />
       </div>
       <MapCardComposer nodeId={props.id} />
+      {expandedMsg && (
+        <MessageModal
+          text={expandedMsg.text}
+          source={expandedMsg.source}
+          onClose={() => setExpandedMsg(null)}
+        />
+      )}
     </div>
   );
 }

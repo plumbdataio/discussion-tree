@@ -88,15 +88,15 @@ function ThreadMessageImpl({
           <Leaf size={18} strokeWidth={isPinned ? 2.5 : 1.75} />
         </button>
       )}
-      {!compact && (
-        <button
-          className="msg-expand"
-          title={t("item_card.expand_message")}
-          onClick={() => onExpand(item)}
-        >
-          <Maximize2 size={12} strokeWidth={1.75} />
-        </button>
-      )}
+      {/* Expand stays even in compact mode — the map card is small, so being
+          able to pop a message out to read it in full is especially useful. */}
+      <button
+        className="msg-expand"
+        title={t("item_card.expand_message")}
+        onClick={() => onExpand(item)}
+      >
+        <Maximize2 size={12} strokeWidth={1.75} />
+      </button>
       <span className="who">
         {item.source === "user" ? t("item_card.you") : t("item_card.claude")}
         {!compact && (
