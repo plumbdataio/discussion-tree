@@ -25,7 +25,9 @@
     "toggle_label": "サイドバーを開閉",
     "filter_label": "表示",
     "filter_summary": "{{visible}} / {{total}}",
-    "map_node_count": "{{count}} 個のノード"
+    "map_node_count": "{{count}} 個のノード",
+    "collapse_label": "サイドバーを閉じる",
+    "expand_label": "サイドバーを開く"
   },
   "session_dashboard": {
     "back_to_top": "← トップへ戻る",

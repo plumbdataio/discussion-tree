@@ -32,6 +32,10 @@ export type Settings = {
   // Per-session collapsed state of the boards list. Missing keys default to
   // expanded (false).
   collapsedSessions: Record<string, boolean>;
+  // Desktop-only: hide the whole sidebar to reclaim horizontal space (useful
+  // on the map view's wide canvas). A floating reopen button stays visible.
+  // The mobile drawer is unaffected — it has its own toggle.
+  sidebarCollapsed: boolean;
 };
 
 const DEFAULTS: Settings = {
@@ -49,6 +53,7 @@ const DEFAULTS: Settings = {
   },
   sessionOrder: [],
   collapsedSessions: {},
+  sidebarCollapsed: false,
 };
 
 const STORAGE_KEY = "pd-settings";

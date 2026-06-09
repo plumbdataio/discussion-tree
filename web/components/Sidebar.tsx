@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Clock,
   Cog,
   Filter,
@@ -605,7 +607,26 @@ export function Sidebar({
           onClick={() => setDrawerOpen(false)}
         />
       )}
-      <aside className={`sidebar${drawerOpen ? " open" : ""}`}>
+      {/* Desktop reopen affordance — only visible (via CSS) when the sidebar
+          is collapsed AND we're on a wide screen. The mobile hamburger above
+          owns the narrow-screen case. */}
+      {settings.sidebarCollapsed && (
+        <button
+          type="button"
+          className="sidebar-reopen"
+          aria-label={t("sidebar.expand_label")}
+          title={t("sidebar.expand_label")}
+          onClick={() => updateSettings({ sidebarCollapsed: false })}
+        >
+          <ChevronsRight size={18} strokeWidth={2} />
+        </button>
+      )}
+      <aside
+        className={
+          `sidebar${drawerOpen ? " open" : ""}` +
+          (settings.sidebarCollapsed ? " collapsed" : "")
+        }
+      >
         {/* Mobile-only quick actions — replaces the .gear-fab corner
             button which is hidden at <=768px. The .anchor-fab stays
             in the header on mobile (it occupies the slot the gear
@@ -625,7 +646,21 @@ export function Sidebar({
             <span>{t("settings.title")}</span>
           </button>
         </div>
-        <h2 className="sidebar-title">{t("sidebar.sessions")}</h2>
+        <div className="sidebar-title-row">
+          <h2 className="sidebar-title">{t("sidebar.sessions")}</h2>
+          <button
+            type="button"
+            className="sidebar-collapse-btn"
+            aria-label={t("sidebar.collapse_label")}
+            title={t("sidebar.collapse_label")}
+            onClick={() => {
+              updateSettings({ sidebarCollapsed: true });
+              setDrawerOpen(false);
+            }}
+          >
+            <ChevronsLeft size={16} strokeWidth={2} />
+          </button>
+        </div>
 
         <div className="sidebar-filter">
           <button

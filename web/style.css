@@ -4595,3 +4595,57 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
   }
   .map-node-send { display: inline-block; }
 }
+
+/* --- Sidebar collapse (desktop) --- */
+.sidebar-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sidebar-collapse-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+.sidebar-collapse-btn:hover { background: var(--bg); color: var(--text); }
+/* Floating reopen button — sits at the top-left where the sidebar used to be.
+   Hidden by default; shown only on desktop when collapsed (see media query). */
+.sidebar-reopen {
+  display: none;
+  position: fixed;
+  /* Below the header (which is full-width), at the left edge — clear of the
+     breadcrumb above and the React Flow zoom controls (bottom-left). */
+  top: 72px;
+  left: 10px;
+  z-index: 50;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+}
+.sidebar-reopen:hover { background: var(--bg); color: var(--text); }
+@media (min-width: 769px) {
+  /* Collapse only applies on desktop; the mobile drawer has its own toggle. */
+  .sidebar.collapsed { display: none; }
+  .sidebar-reopen { display: inline-flex; }
+}
+@media (max-width: 768px) {
+  /* On mobile the collapse button in the header is redundant with the drawer
+     backdrop/hamburger; hide it so the title row stays clean. */
+  .sidebar-collapse-btn { display: none; }
+}
