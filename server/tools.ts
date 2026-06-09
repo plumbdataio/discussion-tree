@@ -79,7 +79,7 @@ export const TOOLS = [
   {
     name: "add_item",
     description:
-      "Add a discussion item under a concern. Boards are intentionally 2-level (concern → items) — sub-items are not supported. If a topic feels like it needs a sub-item, either split it into its own concern or restructure with update_node / move_node. NOTE: the default conversation board has a FIXED structure of one concern + one item; add_item rejects it (along with add_concern / move_node / reorder_node / delete_node). For structured option-evaluation derived from a default-board conversation, create_board a NEW board instead of growing the default board. TITLE STYLE: short (<40 chars), drop board/concern prefix, match sibling grammar — see NODE / CONCERN TITLE FORMATTING in the server instructions.",
+      "Add a DISCUSSION item under a concern. Boards are intentionally 2-level (concern → items) — sub-items are not supported. If a topic feels like it needs a sub-item, either split it into its own concern or restructure with update_node / move_node. NOT FOR CHECKLISTS: if you're making a checklist / task list / to-do (lines you'll check off), do NOT add a concern full of items as fake checkboxes — add ONE node and mark_checklist_node it, then add lines via record_decision. NOTE: the default conversation board has a FIXED structure of one concern + one item; add_item rejects it (along with add_concern / move_node / reorder_node / delete_node). For structured option-evaluation derived from a default-board conversation, create_board a NEW board instead of growing the default board. TITLE STYLE: short (<40 chars), drop board/concern prefix, match sibling grammar — see NODE / CONCERN TITLE FORMATTING in the server instructions.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -535,7 +535,7 @@ export const TOOLS = [
   {
     name: "mark_checklist_node",
     description:
-      "Flag an existing node as a decision-checklist node (is_checklist=1) so record_decision can append items to it. Checklist nodes are ordinary nodes (created with add_item) that you deliberately turn into a checklist — they are NEVER auto-created. Place the checklist node leftmost under its concern by convention. Pass is_checklist=false to turn it back into a normal node.",
+      "Flag an existing node as a CHECKLIST node (is_checklist=1) so record_decision can append items to it. THIS is how you make a checklist of ANY kind — settled decisions, task steps, work phases, a plain to-do — so do NOT hand-build a checklist as a concern with checkbox-styled item children; that isn't a real, trackable checklist. Checklist nodes are ordinary nodes (created with add_item) that you deliberately turn into a checklist — never auto-created. Place it leftmost under its concern by convention. Pass is_checklist=false to turn it back into a normal node.",
     inputSchema: {
       type: "object" as const,
       properties: {
