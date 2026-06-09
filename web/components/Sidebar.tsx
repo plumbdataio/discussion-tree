@@ -13,7 +13,8 @@ import {
   RefreshCw,
   Send,
   Settings,
-  Share2,
+  ChartNetwork,
+  Network,
 } from "lucide-react";
 import { HelpBubbleIcon } from "./HelpBubbleIcon.tsx";
 import { useTranslation } from "react-i18next";
@@ -337,9 +338,15 @@ function SessionItem({
                 >
                   <a href={"/board/" + b.id} className="sidebar-board-link">
                     <span className="sidebar-board-title">
-                      {isDefault && (
+                      {isDefault ? (
                         <MessageCircle
                           className="sidebar-default-icon"
+                          size={13}
+                          strokeWidth={1.75}
+                        />
+                      ) : (
+                        <Network
+                          className="sidebar-board-icon"
                           size={13}
                           strokeWidth={1.75}
                         />
@@ -395,7 +402,7 @@ function SessionItem({
               >
                 <a href={"/map/" + m.id} className="sidebar-map-link">
                   <span className="sidebar-map-title">
-                    <Share2
+                    <ChartNetwork
                       className="sidebar-map-icon"
                       size={13}
                       strokeWidth={1.75}
