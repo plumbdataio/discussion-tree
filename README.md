@@ -254,6 +254,19 @@ The defaults need no setup. To relocate state, set `DISCUSSION_TREE_HOME` somewh
 - [Bun](https://bun.sh) ≥ 1.0
 - Claude Code (a version supporting `--dangerously-load-development-channels`)
 
+## Install as a Claude Code plugin
+
+discussion-tree also ships as a Claude Code plugin, so you can install it (MCP server + the activity / unanswered-post / compact-reminder hooks + the `dt-checklist` skill) without hand-editing `settings.json`:
+
+```
+/plugin marketplace add plumbdataio/discussion-tree
+/plugin install discussion-tree@discussion-tree
+```
+
+The plugin bundles a `SessionStart` hook that auto-launches the broker if it isn't already running, and keeps its SQLite state in the plugin's persistent data dir (so it survives `/plugin update`). [Bun](https://bun.sh) must be on your `PATH`. Update later with `/plugin update discussion-tree`.
+
+> The plugin and the manual clone-and-run setup above are alternatives — pick one. If you already run the broker manually (e.g. on a custom `DISCUSSION_TREE_PORT` / `DISCUSSION_TREE_HOME`), the plugin's ensure-broker hook detects the live `/health` endpoint and stays out of the way.
+
 ## Acknowledgements
 
 The broker-daemon + per-session MCP-server architecture is inspired by the same broker-daemon + per-session-MCP-server pattern used in other tools. discussion-tree's contribution is the orthogonal split: instead of routing messages between *peer* CC instances, it splits *one* CC session's conversation into structured parallel threads — same machinery, different axis.
