@@ -48,7 +48,7 @@ describe("decision checklist (record / update / mark)", () => {
   test("record_decision is rejected until the node is a checklist node", async () => {
     const r = await post<{ ok: boolean; error?: string }>(
       `${broker.url}/record-decision`,
-      { board_id: boardId, node_id: "n1", summary: "X であること" },
+      { board_id: boardId, node_id: "n1", summary: "X must hold" },
     );
     expect(r.json.ok).toBe(false);
     expect(r.json.error).toContain("checklist");
@@ -71,7 +71,7 @@ describe("decision checklist (record / update / mark)", () => {
       {
         board_id: boardId,
         node_id: "n1",
-        summary: "認証は JWT であること。背景: セッション管理を避けるため",
+        summary: "Auth must use JWT. Context: to avoid session management",
         source_node_id: "src",
       },
     );
@@ -109,12 +109,12 @@ describe("decision checklist (record / update / mark)", () => {
     const r = await post<{ ok: boolean }>(`${broker.url}/update-decision`, {
       item_id: id,
       status: "dropped",
-      drop_reason: "要件が消えた",
+      drop_reason: "Requirement was dropped",
     });
     expect(r.json.ok).toBe(true);
     const it = (await items())[0];
     expect(it.status).toBe("dropped");
-    expect(it.drop_reason).toBe("要件が消えた");
+    expect(it.drop_reason).toBe("Requirement was dropped");
   });
 
   test("record_decision rejects an unknown node", async () => {
@@ -284,7 +284,7 @@ describe("board auto-completion (checklist fully resolved)", () => {
     });
     const rec = await post<{ item_id: number }>(
       `${broker.url}/record-decision`,
-      { board_id: bid, node_id: "cl3", summary: "X であること" },
+      { board_id: bid, node_id: "cl3", summary: "X must hold" },
     );
     const itemId = rec.json.item_id;
     // Settle both nodes — board rolls up to settled, but the checklist item

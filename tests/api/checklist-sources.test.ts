@@ -60,7 +60,7 @@ describe("checklist sources", () => {
       {
         board_id: boardId,
         node_id: "cl",
-        summary: "X であること",
+        summary: "X must hold",
         sources: [{ kind: "node", id: "dec" }],
       },
     );
@@ -78,7 +78,7 @@ describe("checklist sources", () => {
       {
         board_id: boardId,
         node_id: "cl",
-        summary: "Y であること",
+        summary: "Y must hold",
         source_node_id: "dec",
       },
     );
@@ -110,7 +110,7 @@ describe("checklist sources", () => {
       {
         board_id: boardId,
         node_id: "cl",
-        summary: "Z であること",
+        summary: "Z must hold",
         sources: [{ kind: "message", id: String(messageId) }],
       },
     );
@@ -128,7 +128,7 @@ describe("checklist sources", () => {
       {
         board_id: boardId,
         node_id: "cl",
-        summary: "W であること",
+        summary: "W must hold",
         sources: [
           { kind: "board", id: boardId },
           { kind: "node", id: "dec" },
@@ -175,7 +175,7 @@ describe("checklist sources", () => {
   test("no sources → empty sources array", async () => {
     const r = await post<{ ok: boolean; item_id: number }>(
       `${broker.url}/record-decision`,
-      { board_id: boardId, node_id: "cl", summary: "no source であること" },
+      { board_id: boardId, node_id: "cl", summary: "no source must hold" },
     );
     expect(r.json.ok).toBe(true);
     const it = (await items()).find((i) => i.id === r.json.item_id)!;
@@ -203,7 +203,7 @@ describe("checklist sources", () => {
         {
           board_id: boardId,
           node_id: "cl",
-          summary: "cross-board unique であること",
+          summary: "cross-board unique must hold",
           sources: [{ kind: "node", id: "lonelynode" }],
         },
       );
@@ -240,7 +240,7 @@ describe("checklist sources", () => {
         {
           board_id: boardId,
           node_id: "cl",
-          summary: "disambiguated であること",
+          summary: "disambiguated must hold",
           sources: [{ kind: "node", id: "dupnode2", board: a }],
         },
       );

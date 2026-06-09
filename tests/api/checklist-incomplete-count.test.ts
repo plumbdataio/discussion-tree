@@ -61,7 +61,7 @@ describe("incomplete-checklist count (post-compact nudge source)", () => {
     await post(`${broker.url}/record-decision`, {
       board_id: boardId,
       node_id: "cl",
-      summary: "X であること",
+      summary: "X must hold",
     });
     expect((await count()).count).toBe(1);
   });
@@ -69,7 +69,7 @@ describe("incomplete-checklist count (post-compact nudge source)", () => {
   test("an in-progress item still counts as unfinished", async () => {
     const r = await post<{ ok: boolean; item_id: number }>(
       `${broker.url}/record-decision`,
-      { board_id: boardId, node_id: "cl", summary: "Y であること" },
+      { board_id: boardId, node_id: "cl", summary: "Y must hold" },
     );
     await post(`${broker.url}/update-decision`, {
       item_id: r.json.item_id,
@@ -83,7 +83,7 @@ describe("incomplete-checklist count (post-compact nudge source)", () => {
     await post(`${broker.url}/record-decision`, {
       board_id: b2,
       node_id: "cl2",
-      summary: "Z であること",
+      summary: "Z must hold",
     });
     expect((await count()).count).toBe(2);
   });
