@@ -45,6 +45,42 @@ async function fetchActiveBoardSummary(sessionId: string): Promise<string> {
   }
 }
 
+// Build a COMPACT current-map snapshot to ride along with a map_chat push, so
+// the owning CC RECEIVES the current shape (passive) instead of having to
+// remember to call get_map (active — agents forget, the same failure class as
+// forgotten UI mirrors). Only the shape (id · kind · title + edges), not full
+// context/threads — those stay a deliberate get_map. Big maps fall back to a
+// count + a get_map pointer so the push doesn't balloon.
+async function fetchMapShape(mapId: string): Promise<string> {
+  try {
+    const res = await brokerFetch<{
+      ok: boolean;
+      nodes?: { id: string; kind: string; title: string }[];
+      edges?: { from_id: string; to_id: string }[];
+    }>("/get-map", { map_id: mapId });
+    if (!res.ok || !res.nodes) return "";
+    const nodes = res.nodes;
+    const edges = res.edges ?? [];
+    if (nodes.length === 0) {
+      return "Current map: no nodes yet — this is a blank map to start growing.";
+    }
+    if (nodes.length > 40) {
+      return `Current map has ${nodes.length} nodes / ${edges.length} edges — too many to inline; call get_map(map_id="${mapId}") for the structure.`;
+    }
+    const oneLine = (s: string) =>
+      (s ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+    const nodeLines = nodes
+      .map((n) => `  ${n.id} · ${n.kind} · ${oneLine(n.title) || "(untitled)"}`)
+      .join("\n");
+    const edgeLines = edges.length
+      ? edges.map((e) => `  ${e.from_id} → ${e.to_id}`).join("\n")
+      : "  (none)";
+    return `Current map structure (so you don't need a separate get_map for the shape):\nNodes (id · kind · title):\n${nodeLines}\nEdges (from → to):\n${edgeLines}\n(get_map only for full node context / threads.)`;
+  } catch {
+    return "";
+  }
+}
+
 export async function pollAndPushMessages(mcp: Server): Promise<void> {
   const sessionId = getSessionId();
   if (!sessionId) return;
@@ -87,8 +123,11 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
           msg.node_id && msg.node_id !== "__general__"
             ? `map node "${msg.node_id}"`
             : `the map-wide general chat`;
+        // Ride the current map shape along with the push (passive receipt) so
+        // the CC doesn't have to remember a get_map before acting on structure.
+        const shape = await fetchMapShape(msg.board_id);
         reminderParts.push(
-          `[discussion-tree] Map message (${target}). Call get_map(map_id="${msg.board_id}") first — structure edits are silent — then grow the map (add_map_node / connect_map_nodes / update_map_node) and/or reply via post_to_map_node(map_id="${msg.board_id}", node_id="${msg.node_id || "__general__"}"). Incremental, a few nodes at a time.`,
+          `[discussion-tree] Map message (${target}). Respond by GROWING THE MAP (add_map_node / connect_map_nodes / update_map_node) and/or reply via post_to_map_node(map_id="${msg.board_id}", node_id="${msg.node_id || "__general__"}"). Incremental, a few nodes at a time.${shape ? `\n\n${shape}` : ""}`,
         );
       }
       const content =
