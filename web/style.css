@@ -217,7 +217,7 @@ body {
     flex-shrink: 0;
   }
 
-  /* Mobile: the board-meta line ("ボード: bd_xxx · concern 数: N") is
+  /* Mobile: the board-meta line ("board: bd_xxx · concerns: N") is
      debug-grade info — useful on desktop, never worth a header slot on
      a phone screen. (Note: the .meta chip itself was removed across all
      three pages on 2026-05-25; comment kept for context.) */
@@ -228,9 +228,9 @@ body {
     font-size: 15px;
   }
 
-  /* Mobile: the unread "全部既読化" button has a long Japanese label;
-     compact padding + smaller font keeps it from claiming a disproportionate
-     fraction of the header. */
+  /* Mobile: the unread "mark all read" button has a long label (especially
+     in Japanese); compact padding + smaller font keeps it from claiming a
+     disproportionate fraction of the header. */
   .header .mark-all-read {
     font-size: 11px;
     padding: 3px 8px;
@@ -308,8 +308,8 @@ body {
     line-height: 1.4;
   }
 
-  /* Mobile: the default-board welcome banner ("ここでの投稿は CC への
-     直接メッセージとして届きます。") is informational and adds zero
+  /* Mobile: the default-board welcome banner ("Posts here are delivered as
+     direct messages to Claude Code.") is informational and adds zero
      value once the user has used the board even once. Hide it entirely
      so the conversation thread starts at the top of the visible area. */
   .default-board-context.md-body {

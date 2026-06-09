@@ -254,7 +254,7 @@ export interface GlobalBanner {
 }
 
 // Anchor (= per-session pinned thread item). Stored as `favorites` in the
-// DB; the user-facing UI calls them "anchors" / 「アンカー」.
+// DB; the user-facing UI calls them "anchors".
 //
 // The optional `*_title` / `text` / `source` fields are populated by the
 // list / broadcast paths so the UI can render the anchor list without a

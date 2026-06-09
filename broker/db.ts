@@ -169,7 +169,7 @@ safeAlter(
 safeAlter("ALTER TABLE pending_messages ADD COLUMN thread_item_id INTEGER");
 
 // Anchors (= per-session pinned thread items). The "favorites" name is the
-// implementation-level term; user-facing UI calls these "anchors" / 「アンカー」.
+// implementation-level term; user-facing UI calls these "anchors".
 // Scoped to a session_id so multiple sessions don't see each other's pins;
 // attach_cc_session carries them across CC restarts via the same reclaim
 // path that handles boards / pending_messages.

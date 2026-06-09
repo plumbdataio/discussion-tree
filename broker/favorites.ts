@@ -1,4 +1,4 @@
-// Anchor (favorites) handlers. The UI calls these "anchors" / 「アンカー」
+// Anchor (favorites) handlers. The UI calls these "anchors"
 // but the implementation level uses "favorites" to match the schema.
 //
 // Each session keeps its own set of pinned thread items. attach_cc_session

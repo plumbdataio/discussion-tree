@@ -211,8 +211,8 @@ export function AnchorListModal({
             visible.map((fav) => {
               // Collapse consecutive duplicates so default boards (which
               // intentionally use the same title for board / concern /
-              // node — "会話" / "Conversation") don't render as
-              // "discussion-tree › 会話 › 会話 › 会話".
+              // node — e.g. "Conversation") don't render as
+              // "discussion-tree › Conversation › Conversation › Conversation".
               const segs = [
                 fav.session_name ?? sessionName(fav.session_id),
                 fav.board_title ?? fav.board_id,
