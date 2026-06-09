@@ -148,6 +148,11 @@ function MapNodeImpl(props: NodeProps) {
   const ctx = useContext(MapContext);
   const data = props.data as unknown as MapNodeData;
   const kind = data.kind || "idea";
+  // Same unread cue as a board node card: a thick warm border so you can spot
+  // which node on the canvas has new CC messages.
+  const hasUnread = data.messages.some(
+    (m) => m.source === "cc" && !m.read_at,
+  );
   const cardRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const sizeRef = useRef<{ w: number; h: number; x: number; y: number }>({
@@ -164,7 +169,10 @@ function MapNodeImpl(props: NodeProps) {
   useMarkReadOnVisible(cardRef, data.messages);
 
   return (
-    <div ref={cardRef} className={`map-card kind-${kind}`}>
+    <div
+      ref={cardRef}
+      className={`map-card kind-${kind}${hasUnread ? " has-unread" : ""}`}
+    >
       <NodeResizer
         minWidth={240}
         minHeight={160}

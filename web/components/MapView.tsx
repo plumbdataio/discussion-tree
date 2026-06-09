@@ -22,6 +22,7 @@ import {
   MarkerType,
   applyNodeChanges,
   applyEdgeChanges,
+  reconnectEdge,
 } from "@xyflow/react";
 import { FloatingEdge, FloatingConnectionLine } from "./mapFloatingEdge.tsx";
 import type {
@@ -245,6 +246,27 @@ export function MapView({ mapId }: { mapId: string }) {
     [mapId],
   );
 
+  // Drag an edge's endpoint to a different node = reconnect (付替え): drop the
+  // old edge, draw the new one. The broker broadcast + refetch reconciles ids.
+  const onReconnect = useCallback(
+    (oldEdge: RFEdge, conn: any) => {
+      if (!conn.source || !conn.target) return;
+      postMapDisconnect(mapId, oldEdge.id).catch(() => {});
+      postMapConnect(mapId, conn.source, conn.target).catch(() => {});
+      setRfEdges((es) => reconnectEdge(oldEdge, conn, es));
+    },
+    [mapId],
+  );
+
+  // Delete the selected edge(s) with the canvas Delete/Backspace key. (Edge
+  // selection still works through the floating edge's interaction path.)
+  const onEdgesDelete = useCallback(
+    (deleted: RFEdge[]) => {
+      for (const e of deleted) postMapDisconnect(mapId, e.id).catch(() => {});
+    },
+    [mapId],
+  );
+
   // Persist a card resize (wired through MapContext → NodeResizer).
   const onResize = useCallback<MapCtx["onResize"]>(
     (nodeId, w, h, x, y) => {
@@ -339,6 +361,10 @@ export function MapView({ mapId }: { mapId: string }) {
                 onEdgesChange={onEdgesChange}
                 onNodeDragStop={onNodeDragStop}
                 onConnect={onConnect}
+                onReconnect={onReconnect}
+                onEdgesDelete={onEdgesDelete}
+                edgesReconnectable
+                deleteKeyCode={["Backspace", "Delete"]}
                 onInit={(inst) => {
                   rf.current = inst;
                 }}

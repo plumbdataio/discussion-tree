@@ -4706,3 +4706,11 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
   opacity: 1;
 }
 .map-handle:hover { opacity: 1; transform: scale(1.3); }
+
+/* Unread map node — same warm thick border + glow as a board's unread card,
+   so you can see which node on the canvas has new CC messages. */
+.map-card.has-unread {
+  border-width: 3px;
+  border-color: #f97316;
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.4);
+}
