@@ -469,8 +469,107 @@ export function handleSearchMaps(body: any) {
   return { ok: true, matches };
 }
 
+// Batch / transactional map mutation. Growing a map is inherently a batch
+// (add several nodes + draw edges + post) and that collides with the harness
+// per-turn tool-call cap — agents were hitting "Tool use limit reached"
+// mid-batch, half the adds silently dropped, then mis-reporting success. One
+// apply_map_ops call builds a whole branch, returns a per-op result so partial
+// failures are VISIBLE (no more silent truncation), and broadcasts once.
+export function handleApplyMapOps(body: any) {
+  const mapId = String(body?.map_id ?? "");
+  if (!selectMap.get(mapId)) return { ok: false, error: "map not found" };
+  const ops = Array.isArray(body?.ops) ? body.ops : [];
+  const now = () => new Date().toISOString();
+  const results: any[] = [];
+  let posted = false;
+  for (const o of ops) {
+    const op = String(o?.op ?? "");
+    try {
+      if (op === "add") {
+        // addNode resolves parent → auto-edge + placement; no per-op emit.
+        const id = addNode(mapId, o);
+        results.push({ op, ok: true, node_id: id });
+      } else if (op === "update") {
+        const nodeId = String(o.node_id ?? "");
+        const cur = selectMapNode.get(mapId, nodeId) as MapNode | undefined;
+        if (!cur) {
+          results.push({ op, ok: false, node_id: nodeId, error: "node not found" });
+          continue;
+        }
+        updateMapNodeContent.run(
+          o.title != null ? String(o.title) : cur.title,
+          o.context != null ? String(o.context) : cur.context,
+          o.kind != null ? normKind(o.kind) : cur.kind,
+          mapId,
+          nodeId,
+        );
+        results.push({ op, ok: true, node_id: nodeId });
+      } else if (op === "connect") {
+        const from = String(o.from_id ?? o.from ?? "");
+        const to = String(o.to_id ?? o.to ?? "");
+        if (from === to) {
+          results.push({ op, ok: false, error: "cannot connect a node to itself" });
+          continue;
+        }
+        if (!selectMapNode.get(mapId, from) || !selectMapNode.get(mapId, to)) {
+          results.push({ op, ok: false, error: "from_id/to_id must be live node ids" });
+          continue;
+        }
+        const ex = selectMapEdgeByPair.get(mapId, from, to) as { id: string } | undefined;
+        if (ex) {
+          results.push({ op, ok: true, edge_id: ex.id, existed: true });
+          continue;
+        }
+        const eid = generateId("me");
+        insertMapEdge.run(mapId, eid, from, to, now());
+        results.push({ op, ok: true, edge_id: eid });
+      } else if (op === "delete") {
+        const nodeId = String(o.node_id ?? "");
+        if (!selectMapNode.get(mapId, nodeId)) {
+          results.push({ op, ok: false, node_id: nodeId, error: "node not found" });
+          continue;
+        }
+        softDeleteMapNode.run(now(), mapId, nodeId);
+        results.push({ op, ok: true, node_id: nodeId });
+      } else if (op === "disconnect") {
+        softDeleteMapEdge.run(now(), mapId, String(o.edge_id ?? ""));
+        results.push({ op, ok: true });
+      } else if (op === "post") {
+        const nodeId = String(o.node_id ?? MAP_GENERAL_NODE);
+        const msg = String(o.message ?? "");
+        if (nodeId !== MAP_GENERAL_NODE && !selectMapNode.get(mapId, nodeId)) {
+          results.push({ op, ok: false, node_id: nodeId, error: "node not found" });
+          continue;
+        }
+        if (!msg.trim()) {
+          results.push({ op, ok: false, error: "message required" });
+          continue;
+        }
+        const ins = insertThread.run(mapId, nodeId, "cc", msg, now());
+        posted = true;
+        results.push({ op, ok: true, node_id: nodeId, message_id: Number(ins.lastInsertRowid) });
+      } else {
+        results.push({ op, ok: false, error: `unknown op '${op}'` });
+      }
+    } catch (e) {
+      results.push({ op, ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  emit(mapId);
+  if (posted) {
+    broadcast(mapId, { type: "thread-update", node_id: MAP_GENERAL_NODE, source: "cc" });
+  }
+  return {
+    ok: true,
+    applied: results.filter((r) => r.ok).length,
+    total: results.length,
+    results,
+  };
+}
+
 export const routes = {
   "/create-map": handleCreateMap,
+  "/map-apply-ops": handleApplyMapOps,
   "/map-add-node": handleAddMapNode,
   "/map-update-node": handleUpdateMapNode,
   "/map-move-node": handleMoveMapNode,

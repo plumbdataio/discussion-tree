@@ -435,3 +435,55 @@ describe("maps — lifecycle (reclaim + sidebar survival)", () => {
     expect(inactive.maps.some((m: any) => m.id === mapId)).toBe(true);
   });
 });
+
+describe("maps — apply_map_ops (batch)", () => {
+  test("builds a whole branch in one call with per-op results", async () => {
+    const mapId = await createMap("batch");
+    const r = await post<{
+      ok: boolean;
+      applied: number;
+      total: number;
+      results: any[];
+    }>(`${broker.url}/map-apply-ops`, {
+      map_id: mapId,
+      ops: [
+        { op: "add", id: "root", title: "Root", kind: "question" },
+        { op: "add", id: "a", title: "A", kind: "idea", parent: "root" },
+        { op: "add", id: "b", title: "B", kind: "research", parent: "root" },
+        { op: "connect", from_id: "a", to_id: "b" },
+        { op: "post", node_id: "a", message: "note on A" },
+        { op: "post", message: "general note" },
+      ],
+    });
+    expect(r.json.ok).toBe(true);
+    expect(r.json.applied).toBe(6);
+    expect(r.json.total).toBe(6);
+    const view = await get<any>(`${broker.url}/api/map/${mapId}`);
+    expect(view.json.nodes.length).toBe(3);
+    // root->a, root->b (from parent=) + a->b (connect)
+    expect(view.json.edges.length).toBe(3);
+    expect(view.json.threads["a"].length).toBe(1);
+    expect(view.json.threads["__general__"].length).toBe(1);
+  });
+
+  test("reports per-op failure without aborting the rest of the batch", async () => {
+    const mapId = await createMap("batch-partial");
+    const r = await post<{ applied: number; results: any[] }>(
+      `${broker.url}/map-apply-ops`,
+      {
+        map_id: mapId,
+        ops: [
+          { op: "add", id: "x", title: "X" },
+          { op: "connect", from_id: "x", to_id: "ghost" }, // fails: ghost missing
+          { op: "add", id: "y", title: "Y" }, // still applies
+        ],
+      },
+    );
+    expect(r.json.results[0].ok).toBe(true);
+    expect(r.json.results[1].ok).toBe(false);
+    expect(r.json.results[2].ok).toBe(true);
+    expect(r.json.applied).toBe(2);
+    const view = await get<any>(`${broker.url}/api/map/${mapId}`);
+    expect(view.json.nodes.length).toBe(2);
+  });
+});

@@ -596,6 +596,63 @@ export const TOOLS = [
     },
   },
   {
+    name: "apply_map_ops",
+    description:
+      "Apply a BATCH of map mutations in ONE call — add / update / connect / delete / disconnect / post. Use this (not many separate add_map_node / connect_map_nodes calls) whenever you grow a map by more than a node or two: it sidesteps the per-turn tool-call limit (which otherwise silently drops half your adds and leaves you mis-reporting success), and returns a per-op result so you can SEE exactly what applied. Ops run in array order, so an 'add' with an explicit `id` can be referenced by a later 'connect'/'post' in the SAME batch.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        map_id: { type: "string" as const },
+        ops: {
+          type: "array" as const,
+          description: "Ordered list of operations to apply atomically-ish.",
+          items: {
+            type: "object" as const,
+            properties: {
+              op: {
+                type: "string" as const,
+                enum: [
+                  "add",
+                  "update",
+                  "connect",
+                  "delete",
+                  "disconnect",
+                  "post",
+                ],
+              },
+              id: {
+                type: "string" as const,
+                description:
+                  "add: optional explicit node id so a later connect/post in this batch can reference it.",
+              },
+              node_id: {
+                type: "string" as const,
+                description: "update / delete / post target node id.",
+              },
+              title: { type: "string" as const },
+              context: { type: "string" as const },
+              kind: {
+                type: "string" as const,
+                enum: ["question", "idea", "research", "note", "selection"],
+              },
+              parent: {
+                type: "string" as const,
+                description:
+                  "add: existing node id → also draws parent→new edge and places the card beside it.",
+              },
+              from_id: { type: "string" as const, description: "connect" },
+              to_id: { type: "string" as const, description: "connect" },
+              edge_id: { type: "string" as const, description: "disconnect" },
+              message: { type: "string" as const, description: "post" },
+            },
+            required: ["op"],
+          },
+        },
+      },
+      required: ["map_id", "ops"],
+    },
+  },
+  {
     name: "add_map_node",
     description:
       "Add one node to a map. The node renders as a card (title = headline, context = markdown body) coloured by kind. kind: question (an open question) | idea (a proposal) | research (YOUR findings — the AI node) | note (neutral) | selection (reserved). Pass parent = an existing node id to BOTH place the new node beside it AND draw an edge from parent → new (build a branch in one call). You never supply coordinates — the broker places the card and the user drags it where they like (the position is then remembered).",
@@ -1330,6 +1387,23 @@ export async function dispatchToolCall(
         if (!res.ok) return textResult(res.error ?? "create_map failed", true);
         return textResult(
           `Map created. map_id = ${res.map_id}\n\nThis map_id is your handle to the map — pass it to every map call (add_map_node, connect_map_nodes, get_map, post_to_map_node). KEEP REFERENCING this exact id for the rest of the conversation. You do NOT need the browser URL for anything; if you ever lose the id, call list_maps to get it back (never read it off a screenshot / address bar).\n\nShareable URL for the user (optional): ${res.url}\n\nGrow the map with add_map_node / connect_map_nodes; the user arranges layout and draws links in the UI (their structural edits are silent — call get_map before acting on structure).`,
+        );
+      }
+
+      case "apply_map_ops": {
+        ensureSession();
+        const a = args as { map_id: string; ops: any[] };
+        const res = await brokerFetch<{
+          ok: boolean;
+          applied?: number;
+          total?: number;
+          results?: any[];
+          error?: string;
+        }>("/map-apply-ops", a);
+        if (!res.ok)
+          return textResult(res.error ?? "apply_map_ops failed", true);
+        return textResult(
+          `Applied ${res.applied}/${res.total} map ops.\n${JSON.stringify(res.results, null, 2)}`,
         );
       }
 
