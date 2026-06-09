@@ -791,6 +791,16 @@ export const TOOLS = [
       required: ["query"],
     },
   },
+  {
+    name: "claim_map",
+    description:
+      "Take ownership of a map for THIS session (handover). After list_maps(scope='all') finds a map a dead/previous session owned, claim it so the user's map-chat messages route to you and you can keep growing it. Idempotent; only needs the map_id.",
+    inputSchema: {
+      type: "object" as const,
+      properties: { map_id: { type: "string" as const } },
+      required: ["map_id"],
+    },
+  },
 ];
 
 function textResult(text: string, isError = false) {
@@ -1556,6 +1566,17 @@ export async function dispatchToolCall(
         }>("/search-maps", { session_id: sessionId, query: a.query });
         if (!res.ok) return textResult(res.error ?? "search_maps failed", true);
         return textResult(JSON.stringify(res.matches, null, 2));
+      }
+
+      case "claim_map": {
+        const sessionId = ensureSession();
+        const a = args as { map_id: string };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/claim-map",
+          { session_id: sessionId, map_id: a.map_id },
+        );
+        if (!res.ok) return textResult(res.error ?? "claim_map failed", true);
+        return textResult(`Claimed map ${a.map_id} for this session.`);
       }
 
       default:
