@@ -59,7 +59,15 @@ export function getEdgeParams(source: any, target: any) {
 export function FloatingEdge({ id, source, target, markerEnd, style }: any) {
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
-  if (!sourceNode || !targetNode) return null;
+  // Guard the whole geometry chain: during a remount/measure gap a node can
+  // exist without internals/positionAbsolute yet. Returning null for that one
+  // frame is fine now that edge identities are preserved (no remount storm).
+  if (
+    !sourceNode?.internals?.positionAbsolute ||
+    !targetNode?.internals?.positionAbsolute
+  ) {
+    return null;
+  }
   const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(
     sourceNode,
     targetNode,
