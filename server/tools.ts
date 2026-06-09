@@ -1329,7 +1329,7 @@ export async function dispatchToolCall(
         });
         if (!res.ok) return textResult(res.error ?? "create_map failed", true);
         return textResult(
-          `Map created: ${res.map_id}\nURL: ${res.url}\n\nShare the URL. You grow the map with add_map_node / connect_map_nodes; the user arranges layout and draws links in the UI. Their structural edits are silent — call get_map before acting on structure.`,
+          `Map created. map_id = ${res.map_id}\n\nThis map_id is your handle to the map — pass it to every map call (add_map_node, connect_map_nodes, get_map, post_to_map_node). KEEP REFERENCING this exact id for the rest of the conversation. You do NOT need the browser URL for anything; if you ever lose the id, call list_maps to get it back (never read it off a screenshot / address bar).\n\nShareable URL for the user (optional): ${res.url}\n\nGrow the map with add_map_node / connect_map_nodes; the user arranges layout and draws links in the UI (their structural edits are silent — call get_map before acting on structure).`,
         );
       }
 
