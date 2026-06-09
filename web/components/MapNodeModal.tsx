@@ -16,6 +16,7 @@ import { renderSystemMessage } from "./SystemMessage.tsx";
 import { formatThreadTimestamp } from "../utils/format.ts";
 import { useDraft } from "../utils/drafts.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
+import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import {
   extractImageFiles,
   postMapChat,
@@ -64,6 +65,13 @@ export function MapNodeModal({
     deps: [messages.length],
     enabled: !scrollToItemId,
   });
+
+  // Reading the node here IS a deliberate, full-screen, legible read — so mark
+  // its unread CC messages read after the usual visible-dwell, with the gate
+  // OPEN regardless of canvas zoom (the zoom gate only guards the tiny on-canvas
+  // card; once the modal is up the text is plainly legible). Without this, a
+  // node opened from a zoomed-out canvas would stay unread forever.
+  useMarkReadOnVisible(threadRef, messages, true);
 
   // Opened from a single message's expand button → scroll that message into
   // view (centered) and flash it so it's findable in the full thread.
