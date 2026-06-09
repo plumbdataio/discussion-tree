@@ -4452,6 +4452,11 @@ button.secondary {
   align-items: flex-end;
   padding: 6px 8px;
   border-top: 1px dashed var(--border);
+  /* Locking the canvas only freezes node position/size + edge editing — you
+     can still chat. The locked node is pointer-events:none, so (like the
+     thread body + expand button) re-enable it on the composer so messages
+     can still be sent while locked. */
+  pointer-events: auto;
 }
 .map-node-input {
   flex: 1;
