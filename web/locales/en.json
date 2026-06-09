@@ -216,7 +216,7 @@
     "open_node_board": "Open this node's board",
     "source_missing": "Reference not found",
     "sort_group": "Sort",
-    "sort_by_position": "Sort by array order",
+    "sort_by_position": "Sort by recorded order",
     "sort_by_status": "Sort by status",
     "sort_position": "Order",
     "sort_status": "Status",

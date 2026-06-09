@@ -4754,7 +4754,7 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
   box-shadow: 0 0 12px rgba(249, 115, 22, 0.4);
 }
 
-/* strategyC — a node whose content just changed glows briefly (no camera move).
+/* strategy C — a node whose content just changed glows briefly (no camera move).
    Applied to the React Flow node wrapper so it sits above border/shadow. */
 @keyframes map-node-flash-kf {
   0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
