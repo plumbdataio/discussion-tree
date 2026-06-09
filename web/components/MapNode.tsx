@@ -9,6 +9,7 @@
 
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -16,12 +17,13 @@ import React, {
 } from "react";
 import { Handle, Position, NodeResizer, useStore } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
+import { Maximize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { MapNodeKind, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
 import { ThreadMessage } from "./ThreadMessage.tsx";
 import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
-import { MessageModal } from "./MessageModal.tsx";
+import { MapNodeModal } from "./MapNodeModal.tsx";
 import { useDraft } from "../utils/drafts.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { MAP_READ_ZOOM } from "../utils/readTiming.ts";
@@ -160,7 +162,14 @@ function MapNodeImpl(props: NodeProps) {
   const hasUnread = data.messages.some(
     (m) => m.source === "cc" && !m.read_at,
   );
-  const [expandedMsg, setExpandedMsg] = useState<ThreadItem | null>(null);
+  // Expanding a message opens the WHOLE node (MapNodeModal) scrolled to that
+  // message — same as a board card — instead of a lone single-message preview.
+  const [nodeExpanded, setNodeExpanded] = useState(false);
+  const [msgTarget, setMsgTarget] = useState<number | null>(null);
+  const openExpandedMsg = useCallback((it: ThreadItem) => {
+    setMsgTarget(it.id);
+    setNodeExpanded(true);
+  }, []);
   const cardRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const sizeRef = useRef<{ w: number; h: number; x: number; y: number }>({
@@ -229,7 +238,20 @@ function MapNodeImpl(props: NodeProps) {
       <Handle type="source" position={Position.Left} id="l" className="map-handle" />
       <div className="map-card-title nodrag" title={data.title}>
         <span className="map-card-kind">{t(`map.kind.${kind}`)}</span>
-        {data.title || t("map.untitled")}
+        <span className="map-card-title-text">
+          {data.title || t("map.untitled")}
+        </span>
+        {/* Expand the whole node (title + context + full thread + input). */}
+        <button
+          className="map-node-expand"
+          title={t("map.expand_node")}
+          onClick={() => {
+            setMsgTarget(null);
+            setNodeExpanded(true);
+          }}
+        >
+          <Maximize2 size={13} strokeWidth={1.75} />
+        </button>
       </div>
       <div className="map-card-body nodrag nowheel" ref={bodyRef}>
         {data.context ? (
@@ -245,7 +267,7 @@ function MapNodeImpl(props: NodeProps) {
                 item={m}
                 compact
                 enableAnchor={false}
-                onExpand={setExpandedMsg}
+                onExpand={openExpandedMsg}
               />
             ))}
           </div>
@@ -256,11 +278,20 @@ function MapNodeImpl(props: NodeProps) {
         <ScrollToBottomButton scrollRef={bodyRef} />
       </div>
       <MapCardComposer nodeId={props.id} />
-      {expandedMsg && (
-        <MessageModal
-          text={expandedMsg.text}
-          source={expandedMsg.source}
-          onClose={() => setExpandedMsg(null)}
+      {nodeExpanded && ctx && (
+        <MapNodeModal
+          mapId={ctx.mapId}
+          nodeId={props.id}
+          title={data.title}
+          context={data.context}
+          kind={kind}
+          messages={data.messages}
+          ownerAlive={ctx.ownerAlive}
+          scrollToItemId={msgTarget}
+          onClose={() => {
+            setNodeExpanded(false);
+            setMsgTarget(null);
+          }}
         />
       )}
     </div>

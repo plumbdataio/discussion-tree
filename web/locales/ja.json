@@ -220,6 +220,7 @@
     "send_failed": "送信に失敗しました",
     "image_failed": "画像のアップロードに失敗しました",
     "untitled": "(無題)",
+    "expand_node": "ノード全体を拡大表示",
     "kind": {
       "question": "Question",
       "idea": "Idea",

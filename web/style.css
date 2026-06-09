@@ -4353,8 +4353,9 @@ button.secondary {
   overflow: hidden;
 }
 .map-card-title {
+  position: relative;
   flex: 0 0 auto;
-  padding: 9px 11px;
+  padding: 9px 32px 9px 11px;
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
@@ -4367,6 +4368,35 @@ button.secondary {
   display: flex;
   flex-direction: column;
   gap: 3px;
+}
+/* Expand-whole-node button, top-right of the title. pointer-events:auto so it
+   still works when the canvas is locked (previewing is a read action). */
+.map-node-expand {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.5;
+  pointer-events: auto;
+}
+.map-node-expand:hover {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.14);
+}
+.map-node-expand svg {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
 }
 .map-card-kind {
   font-size: 9px;
@@ -4463,6 +4493,14 @@ button.secondary {
 .map-card.kind-selection .map-card-kind { background: #10b981; }
 .map-card.kind-note { border-color: #9ca3af; }
 .map-card.kind-note .map-card-kind { background: #9ca3af; }
+
+/* Standalone kind colours for the kind badge when it isn't inside a
+   .map-card (e.g. the MapNodeModal header). */
+.map-card-kind.kind-question { background: #f59e0b; }
+.map-card-kind.kind-idea { background: #2563eb; }
+.map-card-kind.kind-research { background: #7c3aed; }
+.map-card-kind.kind-selection { background: #10b981; }
+.map-card-kind.kind-note { background: #9ca3af; }
 
 /* --- Right-hand general chat panel --- */
 .map-chat {

@@ -220,6 +220,7 @@
     "send_failed": "Failed to send",
     "image_failed": "Image upload failed",
     "untitled": "(untitled)",
+    "expand_node": "Expand node",
     "kind": {
       "question": "Question",
       "idea": "Idea",
