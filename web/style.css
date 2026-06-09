@@ -4690,3 +4690,19 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
   margin-left: 6px;
 }
 .sidebar ul.maps li.has-unread .sidebar-map-title { font-weight: 600; }
+
+/* Map node connection handles — one per side (top/right/bottom/left). Subtle
+   until you hover the card, so they don't clutter, but grabbable from any edge. */
+.map-handle {
+  width: 9px;
+  height: 9px;
+  background: var(--accent);
+  border: 1.5px solid var(--panel);
+  opacity: 0.35;
+  transition: opacity 0.12s;
+}
+.react-flow__node-mapCard:hover .map-handle,
+.react-flow__node-mapCard.selected .map-handle {
+  opacity: 1;
+}
+.map-handle:hover { opacity: 1; transform: scale(1.3); }

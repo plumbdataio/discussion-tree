@@ -18,10 +18,12 @@ import {
   ReactFlow,
   Background,
   Controls,
+  ConnectionMode,
   MarkerType,
   applyNodeChanges,
   applyEdgeChanges,
 } from "@xyflow/react";
+import { FloatingEdge, FloatingConnectionLine } from "./mapFloatingEdge.tsx";
 import type {
   Node as RFNode,
   Edge as RFEdge,
@@ -51,12 +53,14 @@ import { showToast } from "./Toast.tsx";
 const NODE_W_DEFAULT = 320;
 const NODE_H_DEFAULT = 340;
 
-// Stable node-type map (React Flow warns if this identity changes each render).
+// Stable type maps (React Flow warns if these identities change each render).
 const nodeTypes = { mapCard: MapNode };
+const edgeTypes = { floating: FloatingEdge };
 
 const defaultEdgeOptions = {
+  type: "floating",
   markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
-  style: { strokeWidth: 1.5 },
+  style: { strokeWidth: 1.5, stroke: "#9ca3af" },
 };
 
 function buildEdges(view: MapViewData): RFEdge[] {
@@ -64,6 +68,8 @@ function buildEdges(view: MapViewData): RFEdge[] {
     id: e.id,
     source: e.from_id,
     target: e.to_id,
+    type: "floating",
+    markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
   }));
 }
 
@@ -325,6 +331,9 @@ export function MapView({ mapId }: { mapId: string }) {
                 nodes={rfNodes}
                 edges={rfEdges}
                 nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                connectionMode={ConnectionMode.Loose}
+                connectionLineComponent={FloatingConnectionLine}
                 defaultEdgeOptions={defaultEdgeOptions}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}

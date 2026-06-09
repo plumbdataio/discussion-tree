@@ -180,7 +180,13 @@ function MapNodeImpl(props: NodeProps) {
           if (ctx && s.w > 0) ctx.onResize(props.id, s.w, s.h, s.x, s.y);
         }}
       />
-      <Handle type="target" position={Position.Left} />
+      {/* One handle per side. With ConnectionMode.Loose every handle is both
+          source and target, so the user can pull a link out of (or drop one
+          onto) any edge of the card; floating edges then route border-to-border. */}
+      <Handle type="source" position={Position.Top} id="t" className="map-handle" />
+      <Handle type="source" position={Position.Right} id="r" className="map-handle" />
+      <Handle type="source" position={Position.Bottom} id="b" className="map-handle" />
+      <Handle type="source" position={Position.Left} id="l" className="map-handle" />
       <div className="map-card-title nodrag" title={data.title}>
         <span className="map-card-kind">{t(`map.kind.${kind}`)}</span>
         {data.title || t("map.untitled")}
@@ -206,7 +212,6 @@ function MapNodeImpl(props: NodeProps) {
         )}
       </div>
       <MapCardComposer nodeId={props.id} />
-      <Handle type="source" position={Position.Right} />
     </div>
   );
 }
