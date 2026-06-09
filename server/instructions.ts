@@ -66,7 +66,7 @@ When a post_to_node / set_node_status / add_concern / add_item / delete_node cal
 CHECKLISTS (decisions you settle — and any task / phase / to-do list):
 Some boards carry one or more "checklist" nodes — ordinary nodes flagged is_checklist=1 that ALSO hold a checklist_items array (visible in get_board). They turn a board's decisions (or a piece of work's steps) into a verifiable list you can check off AFTER the work is done. The UI renders them strictly read-only; the ONLY way to change them is the two tools below.
 
-When a node's decision lands (you set its status to adopted / agreed / resolved / rejected) AND the board has a checklist node, ALSO call record_decision(board_id, node_id=<the checklist node>, summary, source_node_id=<the node that just settled>) in the same turn. Write the summary as a short, verifiable acceptance-criterion line ("X であること。背景: …" — 2-3 sentences: what to check + why) so a later reviewer can confirm each item was actually implemented. Keep items granular: one decision per item.
+When a node's decision lands (you set its status to adopted / agreed / resolved / rejected) AND the board has a checklist node, ALSO call record_decision(board_id, node_id=<the checklist node>, summary, source_node_id=<the node that just settled>) in the same turn. Write the summary as a short, verifiable acceptance-criterion line ("X must hold. Context: …" — 2-3 sentences: what to check + why) so a later reviewer can confirm each item was actually implemented. Keep items granular: one decision per item.
 
 Item status ∈ pending / in-progress / done / dropped, changed only via update_decision(item_id, status?, summary?, drop_reason?). status=dropped REQUIRES a non-empty drop_reason (the broker rejects it otherwise); moving off dropped clears the reason. "The board's work is truly finished" means every checklist item is done (or dropped with a reason) — not merely that the nodes settled.
 
@@ -116,14 +116,14 @@ Board readability depends heavily on title consistency. When you add nodes (conc
 
   - **Keep titles SHORT** — aim for under 40 characters; never exceed 60. Long titles wrap awkwardly in the card UI and bury the meaning. Long detail belongs in 'context', not 'title'.
   - **Do NOT repeat context the board or concern already provides.** If the board scopes one subsystem and the concern scopes one feature within it, child items shouldn't restate the subsystem name in their own title. Drop those prefixes — the parent already supplies the scope.
-  - **Pick ONE grammatical pattern per board** and stick to it. Mixing "〜の方針" / "〜未設定" / "〜の確認" / "〜どうするか" / "〜やるか" inside one board reads as random. Choose a single form up front for the items in this board, e.g.:
-    - All decision items → noun phrase: "〜の方針", "〜の選定", "〜の運用ルール"
-    - All confirmation items → noun phrase: "〜の確認", "〜の動作確認"
-    - All open questions → question form: "〜どうするか", "〜とは何か"
+  - **Pick ONE grammatical pattern per board** and stick to it. Mixing forms like "X policy" / "X not set" / "X check" / "how to handle X" / "whether to do X" inside one board reads as random. Choose a single form up front for the items in this board, e.g.:
+    - All decision items → noun phrase: "X policy", "X selection", "X operating rules"
+    - All confirmation items → noun phrase: "X check", "X smoke test"
+    - All open questions → question form: "how to handle X", "what is X"
     Don't mix patterns within the same concern.
   - **Match the language to the user's working language** (Japanese in a JP session, English in an EN session). Don't switch mid-board.
   - **No trailing punctuation** (no terminal "?", "。", "!", "…").
-  - **Don't pack two topics into one node.** If a title would naturally want "X と Y" or "X 及び Y", it's two nodes.
+  - **Don't pack two topics into one node.** If a title would naturally want "X and Y" or "X as well as Y", it's two nodes.
 
 These rules apply equally to add_concern, add_item, create_board (every title in the structure tree), and update_node when renaming an existing node. When extending an existing board, look at the current sibling titles FIRST and match their pattern instead of introducing a new one.
 
@@ -168,7 +168,7 @@ Available tools:
 - report_bg_task_done: Optional fast-path to clear a finished background task's BG marker now instead of waiting for the Stop hook (which auto-clears completed tasks each turn end). Pass the <tool-use-id> (toolu_…) of a completed <task-notification> — NOT the short <task-id>. Bundling multiple ids in one call is fine.
 - clear_bg_tasks: Reset this session's BG marker counter to zero in one shot. Fallback for when the count is stale — you missed some completed-notifications so report_bg_task_done never cleared them, but you're confident no background tasks are still running. The user can also clear it by clicking the BG chip in the UI.
 - request_improvement: Submit a concrete friction point to REQUESTS.md for the user to review
-- record_decision: Append a settled decision to a checklist node as a new checklist item (status=pending). Call when a node settles to a verdict AND the board has a checklist node; write the summary as a verifiable "〜であること" acceptance criterion.
+- record_decision: Append a settled decision to a checklist node as a new checklist item (status=pending). Call when a node settles to a verdict AND the board has a checklist node; write the summary as a verifiable "X must hold" acceptance criterion.
 - update_decision: Change a checklist item's status / summary / drop_reason. status=dropped requires drop_reason. The checklist UI is read-only, so this is the only way to edit an item.
 - mark_checklist_node: Flag an existing node as a checklist node (is_checklist=1) so record_decision can target it. Checklist nodes are never auto-created — make a normal node with add_item, then flag it.
 - create_map: Create a divergent-discussion map (free-form graph for the exploration phase before a board). Returns a URL. Not auto-created.
