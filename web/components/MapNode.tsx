@@ -183,7 +183,7 @@ function MapNodeImpl(props: NodeProps) {
     x: 0,
     y: 0,
   });
-  // 方針A — only auto-read when the canvas is zoomed in enough that the text is
+  // strategyA — only auto-read when the canvas is zoomed in enough that the text is
   // actually legible. Subscribe to a BOOLEAN derived from the zoom so the node
   // re-renders only when it crosses the threshold, not on every pan/zoom tick.
   const zoomGateOpen = useStore((s) => s.transform[2] >= MAP_READ_ZOOM);
