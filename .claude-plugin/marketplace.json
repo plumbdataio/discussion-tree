@@ -1,0 +1,13 @@
+{
+  "name": "discussion-tree",
+  "owner": {
+    "name": "plumbdata"
+  },
+  "plugins": [
+    {
+      "name": "discussion-tree",
+      "source": ".",
+      "description": "Turn a single Claude Code session into a structured, parallel decision tree — answer discussion items independently in a browser mind-map and have the answers flow back over the MCP channel."
+    }
+  ]
+}

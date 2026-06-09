@@ -1,0 +1,24 @@
+{
+  "name": "discussion-tree",
+  "version": "0.1.0",
+  "description": "Turn a single Claude Code session into a structured, parallel decision tree — answer discussion items independently in a browser mind-map and have the answers flow back over the MCP channel.",
+  "author": {
+    "name": "plumbdata"
+  },
+  "homepage": "https://github.com/plumbdataio/discussion-tree",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/plumbdataio/discussion-tree.git"
+  },
+  "mcpServers": {
+    "discussion-tree": {
+      "command": "bun",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server.ts"],
+      "env": {
+        "DISCUSSION_TREE_HOME": "${CLAUDE_PLUGIN_DATA}"
+      }
+    }
+  },
+  "skills": ["./skills/"],
+  "hooks": "./hooks/hooks.json"
+}
