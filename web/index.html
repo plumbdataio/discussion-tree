@@ -4,6 +4,31 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>discussion-tree</title>
+    <!-- React Flow's NodeResizer (ResizeObserver-driven) emits the benign
+         "ResizeObserver loop completed with undelivered notifications" warning
+         during a node resize: the browser self-corrects on the next frame and
+         nothing is actually broken. But Bun's dev HMR overlay catches that
+         window 'error' and throws up a scary full-screen "Runtime Error"
+         (shown as "error: null", since there is no Error object). Swallow ONLY
+         this exact benign message in the capture phase — registered here in
+         <head> so it runs before the HMR runtime's own error handler. Real
+         errors are untouched. -->
+    <script>
+      (function () {
+        var BENIGN =
+          /ResizeObserver loop (completed with undelivered notifications|limit exceeded)/;
+        window.addEventListener(
+          "error",
+          function (e) {
+            if (e && e.message && BENIGN.test(e.message)) {
+              e.stopImmediatePropagation();
+              e.preventDefault();
+            }
+          },
+          true,
+        );
+      })();
+    </script>
     <!-- Launch as a standalone web app when added to the iOS/Android home
          screen, so tapping the icon reuses the single app window instead of
          spawning a new Safari tab each time. (iOS only reads these at
