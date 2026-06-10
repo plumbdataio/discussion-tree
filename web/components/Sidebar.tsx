@@ -581,9 +581,10 @@ export function Sidebar({
   // allow-list (only those show; new sessions stay hidden until added).
   const shownSessions = settings.shownSessions;
   const sessionKey = (s: SessionListItem) => s.cc_session_id ?? s.cwd;
-  const allKeys = Array.from(
-    new Set([...(sessions ?? []), ...inactiveSessions].map(sessionKey)),
-  );
+  // ACTIVE sessions only — inactive sessions already have their own
+  // collapsible "Inactive (N)" section at the bottom, so they stay out of this
+  // filter entirely (not listed, not hidden by it).
+  const allKeys = Array.from(new Set((sessions ?? []).map(sessionKey)));
   const isSessionShown = (key: string) =>
     shownSessions === null || shownSessions.includes(key);
   const shownSessionCount = allKeys.filter(isSessionShown).length;
@@ -604,9 +605,6 @@ export function Sidebar({
   const visibleActive = orderedActive.filter((s) =>
     isSessionShown(sessionKey(s)),
   );
-  const visibleInactive = inactiveSessions.filter((s) =>
-    isSessionShown(sessionKey(s)),
-  );
 
   // Short, readable label for a session checkbox: its name, else the last two
   // cwd path segments. Full cwd goes in the row's title.
@@ -617,7 +615,7 @@ export function Sidebar({
   const filterSessions = (() => {
     const seen = new Set<string>();
     const out: { key: string; label: string; cwd: string }[] = [];
-    for (const s of [...(sessions ?? []), ...inactiveSessions]) {
+    for (const s of sessions ?? []) {
       const key = sessionKey(s);
       if (seen.has(key)) continue;
       seen.add(key);
@@ -816,7 +814,7 @@ export function Sidebar({
           />
         ))}
 
-        {visibleInactive.length > 0 && (
+        {inactiveSessions.length > 0 && (
           <div className="inactive-sessions">
             <button
               type="button"
@@ -830,12 +828,12 @@ export function Sidebar({
               )}
               <span>
                 {t("sidebar.inactive_label", {
-                  count: visibleInactive.length,
+                  count: inactiveSessions.length,
                 })}
               </span>
             </button>
             {inactiveOpen &&
-              visibleInactive.map((s) => (
+              inactiveSessions.map((s) => (
                 <SessionItem
                   key={s.id}
                   s={s}
