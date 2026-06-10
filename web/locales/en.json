@@ -262,7 +262,8 @@
       "idea": "Idea",
       "research": "Research",
       "note": "Note",
-      "selection": "Selection"
+      "selection": "Selection",
+      "checklist": "Checklist"
     }
   }
 }

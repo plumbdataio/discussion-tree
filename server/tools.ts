@@ -781,6 +781,55 @@ export const TOOLS = [
       required: ["query"],
     },
   },
+  {
+    name: "mark_map_checklist_node",
+    description:
+      "Flag a map node as a CHECKLIST node (is_checklist=1) so record_map_decision can append items to it. The node then renders its checklist items (read-only) on the canvas INSTEAD of a conversation thread — this is how you put a checklist / task list / acceptance criteria onto a map. Make an ordinary node first (add_map_node), then flag it. A node that already has chat messages can't be flagged (the checklist card hides threads); add a fresh node instead. Pass is_checklist=false to turn it back into a normal node.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        map_id: { type: "string" as const },
+        node_id: { type: "string" as const },
+        is_checklist: {
+          type: "boolean" as const,
+          description: "Defaults to true. Pass false to unflag.",
+        },
+      },
+      required: ["map_id", "node_id"],
+    },
+  },
+  {
+    name: "record_map_decision",
+    description:
+      "Append one line (a new pending item) to a map checklist node. The node must be flagged via mark_map_checklist_node first. Write summary as a short, verifiable line. Map checklist items are summary + status only (no cross-board source citations).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        map_id: { type: "string" as const },
+        node_id: { type: "string" as const },
+        summary: { type: "string" as const },
+      },
+      required: ["map_id", "node_id", "summary"],
+    },
+  },
+  {
+    name: "update_map_decision",
+    description:
+      "Change a map checklist item's status / summary / drop_reason. status ∈ pending | in-progress | done | dropped; status=dropped requires a non-empty drop_reason. The checklist card is read-only, so this is the only way to advance an item. Get item ids from get_map (each checklist node carries checklist_items).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        item_id: { type: "number" as const },
+        status: {
+          type: "string" as const,
+          enum: ["pending", "in-progress", "done", "dropped"],
+        },
+        summary: { type: "string" as const },
+        drop_reason: { type: "string" as const },
+      },
+      required: ["item_id"],
+    },
+  },
 ];
 
 function textResult(text: string, isError = false) {
@@ -1545,6 +1594,62 @@ export async function dispatchToolCall(
         }>("/search-maps", { session_id: sessionId, query: a.query });
         if (!res.ok) return textResult(res.error ?? "search_maps failed", true);
         return textResult(JSON.stringify(res.matches, null, 2));
+      }
+
+      case "mark_map_checklist_node": {
+        ensureSession();
+        const a = args as {
+          map_id: string;
+          node_id: string;
+          is_checklist?: boolean;
+        };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/map-mark-checklist",
+          a,
+        );
+        if (!res.ok)
+          return textResult(res.error ?? "mark_map_checklist_node failed", true);
+        return textResult(
+          a.is_checklist === false
+            ? `Map node ${a.node_id} is no longer a checklist node.`
+            : `Map node ${a.node_id} is now a checklist node; add lines with record_map_decision.`,
+        );
+      }
+
+      case "record_map_decision": {
+        ensureSession();
+        const a = args as {
+          map_id: string;
+          node_id: string;
+          summary: string;
+        };
+        const res = await brokerFetch<{
+          ok: boolean;
+          item_id?: number;
+          error?: string;
+        }>("/map-record-decision", a);
+        if (!res.ok)
+          return textResult(res.error ?? "record_map_decision failed", true);
+        return textResult(
+          `Recorded map checklist item ${res.item_id} (pending) on node ${a.node_id}.`,
+        );
+      }
+
+      case "update_map_decision": {
+        ensureSession();
+        const a = args as {
+          item_id: number;
+          status?: string;
+          summary?: string;
+          drop_reason?: string;
+        };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/map-update-decision",
+          a,
+        );
+        if (!res.ok)
+          return textResult(res.error ?? "update_map_decision failed", true);
+        return textResult(`Map checklist item ${a.item_id} updated.`);
       }
 
       default:

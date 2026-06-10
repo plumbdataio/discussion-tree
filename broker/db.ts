@@ -299,6 +299,16 @@ db.run(`
 db.run(
   `CREATE INDEX IF NOT EXISTS map_nodes_by_map ON map_nodes(map_id)`,
 );
+// A map node can be flagged as a checklist node — the same mechanism a board
+// node uses (is_checklist=1). It then renders its checklist_items (reused via
+// board_id = map_id, node_id = map node id) read-only INSTEAD of a
+// conversation thread. Mutated only through the map checklist tools.
+safeAlter(
+  "ALTER TABLE map_nodes ADD COLUMN is_checklist INTEGER NOT NULL DEFAULT 0",
+);
+export const setMapNodeChecklist = db.prepare(
+  `UPDATE map_nodes SET is_checklist = ? WHERE map_id = ? AND id = ? AND deleted_at IS NULL`,
+);
 // Directed edges. Both the human (drawing in the UI) and the AI (connect tool)
 // create these; delete is logical so an edge whose endpoint node was logically
 // deleted can still be reasoned about. from_id/to_id reference map_nodes.id.

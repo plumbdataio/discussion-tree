@@ -15,10 +15,16 @@
 // surface works unchanged. Node delete is LOGICAL so a node's messages + edges
 // never dangle.
 
-import type { Map as MapRow, MapNode, ThreadItem } from "../shared/types.ts";
+import type {
+  ChecklistItem,
+  Map as MapRow,
+  MapNode,
+  ThreadItem,
+} from "../shared/types.ts";
 import { MAP_GENERAL_NODE } from "../shared/types.ts";
 import {
   db,
+  selectChecklistItemsByNode,
   insertMap,
   insertMapEdge,
   insertMapNode,
@@ -401,6 +407,16 @@ export function getMapView(mapId: string) {
   const map = selectMap.get(mapId) as MapRow | undefined;
   if (!map) return null;
   const nodes = selectMapNodesByMap.all(mapId) as MapNode[];
+  // Attach the checklist_items list to any checklist map node (board_id =
+  // map_id), so the canvas can render it read-only without a second round-trip.
+  for (const n of nodes) {
+    if (n.is_checklist) {
+      n.checklist_items = selectChecklistItemsByNode.all(
+        mapId,
+        n.id,
+      ) as ChecklistItem[];
+    }
+  }
   const liveIds = new Set(nodes.map((n) => n.id));
   const edges = (selectMapEdgesByMap.all(mapId) as any[]).filter(
     (e) => liveIds.has(e.from_id) && liveIds.has(e.to_id),

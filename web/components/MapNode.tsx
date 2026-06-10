@@ -19,10 +19,16 @@ import { Handle, Position, NodeResizer, useStore } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import { Maximize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { MapNodeKind, ThreadItem } from "../../shared/types.ts";
+import type {
+  ChecklistItem,
+  MapNodeKind,
+  Node,
+  ThreadItem,
+} from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
 import { ThreadMessage } from "./ThreadMessage.tsx";
 import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
+import { ChecklistCard } from "./ChecklistCard.tsx";
 import { MapNodeModal } from "./MapNodeModal.tsx";
 import { useDraft } from "../utils/drafts.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
@@ -62,6 +68,9 @@ export interface MapNodeData {
   context: string;
   kind: MapNodeKind;
   messages: ThreadItem[];
+  // A checklist node renders its items (read-only) instead of a thread.
+  is_checklist?: number;
+  checklist_items?: ChecklistItem[];
 }
 
 
@@ -162,6 +171,23 @@ function MapNodeImpl(props: NodeProps) {
   const ctx = useContext(MapContext);
   const data = props.data as unknown as MapNodeData;
   const kind = data.kind || "idea";
+  const isChecklist = !!data.is_checklist;
+  // A synthetic Node so the read-only ChecklistCard (built for board nodes)
+  // renders verbatim inside the map card. Only title / context / checklist_items
+  // are read by the card.
+  const checklistNode = {
+    id: props.id,
+    board_id: ctx?.mapId ?? "",
+    parent_id: null,
+    kind: "concern",
+    title: data.title,
+    context: data.context,
+    status: "discussing",
+    position: 0,
+    created_at: "",
+    is_checklist: 1,
+    checklist_items: data.checklist_items ?? [],
+  } as unknown as Node;
   // Same unread cue as a board node card: a thick warm border so you can spot
   // which node on the canvas has new CC messages.
   const hasUnread = data.messages.some(
@@ -215,7 +241,9 @@ function MapNodeImpl(props: NodeProps) {
   return (
     <div
       ref={cardRef}
-      className={`map-card kind-${kind}${hasUnread ? " has-unread" : ""}`}
+      className={`map-card kind-${isChecklist ? "checklist" : kind}${
+        hasUnread ? " has-unread" : ""
+      }${isChecklist ? " map-card-is-checklist" : ""}`}
     >
       <NodeResizer
         minWidth={240}
@@ -242,48 +270,63 @@ function MapNodeImpl(props: NodeProps) {
       <Handle type="source" position={Position.Bottom} id="b" className="map-handle" />
       <Handle type="source" position={Position.Left} id="l" className="map-handle" />
       <div className="map-card-title nodrag" title={data.title}>
-        <span className="map-card-kind">{t(`map.kind.${kind}`)}</span>
+        <span className="map-card-kind">
+          {isChecklist ? t("map.kind.checklist") : t(`map.kind.${kind}`)}
+        </span>
         <span className="map-card-title-text">
           {data.title || t("map.untitled")}
         </span>
-        {/* Expand the whole node (title + context + full thread + input). */}
-        <button
-          className="map-node-expand"
-          title={t("map.expand_node")}
-          onClick={() => {
-            setMsgTarget(null);
-            setNodeExpanded(true);
-          }}
-        >
-          <Maximize2 size={13} strokeWidth={1.75} />
-        </button>
-      </div>
-      <div className="map-card-body nodrag nowheel" ref={bodyRef}>
-        {data.context ? (
-          <div className="map-card-context">
-            <MDView text={data.context} />
-          </div>
-        ) : null}
-        {data.messages.length > 0 && (
-          <div className="map-card-thread">
-            {data.messages.map((m) => (
-              <ThreadMessage
-                key={m.id}
-                item={m}
-                compact
-                enableAnchor={false}
-                onExpand={openExpandedMsg}
-              />
-            ))}
-          </div>
+        {/* Expand the whole node (title + context + full thread + input). A
+            checklist node has no thread to preview; its own card carries the
+            fullscreen affordance, so skip this. */}
+        {!isChecklist && (
+          <button
+            className="map-node-expand"
+            title={t("map.expand_node")}
+            onClick={() => {
+              setMsgTarget(null);
+              setNodeExpanded(true);
+            }}
+          >
+            <Maximize2 size={13} strokeWidth={1.75} />
+          </button>
         )}
-        {/* Same "jump to latest" affordance as a board node — shows only when
-            the bottom of the thread is scrolled out of view. Normal flow
-            (newest at the bottom), so NOT reversed. */}
-        <ScrollToBottomButton scrollRef={bodyRef} />
       </div>
-      <MapCardComposer nodeId={props.id} />
-      {nodeExpanded && ctx && (
+      {isChecklist ? (
+        <div
+          className="map-card-body map-card-checklist nodrag nowheel"
+          ref={bodyRef}
+        >
+          <ChecklistCard node={checklistNode} embedded />
+        </div>
+      ) : (
+        <div className="map-card-body nodrag nowheel" ref={bodyRef}>
+          {data.context ? (
+            <div className="map-card-context">
+              <MDView text={data.context} />
+            </div>
+          ) : null}
+          {data.messages.length > 0 && (
+            <div className="map-card-thread">
+              {data.messages.map((m) => (
+                <ThreadMessage
+                  key={m.id}
+                  item={m}
+                  compact
+                  enableAnchor={false}
+                  onExpand={openExpandedMsg}
+                />
+              ))}
+            </div>
+          )}
+          {/* Same "jump to latest" affordance as a board node — shows only when
+              the bottom of the thread is scrolled out of view. Normal flow
+              (newest at the bottom), so NOT reversed. */}
+          <ScrollToBottomButton scrollRef={bodyRef} />
+        </div>
+      )}
+      {!isChecklist && <MapCardComposer nodeId={props.id} />}
+      {nodeExpanded && ctx && !isChecklist && (
         <MapNodeModal
           mapId={ctx.mapId}
           nodeId={props.id}

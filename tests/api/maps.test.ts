@@ -595,3 +595,132 @@ describe("maps — list is session-scoped (no cross-session discovery)", () => {
   });
 });
 
+describe("maps — checklist nodes", () => {
+  async function nodeInView(mapId: string, nodeId: string): Promise<any> {
+    const view = await get<any>(`${broker.url}/api/map/${mapId}`);
+    return view.json.nodes.find((n: any) => n.id === nodeId);
+  }
+
+  test("mark + record + update flows through getMapView", async () => {
+    const mapId = await createMap("checklist map");
+    const nodeId = await addNode(mapId, { title: "Acceptance criteria" });
+
+    // Before flagging: not a checklist, no items attached.
+    let node = await nodeInView(mapId, nodeId);
+    expect(node.is_checklist).toBeFalsy();
+    expect(node.checklist_items).toBeUndefined();
+
+    // Flag it.
+    const mark = await post<{ ok: boolean }>(
+      `${broker.url}/map-mark-checklist`,
+      { map_id: mapId, node_id: nodeId },
+    );
+    expect(mark.json.ok).toBe(true);
+
+    // Record two lines.
+    const r1 = await post<{ ok: boolean; item_id: number }>(
+      `${broker.url}/map-record-decision`,
+      { map_id: mapId, node_id: nodeId, summary: "X must hold" },
+    );
+    expect(r1.json.ok).toBe(true);
+    const r2 = await post<{ ok: boolean; item_id: number }>(
+      `${broker.url}/map-record-decision`,
+      { map_id: mapId, node_id: nodeId, summary: "Y must hold" },
+    );
+    expect(r2.json.ok).toBe(true);
+
+    // They surface on the node in order, all pending.
+    node = await nodeInView(mapId, nodeId);
+    expect(node.is_checklist).toBeTruthy();
+    expect(node.checklist_items.map((i: any) => i.summary)).toEqual([
+      "X must hold",
+      "Y must hold",
+    ]);
+    expect(node.checklist_items.every((i: any) => i.status === "pending")).toBe(
+      true,
+    );
+
+    // Advance the first to done.
+    const upd = await post<{ ok: boolean }>(
+      `${broker.url}/map-update-decision`,
+      { item_id: r1.json.item_id, status: "done" },
+    );
+    expect(upd.json.ok).toBe(true);
+    node = await nodeInView(mapId, nodeId);
+    const item = node.checklist_items.find(
+      (i: any) => i.id === r1.json.item_id,
+    );
+    expect(item.status).toBe("done");
+  });
+
+  test("record_map_decision rejects a non-checklist node", async () => {
+    const mapId = await createMap("cl reject map");
+    const nodeId = await addNode(mapId, { title: "plain node" });
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/map-record-decision`,
+      { map_id: mapId, node_id: nodeId, summary: "nope" },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toMatch(/not a checklist node/);
+  });
+
+  test("mark refuses a node that already has chat messages", async () => {
+    const mapId = await createMap("cl guard map");
+    const nodeId = await addNode(mapId, { title: "has a thread" });
+    await post(`${broker.url}/map-post`, {
+      map_id: mapId,
+      node_id: nodeId,
+      message: "a CC note",
+    });
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/map-mark-checklist`,
+      { map_id: mapId, node_id: nodeId },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toMatch(/conversation message/);
+  });
+
+  test("update_map_decision requires drop_reason for dropped", async () => {
+    const mapId = await createMap("cl drop map");
+    const nodeId = await addNode(mapId, { title: "list" });
+    await post(`${broker.url}/map-mark-checklist`, {
+      map_id: mapId,
+      node_id: nodeId,
+    });
+    const rec = await post<{ ok: boolean; item_id: number }>(
+      `${broker.url}/map-record-decision`,
+      { map_id: mapId, node_id: nodeId, summary: "to drop" },
+    );
+    const bad = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/map-update-decision`,
+      { item_id: rec.json.item_id, status: "dropped" },
+    );
+    expect(bad.json.ok).toBe(false);
+    expect(bad.json.error).toMatch(/drop_reason/);
+    const good = await post<{ ok: boolean }>(
+      `${broker.url}/map-update-decision`,
+      { item_id: rec.json.item_id, status: "dropped", drop_reason: "obsolete" },
+    );
+    expect(good.json.ok).toBe(true);
+  });
+
+  test("unflagging a checklist node drops the checklist surface", async () => {
+    const mapId = await createMap("cl unflag map");
+    const nodeId = await addNode(mapId, { title: "toggle" });
+    await post(`${broker.url}/map-mark-checklist`, {
+      map_id: mapId,
+      node_id: nodeId,
+    });
+    let node = await nodeInView(mapId, nodeId);
+    expect(node.is_checklist).toBeTruthy();
+    const unflag = await post<{ ok: boolean }>(
+      `${broker.url}/map-mark-checklist`,
+      { map_id: mapId, node_id: nodeId, is_checklist: false },
+    );
+    expect(unflag.json.ok).toBe(true);
+    node = await nodeInView(mapId, nodeId);
+    expect(node.is_checklist).toBeFalsy();
+    expect(node.checklist_items).toBeUndefined();
+  });
+});
+

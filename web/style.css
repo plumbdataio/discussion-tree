@@ -4551,6 +4551,27 @@ button.secondary {
 .map-card-kind.kind-selection { background: #10b981; }
 .map-card-kind.kind-note { background: #9ca3af; }
 
+/* Checklist map node: a distinct teal frame + badge, and the embedded
+   read-only ChecklistCard is stripped of its own frame so it blends into the
+   map card (which already supplies the border + the title row). */
+.map-card.kind-checklist { border-color: #0d9488; }
+.map-card.kind-checklist .map-card-kind { background: #0d9488; }
+.map-card-kind.kind-checklist { background: #0d9488; }
+.map-card-checklist .checklist-card-embedded {
+  border: none;
+  border-left: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  min-width: 0;
+  max-width: none;
+  overflow-y: visible;
+}
+/* No title in embedded mode — keep the sort/expand controls flush right. */
+.map-card-checklist .checklist-card-embedded .checklist-card-header {
+  justify-content: flex-end;
+}
+
 /* --- Right-hand general chat panel --- */
 .map-chat {
   width: 340px;

@@ -203,6 +203,11 @@ export interface MapNode {
   h?: number | null;
   created_at: string;
   deleted_at?: string | null;
+  // 1 = a checklist node: it carries a checklist_items array (reused via
+  // board_id = map_id) and renders read-only items instead of a thread.
+  is_checklist?: number;
+  // Populated by getMapView only for is_checklist map nodes. Absent otherwise.
+  checklist_items?: ChecklistItem[];
 }
 
 export interface MapEdge {

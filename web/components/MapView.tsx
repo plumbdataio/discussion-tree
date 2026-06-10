@@ -124,8 +124,18 @@ export function MapView({ mapId }: { mapId: string }) {
 
   // A cheap content signature so we can flash only the nodes that actually
   // changed between snapshots (title / context / thread tail).
-  const sigOf = (n: RFNode["data"], msgs: ThreadItem[]) =>
-    `${(n as any).title}\u0000${(n as any).context}\u0000${msgs.length}\u0000${msgs.length ? msgs[msgs.length - 1].id : 0}`;
+  const sigOf = (n: RFNode["data"], msgs: ThreadItem[]) => {
+    // Checklist nodes have no thread; their content lives in checklist_items,
+    // so fold each item's id+status+summary length into the signature too (a
+    // status change or edit then flashes the node, same as a new message does).
+    const cl = (n as any).checklist_items as
+      | { id: number; status: string; summary: string }[]
+      | undefined;
+    const clSig = cl
+      ? cl.map((i) => `${i.id}:${i.status}:${i.summary.length}`).join(",")
+      : "";
+    return `${(n as any).title}\u0000${(n as any).context}\u0000${msgs.length}\u0000${msgs.length ? msgs[msgs.length - 1].id : 0}\u0000${clSig}`;
+  };
 
   // Reconcile RF nodes against a fresh broker snapshot instead of rebuilding
   // them. Reusing the previous node object (spread) keeps React Flow's UI-only
@@ -141,7 +151,14 @@ export function MapView({ mapId }: { mapId: string }) {
       const next = v.nodes.map((n) => {
         const existing = prevById.get(n.id);
         const messages = v.threads[n.id] ?? [];
-        const data = { title: n.title, context: n.context, kind: n.kind, messages };
+        const data = {
+          title: n.title,
+          context: n.context,
+          kind: n.kind,
+          messages,
+          is_checklist: n.is_checklist,
+          checklist_items: n.checklist_items,
+        };
         if (existing && sigOf(existing.data, (existing.data as any).messages ?? []) !== sigOf(data as any, messages)) {
           changed.add(n.id);
         }

@@ -385,7 +385,16 @@ function ChecklistBody({ node, sort }: { node: Node; sort: Sort }) {
   );
 }
 
-export function ChecklistCard({ node }: { node: Node }) {
+// embedded = rendered inside another card (a map checklist node) that already
+// shows the title and supplies the border — so drop the outer title + chrome
+// and let the host card frame it.
+export function ChecklistCard({
+  node,
+  embedded = false,
+}: {
+  node: Node;
+  embedded?: boolean;
+}) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [sort, updateSort] = useChecklistSort();
@@ -399,9 +408,11 @@ export function ChecklistCard({ node }: { node: Node }) {
   }, [expanded]);
 
   return (
-    <div className="checklist-card">
+    <div
+      className={"checklist-card" + (embedded ? " checklist-card-embedded" : "")}
+    >
       <div className="checklist-card-header">
-        <h3 className="checklist-card-title">{node.title}</h3>
+        {!embedded && <h3 className="checklist-card-title">{node.title}</h3>}
         <div className="checklist-card-actions">
           <SortControls sort={sort} update={updateSort} />
           <button
