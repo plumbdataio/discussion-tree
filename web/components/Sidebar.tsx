@@ -572,39 +572,59 @@ export function Sidebar({
 
   const orderedActive = applyOrder(sessions ?? [], settings.sessionOrder);
 
-  // --- Session visibility filter (keyed by cwd; see settings.shownCwds) ----
-  // cwd, not session id: ids are minted fresh on every CC restart while cwd is
-  // stable, and "a client" maps to a cwd. null = show all (new sessions appear);
-  // a non-null array is an allow-list (only these cwds show, new sessions stay
-  // hidden until added).
-  const shownCwds = settings.shownCwds;
-  const allCwds = Array.from(
-    new Set([...(sessions ?? []), ...inactiveSessions].map((s) => s.cwd)),
-  ).sort();
-  const isCwdShown = (cwd: string) =>
-    shownCwds === null || shownCwds.includes(cwd);
-  const shownCwdCount = allCwds.filter(isCwdShown).length;
-  const toggleCwd = (cwd: string) => {
-    if (isCwdShown(cwd)) {
-      // Hide this cwd. If we were in "show all" mode, materialize the full set
-      // first so the rest stay explicit (= partial mode, where newly-observed
-      // sessions are hidden by default).
-      const base = shownCwds === null ? allCwds : shownCwds;
-      updateSettings({ shownCwds: base.filter((c) => c !== cwd) });
+  // --- Session visibility filter (keyed by cc_session_id; see
+  // settings.shownSessions) ------------------------------------------------
+  // cc_session_id (falling back to cwd before attach) is stable across
+  // /compact and `claude -r` resume — only a genuinely fresh CC launch mints a
+  // new one — so the filter survives the restarts that matter while staying
+  // per-session. null = show all (new sessions appear); a non-null array is an
+  // allow-list (only those show; new sessions stay hidden until added).
+  const shownSessions = settings.shownSessions;
+  const sessionKey = (s: SessionListItem) => s.cc_session_id ?? s.cwd;
+  const allKeys = Array.from(
+    new Set([...(sessions ?? []), ...inactiveSessions].map(sessionKey)),
+  );
+  const isSessionShown = (key: string) =>
+    shownSessions === null || shownSessions.includes(key);
+  const shownSessionCount = allKeys.filter(isSessionShown).length;
+  const toggleSession = (key: string) => {
+    if (isSessionShown(key)) {
+      // Hide: materialize the full set first if we were showing all, so the
+      // rest stay explicit (= partial mode, where new sessions hide).
+      const base = shownSessions === null ? allKeys : shownSessions;
+      updateSettings({ shownSessions: base.filter((k) => k !== key) });
     } else {
-      // Show this cwd. If every known cwd is now visible, collapse back to null
-      // (= show all) so future new sessions appear too.
-      const next = [...(shownCwds ?? []), cwd];
-      const allVisible = allCwds.every((c) => next.includes(c));
-      updateSettings({ shownCwds: allVisible ? null : next });
+      // Show: add it; if every known session is now visible, collapse back to
+      // null (= show all) so future new sessions appear too.
+      const next = [...(shownSessions ?? []), key];
+      const allVisible = allKeys.every((k) => next.includes(k));
+      updateSettings({ shownSessions: allVisible ? null : next });
     }
   };
-  const visibleActive = orderedActive.filter((s) => isCwdShown(s.cwd));
-  const visibleInactive = inactiveSessions.filter((s) => isCwdShown(s.cwd));
+  const visibleActive = orderedActive.filter((s) =>
+    isSessionShown(sessionKey(s)),
+  );
+  const visibleInactive = inactiveSessions.filter((s) =>
+    isSessionShown(sessionKey(s)),
+  );
 
-  // Short, readable label for a cwd checkbox (last two path segments).
+  // Short, readable label for a session checkbox: its name, else the last two
+  // cwd path segments. Full cwd goes in the row's title.
   const shortCwd = (cwd: string) =>
     cwd.split("/").filter(Boolean).slice(-2).join("/") || cwd;
+  // De-duplicated list of sessions (active + inactive) for the filter list,
+  // keyed the same way as the filter so toggles line up.
+  const filterSessions = (() => {
+    const seen = new Set<string>();
+    const out: { key: string; label: string; cwd: string }[] = [];
+    for (const s of [...(sessions ?? []), ...inactiveSessions]) {
+      const key = sessionKey(s);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ key, label: s.name || shortCwd(s.cwd), cwd: s.cwd });
+    }
+    return out.sort((a, b) => a.label.localeCompare(b.label));
+  })();
 
   const reorderTo = (
     fromId: string,
@@ -737,31 +757,29 @@ export function Sidebar({
                   <span>{t([`board_status.${status}`, status])}</span>
                 </label>
               ))}
-              {allCwds.length > 0 && (
+              {filterSessions.length > 0 && (
                 <div className="sidebar-filter-group">
                   <div className="sidebar-filter-group-head">
                     <span>{t("sidebar.session_filter_label")}</span>
                     <span className="sidebar-filter-summary">
                       {t("sidebar.filter_summary", {
-                        visible: shownCwdCount,
-                        total: allCwds.length,
+                        visible: shownSessionCount,
+                        total: allKeys.length,
                       })}
                     </span>
                   </div>
-                  {allCwds.map((cwd) => (
+                  {filterSessions.map((fs) => (
                     <label
-                      key={cwd}
+                      key={fs.key}
                       className="sidebar-filter-option"
-                      title={cwd}
+                      title={fs.cwd}
                     >
                       <input
                         type="checkbox"
-                        checked={isCwdShown(cwd)}
-                        onChange={() => toggleCwd(cwd)}
+                        checked={isSessionShown(fs.key)}
+                        onChange={() => toggleSession(fs.key)}
                       />
-                      <span className="sidebar-filter-cwd">
-                        {shortCwd(cwd)}
-                      </span>
+                      <span className="sidebar-filter-cwd">{fs.label}</span>
                     </label>
                   ))}
                 </div>

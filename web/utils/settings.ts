@@ -29,14 +29,16 @@ export type Settings = {
   // array render first, in this order; sessions not present render after,
   // in their natural broker order.
   sessionOrder: string[];
-  // Sidebar session visibility, keyed by cwd (NOT session id — ids are minted
-  // fresh on every CC restart, cwd is stable, and "a client" maps to a cwd
-  // tree). null = show every session (the default). A non-null array is an
-  // explicit allow-list: only sessions whose cwd is in it are shown, and any
-  // newly-observed session is hidden until its cwd is added. So "all selected"
-  // collapses to null (new sessions appear); "one+ hidden" keeps the array
-  // (new sessions stay hidden).
-  shownCwds: string[] | null;
+  // Sidebar session visibility, keyed by the CC session id (cc_session_id,
+  // falling back to cwd for a not-yet-attached session). cc_session_id is
+  // stable across /compact and `claude -r` resume — only a genuinely fresh CC
+  // launch gets a new one — so the filter survives the restarts that matter
+  // while still being per-session. null = show every session (default). A
+  // non-null array is an explicit allow-list: only those sessions show, and a
+  // newly-observed session stays hidden until added. "All selected" collapses
+  // to null (new sessions appear); "one+ hidden" keeps the array (new sessions
+  // stay hidden).
+  shownSessions: string[] | null;
   // Per-session collapsed state of the boards list. Missing keys default to
   // expanded (false).
   collapsedSessions: Record<string, boolean>;
@@ -60,7 +62,7 @@ const DEFAULTS: Settings = {
     paused: true,
   },
   sessionOrder: [],
-  shownCwds: null,
+  shownSessions: null,
   collapsedSessions: {},
   sidebarCollapsed: false,
 };
@@ -90,7 +92,7 @@ function readSettings(): Settings {
       },
       sessionOrder: parsed.sessionOrder ?? DEFAULTS.sessionOrder,
       // Preserve an explicit array; both missing and stored-null mean "show all".
-      shownCwds: parsed.shownCwds ?? null,
+      shownSessions: parsed.shownSessions ?? null,
     };
   } catch {
     return DEFAULTS;
