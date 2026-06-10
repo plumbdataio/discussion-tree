@@ -572,6 +572,40 @@ export function Sidebar({
 
   const orderedActive = applyOrder(sessions ?? [], settings.sessionOrder);
 
+  // --- Session visibility filter (keyed by cwd; see settings.shownCwds) ----
+  // cwd, not session id: ids are minted fresh on every CC restart while cwd is
+  // stable, and "a client" maps to a cwd. null = show all (new sessions appear);
+  // a non-null array is an allow-list (only these cwds show, new sessions stay
+  // hidden until added).
+  const shownCwds = settings.shownCwds;
+  const allCwds = Array.from(
+    new Set([...(sessions ?? []), ...inactiveSessions].map((s) => s.cwd)),
+  ).sort();
+  const isCwdShown = (cwd: string) =>
+    shownCwds === null || shownCwds.includes(cwd);
+  const shownCwdCount = allCwds.filter(isCwdShown).length;
+  const toggleCwd = (cwd: string) => {
+    if (isCwdShown(cwd)) {
+      // Hide this cwd. If we were in "show all" mode, materialize the full set
+      // first so the rest stay explicit (= partial mode, where newly-observed
+      // sessions are hidden by default).
+      const base = shownCwds === null ? allCwds : shownCwds;
+      updateSettings({ shownCwds: base.filter((c) => c !== cwd) });
+    } else {
+      // Show this cwd. If every known cwd is now visible, collapse back to null
+      // (= show all) so future new sessions appear too.
+      const next = [...(shownCwds ?? []), cwd];
+      const allVisible = allCwds.every((c) => next.includes(c));
+      updateSettings({ shownCwds: allVisible ? null : next });
+    }
+  };
+  const visibleActive = orderedActive.filter((s) => isCwdShown(s.cwd));
+  const visibleInactive = inactiveSessions.filter((s) => isCwdShown(s.cwd));
+
+  // Short, readable label for a cwd checkbox (last two path segments).
+  const shortCwd = (cwd: string) =>
+    cwd.split("/").filter(Boolean).slice(-2).join("/") || cwd;
+
   const reorderTo = (
     fromId: string,
     toId: string,
@@ -688,6 +722,9 @@ export function Sidebar({
           </button>
           {filterOpen && (
             <div className="sidebar-filter-options">
+              <div className="sidebar-filter-group-head">
+                {t("sidebar.status_filter_label")}
+              </div>
               {BOARD_STATUSES.map((status) => (
                 <label key={status} className="sidebar-filter-option">
                   <input
@@ -700,6 +737,35 @@ export function Sidebar({
                   <span>{t([`board_status.${status}`, status])}</span>
                 </label>
               ))}
+              {allCwds.length > 0 && (
+                <div className="sidebar-filter-group">
+                  <div className="sidebar-filter-group-head">
+                    <span>{t("sidebar.session_filter_label")}</span>
+                    <span className="sidebar-filter-summary">
+                      {t("sidebar.filter_summary", {
+                        visible: shownCwdCount,
+                        total: allCwds.length,
+                      })}
+                    </span>
+                  </div>
+                  {allCwds.map((cwd) => (
+                    <label
+                      key={cwd}
+                      className="sidebar-filter-option"
+                      title={cwd}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isCwdShown(cwd)}
+                        onChange={() => toggleCwd(cwd)}
+                      />
+                      <span className="sidebar-filter-cwd">
+                        {shortCwd(cwd)}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -711,7 +777,7 @@ export function Sidebar({
         {sessions && sessions.length === 0 && (
           <div className="empty">{t("sidebar.no_active_sessions")}</div>
         )}
-        {orderedActive.map((s) => (
+        {visibleActive.map((s) => (
           <SessionItem
             key={s.id}
             s={s}
@@ -732,7 +798,7 @@ export function Sidebar({
           />
         ))}
 
-        {inactiveSessions.length > 0 && (
+        {visibleInactive.length > 0 && (
           <div className="inactive-sessions">
             <button
               type="button"
@@ -746,12 +812,12 @@ export function Sidebar({
               )}
               <span>
                 {t("sidebar.inactive_label", {
-                  count: inactiveSessions.length,
+                  count: visibleInactive.length,
                 })}
               </span>
             </button>
             {inactiveOpen &&
-              inactiveSessions.map((s) => (
+              visibleInactive.map((s) => (
                 <SessionItem
                   key={s.id}
                   s={s}

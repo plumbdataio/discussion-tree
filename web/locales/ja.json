@@ -25,6 +25,8 @@
     "toggle_label": "サイドバーを開閉",
     "filter_label": "表示",
     "filter_summary": "{{visible}} / {{total}}",
+    "status_filter_label": "ボードの状態",
+    "session_filter_label": "セッション (作業ディレクトリ単位)",
     "map_node_count": "{{count}} 個のノード",
     "collapse_label": "サイドバーを閉じる",
     "expand_label": "サイドバーを開く"

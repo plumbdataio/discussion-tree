@@ -1626,6 +1626,40 @@ a.session-name:hover {
   margin: 0;
 }
 
+/* Sub-group header inside the filter dropdown (Board status / Sessions). */
+.sidebar-filter-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+/* The session (cwd) group sits below the status group with a divider. */
+.sidebar-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  /* Many cwds → keep the dropdown from growing without bound. */
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+/* cwd label: truncate gracefully (full path is in the title attribute). */
+.sidebar-filter-cwd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .inactive-sessions {
   margin-top: 24px;
   padding-top: 12px;

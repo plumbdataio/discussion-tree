@@ -25,6 +25,8 @@
     "toggle_label": "Toggle sidebar",
     "filter_label": "Show",
     "filter_summary": "{{visible}} / {{total}}",
+    "status_filter_label": "Board status",
+    "session_filter_label": "Sessions (by working directory)",
     "map_node_count": "{{count}} nodes",
     "collapse_label": "Collapse sidebar",
     "expand_label": "Expand sidebar"
