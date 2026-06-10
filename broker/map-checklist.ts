@@ -192,11 +192,13 @@ export function handleMarkMapChecklistRead(body: {
   if (!node) return { ok: false, error: "map node not found" };
   // Only mark read up to the version the client actually saw — a change that
   // landed after it rendered must stay unread. Fall back to the current
-  // version if the client didn't say (older callers).
-  const observed =
-    typeof body.version === "number"
-      ? body.version
-      : (node.checklist_version ?? 0);
+  // version if the client didn't say (older callers). CLAMP to the current
+  // version so a bogus future value can't suppress unread for later changes.
+  const current = node.checklist_version ?? 0;
+  const observed = Math.min(
+    typeof body.version === "number" ? body.version : current,
+    current,
+  );
   setMapChecklistRead.run(observed, mapId, nodeId, observed);
   emit(mapId);
   return { ok: true };

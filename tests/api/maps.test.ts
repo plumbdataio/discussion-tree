@@ -797,6 +797,28 @@ describe("maps — checklist nodes", () => {
     expect((await nodeInView(mapId, nodeId)).checklist_unread).toBe(false);
   });
 
+  test("a future version is clamped (can't suppress later unread)", async () => {
+    const mapId = await createMap("cl clamp map");
+    const nodeId = await addNode(mapId, { title: "x" });
+    await post(`${broker.url}/map-mark-checklist`, {
+      map_id: mapId,
+      node_id: nodeId,
+    });
+    // A bogus client sends a version far ahead of the real one.
+    await post(`${broker.url}/map-checklist-read`, {
+      map_id: mapId,
+      node_id: nodeId,
+      version: 999,
+    });
+    // A real change must still surface as unread (read was clamped, not 999).
+    await post(`${broker.url}/map-record-decision`, {
+      map_id: mapId,
+      node_id: nodeId,
+      summary: "real change",
+    });
+    expect((await nodeInView(mapId, nodeId)).checklist_unread).toBe(true);
+  });
+
   test("checklist unread counts toward the sidebar map badge", async () => {
     const mapId = await createMap("cl badge map");
     const nodeId = await addNode(mapId, { title: "list" });
