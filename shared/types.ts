@@ -208,6 +208,10 @@ export interface MapNode {
   is_checklist?: number;
   // Populated by getMapView only for is_checklist map nodes. Absent otherwise.
   checklist_items?: ChecklistItem[];
+  // getMapView only: true when the checklist changed since the user last
+  // viewed the node (node-level unread, the checklist analogue of an unread
+  // thread message). Drives the canvas unread cue + the sidebar map badge.
+  checklist_unread?: boolean;
 }
 
 export interface MapEdge {

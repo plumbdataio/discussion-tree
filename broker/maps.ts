@@ -420,12 +420,18 @@ export function getMapView(mapId: string) {
   const nodes = selectMapNodesByMap.all(mapId) as MapNode[];
   // Attach the checklist_items list to any checklist map node (board_id =
   // map_id), so the canvas can render it read-only without a second round-trip.
+  // Also derive its unread flag: a checklist is unread when it changed (became
+  // a checklist / item added or updated) more recently than the user last
+  // viewed it — same idea as a thread's per-message read_at, node-level here.
   for (const n of nodes) {
     if (n.is_checklist) {
       n.checklist_items = selectChecklistItemsByNode.all(
         mapId,
         n.id,
       ) as ChecklistItem[];
+      const ver = ((n as any).checklist_version as number) ?? 0;
+      const readVer = ((n as any).checklist_read_version as number) ?? 0;
+      n.checklist_unread = ver > readVer;
     }
   }
   const liveIds = new Set(nodes.map((n) => n.id));

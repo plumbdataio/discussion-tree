@@ -255,6 +255,8 @@
     "image_failed": "Image upload failed",
     "untitled": "(untitled)",
     "expand_node": "Expand node",
+    "drag_handle": "Drag to move the node",
+    "checklist_preview": "Expand checklist",
     "lock": "Lock (freeze position / size / edge editing)",
     "unlock": "Unlock (L)",
     "deleted_node": "Deleted \"{{title}}\"",

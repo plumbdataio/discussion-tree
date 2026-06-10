@@ -415,12 +415,23 @@ export function handleListSessions() {
           )
           .get(m.id) as { cnt: number }
       ).cnt;
+      // Checklist nodes have no thread; their node-level unread (changed since
+      // last viewed) counts toward the badge too, for parity with threads.
+      const checklistUnread = (
+        db
+          .prepare(
+            `SELECT COUNT(*) AS cnt FROM map_nodes
+              WHERE map_id = ? AND deleted_at IS NULL AND is_checklist = 1
+                AND checklist_version > checklist_read_version`,
+          )
+          .get(m.id) as { cnt: number }
+      ).cnt;
       return {
         id: m.id,
         title: m.title,
         archived: m.archived,
         node_count: nodeCount,
-        unread_count: unread,
+        unread_count: unread + checklistUnread,
       };
     });
     return {

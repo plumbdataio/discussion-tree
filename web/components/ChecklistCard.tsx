@@ -387,13 +387,16 @@ function ChecklistBody({ node, sort }: { node: Node; sort: Sort }) {
 
 // embedded = rendered inside another card (a map checklist node) that already
 // shows the title and supplies the border — so drop the outer title + chrome
-// and let the host card frame it.
+// and let the host card frame it. hideExpand suppresses the card's own
+// fullscreen button (the map card provides that affordance in its title bar).
 export function ChecklistCard({
   node,
   embedded = false,
+  hideExpand = false,
 }: {
   node: Node;
   embedded?: boolean;
+  hideExpand?: boolean;
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -415,15 +418,17 @@ export function ChecklistCard({
         {!embedded && <h3 className="checklist-card-title">{node.title}</h3>}
         <div className="checklist-card-actions">
           <SortControls sort={sort} update={updateSort} />
-          <button
-            type="button"
-            className="checklist-expand"
-            title={t("checklist.expand")}
-            aria-label={t("checklist.expand_aria")}
-            onClick={() => setExpanded(true)}
-          >
-            <Maximize2 size={14} strokeWidth={1.75} />
-          </button>
+          {!hideExpand && (
+            <button
+              type="button"
+              className="checklist-expand"
+              title={t("checklist.expand")}
+              aria-label={t("checklist.expand_aria")}
+              onClick={() => setExpanded(true)}
+            >
+              <Maximize2 size={14} strokeWidth={1.75} />
+            </button>
+          )}
         </div>
       </div>
       {node.context && (

@@ -82,6 +82,16 @@ export function postMapDeleteNode(mapId: string, nodeId: string) {
   });
 }
 
+// Mark a checklist map node read (the user dwelled on it) — clears its
+// node-level unread cue, mirroring marking a thread's CC messages read.
+export function postMapChecklistRead(mapId: string, nodeId: string) {
+  return fetch("/map-checklist-read", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ map_id: mapId, node_id: nodeId }),
+  });
+}
+
 // Undo a delete: un-tombstone the given nodes and/or edges in one call.
 export function postMapRestore(
   mapId: string,

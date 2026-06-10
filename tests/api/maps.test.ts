@@ -727,6 +727,73 @@ describe("maps — checklist nodes", () => {
     expect(batch.json.results[0].error).toMatch(/checklist node/);
   });
 
+  test("checklist unread: on create/update, cleared by read", async () => {
+    const mapId = await createMap("cl unread map");
+    const nodeId = await addNode(mapId, { title: "release" });
+
+    // Flagging it makes it unread (a fresh checklist).
+    await post(`${broker.url}/map-mark-checklist`, {
+      map_id: mapId,
+      node_id: nodeId,
+    });
+    expect((await nodeInView(mapId, nodeId)).checklist_unread).toBe(true);
+
+    // Reading clears it.
+    const read = await post<{ ok: boolean }>(
+      `${broker.url}/map-checklist-read`,
+      { map_id: mapId, node_id: nodeId },
+    );
+    expect(read.json.ok).toBe(true);
+    expect((await nodeInView(mapId, nodeId)).checklist_unread).toBe(false);
+
+    // Adding a line makes it unread again.
+    const rec = await post<{ ok: boolean; item_id: number }>(
+      `${broker.url}/map-record-decision`,
+      { map_id: mapId, node_id: nodeId, summary: "ship it" },
+    );
+    expect((await nodeInView(mapId, nodeId)).checklist_unread).toBe(true);
+
+    // Read, then a status update makes it unread once more.
+    await post(`${broker.url}/map-checklist-read`, {
+      map_id: mapId,
+      node_id: nodeId,
+    });
+    expect((await nodeInView(mapId, nodeId)).checklist_unread).toBe(false);
+    await post(`${broker.url}/map-update-decision`, {
+      item_id: rec.json.item_id,
+      status: "done",
+    });
+    expect((await nodeInView(mapId, nodeId)).checklist_unread).toBe(true);
+  });
+
+  test("checklist unread counts toward the sidebar map badge", async () => {
+    const mapId = await createMap("cl badge map");
+    const nodeId = await addNode(mapId, { title: "list" });
+    await post(`${broker.url}/map-mark-checklist`, {
+      map_id: mapId,
+      node_id: nodeId,
+    });
+    const before = await get<{
+      sessions: { id: string; maps?: { id: string; unread_count: number }[] }[];
+    }>(`${broker.url}/api/sessions`);
+    const mapItem = before.json.sessions
+      .flatMap((s) => s.maps ?? [])
+      .find((m) => m.id === mapId);
+    expect(mapItem?.unread_count).toBe(1);
+
+    await post(`${broker.url}/map-checklist-read`, {
+      map_id: mapId,
+      node_id: nodeId,
+    });
+    const after = await get<{
+      sessions: { id: string; maps?: { id: string; unread_count: number }[] }[];
+    }>(`${broker.url}/api/sessions`);
+    const mapItem2 = after.json.sessions
+      .flatMap((s) => s.maps ?? [])
+      .find((m) => m.id === mapId);
+    expect(mapItem2?.unread_count).toBe(0);
+  });
+
   test("unflagging a checklist node drops the checklist surface", async () => {
     const mapId = await createMap("cl unflag map");
     const nodeId = await addNode(mapId, { title: "toggle" });

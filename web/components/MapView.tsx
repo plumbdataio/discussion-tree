@@ -158,6 +158,7 @@ export function MapView({ mapId }: { mapId: string }) {
           messages,
           is_checklist: n.is_checklist,
           checklist_items: n.checklist_items,
+          checklist_unread: n.checklist_unread,
         };
         if (existing && sigOf(existing.data, (existing.data as any).messages ?? []) !== sigOf(data as any, messages)) {
           changed.add(n.id);

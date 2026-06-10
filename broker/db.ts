@@ -320,8 +320,27 @@ db.run(
 safeAlter(
   "ALTER TABLE map_nodes ADD COLUMN is_checklist INTEGER NOT NULL DEFAULT 0",
 );
+// Unread tracking for checklist map nodes (a checklist node has no thread, so
+// the per-message read_at mechanism doesn't apply). A monotonic version counter
+// (NOT a timestamp — ms-resolution timestamps collide when a read and a change
+// land in the same millisecond): checklist_version is bumped whenever the node
+// becomes a checklist or an item is added/changed; checklist_read_version is
+// set to the current version when the user dwells on the node (same visible
+// rule as a thread). Unread = version > read_version.
+safeAlter(
+  "ALTER TABLE map_nodes ADD COLUMN checklist_version INTEGER NOT NULL DEFAULT 0",
+);
+safeAlter(
+  "ALTER TABLE map_nodes ADD COLUMN checklist_read_version INTEGER NOT NULL DEFAULT 0",
+);
 export const setMapNodeChecklist = db.prepare(
   `UPDATE map_nodes SET is_checklist = ? WHERE map_id = ? AND id = ? AND deleted_at IS NULL`,
+);
+export const bumpMapChecklistVersion = db.prepare(
+  `UPDATE map_nodes SET checklist_version = checklist_version + 1 WHERE map_id = ? AND id = ?`,
+);
+export const setMapChecklistRead = db.prepare(
+  `UPDATE map_nodes SET checklist_read_version = checklist_version WHERE map_id = ? AND id = ?`,
 );
 // Directed edges. Both the human (drawing in the UI) and the AI (connect tool)
 // create these; delete is logical so an edge whose endpoint node was logically

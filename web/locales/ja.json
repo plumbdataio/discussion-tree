@@ -255,6 +255,8 @@
     "image_failed": "画像のアップロードに失敗しました",
     "untitled": "(無題)",
     "expand_node": "ノード全体を拡大表示",
+    "drag_handle": "ドラッグでノードを移動",
+    "checklist_preview": "チェックリストを拡大表示",
     "lock": "ロック(位置・サイズ・エッジ編集を固定)",
     "unlock": "ロック解除(L)",
     "deleted_node": "「{{title}}」を削除しました",

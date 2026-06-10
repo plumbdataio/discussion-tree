@@ -17,7 +17,8 @@ import React, {
 } from "react";
 import { Handle, Position, NodeResizer, useStore } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
-import { Maximize2 } from "lucide-react";
+import { GripVertical, Maximize2, X } from "lucide-react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type {
   ChecklistItem,
@@ -32,10 +33,12 @@ import { ChecklistCard } from "./ChecklistCard.tsx";
 import { MapNodeModal } from "./MapNodeModal.tsx";
 import { useDraft } from "../utils/drafts.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
+import { useVisibleDwell } from "../utils/useVisibleDwell.ts";
 import { MAP_READ_ZOOM } from "../utils/readTiming.ts";
 import {
   extractImageFiles,
   postMapChat,
+  postMapChecklistRead,
   uploadImage,
 } from "../utils/api.ts";
 import { showToast } from "./Toast.tsx";
@@ -71,6 +74,8 @@ export interface MapNodeData {
   // A checklist node renders its items (read-only) instead of a thread.
   is_checklist?: number;
   checklist_items?: ChecklistItem[];
+  // Node-level unread for a checklist (changed since the user last viewed it).
+  checklist_unread?: boolean;
 }
 
 
@@ -189,14 +194,26 @@ function MapNodeImpl(props: NodeProps) {
     checklist_items: data.checklist_items ?? [],
   } as unknown as Node;
   // Same unread cue as a board node card: a thick warm border so you can spot
-  // which node on the canvas has new CC messages.
-  const hasUnread = data.messages.some(
-    (m) => m.source === "cc" && !m.read_at,
-  );
+  // which node on the canvas has new content. For a checklist node (no thread)
+  // that's the node-level checklist_unread; otherwise it's unread CC messages.
+  const hasUnread = isChecklist
+    ? !!data.checklist_unread
+    : data.messages.some((m) => m.source === "cc" && !m.read_at);
   // Expanding a message opens the WHOLE node (MapNodeModal) scrolled to that
   // message — same as a board card — instead of a lone single-message preview.
   const [nodeExpanded, setNodeExpanded] = useState(false);
   const [msgTarget, setMsgTarget] = useState<number | null>(null);
+  // Fullscreen preview for a checklist node (the map counterpart of expanding
+  // a thread node). Driven by the title-bar button.
+  const [checklistExpanded, setChecklistExpanded] = useState(false);
+  useEffect(() => {
+    if (!checklistExpanded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setChecklistExpanded(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [checklistExpanded]);
   const openExpandedMsg = useCallback((it: ThreadItem) => {
     setMsgTarget(it.id);
     setNodeExpanded(true);
@@ -218,6 +235,19 @@ function MapNodeImpl(props: NodeProps) {
   // unread CC messages read (map messages are thread_items, so
   // /mark-thread-items-read clears them + the sidebar unread dot).
   useMarkReadOnVisible(cardRef, data.messages, zoomGateOpen);
+
+  // Checklist nodes have no thread, so the same visible-dwell rule (zoom-gated)
+  // marks the node-level checklist read instead — identical behaviour via the
+  // shared useVisibleDwell hook.
+  useVisibleDwell(
+    cardRef,
+    isChecklist && !!data.checklist_unread,
+    zoomGateOpen,
+    `cl:${data.checklist_unread ? 1 : 0}`,
+    () => {
+      if (ctx) postMapChecklistRead(ctx.mapId, props.id).catch(() => {});
+    },
+  );
 
   // When this node has unread CC messages, scroll its thread to the OLDEST
   // unread one so the user reads forward from where they left off (instead of
@@ -269,35 +299,48 @@ function MapNodeImpl(props: NodeProps) {
       <Handle type="source" position={Position.Right} id="r" className="map-handle" />
       <Handle type="source" position={Position.Bottom} id="b" className="map-handle" />
       <Handle type="source" position={Position.Left} id="l" className="map-handle" />
-      <div className="map-card-title nodrag" title={data.title}>
+      {/* The title bar IS the drag handle (NOT nodrag) — previously only the
+          thin padding below the card was draggable, which a checklist node
+          (no composer) left with no draggable area at all. Only the buttons
+          opt out via nodrag; the GripVertical at the right is the explicit
+          "grab here to move" cue the bar's drag affordance. */}
+      <div className="map-card-title" title={data.title}>
         <span className="map-card-kind">
           {isChecklist ? t("map.kind.checklist") : t(`map.kind.${kind}`)}
         </span>
         <span className="map-card-title-text">
           {data.title || t("map.untitled")}
         </span>
-        {/* Expand the whole node (title + context + full thread + input). A
-            checklist node has no thread to preview; its own card carries the
-            fullscreen affordance, so skip this. */}
-        {!isChecklist && (
-          <button
-            className="map-node-expand"
-            title={t("map.expand_node")}
-            onClick={() => {
+        {/* Preview: thread node → whole-node modal; checklist node →
+            fullscreen list. Both sit just left of the drag handle. */}
+        <button
+          className="map-node-expand nodrag"
+          title={isChecklist ? t("map.checklist_preview") : t("map.expand_node")}
+          onClick={() => {
+            if (isChecklist) {
+              setChecklistExpanded(true);
+            } else {
               setMsgTarget(null);
               setNodeExpanded(true);
-            }}
-          >
-            <Maximize2 size={13} strokeWidth={1.75} />
-          </button>
-        )}
+            }
+          }}
+        >
+          <Maximize2 size={13} strokeWidth={1.75} />
+        </button>
+        <span
+          className="map-card-drag-handle"
+          title={t("map.drag_handle")}
+          aria-label={t("map.drag_handle")}
+        >
+          <GripVertical size={15} strokeWidth={2} />
+        </span>
       </div>
       {isChecklist ? (
         <div
           className="map-card-body map-card-checklist nodrag nowheel"
           ref={bodyRef}
         >
-          <ChecklistCard node={checklistNode} embedded />
+          <ChecklistCard node={checklistNode} embedded hideExpand />
         </div>
       ) : (
         <div className="map-card-body nodrag nowheel" ref={bodyRef}>
@@ -342,6 +385,38 @@ function MapNodeImpl(props: NodeProps) {
           }}
         />
       )}
+      {isChecklist &&
+        checklistExpanded &&
+        createPortal(
+          <div
+            className="modal-backdrop"
+            onClick={() => setChecklistExpanded(false)}
+          >
+            <div
+              className="map-checklist-modal"
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                className="modal-close"
+                onClick={() => setChecklistExpanded(false)}
+                aria-label={t("modal.close")}
+                title={t("modal.close")}
+              >
+                <X size={18} strokeWidth={1.75} />
+              </button>
+              <h2 className="map-checklist-modal-title">
+                <span className="map-card-kind kind-checklist">
+                  {t("map.kind.checklist")}
+                </span>
+                {data.title || t("map.untitled")}
+              </h2>
+              <ChecklistCard node={checklistNode} hideExpand />
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

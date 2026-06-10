@@ -4451,25 +4451,32 @@ button.secondary {
 .map-card-title {
   position: relative;
   flex: 0 0 auto;
-  padding: 9px 32px 9px 11px;
+  /* room on the right for the expand button + the drag handle */
+  padding: 9px 58px 9px 11px;
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
   line-height: 1.35;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
-  user-select: text;
-  cursor: text;
+  /* The title bar IS the node's drag handle (it's not nodrag) — so signal
+     grab, and don't let a drag start a text selection. */
+  user-select: none;
+  cursor: grab;
   white-space: pre-wrap;
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
-/* Expand-whole-node button, top-right of the title. */
+.map-card-title:active {
+  cursor: grabbing;
+}
+/* Expand-whole-node button, top-right of the title — sits just left of the
+   drag handle. */
 .map-node-expand {
   position: absolute;
   top: 6px;
-  right: 6px;
+  right: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4491,6 +4498,55 @@ button.secondary {
   flex: 0 0 auto;
   width: 13px;
   height: 13px;
+}
+/* Explicit "grab here to move" handle — the rightmost item in the title bar.
+   NOT nodrag, so React Flow drags the node from it; the icon makes the title
+   bar's draggability discoverable (the bar itself is draggable too). */
+.map-card-drag-handle {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  color: var(--text-muted);
+  cursor: grab;
+  opacity: 0.45;
+}
+.map-card-drag-handle:hover {
+  opacity: 0.9;
+  background: rgba(127, 127, 127, 0.14);
+}
+.map-card-drag-handle:active {
+  cursor: grabbing;
+}
+.map-card-drag-handle svg {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+}
+/* Fullscreen preview of a checklist map node (the ⤢ in the title). */
+.map-checklist-modal {
+  position: relative;
+  background: var(--panel);
+  border-radius: 12px;
+  width: min(640px, 92vw);
+  max-height: 86vh;
+  overflow: auto;
+  padding: 20px 22px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.32);
+}
+.map-checklist-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 17px;
+  font-weight: 700;
+  padding-right: 28px;
 }
 .map-card-kind {
   font-size: 9px;

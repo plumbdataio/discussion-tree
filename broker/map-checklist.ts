@@ -11,9 +11,11 @@
 // open canvas refetches), instead of a board structure-update.
 
 import {
+  bumpMapChecklistVersion,
   db,
   selectMap,
   selectMapNode,
+  setMapChecklistRead,
   setMapNodeChecklist,
 } from "./db.ts";
 import { broadcast } from "./ws.ts";
@@ -65,6 +67,9 @@ export function handleMarkMapChecklist(body: {
     }
   }
   setMapNodeChecklist.run(promoting ? 1 : 0, mapId, nodeId);
+  // Becoming a checklist node makes it freshly unread (like a new node) — bump
+  // the version so the canvas shows the unread cue until the user views it.
+  if (promoting) bumpMapChecklistVersion.run(mapId, nodeId);
   emit(mapId);
   return { ok: true };
 }
@@ -107,6 +112,8 @@ export function handleRecordMapDecision(body: {
     pos,
     now,
   );
+  // A new item makes the checklist unread again (same as a new CC message).
+  bumpMapChecklistVersion.run(mapId, nodeId);
   emit(mapId);
   return { ok: true, item_id: Number(res.lastInsertRowid) };
 }
@@ -126,6 +133,7 @@ export function handleUpdateMapDecision(body: {
     | {
         id: number;
         board_id: string;
+        node_id: string;
         summary: string;
         status: string;
         drop_reason: string | null;
@@ -162,7 +170,26 @@ export function handleUpdateMapDecision(body: {
   }
 
   updateItem.run(nextSummary, nextStatus, nextReason, body.item_id);
-  emit(cur.board_id); // board_id == map_id for a map item
+  // A status/summary change makes the checklist unread again. board_id == map_id.
+  bumpMapChecklistVersion.run(cur.board_id, cur.node_id);
+  emit(cur.board_id);
+  return { ok: true };
+}
+
+// Stamp a checklist node read (the user dwelled on it). Mirrors marking a
+// thread's CC messages read — the canvas unread cue clears.
+export function handleMarkMapChecklistRead(body: {
+  map_id?: string;
+  node_id?: string;
+}): { ok: boolean; error?: string } {
+  const mapId = String(body?.map_id ?? "");
+  const nodeId = String(body?.node_id ?? "");
+  if (!selectMap.get(mapId)) return { ok: false, error: "map not found" };
+  if (!selectMapNode.get(mapId, nodeId)) {
+    return { ok: false, error: "map node not found" };
+  }
+  setMapChecklistRead.run(mapId, nodeId);
+  emit(mapId);
   return { ok: true };
 }
 
@@ -170,4 +197,5 @@ export const routes = {
   "/map-mark-checklist": handleMarkMapChecklist,
   "/map-record-decision": handleRecordMapDecision,
   "/map-update-decision": handleUpdateMapDecision,
+  "/map-checklist-read": handleMarkMapChecklistRead,
 };
