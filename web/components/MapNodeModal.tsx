@@ -39,7 +39,8 @@ export function MapNodeModal({
   nodeId: string;
   title: string;
   context: string;
-  kind: MapNodeKind;
+  // Absent for the map-wide general chat, which has no kind badge.
+  kind?: MapNodeKind | null;
   messages: ThreadItem[];
   ownerAlive: boolean;
   onClose: () => void;
@@ -149,9 +150,11 @@ export function MapNodeModal({
         </button>
         <div className="node-modal-header">
           <h2 className="node-modal-title">
-            <span className={`map-card-kind kind-${kind}`}>
-              {t(`map.kind.${kind}`)}
-            </span>
+            {kind && (
+              <span className={`map-card-kind kind-${kind}`}>
+                {t(`map.kind.${kind}`)}
+              </span>
+            )}
             {title || t("map.untitled")}
           </h2>
         </div>

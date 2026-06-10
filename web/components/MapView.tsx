@@ -25,7 +25,7 @@ import {
   applyEdgeChanges,
   reconnectEdge,
 } from "@xyflow/react";
-import { ChartNetwork, Lock, Unlock } from "lucide-react";
+import { ChartNetwork, Lock, Maximize2, Unlock } from "lucide-react";
 import { FloatingEdge, FloatingConnectionLine } from "./mapFloatingEdge.tsx";
 import type {
   Node as RFNode,
@@ -38,6 +38,7 @@ import { useTranslation } from "react-i18next";
 import type { MapView as MapViewData, ThreadItem } from "../../shared/types.ts";
 import { MAP_GENERAL_NODE } from "../../shared/types.ts";
 import { MapNode, MapContext, type MapCtx } from "./MapNode.tsx";
+import { MapNodeModal } from "./MapNodeModal.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
 import { ThreadMessage } from "./ThreadMessage.tsx";
@@ -592,6 +593,10 @@ function MapGeneralChat({
   const [uploading, setUploading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  // Whole-thread preview — the same affordance a node card has: opens the
+  // general chat in a MapNodeModal, optionally scrolled to one message.
+  const [expanded, setExpanded] = useState(false);
+  const [msgTarget, setMsgTarget] = useState<number | null>(null);
   // Auto-read the general chat's CC messages while the panel is on screen
   // (same visible-dwell as board cards; map messages are thread_items).
   useMarkReadOnVisible(bodyRef, thread);
@@ -639,7 +644,22 @@ function MapGeneralChat({
 
   return (
     <aside className="map-chat">
-      <div className="map-chat-head">{t("map.general_chat")}</div>
+      <div className="map-chat-head">
+        <span>{t("map.general_chat")}</span>
+        {/* Expand the whole general chat into a full preview modal (matches a
+            node card's expand button). */}
+        <button
+          type="button"
+          className="map-node-expand"
+          title={t("map.expand_node")}
+          onClick={() => {
+            setMsgTarget(null);
+            setExpanded(true);
+          }}
+        >
+          <Maximize2 size={14} strokeWidth={1.75} />
+        </button>
+      </div>
       <div className="map-chat-body" ref={bodyRef}>
         <p className="map-chat-note">{t("map.general_chat_note")}</p>
         {thread.map((it) => (
@@ -650,7 +670,10 @@ function MapGeneralChat({
             nodeId={MAP_GENERAL_NODE}
             sessionId={sessionId}
             enableAnchor={false}
-            onExpand={() => {}}
+            onExpand={(it) => {
+              setMsgTarget(it.id);
+              setExpanded(true);
+            }}
           />
         ))}
         <div ref={bottomRef} />
@@ -695,6 +718,21 @@ function MapGeneralChat({
           </button>
         </div>
       </div>
+      {expanded && (
+        <MapNodeModal
+          mapId={mapId}
+          nodeId={MAP_GENERAL_NODE}
+          title={t("map.general_chat")}
+          context=""
+          messages={thread}
+          ownerAlive={ownerAlive}
+          scrollToItemId={msgTarget}
+          onClose={() => {
+            setExpanded(false);
+            setMsgTarget(null);
+          }}
+        />
+      )}
     </aside>
   );
 }

@@ -4567,6 +4567,10 @@ button.secondary {
   min-height: 0;
 }
 .map-chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   flex: 0 0 auto;
   padding: 11px 13px;
   font-weight: 700;
@@ -4574,6 +4578,12 @@ button.secondary {
   border-bottom: 1px solid var(--border);
   background: var(--bg);
   color: var(--accent);
+}
+/* The whole-chat expand button flows in the header row here (on a node card the
+   same button is absolutely positioned inside the card title). */
+.map-chat-head .map-node-expand {
+  position: static;
+  flex: 0 0 auto;
 }
 .map-chat-body {
   flex: 1 1 auto;
