@@ -7,6 +7,7 @@ CLI is serial. The moment you have three things to figure out at once with Claud
 ## Key features
 
 - **Parallel decisions inside a single CC session.** Not multi-instance orchestration — just splits one Claude Code session's discussion into independent settle-able branches. Each board = one actionable feature / decision.
+- **Three surfaces: boards, maps, checklists.** A **board** is the converge-and-decide surface (a concern → item tree you settle one card at a time). A **map** is the diverge-and-explore surface that comes *before* a board (a free-form graph of cards you and Claude co-build spatially). A **checklist** is a node that tracks items with a status each (decisions, acceptance criteria, work steps) — Claude keeps it current. See [Concepts](#concepts) and [Using it](#using-it-the-standard-workflow).
 - **DB-backed context that doesn't evaporate.** Every board, node, status change, and message is persisted in SQLite. You can revisit a discussion from last week and Claude Code can re-read its own past reasoning, same as you do — the project becomes a permanent shared memory rather than a stream of CLI turns lost to scrollback.
 - **Mobile / off-device access via Tailscale Serve.** Open the same board UI from your phone on the train, answer a node, and the next CC turn picks up your reply on the desktop. The broker stays bound to localhost; Tailscale handles the network and auth.
 - **Live UI.** WebSocket pushes — node status changes, Claude's incoming replies, the working badge from the PreToolUse hook — repaint instantly across every open tab and device.
@@ -27,6 +28,21 @@ The data model is intentionally shallow. Two structural levels and that's it:
         - **Thread item** — one message in the item's conversation log. `source` is `user`, `cc`, or `system` (status-change auto-entries). Has a `read_at` so the unread dot in the sidebar can light up.
 
 The hierarchy is deliberately exactly 2 levels (concern → items): no sub-items. If a topic feels like it needs nesting, you split it into a separate concern, or split the whole thing into a new board. This keeps the UI readable at a glance and forces "1 decision per node" granularity.
+
+Two more surfaces sit alongside boards:
+
+- **Map** — a free-form *divergence* graph, for a topic that's still flying off in all directions (branches, cross-links, dead-ends, isolated thoughts). Where a board is a settled tree for a decision that's ready to be structured, a map is the exploration phase *before* that: nodes are cards you and Claude place and link spatially. You think out loud with Claude on the map, then graduate the settled parts into a board. You own layout (drag cards, draw links); Claude grows the content as you chat.
+- **Checklist** — a node (on a board *or* a map) that tracks a list of items, each with a status (`pending` / `in-progress` / `done` / `dropped`): settled decisions, acceptance criteria, the steps of a piece of work. It is **read-only in the browser** — Claude maintains the items as the conversation settles them. You don't tick boxes yourself; you talk it through and Claude keeps the list current.
+
+## Using it (the standard workflow)
+
+You don't build any of this by hand — there's no "new board" button in the UI. The standard workflow is to **ask Claude Code, in plain language, to set up the structure**, then do the thinking in the browser:
+
+- *"Spin up a board for the auth refactor — break it into the decisions we need to make."* → Claude creates a board with concerns + items; you answer / discuss each card independently in the browser, and your replies flow back into the CLI turn.
+- *"Let's map out the options for X."* → Claude creates a map you co-build by chatting; you drag the cards around and draw links, and ask Claude to add or connect nodes.
+- *"Track those as a checklist."* → Claude marks a checklist node and keeps it current as decisions land.
+
+Claude reads its own instructions and knows what discussion-tree can do — but it won't volunteer a tour, and it isn't responsible for teaching you the tool (it'll explain if you ask). So this is your half of the contract: knowing the three surfaces exist and asking for them. Everything you create is just the conversation made persistent, structured, and revisitable.
 
 ## Quick start
 
