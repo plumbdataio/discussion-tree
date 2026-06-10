@@ -129,7 +129,9 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
             `[data-thread-item-id="${tid}"]`,
           ) as HTMLElement | null;
           if (!el) return;
-          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          // Instant jump (no smooth animation) — a long thread made the smooth
+          // scroll take ~1s and feel like waiting. The highlight still marks it.
+          el.scrollIntoView({ behavior: "instant", block: "center" });
           el.classList.add("highlight-jump");
           setTimeout(() => {
             el.classList.remove("highlight-jump");

@@ -74,7 +74,9 @@ export function NodeModal({
       `[data-thread-item-id="${scrollToItemId}"]`,
     ) as HTMLElement | null;
     if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Instant jump (no smooth animation) — with a long thread the smooth
+    // scroll took ~1s and felt like waiting. The flash still marks the target.
+    el.scrollIntoView({ behavior: "instant", block: "center" });
     el.classList.add("thread-msg-flash");
     const tid = setTimeout(() => el.classList.remove("thread-msg-flash"), 1600);
     return () => clearTimeout(tid);
