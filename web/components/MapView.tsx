@@ -25,7 +25,7 @@ import {
   applyEdgeChanges,
   reconnectEdge,
 } from "@xyflow/react";
-import { ChartNetwork, Lock, Maximize2, Unlock } from "lucide-react";
+import { AlertTriangle, ChartNetwork, Lock, Maximize2, Unlock } from "lucide-react";
 import { FloatingEdge, FloatingConnectionLine } from "./mapFloatingEdge.tsx";
 import type {
   Node as RFNode,
@@ -226,9 +226,20 @@ export function MapView({ mapId }: { mapId: string }) {
         setWsConnected(false);
         if (!closed) retry = setTimeout(connect, 1500);
       };
-      ws.onmessage = () => {
-        // Any frame (map-update / thread-update) means refetch the snapshot.
+      ws.onmessage = (ev) => {
+        // Any frame (map-update / thread-update) means refetch the snapshot —
+        // that also refreshes the header's owner_stalled chip.
         fetchMap();
+        // A stall update also drives the sidebar's per-session warning, which
+        // (on a map page) only this socket can nudge.
+        try {
+          const msg = JSON.parse(ev.data as string);
+          if (msg?.type === "session-stall-update") {
+            window.dispatchEvent(new Event("pd-sidebar-refresh"));
+          }
+        } catch {
+          /* non-JSON frame — ignore */
+        }
       };
     };
     connect();
@@ -515,6 +526,15 @@ export function MapView({ mapId }: { mapId: string }) {
           {!ownerAlive && (
             <span className="owner-warning" title={t("header.owner_warning_title")}>
               {t("header.owner_warning")}
+            </span>
+          )}
+          {view.owner_stalled && (
+            <span
+              className="header-stall-warning"
+              title={t("header.stalled_title")}
+            >
+              <AlertTriangle size={15} strokeWidth={2.5} />
+              <span>{t("header.stalled")}</span>
             </span>
           )}
           <div className="header-right">

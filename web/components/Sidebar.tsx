@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  AlertTriangle,
   ChevronDown,
   ChevronRight,
   ChevronsLeft,
@@ -206,6 +207,15 @@ function SessionItem({
         <a className="session-name" href={"/session/" + s.id}>
           {s.name ?? <em className="unnamed">{s.id}</em>}
         </a>
+        {s.stalled && (
+          <span
+            className="session-stall-indicator"
+            title={t("sidebar.stalled_title")}
+            aria-label={t("sidebar.stalled_aria")}
+          >
+            <AlertTriangle size={15} strokeWidth={2.5} />
+          </span>
+        )}
         {activity && (
           <span
             className={`session-activity-indicator activity-${activity.state}`}

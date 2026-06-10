@@ -47,6 +47,20 @@ function safeAlter(sql: string) {
 safeAlter("ALTER TABLE sessions ADD COLUMN alive INTEGER NOT NULL DEFAULT 1");
 safeAlter("ALTER TABLE sessions ADD COLUMN cc_session_id TEXT");
 safeAlter("ALTER TABLE sessions ADD COLUMN name TEXT");
+// Set to an ISO timestamp when a turn ends with an API error (the StopFailure
+// hook fires) — i.e. Claude Code is stuck / stopped, not working. Surfaces a
+// prominent warning in the sidebar + header so the user doesn't have to watch
+// the CLI to notice a stall. Cleared the instant the session shows life again
+// (next tool use, normal Stop, or SessionStart re-attach).
+safeAlter("ALTER TABLE sessions ADD COLUMN stalled_at TEXT");
+export const setSessionStalledStmt = db.prepare(
+  "UPDATE sessions SET stalled_at = ? WHERE id = ?",
+);
+// AND stalled_at IS NOT NULL so `changes` is 0 when nothing was actually
+// cleared — lets callers skip a redundant broadcast.
+export const clearSessionStalledStmt = db.prepare(
+  "UPDATE sessions SET stalled_at = NULL WHERE id = ? AND stalled_at IS NOT NULL",
+);
 // Counter of user UI submissions that haven't been matched by a CC
 // post_to_node yet. Incremented when a user_input_relay is delivered to CC,
 // decremented when CC posts back into any node on a board owned by this

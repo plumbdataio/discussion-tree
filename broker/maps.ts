@@ -440,8 +440,12 @@ export function getMapView(mapId: string) {
   }
   const activity = activities.get(map.session_id) ?? null;
   const ownerRow = db
-    .prepare("SELECT alive, name FROM sessions WHERE id = ?")
-    .get(map.session_id) as { alive: number; name: string | null } | null;
+    .prepare("SELECT alive, name, stalled_at FROM sessions WHERE id = ?")
+    .get(map.session_id) as {
+    alive: number;
+    name: string | null;
+    stalled_at: string | null;
+  } | null;
   return {
     map,
     nodes,
@@ -449,6 +453,7 @@ export function getMapView(mapId: string) {
     threads,
     activity,
     owner_alive: ownerRow?.alive === 1,
+    owner_stalled: ownerRow?.alive === 1 && !!ownerRow?.stalled_at,
     owner_session_name: ownerRow?.name ?? null,
     owner_context_usage: getContextUsage(map.session_id),
     owner_bg_task_count: bgTaskCountForSession(map.session_id),

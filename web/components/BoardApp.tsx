@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Cog, Wand2 } from "lucide-react";
+import { AlertTriangle, Cog, Wand2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Activity, BoardView } from "../../shared/types.ts";
 import { ActivityBadge } from "./ActivityBadge.tsx";
@@ -220,6 +220,13 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           // refetch immediately when unread counts shift.
           window.dispatchEvent(new Event("pd-sidebar-refresh"));
           return;
+        } else if (msg.type === "session-stall-update") {
+          // A session stalled on an API error (StopFailure) or recovered.
+          // Refresh the sidebar (per-session warning icon) and the board
+          // (header owner_stalled chip). Rare event, so a full refetch is fine.
+          window.dispatchEvent(new Event("pd-sidebar-refresh"));
+          fetchBoard();
+          return;
         } else if (msg.type === "bg-tasks-update") {
           // BG marker rides on the same sidebar-poll pipe — nudge the
           // sidebar to refetch /api/sessions (carries bg_task_count).
@@ -411,6 +418,15 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
             title={t("header.owner_warning_title")}
           >
             {t("header.owner_warning")}
+          </span>
+        )}
+        {data.owner_stalled && (
+          <span
+            className="header-stall-warning"
+            title={t("header.stalled_title")}
+          >
+            <AlertTriangle size={15} strokeWidth={2.5} />
+            <span>{t("header.stalled")}</span>
           </span>
         )}
         {/* Working / activity badge sits at the right end of the LEFT

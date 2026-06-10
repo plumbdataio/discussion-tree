@@ -9,7 +9,11 @@
 //     can clear them.
 
 import type { Activity, SetActivityRequest } from "../shared/types.ts";
-import { db } from "./db.ts";
+import {
+  clearSessionStalledStmt,
+  db,
+  setSessionStalledStmt,
+} from "./db.ts";
 import { broadcastToAll } from "./ws.ts";
 
 export const activities = new Map<string, Activity>();
@@ -60,6 +64,34 @@ function lookupAliveSessionByCcId(ccSessionId: string): string | null {
   return session?.id ?? null;
 }
 
+// --- Stall (Claude Code stopped on an API error) ---------------------------
+// stalled_at lives on the sessions row; the sidebar / header read it via
+// /api/sessions + the board/map view. A "sidebar-refresh" broadcast nudges
+// every client to refetch so the warning appears (or clears) instantly.
+
+// The StopFailure hook fires when a turn ends with an API error (rate limit,
+// "retry also failed", auth, …). Message-agnostic by design: ANY error-stop
+// raises the SAME warning. Mark the owning session stalled.
+export function handleSessionStalled(body: {
+  cc_session_id?: string;
+}): { ok: boolean } {
+  if (!body.cc_session_id) return { ok: false };
+  const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
+  if (!sessionId) return { ok: false };
+  setSessionStalledStmt.run(new Date().toISOString(), sessionId);
+  broadcastToAll({ type: "session-stall-update" });
+  return { ok: true };
+}
+
+// Clear the stall the moment a session shows life again — called from the
+// tool heartbeat (PreToolUse), the tool-activity clear (normal Stop), and
+// the SessionStart re-attach. Broadcasts only when something actually
+// changed (the prepared statement's WHERE guards that).
+export function clearStall(sessionId: string): void {
+  const res = clearSessionStalledStmt.run(sessionId);
+  if (res.changes > 0) broadcastToAll({ type: "session-stall-update" });
+}
+
 export function handleSetActivity(body: SetActivityRequest) {
   const sessionId = body.session_id;
   if (!body.state) {
@@ -87,6 +119,8 @@ export function handleHeartbeatTool(body: {
   if (!body.cc_session_id) return { ok: false };
   const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
   if (!sessionId) return { ok: false };
+  // A tool firing means the session is alive again — clear any stall warning.
+  clearStall(sessionId);
   // Don't stomp an explicit non-working state (e.g. "blocked" set by the
   // AskUserQuestion / ExitPlanMode hook). PreToolUse hooks fire in
   // unspecified order — if heartbeat ran AFTER the blocked-on-user hook,
@@ -135,6 +169,10 @@ export function handleClearToolActivity(body: { cc_session_id?: string }): {
   if (!body.cc_session_id) return { ok: false };
   const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
   if (!sessionId) return { ok: false };
+  // A normal turn end (Stop hook) means the session recovered — clear any
+  // stall. (On an API-error stop the StopFailure hook fires instead of Stop,
+  // so this only runs on a clean finish.)
+  clearStall(sessionId);
   toolHeartbeats.delete(sessionId);
   // Only clear the hook-managed "working" state. Explicit set_activity
   // entries (e.g. "blocked") are preserved.
@@ -350,6 +388,7 @@ export const routes = {
   "/set-activity": handleSetActivity,
   "/heartbeat-tool": handleHeartbeatTool,
   "/clear-tool-activity": handleClearToolActivity,
+  "/session-stalled": handleSessionStalled,
   "/clear-activities-for-sessions": handleClearActivitiesForSessions,
   "/blocked-on-user-start": handleBlockedOnUserStart,
   "/blocked-on-user-clear": handleBlockedOnUserClear,

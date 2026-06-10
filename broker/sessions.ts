@@ -7,6 +7,7 @@
 import {
   activities,
   bgTaskCountForSession,
+  clearStall,
   scheduledSendAtForSession,
 } from "./activity.ts";
 import { getContextUsage } from "./context-usage.ts";
@@ -61,6 +62,9 @@ export function handleAttachCCSession(body: any) {
     ccId,
     sessionId,
   ]);
+  // A fresh SessionStart / re-attach means Claude Code is back — clear any
+  // stall warning left over from an API-error stop in the previous run.
+  clearStall(sessionId);
 
   const reclaimed = {
     boards: 0,
@@ -236,6 +240,7 @@ export function handleListSessions() {
     name: string | null;
     alive: number;
     cc_session_id: string | null;
+    stalled_at: string | null;
   };
 
   // Hide alive husks: a bare registration (a CC whose SessionStart hook
@@ -245,7 +250,7 @@ export function handleListSessions() {
   // the default board, so any genuinely-in-use session qualifies immediately).
   const aliveSessions = db
     .prepare(
-      `SELECT id, pid, cwd, name, alive, cc_session_id
+      `SELECT id, pid, cwd, name, alive, cc_session_id, stalled_at
        FROM sessions
        WHERE alive = 1
          AND (
@@ -272,7 +277,7 @@ export function handleListSessions() {
   // alive=0.
   const inactiveSessions = db
     .prepare(
-      `SELECT id, pid, cwd, name, alive, cc_session_id
+      `SELECT id, pid, cwd, name, alive, cc_session_id, stalled_at
        FROM sessions
        WHERE alive = 0
          AND (
@@ -424,6 +429,8 @@ export function handleListSessions() {
       cwd: s.cwd,
       alive: s.alive,
       cc_session_id: s.cc_session_id,
+      // A dead session can't be "stalled" — only flag alive ones.
+      stalled: s.alive === 1 && !!s.stalled_at,
       activity,
       context_usage,
       bg_task_count: bgTaskCountForSession(s.id),

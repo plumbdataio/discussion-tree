@@ -232,6 +232,8 @@ export interface MapView {
   threads: Record<string, ThreadItem[]>;
   activity?: Activity | null;
   owner_alive?: boolean;
+  // Owning CC stopped on an API error — drives the header stall warning.
+  owner_stalled?: boolean;
   owner_session_name?: string | null;
   owner_context_usage?: { remaining_pct: number; set_at: string } | null;
   owner_bg_task_count?: number;
@@ -447,6 +449,10 @@ export interface SessionListItem {
   cwd: string;
   alive: number;
   cc_session_id: string | null;
+  // True when Claude Code stopped on an API error (the StopFailure hook fired)
+  // and hasn't shown life since. The sidebar renders a prominent warning icon
+  // so the user notices the stall without watching the CLI.
+  stalled?: boolean;
   // Live in-memory activity entry (working / blocked / etc) if the broker
   // currently has one for this session. Sidebar uses this to show the
   // per-session activity indicator so the user can see at a glance which
@@ -485,6 +491,8 @@ export interface BoardView {
   threads: Record<string, ThreadItem[]>;
   activity?: Activity | null;
   owner_alive?: boolean;
+  // Owning CC stopped on an API error — drives the header stall warning.
+  owner_stalled?: boolean;
   // null when the owning session has no human-set name yet — the frontend
   // falls back to the session id in that case (or just omits the segment).
   owner_session_name?: string | null;

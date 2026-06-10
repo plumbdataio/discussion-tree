@@ -1775,6 +1775,45 @@ a.session-name:hover {
   cursor: help;
 }
 
+/* Stall warning — Claude Code stopped on an API error (StopFailure hook).
+   Deliberately loud (red fill + a slow blink) so the user notices the stall
+   in the header without having to watch the CLI. */
+.header-stall-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  padding: 4px 10px;
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #f87171;
+  border-radius: 999px;
+  font-weight: 800;
+  cursor: help;
+  animation: activity-badge-blink 1.6s ease-in-out infinite;
+}
+.header-stall-warning svg {
+  flex: 0 0 auto;
+}
+:root[data-theme="dark"] .header-stall-warning {
+  background: #450a0a;
+  color: #fca5a5;
+  border-color: #b91c1c;
+}
+/* Sidebar per-session stall icon — same alarm colour, blinks to draw the eye. */
+.session-stall-indicator {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+  color: #e11d48;
+  cursor: help;
+  flex: 0 0 auto;
+  animation: activity-badge-blink 1.6s ease-in-out infinite;
+}
+.session-stall-indicator svg {
+  flex: 0 0 auto;
+}
+
 /* Subtle "closed" badge for closed boards. The board-meta line that
    used to host this was removed; we surface only the closed state now
    because the rest (id, concern count) is derivable. */

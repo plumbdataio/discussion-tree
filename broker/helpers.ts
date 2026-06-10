@@ -173,9 +173,15 @@ export function getBoardView(boardId: string) {
   }
   const activity = activities.get(board.session_id) ?? null;
   const ownerRow = db
-    .prepare("SELECT alive, name FROM sessions WHERE id = ?")
-    .get(board.session_id) as { alive: number; name: string | null } | null;
+    .prepare("SELECT alive, name, stalled_at FROM sessions WHERE id = ?")
+    .get(board.session_id) as {
+    alive: number;
+    name: string | null;
+    stalled_at: string | null;
+  } | null;
   const owner_alive = ownerRow?.alive === 1;
+  // The owning CC stopped on an API error — surfaces a header warning.
+  const owner_stalled = owner_alive && !!ownerRow?.stalled_at;
   // Exposed so the frontend can update document.title to a meaningful
   // string like "discussion-tree / <session> / <board>" — that's what
   // Clockify's auto-tracker (and other browser-based time trackers) pick
@@ -192,6 +198,7 @@ export function getBoardView(boardId: string) {
     threads: threadsByNode,
     activity,
     owner_alive,
+    owner_stalled,
     owner_session_name,
     owner_context_usage,
     owner_bg_task_count,
