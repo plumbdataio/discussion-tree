@@ -26,6 +26,7 @@ import { postSubmitAnswer } from "../utils/api.ts";
 import { readBoardCache, writeBoardCache } from "../utils/boardCache.ts";
 import { translateError } from "../utils/errors.ts";
 import { buildTree } from "../utils/tree.ts";
+import { useDocumentTitle } from "../utils/useDocumentTitle.ts";
 
 // boardId is passed as a prop (not read from the URL internally) so this
 // component does NOT need a `key` to re-mount on navigation. All data
@@ -140,23 +141,17 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     return subscribePendingJump(tryConsume);
   }, [boardId, data]);
 
-  // Keep document.title in sync with the loaded board so external trackers
-  // (Clockify auto-tracker, browser tab strip, history) get something more
-  // useful than the literal "discussion-tree". Resets on unmount so the
-  // next page (session dashboard / root) can write its own.
-  useEffect(() => {
-    if (!data) return;
-    const owner = data.owner_session_name ?? "";
-    const boardTitle = data.board.is_default
-      ? t("default_board.title")
-      : data.board.title;
-    document.title = owner
-      ? `discussion-tree / ${owner} / ${boardTitle}`
-      : `discussion-tree / ${boardTitle}`;
-    return () => {
-      document.title = "discussion-tree";
-    };
-  }, [data, t]);
+  // Browser-tab breadcrumb title so external trackers (Clockify auto-tracker,
+  // tab strip, history) get something more useful than the bare app name.
+  // Shared hook — same format on every page.
+  useDocumentTitle([
+    data?.owner_session_name,
+    data
+      ? data.board.is_default
+        ? t("default_board.title")
+        : data.board.title
+      : undefined,
+  ]);
 
   useEffect(() => {
     if (!boardId) return;

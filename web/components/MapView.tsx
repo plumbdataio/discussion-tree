@@ -43,6 +43,7 @@ import { ContextMeter } from "./ContextMeter.tsx";
 import { ThreadMessage } from "./ThreadMessage.tsx";
 import { useDraft } from "../utils/drafts.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
+import { useDocumentTitle } from "../utils/useDocumentTitle.ts";
 import {
   extractImageFiles,
   postMapChat,
@@ -185,22 +186,11 @@ export function MapView({ mapId }: { mapId: string }) {
     }
   }, [mapId, applySnapshot]);
 
-  // Keep the browser-tab title in sync with the open map (breadcrumb style),
-  // exactly like BoardApp / SessionDashboard do. Maps were missing this, so
-  // opening a map left document.title stuck at the bare "discussion-tree"
-  // (and external trackers / the tab strip showed nothing page-specific).
-  // Resets on unmount so the next page writes its own.
-  useEffect(() => {
-    if (!view) return;
-    const owner = view.owner_session_name ?? "";
-    const title = view.map.title || t("map.untitled");
-    document.title = owner
-      ? `discussion-tree / ${owner} / ${title}`
-      : `discussion-tree / ${title}`;
-    return () => {
-      document.title = "discussion-tree";
-    };
-  }, [view, t]);
+  // Browser-tab breadcrumb title (shared hook — same format on every page).
+  useDocumentTitle([
+    view?.owner_session_name,
+    view ? view.map.title || t("map.untitled") : undefined,
+  ]);
 
   // Initial load + WS subscription (refetch on any map / thread update).
   useEffect(() => {

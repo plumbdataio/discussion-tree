@@ -11,6 +11,7 @@ import { ContextMeter } from "./ContextMeter.tsx";
 import { EditableSessionName } from "./EditableSessionName.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { normalizeBoardStatus } from "../utils/constants.ts";
+import { useDocumentTitle } from "../utils/useDocumentTitle.ts";
 
 export function SessionDashboard({ sessionId }: { sessionId: string }) {
   const { t } = useTranslation();
@@ -31,17 +32,9 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
       .catch((e) => setError(String(e)));
   }, [sessionId, refreshKey, t]);
 
-  // Browser-tab + auto-tracker friendly title. See BoardApp for the same
-  // pattern; root dashboard keeps the bare "discussion-tree".
-  useEffect(() => {
-    if (!data) return;
-    document.title = data.name
-      ? `discussion-tree / ${data.name}`
-      : "discussion-tree";
-    return () => {
-      document.title = "discussion-tree";
-    };
-  }, [data?.name]);
+  // Browser-tab + auto-tracker friendly title (shared hook). The root
+  // dashboard, which has no session, keeps the bare "discussion-tree".
+  useDocumentTitle([data?.name]);
 
   const handleArchive = async (boardId: string, title: string) => {
     if (!confirm(t("session_dashboard.archive_confirm", { title }))) return;
