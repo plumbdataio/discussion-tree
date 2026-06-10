@@ -135,6 +135,17 @@ describe("decision checklist (record / update / mark)", () => {
     expect(r.json.ok).toBe(false);
     expect(r.json.error).toContain("invalid status");
   });
+
+  test("post_to_node is rejected on a checklist node (post would be invisible)", async () => {
+    // n1 was flagged is_checklist=1 earlier in this block. A reply here would
+    // render nowhere (ChecklistCard shows only items) yet bump the unread dot.
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/post-to-node`,
+      { board_id: boardId, node_id: "n1", message: "hi" },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toContain("checklist");
+  });
 });
 
 describe("settled injection (checklist boards roll up)", () => {

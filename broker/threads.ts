@@ -53,8 +53,10 @@ export function handlePostToNode(body: any) {
   // unreachable through the UI, and it would inflate the sidebar's unread
   // dot on a board the user can't possibly clear. Reject early.
   const target = db
-    .prepare("SELECT kind FROM nodes WHERE board_id = ? AND id = ?")
-    .get(body.board_id, body.node_id) as { kind: string } | null;
+    .prepare("SELECT kind, is_checklist FROM nodes WHERE board_id = ? AND id = ?")
+    .get(body.board_id, body.node_id) as
+    | { kind: string; is_checklist: number }
+    | null;
   if (!target) {
     return { ok: false, error: "node not found" };
   }
@@ -63,6 +65,18 @@ export function handlePostToNode(body: any) {
       ok: false,
       error:
         "post_to_node target must be an item — concerns are category headers and don't render threads in the UI. Pick a child item, or add one with add_item.",
+    };
+  }
+  // Same posture as concerns: a checklist node renders ONLY its checklist
+  // items (no thread), so a post here would be invisible in the UI yet still
+  // inflate the unread dot the user can never clear — and the CC would look
+  // like it "sent a message and got no reply". Reject early. (Record decisions
+  // with record_decision; converse on a different, normal node.)
+  if (target.is_checklist) {
+    return {
+      ok: false,
+      error:
+        "post_to_node target is a checklist node — it shows only its checklist items, not a thread, so a reply here would be invisible to the user. Post to a different node instead; to add a checklist line use record_decision.",
     };
   }
 
