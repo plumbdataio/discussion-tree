@@ -82,13 +82,19 @@ export function postMapDeleteNode(mapId: string, nodeId: string) {
   });
 }
 
-// Mark a checklist map node read (the user dwelled on it) — clears its
-// node-level unread cue, mirroring marking a thread's CC messages read.
-export function postMapChecklistRead(mapId: string, nodeId: string) {
+// Mark a checklist map node read (the user dwelled on it / opened it) — clears
+// its node-level unread cue, mirroring marking a thread's CC messages read.
+// `version` is the checklist version the client observed: the broker advances
+// read state only up to it, so a change that arrived after render stays unread.
+export function postMapChecklistRead(
+  mapId: string,
+  nodeId: string,
+  version: number,
+) {
   return fetch("/map-checklist-read", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ map_id: mapId, node_id: nodeId }),
+    body: JSON.stringify({ map_id: mapId, node_id: nodeId, version }),
   });
 }
 

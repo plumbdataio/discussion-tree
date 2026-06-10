@@ -212,6 +212,10 @@ export interface MapNode {
   // viewed the node (node-level unread, the checklist analogue of an unread
   // thread message). Drives the canvas unread cue + the sidebar map badge.
   checklist_unread?: boolean;
+  // Monotonic change counter (bumped on create / item add / item update). The
+  // client echoes the version it observed back when marking read, so a change
+  // that arrives after render isn't marked read unseen.
+  checklist_version?: number;
 }
 
 export interface MapEdge {

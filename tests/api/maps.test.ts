@@ -766,6 +766,37 @@ describe("maps — checklist nodes", () => {
     expect((await nodeInView(mapId, nodeId)).checklist_unread).toBe(true);
   });
 
+  test("read only clears up to the version the client observed", async () => {
+    const mapId = await createMap("cl version map");
+    const nodeId = await addNode(mapId, { title: "x" });
+    await post(`${broker.url}/map-mark-checklist`, {
+      map_id: mapId,
+      node_id: nodeId,
+    });
+    const v1 = (await nodeInView(mapId, nodeId)).checklist_version as number;
+    // A change lands AFTER the client rendered v1 (bumps to v2).
+    await post(`${broker.url}/map-record-decision`, {
+      map_id: mapId,
+      node_id: nodeId,
+      summary: "late change",
+    });
+    // Client marks read with the STALE observed version → still unread.
+    await post(`${broker.url}/map-checklist-read`, {
+      map_id: mapId,
+      node_id: nodeId,
+      version: v1,
+    });
+    expect((await nodeInView(mapId, nodeId)).checklist_unread).toBe(true);
+    // Marking read at the current version clears it.
+    const cur = (await nodeInView(mapId, nodeId)).checklist_version as number;
+    await post(`${broker.url}/map-checklist-read`, {
+      map_id: mapId,
+      node_id: nodeId,
+      version: cur,
+    });
+    expect((await nodeInView(mapId, nodeId)).checklist_unread).toBe(false);
+  });
+
   test("checklist unread counts toward the sidebar map badge", async () => {
     const mapId = await createMap("cl badge map");
     const nodeId = await addNode(mapId, { title: "list" });

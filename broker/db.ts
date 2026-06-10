@@ -339,8 +339,12 @@ export const setMapNodeChecklist = db.prepare(
 export const bumpMapChecklistVersion = db.prepare(
   `UPDATE map_nodes SET checklist_version = checklist_version + 1 WHERE map_id = ? AND id = ?`,
 );
+// Advance read_version only to the version the CLIENT actually observed (never
+// past it — a change that landed after the client rendered stays unread — and
+// never backwards). The caller passes the observed version twice.
 export const setMapChecklistRead = db.prepare(
-  `UPDATE map_nodes SET checklist_read_version = checklist_version WHERE map_id = ? AND id = ?`,
+  `UPDATE map_nodes SET checklist_read_version = ?
+     WHERE map_id = ? AND id = ? AND checklist_read_version < ?`,
 );
 // Directed edges. Both the human (drawing in the UI) and the AI (connect tool)
 // create these; delete is logical so an edge whose endpoint node was logically

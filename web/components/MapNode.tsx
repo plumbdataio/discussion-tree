@@ -76,6 +76,8 @@ export interface MapNodeData {
   checklist_items?: ChecklistItem[];
   // Node-level unread for a checklist (changed since the user last viewed it).
   checklist_unread?: boolean;
+  // Monotonic version the client echoes back when marking read.
+  checklist_version?: number;
 }
 
 
@@ -239,13 +241,21 @@ function MapNodeImpl(props: NodeProps) {
   // Checklist nodes have no thread, so the same visible-dwell rule (zoom-gated)
   // marks the node-level checklist read instead — identical behaviour via the
   // shared useVisibleDwell hook.
+  // Dep is the VERSION (not just the unread boolean), so every checklist change
+  // re-arms the dwell timer — otherwise a change arriving near the end of an
+  // existing dwell would be marked read almost immediately. We echo the
+  // observed version back so the broker only clears up to what was rendered.
+  const checklistVersion = data.checklist_version ?? 0;
   useVisibleDwell(
     cardRef,
     isChecklist && !!data.checklist_unread,
     zoomGateOpen,
-    `cl:${data.checklist_unread ? 1 : 0}`,
+    `cl:${checklistVersion}`,
     () => {
-      if (ctx) postMapChecklistRead(ctx.mapId, props.id).catch(() => {});
+      if (ctx)
+        postMapChecklistRead(ctx.mapId, props.id, checklistVersion).catch(
+          () => {},
+        );
     },
   );
 
@@ -319,6 +329,14 @@ function MapNodeImpl(props: NodeProps) {
           onClick={() => {
             if (isChecklist) {
               setChecklistExpanded(true);
+              // Opening the preview is a deliberate read — clear the unread cue
+              // even when auto-read (dwell) is disabled, so a checklist is never
+              // permanently stuck unread.
+              if (ctx && data.checklist_unread) {
+                postMapChecklistRead(ctx.mapId, props.id, checklistVersion).catch(
+                  () => {},
+                );
+              }
             } else {
               setMsgTarget(null);
               setNodeExpanded(true);

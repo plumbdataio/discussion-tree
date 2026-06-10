@@ -181,14 +181,23 @@ export function handleUpdateMapDecision(body: {
 export function handleMarkMapChecklistRead(body: {
   map_id?: string;
   node_id?: string;
+  version?: number;
 }): { ok: boolean; error?: string } {
   const mapId = String(body?.map_id ?? "");
   const nodeId = String(body?.node_id ?? "");
   if (!selectMap.get(mapId)) return { ok: false, error: "map not found" };
-  if (!selectMapNode.get(mapId, nodeId)) {
-    return { ok: false, error: "map node not found" };
-  }
-  setMapChecklistRead.run(mapId, nodeId);
+  const node = selectMapNode.get(mapId, nodeId) as
+    | { checklist_version: number }
+    | undefined;
+  if (!node) return { ok: false, error: "map node not found" };
+  // Only mark read up to the version the client actually saw — a change that
+  // landed after it rendered must stay unread. Fall back to the current
+  // version if the client didn't say (older callers).
+  const observed =
+    typeof body.version === "number"
+      ? body.version
+      : (node.checklist_version ?? 0);
+  setMapChecklistRead.run(observed, mapId, nodeId, observed);
   emit(mapId);
   return { ok: true };
 }
