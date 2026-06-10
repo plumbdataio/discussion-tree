@@ -59,6 +59,12 @@ function normKind(k: unknown): string {
   return KINDS.has(s) ? s : "idea";
 }
 
+// A checklist map node renders its items, not a thread — so a message posted
+// there would be invisible to the user. Reject the post (mirrors the board
+// checklist guard in threads.ts).
+const CHECKLIST_POST_REJECT =
+  "map node is a checklist node — it renders its checklist items, not a thread, so a message posted here would be invisible. Post to a different node, or add a checklist line with record_map_decision.";
+
 // Notify every browser subscribed to this map's WS channel (/ws/<map_id>).
 // A map_id never collides with a board_id, so the fan-out is naturally scoped.
 function emit(mapId: string) {
@@ -305,11 +311,10 @@ export function handlePostToMapNode(body: any) {
   const nodeId = String(body?.node_id ?? MAP_GENERAL_NODE);
   const message = String(body?.message ?? "");
   if (!selectMap.get(mapId)) return { ok: false, error: "map not found" };
-  if (
-    nodeId !== MAP_GENERAL_NODE &&
-    !selectMapNode.get(mapId, nodeId)
-  ) {
-    return { ok: false, error: "map node not found" };
+  if (nodeId !== MAP_GENERAL_NODE) {
+    const node = selectMapNode.get(mapId, nodeId) as MapNode | undefined;
+    if (!node) return { ok: false, error: "map node not found" };
+    if (node.is_checklist) return { ok: false, error: CHECKLIST_POST_REJECT };
   }
   if (!message.trim()) return { ok: false, error: "message required" };
   const inserted = insertThread.run(
@@ -349,8 +354,14 @@ export async function handleMapChat(body: any): Promise<
   }
   const nodeId = body?.node_id ? String(body.node_id) : MAP_GENERAL_NODE;
   // A real node id must exist; the general chat is always valid.
-  if (nodeId !== MAP_GENERAL_NODE && !selectMapNode.get(mapId, nodeId)) {
-    return { ok: false, error: "map node not found", reason: "no_recipient" };
+  if (nodeId !== MAP_GENERAL_NODE) {
+    const node = selectMapNode.get(mapId, nodeId) as MapNode | undefined;
+    if (!node) {
+      return { ok: false, error: "map node not found", reason: "no_recipient" };
+    }
+    if (node.is_checklist) {
+      return { ok: false, error: CHECKLIST_POST_REJECT, reason: "no_recipient" };
+    }
   }
   const nodeTitle =
     nodeId === MAP_GENERAL_NODE
@@ -596,9 +607,16 @@ export function handleApplyMapOps(body: any) {
       } else if (op === "post") {
         const nodeId = String(o.node_id ?? MAP_GENERAL_NODE);
         const msg = String(o.message ?? "");
-        if (nodeId !== MAP_GENERAL_NODE && !selectMapNode.get(mapId, nodeId)) {
-          results.push({ op, ok: false, node_id: nodeId, error: "node not found" });
-          continue;
+        if (nodeId !== MAP_GENERAL_NODE) {
+          const node = selectMapNode.get(mapId, nodeId) as MapNode | undefined;
+          if (!node) {
+            results.push({ op, ok: false, node_id: nodeId, error: "node not found" });
+            continue;
+          }
+          if (node.is_checklist) {
+            results.push({ op, ok: false, node_id: nodeId, error: CHECKLIST_POST_REJECT });
+            continue;
+          }
         }
         if (!msg.trim()) {
           results.push({ op, ok: false, error: "message required" });

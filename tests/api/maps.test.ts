@@ -704,6 +704,29 @@ describe("maps — checklist nodes", () => {
     expect(good.json.ok).toBe(true);
   });
 
+  test("posting to a checklist map node is rejected (would be invisible)", async () => {
+    const mapId = await createMap("cl post-reject map");
+    const nodeId = await addNode(mapId, { title: "list" });
+    await post(`${broker.url}/map-mark-checklist`, {
+      map_id: mapId,
+      node_id: nodeId,
+    });
+    // direct post
+    const direct = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/map-post`,
+      { map_id: mapId, node_id: nodeId, message: "hi" },
+    );
+    expect(direct.json.ok).toBe(false);
+    expect(direct.json.error).toMatch(/checklist node/);
+    // batch post op
+    const batch = await post<{ results: any[] }>(
+      `${broker.url}/map-apply-ops`,
+      { map_id: mapId, ops: [{ op: "post", node_id: nodeId, message: "hi" }] },
+    );
+    expect(batch.json.results[0].ok).toBe(false);
+    expect(batch.json.results[0].error).toMatch(/checklist node/);
+  });
+
   test("unflagging a checklist node drops the checklist surface", async () => {
     const mapId = await createMap("cl unflag map");
     const nodeId = await addNode(mapId, { title: "toggle" });
