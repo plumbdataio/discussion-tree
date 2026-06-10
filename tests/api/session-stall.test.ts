@@ -26,13 +26,23 @@ afterAll(async () => {
   await broker.kill();
 });
 
-async function isStalled(sid: string): Promise<boolean> {
+async function sessionItem(
+  sid: string,
+): Promise<{ stalled?: boolean; activity?: { state: string } | null } | undefined> {
   const res = await get<{
-    sessions: { id: string; stalled?: boolean }[];
+    sessions: {
+      id: string;
+      stalled?: boolean;
+      activity?: { state: string } | null;
+    }[];
     inactive_sessions?: { id: string; stalled?: boolean }[];
   }>(`${broker.url}/api/sessions`);
   const all = [...res.json.sessions, ...(res.json.inactive_sessions ?? [])];
-  return all.find((s) => s.id === sid)?.stalled ?? false;
+  return all.find((s) => s.id === sid);
+}
+
+async function isStalled(sid: string): Promise<boolean> {
+  return (await sessionItem(sid))?.stalled ?? false;
 }
 
 async function stall() {
@@ -74,6 +84,23 @@ describe("session stall (StopFailure → UI warning)", () => {
       cc_session_id: ccId,
     });
     expect(await isStalled(sessionId)).toBe(false);
+  });
+
+  test("stalling clears a leftover 'working' badge (StopFailure ≠ Stop)", async () => {
+    // A tool heartbeat marks the session working. StopFailure fires INSTEAD of
+    // Stop, so without an explicit clear the badge would spin next to the
+    // stall warning forever.
+    await post(`${broker.url}/heartbeat-tool`, {
+      cc_session_id: ccId,
+      tool: "Bash",
+    });
+    expect((await sessionItem(sessionId))?.activity?.state).toBe("working");
+    await stall();
+    const after = await sessionItem(sessionId);
+    expect(after?.stalled).toBe(true);
+    expect(after?.activity?.state).not.toBe("working");
+    // reset for later tests
+    await post(`${broker.url}/clear-tool-activity`, { cc_session_id: ccId });
   });
 
   test("/session-stalled is a no-op for an unknown cc_session_id", async () => {

@@ -79,6 +79,17 @@ export function handleSessionStalled(body: {
   const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
   if (!sessionId) return { ok: false };
   setSessionStalledStmt.run(new Date().toISOString(), sessionId);
+  // A stalled session is NOT working. StopFailure fires instead of Stop, so the
+  // normal clear path (handleClearToolActivity) never runs and the last
+  // PreToolUse heartbeat would leave a "working" badge spinning next to the
+  // stall warning. Clear the hook-managed working state here (but leave an
+  // explicit LLM-set state like "blocked" alone, same posture as the Stop hook).
+  toolHeartbeats.delete(sessionId);
+  const cur = activities.get(sessionId);
+  if (cur && cur.state === "working") {
+    activities.delete(sessionId);
+    broadcastActivity(sessionId, null);
+  }
   broadcastToAll({ type: "session-stall-update" });
   return { ok: true };
 }
