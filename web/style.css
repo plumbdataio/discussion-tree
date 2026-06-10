@@ -2536,23 +2536,18 @@ body.concern-resizing * {
   border-radius: 4px;
 }
 
-/* Default board (general) gets long fast — hundreds of thread items
-   on a single tall thread. content-visibility: auto lets the browser
-   skip paint + layout for off-screen messages without removing them
-   from the DOM (so Cmd+F search still finds them); contain-intrinsic-
-   size gives the browser a height estimate while a row is skipped.
-
-   This is SAFE to combine with column-reverse ONLY because
-   .default-board-thread sets overflow-anchor: none. With the default
-   scroll anchoring on, content-visibility's estimated→real height
-   swaps for rows entering/leaving the viewport would be "corrected"
-   into the scroll position and the view would jump; with anchoring
-   off, scrollTop's numeric value is preserved, so the height churn
-   stays purely off-screen and never moves the user. */
-.default-board-thread .thread-msg {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 100px;
-}
+/* NOTE: content-visibility:auto was tried here as a perf win for very long
+   default-board threads (skip paint/layout for off-screen rows), with
+   contain-intrinsic-size giving a height estimate. It read as "safe" under
+   column-reverse + overflow-anchor:none on the assumption that the
+   estimated→real height swap stays off-screen — but it does NOT: when the
+   user scrolls UP to read history, each previously-skipped row swaps its
+   100px estimate for its REAL height exactly as it crosses INTO the viewport,
+   shoving the content under the user's eyes ("scroll fights back" — reported
+   2026-06-10, very visible once the thread is huge). Removed: a smooth read
+   of the backlog beats the off-screen paint savings here. If a future thread
+   gets pathologically long, virtualize properly (windowing) rather than
+   re-introducing this. */
 
 /* Per-board node-status filter — small trigger chip in the board
    header that opens a popover with one checkbox per NodeStatus.
