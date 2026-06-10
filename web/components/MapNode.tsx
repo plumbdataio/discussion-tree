@@ -283,7 +283,9 @@ function MapNodeImpl(props: NodeProps) {
       ref={cardRef}
       className={`map-card kind-${isChecklist ? "checklist" : kind}${
         hasUnread ? " has-unread" : ""
-      }${isChecklist ? " map-card-is-checklist" : ""}`}
+      }${isChecklist ? " map-card-is-checklist" : ""}${
+        ctx?.locked ? " locked" : ""
+      }`}
     >
       <NodeResizer
         minWidth={240}

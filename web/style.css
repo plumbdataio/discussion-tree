@@ -4523,6 +4523,16 @@ button.secondary {
 .map-card-drag-handle:active {
   cursor: grabbing;
 }
+/* When the canvas is locked the node can't be dragged, so the handle (and the
+   title bar) give no drag affordance — no grab cursor, no hover highlight. */
+.map-card.locked .map-card-title,
+.map-card.locked .map-card-drag-handle {
+  cursor: default;
+}
+.map-card.locked .map-card-drag-handle:hover {
+  opacity: 0.45;
+  background: transparent;
+}
 .map-card-drag-handle svg {
   flex: 0 0 auto;
   width: 15px;
