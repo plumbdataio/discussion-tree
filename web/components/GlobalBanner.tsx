@@ -12,6 +12,16 @@ import type { GlobalBanner as GlobalBannerData } from "../../shared/types.ts";
 // other tabs / devices still see it until the broker-side
 // expires_at fires or someone calls /clear-global-banner.
 
+// Broadcast types that change something the sidebar renders. GlobalBanner is
+// the only socket mounted on every page, so it forwards these to the sidebar
+// (BoardApp handles them too, but only on a board page).
+const SIDEBAR_REFRESH_TYPES = new Set([
+  "session-stall-update",
+  "sidebar-refresh",
+  "bg-tasks-update",
+  "schedule-marker-update",
+]);
+
 export function GlobalBanner() {
   const [banner, setBanner] = useState<GlobalBannerData | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(null);
@@ -44,15 +54,14 @@ export function GlobalBanner() {
         const msg = JSON.parse(e.data);
         if (msg?.type === "global-banner-update") {
           setBanner(msg.banner ?? null);
-        } else if (
-          msg?.type === "session-stall-update" ||
-          msg?.type === "sidebar-refresh"
-        ) {
+        } else if (SIDEBAR_REFRESH_TYPES.has(msg?.type)) {
           // GlobalBanner is mounted on EVERY page, so it's the only socket that
           // can nudge the sidebar on the map / session / home pages (BoardApp
-          // forwards sidebar-refresh only on a board page). Covers stall
-          // warnings, rename, unread shifts, BG markers, schedule markers. On a
-          // board page this just double-fires a harmless, idempotent refetch.
+          // forwards these only on a board page). Each of these message types
+          // changes something the sidebar shows — stall warning, board/map
+          // title (rename → sidebar-refresh), unread counts, BG markers,
+          // schedule markers — so refetch /api/sessions. On a board page this
+          // just double-fires a harmless, idempotent refetch.
           window.dispatchEvent(new Event("pd-sidebar-refresh"));
         }
       } catch {
