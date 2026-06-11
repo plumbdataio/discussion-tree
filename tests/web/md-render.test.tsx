@@ -1,0 +1,63 @@
+import { describe, test, expect } from "bun:test";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createElement } from "react";
+import { MDView } from "../../web/components/MDView.tsx";
+
+// MDView renders message markdown via react-markdown. Two dt-specific behaviours
+// are pinned here:
+//  1. CJK **bold** rescue (remarkCjkStrong): CommonMark's flanking rules drop a
+//     bold span whose content is edged by Japanese punctuation, leaving literal
+//     asterisks. We re-parse those into <strong> without touching the cases that
+//     already work or `**` inside code.
+//  2. GFM tables get wrapped in .md-table-wrap so they scroll inside dt's narrow
+//     columns.
+const html = (text: string) =>
+  renderToStaticMarkup(createElement(MDView, { text }));
+
+describe("MDView CJK strong rescue", () => {
+  test("bold edged by Japanese brackets is rescued", () => {
+    const out = html("これは**「重要」**です");
+    expect(out).toContain("<strong>「重要」</strong>");
+    expect(out).not.toContain("**");
+  });
+
+  test("bold edged by fullwidth parens is rescued", () => {
+    const out = html("対象は**（注意）**こちら");
+    expect(out).toContain("<strong>（注意）</strong>");
+    expect(out).not.toContain("**");
+  });
+
+  test("already-working bold is unchanged (no double-wrap)", () => {
+    const out = html("これは**重要**です");
+    expect(out).toContain("<strong>重要</strong>");
+    expect((out.match(/<strong>/g) || []).length).toBe(1);
+  });
+
+  test("** inside inline code is NOT rewritten", () => {
+    const out = html("`a ** b ** c` はコード");
+    expect(out).toContain("<code>a ** b ** c</code>");
+    expect(out).not.toContain("<strong>");
+  });
+
+  test("plain text with no bold is untouched", () => {
+    const out = html("ただの文章です");
+    expect(out).not.toContain("<strong>");
+    expect(out).toContain("ただの文章です");
+  });
+});
+
+describe("MDView GFM tables", () => {
+  test("a table is parsed and wrapped for horizontal scroll", () => {
+    const out = html("| A | B |\n|---|---|\n| 1 | 2 |");
+    expect(out).toContain('<div class="md-table-wrap">');
+    expect(out).toContain("<table>");
+    expect(out).toContain("<th>A</th>");
+    expect(out).toContain("<td>1</td>");
+  });
+
+  test("table directly after a heading (no blank line) still parses", () => {
+    const out = html("## 見出し\n| A | B |\n|---|---|\n| 1 | 2 |");
+    expect(out).toContain("<table>");
+    expect(out).toContain("<th>A</th>");
+  });
+});
