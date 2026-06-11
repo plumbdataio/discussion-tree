@@ -114,6 +114,47 @@ export function postMapRestore(
   });
 }
 
+// Grouping frames — user-drawn rectangles behind the nodes. All silent (pull
+// model): broadcast to other browsers, no AI push.
+export function postMapAddFrame(
+  mapId: string,
+  f: { title?: string; color?: string; x: number; y: number; w: number; h: number },
+) {
+  return fetch("/map-add-frame", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ map_id: mapId, ...f }),
+  });
+}
+
+export function postMapUpdateFrame(
+  mapId: string,
+  frameId: string,
+  patch: { title?: string; color?: string; x?: number; y?: number; w?: number; h?: number },
+) {
+  return fetch("/map-update-frame", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ map_id: mapId, frame_id: frameId, ...patch }),
+  });
+}
+
+export function postMapDeleteFrame(mapId: string, frameId: string) {
+  return fetch("/map-delete-frame", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ map_id: mapId, frame_id: frameId }),
+  });
+}
+
+export function postMapRestoreFrame(mapId: string, frameId: string) {
+  return fetch("/map-restore-frame", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ map_id: mapId, frame_id: frameId }),
+  });
+}
+
 export async function uploadImage(
   file: File,
   boardId: string,
