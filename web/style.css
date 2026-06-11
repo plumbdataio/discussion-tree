@@ -3457,50 +3457,21 @@ body.concern-resizing * {
 .md-body h4 { font-size: 1em; }
 
 /* GFM tables (remark-gfm). react-markdown emits a bare <table>; MDView wraps
-   it in .md-table-wrap so a wide table scrolls horizontally inside dt's narrow
-   cards/threads instead of blowing out the layout. The wrapper uses the
-   "scrolling shadows" trick (background-attachment: local) so a fade only
-   shows on the side that has more table to scroll to — a passive hint that
-   columns continue off-screen (otherwise the last column gets silently cut
-   off). --md-table-bg is the at-rest cover colour; default is the card/panel
-   colour. */
+   it in .md-table-wrap so a WIDE table scrolls horizontally inside dt's narrow
+   cards/threads instead of blowing out the layout; a narrow one just hugs its
+   content. Plain solid cells (no scroll-shadow fade — it read as muddy). */
 .md-table-wrap {
-  --md-table-bg: var(--panel);
   overflow-x: auto;
-  /* Shrink to the table's own width (so a narrow 2-col table doesn't paint the
-     scroll-shadow across empty space to its right), but never exceed the
-     column — at which point overflow-x kicks in and the table scrolls. */
   width: fit-content;
   max-width: 100%;
   margin: 0.2em 0;
-  background:
-    linear-gradient(to right, var(--md-table-bg) 30%, rgba(255, 255, 255, 0))
-      left center,
-    linear-gradient(to left, var(--md-table-bg) 30%, rgba(255, 255, 255, 0))
-      right center,
-    radial-gradient(
-        farthest-side at left center,
-        rgba(0, 0, 0, 0.16),
-        rgba(0, 0, 0, 0)
-      )
-      left center,
-    radial-gradient(
-        farthest-side at right center,
-        rgba(0, 0, 0, 0.16),
-        rgba(0, 0, 0, 0)
-      )
-      right center;
-  background-repeat: no-repeat;
-  background-size: 28px 100%, 28px 100%, 12px 100%, 12px 100%;
-  background-attachment: local, local, scroll, scroll;
 }
 .md-body table {
   border-collapse: collapse;
   font-size: 0.95em;
   line-height: 1.4;
-  /* Size to content (not shrink to the wrapper). A wide table then overflows
-     .md-table-wrap, which scrolls; a narrow one stays compact and the wrapper
-     (width: fit-content) hugs it so no scroll-shadow paints in empty space. */
+  /* Size to content so a wide table overflows .md-table-wrap (which scrolls);
+     a narrow one stays compact. */
   width: max-content;
 }
 .md-body th,
@@ -3509,13 +3480,15 @@ body.concern-resizing * {
   padding: 4px 8px;
   text-align: left;
   vertical-align: top;
+  /* Solid panel fill (theme var, not hardcoded white) so the grid reads cleanly
+     even on top of a coloured chat bubble. */
+  background: var(--panel);
   /* Cap a single cell so a long sentence wraps instead of forcing endless
      horizontal scroll; short cells still size to content. */
   max-width: 22em;
   word-break: break-word;
 }
 .md-body thead th {
-  background: var(--bg);
   font-weight: 700;
 }
 
@@ -3595,22 +3568,7 @@ body.concern-resizing * {
   border: 1px solid var(--border);
 }
 
-.md-body table {
-  border-collapse: collapse;
-  margin: 0.5em 0;
-  font-size: 0.95em;
-}
-
-.md-body th,
-.md-body td {
-  border: 1px solid var(--border);
-  padding: 4px 8px;
-}
-
-.md-body th {
-  background: var(--bg);
-  font-weight: 600;
-}
+/* (table styling is consolidated above, with .md-table-wrap) */
 
 .md-body hr {
   border: none;
