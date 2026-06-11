@@ -91,11 +91,14 @@ function MapFrameNodeImpl(props: NodeProps) {
   useEffect(() => {
     setLiveSize(null);
   }, [data.title_size]);
-  // Clear the in-flight colour guard once the authoritative prop catches up (or
-  // is superseded by an undo / newer change) — NOT on HTTP completion, which can
-  // beat the WS snapshot and briefly reopen the rapid-re-pick gap.
+  // Clear the in-flight colour guard once the prop reaches the LATEST requested
+  // value (its echo applied) — comparing to pendingColor, not "any change", so
+  // an earlier overlapping snapshot can't drop a newer guard. Not on HTTP
+  // completion either (that can beat the snapshot and reopen the re-pick gap).
   useEffect(() => {
-    pendingColor.current = null;
+    if (pendingColor.current !== null && (data.color || "") === pendingColor.current) {
+      pendingColor.current = null;
+    }
   }, [data.color]);
 
   const commitTitle = () => {
@@ -115,7 +118,12 @@ function MapFrameNodeImpl(props: NodeProps) {
     if (!ctx || color === current) return;
     ctx.recordFrameUpdate?.(props.id, { color: current });
     pendingColor.current = color;
-    postMapUpdateFrame(ctx.mapId, props.id, { color }).catch(() => {});
+    postMapUpdateFrame(ctx.mapId, props.id, { color }).catch(() => {
+      // The request failed, so the persisted colour never changed and the prop
+      // effect won't clear the guard — release it (unless a newer pick has
+      // since superseded it) so retrying the same colour isn't ignored.
+      if (pendingColor.current === color) pendingColor.current = null;
+    });
   };
 
   // Drag the label's bottom-right corner to scale the font linearly. Custom
