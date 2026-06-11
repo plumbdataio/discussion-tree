@@ -100,7 +100,16 @@ function MapFrameNodeImpl(props: NodeProps) {
   }, [data.title_size]);
   // Re-anchor the undo tracker whenever the authoritative colour changes (an
   // echo, an undo, or an external edit), so the NEXT change records the right
-  // previous colour.
+  // previous colour. This is correct for every realistic case (single change,
+  // change-then-undo, uninterrupted rapid changes). The ONE residual is purely
+  // an undo-GRANULARITY nit, never a colour-correctness or strand issue: if 3+
+  // colours are picked so fast that an intermediate snapshot lands AFTER a newer
+  // pick, this briefly re-anchors to the older value, so a 4th pick in that
+  // window would record it as prev. Distinguishing our own echo from an external
+  // change is impossible client-side (the broker doesn't tag snapshots with the
+  // request that produced them), and the scenario isn't reachable in normal
+  // single-user frame editing, so it's an accepted limitation rather than more
+  // reconciliation machinery that just moves the edge elsewhere.
   useEffect(() => {
     lastRequestedColor.current = data.color || "";
   }, [data.color]);
@@ -127,7 +136,12 @@ function MapFrameNodeImpl(props: NodeProps) {
       ctx.recordFrameUpdate?.(props.id, { color: prev });
       lastRequestedColor.current = color;
     }
-    postMapUpdateFrame(ctx.mapId, props.id, { color }).catch(() => {});
+    postMapUpdateFrame(ctx.mapId, props.id, { color }).catch(() => {
+      // The request failed → the colour was never persisted. Roll the tracker
+      // back (unless a newer pick already advanced it) so the next change
+      // doesn't record a never-applied colour as its undo prev.
+      if (lastRequestedColor.current === color) lastRequestedColor.current = prev;
+    });
   };
 
   // Drag the label's bottom-right corner to scale the font linearly. Custom
