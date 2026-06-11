@@ -263,6 +263,11 @@
     "deleted_edge": "Deleted link",
     "undo_delete": "Undo",
     "restored": "Restored",
+    "timeline_button": "All comments (timeline)",
+    "timeline_title": "All comments — chronological",
+    "timeline_count": "{{count}} comments",
+    "timeline_empty": "No comments yet",
+    "timeline_jump": "Jump to this comment's node",
     "kind": {
       "question": "Question",
       "idea": "Idea",

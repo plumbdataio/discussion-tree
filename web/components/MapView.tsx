@@ -25,7 +25,14 @@ import {
   applyEdgeChanges,
   reconnectEdge,
 } from "@xyflow/react";
-import { AlertTriangle, ChartNetwork, Lock, Maximize2, Unlock } from "lucide-react";
+import {
+  AlertTriangle,
+  ChartNetwork,
+  Lock,
+  Maximize2,
+  ScrollText,
+  Unlock,
+} from "lucide-react";
 import { FloatingEdge, FloatingConnectionLine } from "./mapFloatingEdge.tsx";
 import type {
   Node as RFNode,
@@ -39,6 +46,7 @@ import type { MapView as MapViewData, ThreadItem } from "../../shared/types.ts";
 import { MAP_GENERAL_NODE } from "../../shared/types.ts";
 import { MapNode, MapContext, type MapCtx } from "./MapNode.tsx";
 import { MapNodeModal } from "./MapNodeModal.tsx";
+import { MapTimelineModal } from "./MapTimelineModal.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
 import { ThreadMessage } from "./ThreadMessage.tsx";
@@ -101,6 +109,11 @@ export function MapView({ mapId }: { mapId: string }) {
   // map can't be disturbed by accident; the bottom-left lock toggle and the
   // "L" hotkey flip it. interactive = !locked.
   const [locked, setLocked] = useState(true);
+  // Whole-map chronological preview (header button) + the node jump it triggers.
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [jump, setJump] = useState<{ nodeId: string; itemId: number } | null>(
+    null,
+  );
   // Ids currently being dragged — their local position wins over a broker
   // snapshot so an in-flight drag isn't yanked back by a concurrent WS update.
   const draggingIds = useRef<Set<string>>(new Set());
@@ -575,6 +588,15 @@ export function MapView({ mapId }: { mapId: string }) {
             </span>
           )}
           <div className="header-right">
+            <button
+              type="button"
+              className="map-timeline-btn"
+              title={t("map.timeline_button")}
+              aria-label={t("map.timeline_button")}
+              onClick={() => setTimelineOpen(true)}
+            >
+              <ScrollText size={16} strokeWidth={1.9} />
+            </button>
             <span className="ws-status">
               <span className={`ws-dot ${wsConnected ? "connected" : ""}`} />
               {wsConnected ? t("header.live") : t("header.offline")}
@@ -647,6 +669,41 @@ export function MapView({ mapId }: { mapId: string }) {
             />
           </div>
         </div>
+        {timelineOpen && (
+          <MapTimelineModal
+            nodes={view.nodes}
+            threads={view.threads}
+            onJump={(nodeId, itemId) => {
+              setTimelineOpen(false);
+              setJump({ nodeId, itemId });
+            }}
+            onClose={() => setTimelineOpen(false)}
+          />
+        )}
+        {jump &&
+          (() => {
+            const isGeneral = jump.nodeId === MAP_GENERAL_NODE;
+            const node = view.nodes.find((n) => n.id === jump.nodeId);
+            // The target node was deleted out from under the timeline.
+            if (!isGeneral && !node) return null;
+            return (
+              <MapNodeModal
+                mapId={mapId}
+                nodeId={jump.nodeId}
+                title={
+                  isGeneral
+                    ? t("map.general_chat")
+                    : node!.title || t("map.untitled")
+                }
+                context={isGeneral ? "" : node!.context}
+                kind={isGeneral ? undefined : node!.kind}
+                messages={view.threads[jump.nodeId] ?? []}
+                ownerAlive={ownerAlive}
+                scrollToItemId={jump.itemId}
+                onClose={() => setJump(null)}
+              />
+            );
+          })()}
       </div>
     </MapContext.Provider>
   );

@@ -263,6 +263,11 @@
     "deleted_edge": "リンクを削除しました",
     "undo_delete": "元に戻す",
     "restored": "元に戻しました",
+    "timeline_button": "全コメントを時系列で表示",
+    "timeline_title": "全コメント (時系列)",
+    "timeline_count": "{{count}} 件",
+    "timeline_empty": "まだコメントがありません",
+    "timeline_jump": "このコメントのノードへ移動",
     "kind": {
       "question": "Question",
       "idea": "Idea",

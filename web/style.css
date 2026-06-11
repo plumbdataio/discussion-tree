@@ -4683,6 +4683,103 @@ button.secondary {
 .map-card.kind-checklist { border-color: #0d9488; }
 .map-card.kind-checklist .map-card-kind { background: #0d9488; }
 .map-card-kind.kind-checklist { background: #0d9488; }
+
+/* ---- Whole-map chronological comment preview (MapTimelineModal) ---- */
+/* Header button that opens it. */
+.map-timeline-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 7px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.map-timeline-btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+/* Small muted count beside the modal title. */
+.timeline-modal .timeline-count {
+  margin-left: 0.5em;
+  font-size: 0.8em;
+  font-weight: 400;
+  color: var(--muted);
+}
+.timeline-scroll {
+  display: flex;
+  flex-direction: column;
+}
+.timeline-empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 2em 0;
+}
+/* One comment in the stream — clickable, jumps to its node. */
+.timeline-entry {
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  background: var(--panel);
+  transition: background 0.12s, border-color 0.12s;
+}
+.timeline-entry.from-user { border-left-color: var(--user-border); }
+.timeline-entry.from-cc { border-left-color: var(--cc-border); }
+.timeline-entry:hover,
+.timeline-entry:focus-visible {
+  background: var(--bg);
+  border-color: var(--border-strong);
+  outline: none;
+}
+.timeline-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 0.8em;
+}
+.timeline-who {
+  color: var(--muted);
+  font-weight: 600;
+}
+.timeline-time {
+  color: var(--muted);
+  margin-left: auto;
+}
+.timeline-node-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  color: #fff;
+  background: #9ca3af;
+}
+.timeline-node-chip.is-general { background: var(--muted); }
+.timeline-node-chip.kind-question { background: #f59e0b; }
+.timeline-node-chip.kind-idea { background: #2563eb; }
+.timeline-node-chip.kind-research { background: #7c3aed; }
+.timeline-node-chip.kind-selection { background: #10b981; }
+.timeline-node-chip.kind-note { background: #9ca3af; }
+.timeline-node-chip.kind-checklist { background: #0d9488; }
+/* The body is a preview only — clamp tall messages with a soft fade so the
+   timeline stays scannable; clicking opens the full node modal. */
+.timeline-body {
+  font-size: 0.92em;
+  max-height: 9em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent);
+  mask-image: linear-gradient(to bottom, #000 78%, transparent);
+}
 .map-card-checklist .checklist-card-embedded {
   border: none;
   border-left: none;
