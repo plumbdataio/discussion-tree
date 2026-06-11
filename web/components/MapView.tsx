@@ -351,6 +351,24 @@ export function MapView({ mapId }: { mapId: string }) {
     return () => timers.forEach(clearTimeout);
   }, [rfNodes]);
 
+  // Center + zoom the canvas onto a node and flash it. Used after the timeline
+  // preview closes: a message there can live on a tiny, far-off card, and the
+  // user couldn't tell WHICH one — this pans to it, enlarges it, and glows it.
+  const focusNode = useCallback((nodeId: string) => {
+    rf.current?.fitView({
+      nodes: [{ id: nodeId }],
+      duration: 600,
+      padding: 0.35,
+      maxZoom: 1.2,
+    });
+    const el = document.querySelector(`.react-flow__node[data-id="${nodeId}"]`);
+    if (!el) return;
+    el.classList.remove("map-node-flash");
+    void (el as HTMLElement).offsetWidth; // restart the animation
+    el.classList.add("map-node-flash");
+    setTimeout(() => el.classList.remove("map-node-flash"), 1600);
+  }, []);
+
   // "L" toggles the canvas lock (OS-safe: bare key, ignored while typing or
   // when a modifier is held so it never collides with browser/OS shortcuts).
   useEffect(() => {
@@ -700,7 +718,15 @@ export function MapView({ mapId }: { mapId: string }) {
                 messages={view.threads[jump.nodeId] ?? []}
                 ownerAlive={ownerAlive}
                 scrollToItemId={jump.itemId}
-                onClose={() => setJump(null)}
+                onClose={() => {
+                  const nid = jump.nodeId;
+                  setJump(null);
+                  // After reading the message, reveal WHERE it lives: pan/zoom
+                  // to its card and flash it. (The general chat has no card.)
+                  if (nid !== MAP_GENERAL_NODE) {
+                    requestAnimationFrame(() => focusNode(nid));
+                  }
+                }}
               />
             );
           })()}
