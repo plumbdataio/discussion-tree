@@ -943,3 +943,44 @@ describe("maps — child placement (grid-wrap, never move existing)", () => {
   });
 });
 
+describe("maps — grouping frames", () => {
+  test("add / update / delete / restore; getMapView carries them", async () => {
+    const mapId = await createMap("frames");
+    const add = await post<{ ok: boolean; frame_id: string }>(
+      `${broker.url}/map-add-frame`,
+      { map_id: mapId, title: "Group A", color: "#fde68a", x: 10, y: 20, w: 300, h: 200 },
+    );
+    expect(add.json.ok).toBe(true);
+    const fid = add.json.frame_id;
+
+    let v = await get<{ frames: any[] }>(`${broker.url}/api/map/${mapId}`);
+    expect(v.json.frames.length).toBe(1);
+    expect(v.json.frames[0]).toMatchObject({
+      id: fid,
+      title: "Group A",
+      color: "#fde68a",
+      x: 10,
+      w: 300,
+    });
+
+    await post(`${broker.url}/map-update-frame`, {
+      map_id: mapId,
+      frame_id: fid,
+      title: "Renamed",
+      x: 99,
+    });
+    v = await get<{ frames: any[] }>(`${broker.url}/api/map/${mapId}`);
+    expect(v.json.frames[0].title).toBe("Renamed");
+    expect(v.json.frames[0].x).toBe(99);
+    expect(v.json.frames[0].color).toBe("#fde68a"); // unchanged fields preserved
+
+    await post(`${broker.url}/map-delete-frame`, { map_id: mapId, frame_id: fid });
+    v = await get<{ frames: any[] }>(`${broker.url}/api/map/${mapId}`);
+    expect(v.json.frames.length).toBe(0);
+
+    await post(`${broker.url}/map-restore-frame`, { map_id: mapId, frame_id: fid });
+    v = await get<{ frames: any[] }>(`${broker.url}/api/map/${mapId}`);
+    expect(v.json.frames.length).toBe(1);
+  });
+});
+

@@ -19,6 +19,7 @@ import type {
   ChecklistItem,
   Map as MapRow,
   MapNode,
+  MapFrame,
   ThreadItem,
 } from "../shared/types.ts";
 import { MAP_GENERAL_NODE } from "../shared/types.ts";
@@ -46,6 +47,11 @@ import {
   softDeleteMapNode,
   updateMapNodeContent,
   updateMapNodePos,
+  insertMapFrame,
+  selectMapFramesByMap,
+  updateMapFrame,
+  softDeleteMapFrame,
+  restoreMapFrame,
 } from "./db.ts";
 import { activities, bgTaskCountForSession, markWorkingFromUserSubmit } from "./activity.ts";
 import { getContextUsage } from "./context-usage.ts";
@@ -361,6 +367,69 @@ export function handleDeleteMapNode(body: any) {
   return { ok: true };
 }
 
+// --- Grouping frames (user-owned, purely visual) ---------------------------
+// The AI never touches these — they're drawn/moved/resized/renamed/recoloured/
+// deleted by the human in the canvas, like node layout. Soft-deleted so they
+// ride the same Cmd+Z undo as nodes/edges. SILENT (broadcast only, no AI push).
+export function handleAddMapFrame(body: any) {
+  const mapId = String(body?.map_id ?? "");
+  if (!selectMap.get(mapId)) return { ok: false, error: "map not found" };
+  const id = body?.id ? String(body.id) : generateId("frm");
+  const title = body?.title != null ? String(body.title) : "";
+  const color = body?.color != null ? String(body.color) : "";
+  const x = typeof body?.x === "number" ? body.x : 0;
+  const y = typeof body?.y === "number" ? body.y : 0;
+  const w = typeof body?.w === "number" ? body.w : 240;
+  const h = typeof body?.h === "number" ? body.h : 160;
+  insertMapFrame.run(
+    mapId,
+    id,
+    title,
+    color,
+    x,
+    y,
+    w,
+    h,
+    new Date().toISOString(),
+  );
+  emit(mapId);
+  return { ok: true, frame_id: id };
+}
+
+export function handleUpdateMapFrame(body: any) {
+  const mapId = String(body?.map_id ?? "");
+  const frameId = String(body?.frame_id ?? "");
+  const cur = (selectMapFramesByMap.all(mapId) as MapFrame[]).find(
+    (f) => f.id === frameId,
+  );
+  if (!cur) return { ok: false, error: "map frame not found" };
+  const title = body?.title != null ? String(body.title) : cur.title;
+  const color = body?.color != null ? String(body.color) : cur.color;
+  const x = typeof body?.x === "number" ? body.x : cur.x;
+  const y = typeof body?.y === "number" ? body.y : cur.y;
+  const w = typeof body?.w === "number" ? body.w : cur.w;
+  const h = typeof body?.h === "number" ? body.h : cur.h;
+  updateMapFrame.run(title, color, x, y, w, h, mapId, frameId);
+  emit(mapId);
+  return { ok: true };
+}
+
+export function handleDeleteMapFrame(body: any) {
+  const mapId = String(body?.map_id ?? "");
+  const frameId = String(body?.frame_id ?? "");
+  softDeleteMapFrame.run(new Date().toISOString(), mapId, frameId);
+  emit(mapId);
+  return { ok: true };
+}
+
+export function handleRestoreMapFrame(body: any) {
+  const mapId = String(body?.map_id ?? "");
+  const frameId = String(body?.frame_id ?? "");
+  restoreMapFrame.run(mapId, frameId);
+  emit(mapId);
+  return { ok: true };
+}
+
 export function handleConnectMap(body: any) {
   const mapId = String(body?.map_id ?? "");
   const from = String(body?.from_id ?? body?.from ?? "");
@@ -566,6 +635,7 @@ export function getMapView(mapId: string) {
   const edges = (selectMapEdgesByMap.all(mapId) as any[]).filter(
     (e) => liveIds.has(e.from_id) && liveIds.has(e.to_id),
   );
+  const frames = selectMapFramesByMap.all(mapId) as MapFrame[];
   const threadRows = selectThreadsByBoard.all(mapId) as ThreadItem[];
   const threads: Record<string, ThreadItem[]> = {};
   for (const t of threadRows) {
@@ -584,6 +654,7 @@ export function getMapView(mapId: string) {
     map,
     nodes,
     edges,
+    frames,
     threads,
     activity,
     owner_alive: ownerRow?.alive === 1,
@@ -792,6 +863,10 @@ export const routes = {
   "/map-update-node": handleUpdateMapNode,
   "/map-move-node": handleMoveMapNode,
   "/map-delete-node": handleDeleteMapNode,
+  "/map-add-frame": handleAddMapFrame,
+  "/map-update-frame": handleUpdateMapFrame,
+  "/map-delete-frame": handleDeleteMapFrame,
+  "/map-restore-frame": handleRestoreMapFrame,
   "/map-connect": handleConnectMap,
   "/map-disconnect": handleDisconnectMap,
   "/map-restore": handleRestoreMap,

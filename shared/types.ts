@@ -227,6 +227,23 @@ export interface MapEdge {
   deleted_at?: string | null;
 }
 
+// A user-drawn grouping rectangle that sits BEHIND the nodes/edges. Purely
+// visual (it doesn't own the nodes it covers); the AI never creates or moves
+// these. color is a free-form string (a hex value) so a colour picker can be
+// added later; "" means the default neutral frame.
+export interface MapFrame {
+  map_id: string;
+  id: string;
+  title: string;
+  color: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  created_at?: string;
+  deleted_at?: string | null;
+}
+
 // The whole-map general chat lives under this synthetic node_id (mirrors how
 // board structure-requests use "__board__"). Every other thread is keyed by a
 // real map_nodes.id.
@@ -236,6 +253,8 @@ export interface MapView {
   map: Map;
   nodes: MapNode[];
   edges: MapEdge[];
+  // User-drawn grouping rectangles rendered behind the nodes/edges.
+  frames?: MapFrame[];
   // node_id -> thread items. The map-wide chat is under MAP_GENERAL_NODE.
   threads: Record<string, ThreadItem[]>;
   activity?: Activity | null;

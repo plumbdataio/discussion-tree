@@ -364,6 +364,30 @@ db.run(
   `CREATE INDEX IF NOT EXISTS map_edges_by_map ON map_edges(map_id)`,
 );
 
+// Grouping frames — purely-visual labelled rectangles the USER draws BEHIND the
+// nodes/edges to group them (the AI never touches these, same as node layout).
+// color is a free-form string (a hex value) so a colour picker can be added
+// later without a schema change; the UI offers presets for now. Soft-deleted so
+// it can ride the same Cmd+Z undo path as nodes/edges.
+db.run(`
+  CREATE TABLE IF NOT EXISTS map_frames (
+    map_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    color TEXT NOT NULL DEFAULT '',
+    x REAL NOT NULL DEFAULT 0,
+    y REAL NOT NULL DEFAULT 0,
+    w REAL NOT NULL DEFAULT 240,
+    h REAL NOT NULL DEFAULT 160,
+    created_at TEXT NOT NULL,
+    deleted_at TEXT,
+    PRIMARY KEY (map_id, id)
+  )
+`);
+db.run(
+  `CREATE INDEX IF NOT EXISTS map_frames_by_map ON map_frames(map_id)`,
+);
+
 // --- Prepared statements ---
 //
 // IMPORTANT: there are intentionally NO DELETE FROM statements anywhere.
@@ -551,6 +575,24 @@ export const restoreMapNode = db.prepare(
 );
 export const restoreMapEdge = db.prepare(
   `UPDATE map_edges SET deleted_at = NULL WHERE map_id = ? AND id = ?`,
+);
+
+// Grouping frames (user-owned visual rectangles). Same soft-delete + restore
+// shape as nodes/edges.
+export const insertMapFrame = db.prepare(
+  `INSERT INTO map_frames (map_id, id, title, color, x, y, w, h, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+);
+export const selectMapFramesByMap = db.prepare(
+  `SELECT * FROM map_frames WHERE map_id = ? AND deleted_at IS NULL ORDER BY created_at`,
+);
+export const updateMapFrame = db.prepare(
+  `UPDATE map_frames SET title = ?, color = ?, x = ?, y = ?, w = ?, h = ? WHERE map_id = ? AND id = ?`,
+);
+export const softDeleteMapFrame = db.prepare(
+  `UPDATE map_frames SET deleted_at = ? WHERE map_id = ? AND id = ?`,
+);
+export const restoreMapFrame = db.prepare(
+  `UPDATE map_frames SET deleted_at = NULL WHERE map_id = ? AND id = ?`,
 );
 
 // --- Board status auto-rollup ---
