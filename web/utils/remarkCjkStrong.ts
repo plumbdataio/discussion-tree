@@ -2,15 +2,14 @@
 // refuse to parse next to CJK punctuation.
 //
 // CommonMark decides whether a `**` can open/close emphasis from the
-// characters flanking it ("flanking delimiter runs"). A `**` adjacent to
-// CJK punctuation — 「」『』（）【】、。 etc. — fails those rules, so a bold
-// span whose content starts or ends with such punctuation is left as LITERAL
-// asterisks:
+// characters flanking it ("flanking delimiter runs"). A `**` adjacent to a
+// CJK bracket / quote — 「」 『』 （） 【】 — fails those rules, so a bold span
+// whose content starts or ends with one is left as LITERAL asterisks:
 //
-//   これは**「重要」**です   →   <p>これは**「重要」**です</p>   (asterisks shown)
-//   これは**重要**です       →   <p>これは<strong>重要</strong>です</p>  (fine)
+//   x**「y」**z   ->   literal "x**「y」**z" (asterisks shown, no bold)
+//   x**y**z       ->   "x<strong>y</strong>z" (fine)
 //
-// This is why bold "sometimes" breaks in Japanese text. By the time remark
+// That is why bold "sometimes" breaks in Japanese text. By the time remark
 // plugins run, every WORKING bold span is already a `strong` mdast node; only
 // the FAILED runs survive verbatim inside text nodes. So we re-parse leftover
 // `**...**` runs in text nodes into `strong` nodes. Conservative on purpose:
@@ -19,10 +18,10 @@
 //   - only `text` nodes are touched, so `**` inside `inlineCode`/`code` (which
 //     are separate node types) is never rewritten
 //
-// Known residual: two bold spans on ONE line that are BOTH CJK-edged
-// (`**「A」**と**【B】**`) — CommonMark mis-pairs the inner `**`, splitting the
-// text node so the outer asterisks land in different siblings and we can't
-// rejoin them. Rare; a full fix needs a micromark-level CJK extension.
+// Known residual: two bracket-edged bold spans on ONE line (e.g. `**「A」**`
+// then `**【B】**`) — CommonMark mis-pairs the inner `**`, splitting the text
+// node so the outer asterisks land in different siblings and we can't rejoin
+// them. Rare; a full fix needs a micromark-level CJK extension.
 
 const STRONG_RE = /\*\*(?=\S)([^*\n]+?)\*\*/g;
 
