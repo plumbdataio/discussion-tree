@@ -58,12 +58,12 @@ function MapFrameNodeImpl(props: NodeProps) {
   const locked = !!ctx?.locked;
   const selected = !!props.selected;
   // Colour renders straight from the authoritative prop (WS-driven) — no
-  // optimistic display, so it can never strand on an undone/stale value. The
-  // only thing the prop can't do is guard a *quick re-pick of the previous
-  // colour* before its echo lands (the prop is still the old value then); for
-  // that we track the in-flight colour in a ref (see setColor), cleared when our
-  // own request resolves — not on a fixed timeout.
-  const pendingColor = useRef<string | null>(null);
+  // optimistic display. We deliberately keep NO in-flight tracker: the broker
+  // doesn't tag snapshots with the request that produced them, so any
+  // client-side "pending colour" reconciliation has an unavoidable strand/race
+  // (an undo or a rejected POST can leave it permanently stale). Instead
+  // setColor always posts (the broker no-ops an unchanged colour, so a quick
+  // re-pick is never dropped) and only records an undo step for a real change.
   const colorValue = data.color || "";
   const { border, fill } = frameColors(colorValue);
   const [editing, setEditing] = useState(false);
@@ -91,15 +91,6 @@ function MapFrameNodeImpl(props: NodeProps) {
   useEffect(() => {
     setLiveSize(null);
   }, [data.title_size]);
-  // Clear the in-flight colour guard once the prop reaches the LATEST requested
-  // value (its echo applied) — comparing to pendingColor, not "any change", so
-  // an earlier overlapping snapshot can't drop a newer guard. Not on HTTP
-  // completion either (that can beat the snapshot and reopen the re-pick gap).
-  useEffect(() => {
-    if (pendingColor.current !== null && (data.color || "") === pendingColor.current) {
-      pendingColor.current = null;
-    }
-  }, [data.color]);
 
   const commitTitle = () => {
     setEditing(false);
@@ -110,20 +101,17 @@ function MapFrameNodeImpl(props: NodeProps) {
     }
   };
   const setColor = (color: string) => {
-    // Guard against the in-flight colour (if any), else the prop — so re-picking
-    // the previous colour before its echo isn't dropped as a no-op. The guard is
-    // cleared by the effect above when the prop catches up (request resolution
-    // via the snapshot, not the HTTP response).
-    const current = pendingColor.current ?? colorValue;
-    if (!ctx || color === current) return;
-    ctx.recordFrameUpdate?.(props.id, { color: current });
-    pendingColor.current = color;
-    postMapUpdateFrame(ctx.mapId, props.id, { color }).catch(() => {
-      // The request failed, so the persisted colour never changed and the prop
-      // effect won't clear the guard — release it (unless a newer pick has
-      // since superseded it) so retrying the same colour isn't ignored.
-      if (pendingColor.current === color) pendingColor.current = null;
-    });
+    if (!ctx) return;
+    // Record an undo step only for a real change (skip re-selecting the current
+    // colour) so the stack isn't polluted with no-ops. ALWAYS post: posting an
+    // unchanged colour is a harmless broker no-op, and never short-circuiting on
+    // the WS-lagging prop means a quick re-pick of the previous colour is never
+    // dropped — the failure modes a pending-colour guard would introduce
+    // (strand on undo / rejected POST) simply can't occur.
+    if (color !== colorValue) {
+      ctx.recordFrameUpdate?.(props.id, { color: colorValue });
+    }
+    postMapUpdateFrame(ctx.mapId, props.id, { color }).catch(() => {});
   };
 
   // Drag the label's bottom-right corner to scale the font linearly. Custom
