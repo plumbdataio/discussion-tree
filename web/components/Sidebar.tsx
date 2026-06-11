@@ -462,7 +462,20 @@ export function Sidebar({
   // Hover-peek: when the sidebar is collapsed, hovering the reopen tab (or the
   // peeked sidebar) opens it temporarily; it closes again when the pointer
   // leaves. The reopen button stays put — clicking it opens permanently.
+  // Closing is deferred a beat so moving from the tab INTO the sidebar (which
+  // re-opens) doesn't flicker — and so leaving the tab toward the header still
+  // closes it (the deferred close isn't cancelled).
   const [peek, setPeek] = useState(false);
+  const peekTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openPeek = () => {
+    if (peekTimer.current) clearTimeout(peekTimer.current);
+    peekTimer.current = null;
+    setPeek(true);
+  };
+  const closePeekSoon = () => {
+    if (peekTimer.current) clearTimeout(peekTimer.current);
+    peekTimer.current = setTimeout(() => setPeek(false), 120);
+  };
   const [inactiveOpen, setInactiveOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -684,7 +697,8 @@ export function Sidebar({
           className="sidebar-reopen"
           aria-label={t("sidebar.expand_label")}
           title={t("sidebar.expand_label")}
-          onMouseEnter={() => setPeek(true)}
+          onMouseEnter={openPeek}
+          onMouseLeave={closePeekSoon}
           onClick={() => updateSettings({ sidebarCollapsed: false })}
         >
           <ChevronsRight size={22} strokeWidth={2.25} />
@@ -696,12 +710,8 @@ export function Sidebar({
           (settings.sidebarCollapsed ? " collapsed" : "") +
           (settings.sidebarCollapsed && peek ? " peek" : "")
         }
-        onMouseEnter={
-          settings.sidebarCollapsed ? () => setPeek(true) : undefined
-        }
-        onMouseLeave={
-          settings.sidebarCollapsed ? () => setPeek(false) : undefined
-        }
+        onMouseEnter={settings.sidebarCollapsed ? openPeek : undefined}
+        onMouseLeave={settings.sidebarCollapsed ? closePeekSoon : undefined}
       >
         {/* Mobile-only quick actions — replaces the .gear-fab corner
             button which is hidden at <=768px. The .anchor-fab stays
