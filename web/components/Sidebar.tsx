@@ -459,6 +459,10 @@ export function Sidebar({
   );
   const [error, setError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Hover-peek: when the sidebar is collapsed, hovering the reopen tab (or the
+  // peeked sidebar) opens it temporarily; it closes again when the pointer
+  // leaves. The reopen button stays put — clicking it opens permanently.
+  const [peek, setPeek] = useState(false);
   const [inactiveOpen, setInactiveOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -680,6 +684,7 @@ export function Sidebar({
           className="sidebar-reopen"
           aria-label={t("sidebar.expand_label")}
           title={t("sidebar.expand_label")}
+          onMouseEnter={() => setPeek(true)}
           onClick={() => updateSettings({ sidebarCollapsed: false })}
         >
           <ChevronsRight size={22} strokeWidth={2.25} />
@@ -688,7 +693,14 @@ export function Sidebar({
       <aside
         className={
           `sidebar${drawerOpen ? " open" : ""}` +
-          (settings.sidebarCollapsed ? " collapsed" : "")
+          (settings.sidebarCollapsed ? " collapsed" : "") +
+          (settings.sidebarCollapsed && peek ? " peek" : "")
+        }
+        onMouseEnter={
+          settings.sidebarCollapsed ? () => setPeek(true) : undefined
+        }
+        onMouseLeave={
+          settings.sidebarCollapsed ? () => setPeek(false) : undefined
         }
       >
         {/* Mobile-only quick actions — replaces the .gear-fab corner
