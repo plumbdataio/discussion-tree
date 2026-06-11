@@ -66,6 +66,13 @@ function MapFrameNodeImpl(props: NodeProps) {
   // re-pick is never dropped) and only records an undo step for a real change.
   const colorValue = data.color || "";
   const { border, fill } = frameColors(colorValue);
+  // The colour most recently requested from this card — used ONLY to build a
+  // correct undo `prev` during rapid changes, where the snapshot-driven prop
+  // still lags (A->B->C must record B then A, not A twice). It never feeds
+  // rendering and we always post, so it can't reintroduce the strand/race a
+  // pending-colour *guard* would. Re-synced to the prop when it catches up
+  // (e.g. after an undo or an external change).
+  const lastRequestedColor = useRef(colorValue);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(data.title);
   // Same in-flight size capture pattern as MapNode's resizer; the *-Start refs
@@ -91,6 +98,12 @@ function MapFrameNodeImpl(props: NodeProps) {
   useEffect(() => {
     setLiveSize(null);
   }, [data.title_size]);
+  // Re-anchor the undo tracker whenever the authoritative colour changes (an
+  // echo, an undo, or an external edit), so the NEXT change records the right
+  // previous colour.
+  useEffect(() => {
+    lastRequestedColor.current = data.color || "";
+  }, [data.color]);
 
   const commitTitle = () => {
     setEditing(false);
@@ -102,14 +115,17 @@ function MapFrameNodeImpl(props: NodeProps) {
   };
   const setColor = (color: string) => {
     if (!ctx) return;
-    // Record an undo step only for a real change (skip re-selecting the current
-    // colour) so the stack isn't polluted with no-ops. ALWAYS post: posting an
+    // Record an undo step (and advance the tracker) only for a real change vs
+    // the LAST REQUESTED colour — so rapid A->B->C records B then A, and
+    // re-selecting the same colour adds no no-op. ALWAYS post regardless: an
     // unchanged colour is a harmless broker no-op, and never short-circuiting on
-    // the WS-lagging prop means a quick re-pick of the previous colour is never
-    // dropped — the failure modes a pending-colour guard would introduce
-    // (strand on undo / rejected POST) simply can't occur.
-    if (color !== colorValue) {
-      ctx.recordFrameUpdate?.(props.id, { color: colorValue });
+    // the (WS-lagging) state means a quick re-pick of the previous colour is
+    // never dropped — none of the strand/race failure modes of a pending-colour
+    // *guard* can occur, because nothing here gates the request.
+    const prev = lastRequestedColor.current;
+    if (color !== prev) {
+      ctx.recordFrameUpdate?.(props.id, { color: prev });
+      lastRequestedColor.current = color;
     }
     postMapUpdateFrame(ctx.mapId, props.id, { color }).catch(() => {});
   };
