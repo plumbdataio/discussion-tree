@@ -240,6 +240,8 @@ export interface MapFrame {
   y: number;
   w: number;
   h: number;
+  // Label font size in flow-coordinate px (user-draggable). null = default base.
+  title_size?: number | null;
   created_at?: string;
   deleted_at?: string | null;
 }

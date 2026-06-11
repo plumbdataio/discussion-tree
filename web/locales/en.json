@@ -296,7 +296,9 @@
     "frame_untitled": "(untitled frame)",
     "frame_color_default": "Default colour",
     "frame_color_custom": "Custom colour",
+    "frame_font_size": "Drag to resize the label text",
     "deleted_frame": "Deleted frame",
+    "undone": "Undone",
     "kind": {
       "question": "Question",
       "idea": "Idea",

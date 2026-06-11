@@ -405,6 +405,10 @@ db.run(`
 db.run(
   `CREATE INDEX IF NOT EXISTS map_frames_by_map ON map_frames(map_id)`,
 );
+// The label's font size, in flow-coordinate px (the user drags the label corner
+// to scale it so it stays readable when zoomed out). NULL = the default base
+// size, applied by the frontend.
+safeAlter("ALTER TABLE map_frames ADD COLUMN title_size REAL");
 
 // --- Prepared statements ---
 //
@@ -604,7 +608,7 @@ export const selectMapFramesByMap = db.prepare(
   `SELECT * FROM map_frames WHERE map_id = ? AND deleted_at IS NULL ORDER BY created_at`,
 );
 export const updateMapFrame = db.prepare(
-  `UPDATE map_frames SET title = ?, color = ?, x = ?, y = ?, w = ?, h = ? WHERE map_id = ? AND id = ?`,
+  `UPDATE map_frames SET title = ?, color = ?, x = ?, y = ?, w = ?, h = ?, title_size = ? WHERE map_id = ? AND id = ?`,
 );
 export const softDeleteMapFrame = db.prepare(
   `UPDATE map_frames SET deleted_at = ? WHERE map_id = ? AND id = ?`,

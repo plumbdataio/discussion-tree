@@ -62,6 +62,26 @@ export interface MapCtx {
     x: number,
     y: number,
   ) => void;
+  // Record an undoable "frame was edited" step (color / title / size / geometry)
+  // so Cmd+Z can revert it. `prev` holds the fields' values BEFORE the change.
+  recordFrameUpdate?: (
+    frameId: string,
+    prev: {
+      x?: number;
+      y?: number;
+      w?: number;
+      h?: number;
+      color?: string;
+      title?: string;
+      title_size?: number | null;
+    },
+  ) => void;
+  // Record an undoable node move/resize (pre-gesture geometry) so Cmd+Z reverts
+  // it. The card resizer calls this; node moves are recorded in MapView.
+  recordNodeGeom?: (
+    nodeId: string,
+    prev: { x: number; y: number; w?: number; h?: number },
+  ) => void;
 }
 export const MapContext = createContext<MapCtx | null>(null);
 
@@ -228,6 +248,10 @@ function MapNodeImpl(props: NodeProps) {
     x: 0,
     y: 0,
   });
+  // Pre-resize geometry for the undo entry (captured on resize start).
+  const resizeStart = useRef<{ x: number; y: number; w: number; h: number } | null>(
+    null,
+  );
   // strategy A — only auto-read when the canvas is zoomed in enough that the text is
   // actually legible. Subscribe to a BOOLEAN derived from the zoom so the node
   // re-renders only when it crosses the threshold, not on every pan/zoom tick.
@@ -291,6 +315,9 @@ function MapNodeImpl(props: NodeProps) {
         minWidth={240}
         minHeight={160}
         isVisible={!!props.selected && !ctx?.locked}
+        onResizeStart={(_e, p) => {
+          resizeStart.current = { x: p.x, y: p.y, w: p.width, h: p.height };
+        }}
         onResize={(_e, p) => {
           sizeRef.current = {
             w: p.width,
@@ -301,7 +328,19 @@ function MapNodeImpl(props: NodeProps) {
         }}
         onResizeEnd={() => {
           const s = sizeRef.current;
-          if (ctx && s.w > 0) ctx.onResize(props.id, s.w, s.h, s.x, s.y);
+          if (ctx && s.w > 0) {
+            // Record the pre-resize geometry for undo, then persist the new one.
+            if (resizeStart.current) {
+              ctx.recordNodeGeom?.(props.id, {
+                x: Math.round(resizeStart.current.x),
+                y: Math.round(resizeStart.current.y),
+                w: Math.round(resizeStart.current.w),
+                h: Math.round(resizeStart.current.h),
+              });
+              resizeStart.current = null;
+            }
+            ctx.onResize(props.id, s.w, s.h, s.x, s.y);
+          }
         }}
       />
       {/* One handle per side. With ConnectionMode.Loose every handle is both

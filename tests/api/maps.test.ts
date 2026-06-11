@@ -982,5 +982,37 @@ describe("maps — grouping frames", () => {
     v = await get<{ frames: any[] }>(`${broker.url}/api/map/${mapId}`);
     expect(v.json.frames.length).toBe(1);
   });
+
+  test("title_size round-trips and is independently updatable (defaults null)", async () => {
+    const mapId = await createMap("frame-fontsize");
+    const add = await post<{ ok: boolean; frame_id: string }>(
+      `${broker.url}/map-add-frame`,
+      { map_id: mapId, title: "Big", x: 0, y: 0, w: 200, h: 120 },
+    );
+    const fid = add.json.frame_id;
+    let v = await get<{ frames: any[] }>(`${broker.url}/api/map/${mapId}`);
+    // A fresh frame has no explicit label size yet.
+    expect(v.json.frames[0].title_size ?? null).toBeNull();
+
+    // Setting title_size alone leaves the other fields untouched.
+    await post(`${broker.url}/map-update-frame`, {
+      map_id: mapId,
+      frame_id: fid,
+      title_size: 48,
+    });
+    v = await get<{ frames: any[] }>(`${broker.url}/api/map/${mapId}`);
+    expect(v.json.frames[0].title_size).toBe(48);
+    expect(v.json.frames[0].title).toBe("Big");
+    expect(v.json.frames[0].w).toBe(200);
+
+    // Explicit null clears it back to the default.
+    await post(`${broker.url}/map-update-frame`, {
+      map_id: mapId,
+      frame_id: fid,
+      title_size: null,
+    });
+    v = await get<{ frames: any[] }>(`${broker.url}/api/map/${mapId}`);
+    expect(v.json.frames[0].title_size ?? null).toBeNull();
+  });
 });
 

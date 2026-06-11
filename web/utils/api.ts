@@ -130,7 +130,15 @@ export function postMapAddFrame(
 export function postMapUpdateFrame(
   mapId: string,
   frameId: string,
-  patch: { title?: string; color?: string; x?: number; y?: number; w?: number; h?: number },
+  patch: {
+    title?: string;
+    color?: string;
+    x?: number;
+    y?: number;
+    w?: number;
+    h?: number;
+    title_size?: number | null;
+  },
 ) {
   return fetch("/map-update-frame", {
     method: "POST",

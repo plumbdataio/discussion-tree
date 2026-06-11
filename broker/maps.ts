@@ -409,7 +409,14 @@ export function handleUpdateMapFrame(body: any) {
   const y = typeof body?.y === "number" ? body.y : cur.y;
   const w = typeof body?.w === "number" ? body.w : cur.w;
   const h = typeof body?.h === "number" ? body.h : cur.h;
-  updateMapFrame.run(title, color, x, y, w, h, mapId, frameId);
+  // title_size: a number sets it; null clears it (back to the default base).
+  const title_size =
+    typeof body?.title_size === "number"
+      ? body.title_size
+      : body?.title_size === null
+        ? null
+        : (cur.title_size ?? null);
+  updateMapFrame.run(title, color, x, y, w, h, title_size, mapId, frameId);
   emit(mapId);
   return { ok: true };
 }

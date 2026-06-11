@@ -105,6 +105,35 @@ function mergeEdges(prev: RFEdge[], view: MapViewData): RFEdge[] {
   });
 }
 
+// The fields a frame undo can revert. Partial — only the changed ones are kept.
+type FramePrev = {
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  color?: string;
+  title?: string;
+  title_size?: number | null;
+};
+type UndoEntry =
+  | {
+      kind: "delete";
+      nodeIds: string[];
+      edgeIds: string[];
+      frameIds: string[];
+      label: string;
+    }
+  | { kind: "frame-add"; frameId: string }
+  | { kind: "frame-update"; frameId: string; prev: FramePrev }
+  // A map node's move / resize (the user asked for these to be undoable too,
+  // unlike the rest of the app where node layout has no undo). prev holds the
+  // pre-gesture geometry; w/h absent for a plain move (size unchanged).
+  | {
+      kind: "node-geom";
+      nodeId: string;
+      prev: { x: number; y: number; w?: number; h?: number };
+    };
+
 export function MapView({ mapId }: { mapId: string }) {
   const { t } = useTranslation();
   const [view, setView] = useState<MapViewData | null>(null);
@@ -141,12 +170,17 @@ export function MapView({ mapId }: { mapId: string }) {
   const rf = useRef<any>(null);
   // The canvas element — used to compute the viewport centre when adding a frame.
   const canvasRef = useRef<HTMLDivElement>(null);
-  // Undo stack for deletions. A single Delete can remove node(s) AND their
-  // incident edges AND grouping frame(s), so each entry batches them and is
-  // restored as a unit (Cmd/Ctrl+Z, or the "Undo" button on the delete toast).
-  const undoStack = useRef<
-    { nodeIds: string[]; edgeIds: string[]; frameIds: string[]; label: string }[]
-  >([]);
+  // Position of any node/frame captured at drag start, so onNodeDragStop can
+  // record the pre-move position for undo.
+  const dragStartPos = useRef<Record<string, { x: number; y: number }>>({});
+  // Undo stack (Cmd/Ctrl+Z). Entries are LIFO and heterogeneous:
+  //  - "delete": a batched delete (node(s) + incident edges + frame(s)); undo
+  //    restores them. Also has the "Undo" button on the delete toast.
+  //  - "frame-add": a grouping frame was created; undo deletes it.
+  //  - "frame-update": a frame's color/title/size/geometry changed; undo
+  //    re-applies the previous field values. (Frames are fully user-owned, so
+  //    unlike node layout, ALL frame edits are undoable.)
+  const undoStack = useRef<UndoEntry[]>([]);
 
   // A cheap content signature so we can flash only the nodes that actually
   // changed between snapshots (title / context / thread tail).
@@ -218,7 +252,12 @@ export function MapView({ mapId }: { mapId: string }) {
       // Frame ids never collide with node ids, so the same prevById map is safe.
       const frameNodes = (v.frames ?? []).map((f) => {
         const existing = prevById.get(f.id);
-        const fdata = { title: f.title, color: f.color, frame: true };
+        const fdata = {
+          title: f.title,
+          color: f.color,
+          title_size: f.title_size ?? null,
+          frame: true,
+        };
         const inflight =
           (draggingIds.current.has(f.id) || resizingIds.current.has(f.id)) &&
           !!existing;
@@ -445,25 +484,54 @@ export function MapView({ mapId }: { mapId: string }) {
     setRfEdges((es) => applyEdgeChanges(changes, es));
   }, []);
 
+  // Record an undoable frame edit (color / title / size / geometry). Called by
+  // MapFrameNode before it persists a change, and by onNodeDragStop for moves.
+  const recordFrameUpdate = useCallback(
+    (frameId: string, prev: FramePrev) => {
+      undoStack.current.push({ kind: "frame-update", frameId, prev });
+    },
+    [],
+  );
+
+  // Record an undoable map-node move/resize. Called by onNodeDragStop (move)
+  // and by MapNode's resizer (resize) with the pre-gesture geometry.
+  const recordNodeGeom = useCallback(
+    (nodeId: string, prev: { x: number; y: number; w?: number; h?: number }) => {
+      undoStack.current.push({ kind: "node-geom", nodeId, prev });
+    },
+    [],
+  );
+
+  // Capture a node/frame's pre-drag position so the move can be undone.
+  const onNodeDragStart = useCallback((_e: any, node: RFNode) => {
+    dragStartPos.current[node.id] = {
+      x: node.position.x,
+      y: node.position.y,
+    };
+  }, []);
+
   const onNodeDragStop = useCallback(
     (_e: any, node: RFNode) => {
       draggingIds.current.delete(node.id);
+      const nx = Math.round(node.position.x);
+      const ny = Math.round(node.position.y);
+      const start = dragStartPos.current[node.id];
+      delete dragStartPos.current[node.id];
+      const moved =
+        !!start && (Math.round(start.x) !== nx || Math.round(start.y) !== ny);
+      const prev = start
+        ? { x: Math.round(start.x), y: Math.round(start.y) }
+        : null;
       if (node.type === "frame") {
+        if (moved && prev) recordFrameUpdate(node.id, prev);
         // Frames persist via their own endpoint (they're not map_nodes).
-        postMapUpdateFrame(mapId, node.id, {
-          x: Math.round(node.position.x),
-          y: Math.round(node.position.y),
-        }).catch(() => {});
+        postMapUpdateFrame(mapId, node.id, { x: nx, y: ny }).catch(() => {});
         return;
       }
-      postMapMoveNode(
-        mapId,
-        node.id,
-        Math.round(node.position.x),
-        Math.round(node.position.y),
-      ).catch(() => {});
+      if (moved && prev) recordNodeGeom(node.id, prev);
+      postMapMoveNode(mapId, node.id, nx, ny).catch(() => {});
     },
-    [mapId],
+    [mapId, recordFrameUpdate, recordNodeGeom],
   );
 
   const onConnect = useCallback(
@@ -496,31 +564,58 @@ export function MapView({ mapId }: { mapId: string }) {
     [mapId],
   );
 
-  // Restore a batched deletion (node(s) + their edges + frame(s)): un-tombstone
-  // on the broker, then refetch so the canvas shows them again.
-  const restoreEntry = useCallback(
-    (entry: {
-      nodeIds: string[];
-      edgeIds: string[];
-      frameIds: string[];
-      label: string;
-    }) => {
+  // Apply one undo entry. Dispatches by kind: a batched delete un-tombstones
+  // node(s)/edge(s)/frame(s); a frame-add deletes the created frame; a
+  // frame-update re-applies the previous field values. Always refetches after.
+  const undoEntry = useCallback(
+    (entry: UndoEntry) => {
       const i = undoStack.current.indexOf(entry);
       if (i >= 0) undoStack.current.splice(i, 1);
-      const jobs: Promise<unknown>[] = [];
-      if (entry.nodeIds.length || entry.edgeIds.length) {
-        jobs.push(
-          postMapRestore(mapId, {
-            nodeIds: entry.nodeIds,
-            edgeIds: entry.edgeIds,
-          }),
-        );
+      if (entry.kind === "delete") {
+        const jobs: Promise<unknown>[] = [];
+        if (entry.nodeIds.length || entry.edgeIds.length) {
+          jobs.push(
+            postMapRestore(mapId, {
+              nodeIds: entry.nodeIds,
+              edgeIds: entry.edgeIds,
+            }),
+          );
+        }
+        for (const id of entry.frameIds) {
+          jobs.push(postMapRestoreFrame(mapId, id));
+        }
+        Promise.all(jobs)
+          .then(() => fetchMap())
+          .catch(() => {});
+        showToast(t("map.restored"), "ok");
+        return;
       }
-      for (const id of entry.frameIds) jobs.push(postMapRestoreFrame(mapId, id));
-      Promise.all(jobs)
+      if (entry.kind === "frame-add") {
+        postMapDeleteFrame(mapId, entry.frameId)
+          .then(() => fetchMap())
+          .catch(() => {});
+        showToast(t("map.undone"), "ok");
+        return;
+      }
+      if (entry.kind === "node-geom") {
+        postMapMoveNode(
+          mapId,
+          entry.nodeId,
+          entry.prev.x,
+          entry.prev.y,
+          entry.prev.w,
+          entry.prev.h,
+        )
+          .then(() => fetchMap())
+          .catch(() => {});
+        showToast(t("map.undone"), "ok");
+        return;
+      }
+      // frame-update
+      postMapUpdateFrame(mapId, entry.frameId, entry.prev)
         .then(() => fetchMap())
         .catch(() => {});
-      showToast(t("map.restored"), "ok");
+      showToast(t("map.undone"), "ok");
     },
     [mapId, fetchMap, t],
   );
@@ -528,7 +623,7 @@ export function MapView({ mapId }: { mapId: string }) {
   // Add a grouping frame at the current viewport centre. User-only (the AI
   // never creates frames); works regardless of lock — but a frame can only be
   // moved/resized once unlocked, like everything else on the canvas.
-  const addFrame = useCallback(() => {
+  const addFrame = useCallback(async () => {
     const inst = rf.current;
     const el = canvasRef.current;
     if (!inst || !el) return;
@@ -539,12 +634,21 @@ export function MapView({ mapId }: { mapId: string }) {
       x: rect.left + rect.width / 2,
       y: rect.top + rect.height / 2,
     });
-    postMapAddFrame(mapId, {
-      x: Math.round(c.x - w / 2),
-      y: Math.round(c.y - h / 2),
-      w,
-      h,
-    }).catch(() => {});
+    try {
+      const res = await postMapAddFrame(mapId, {
+        x: Math.round(c.x - w / 2),
+        y: Math.round(c.y - h / 2),
+        w,
+        h,
+      });
+      const j = (await res.json()) as { ok?: boolean; frame_id?: string };
+      // Make the creation undoable (Cmd+Z deletes the new frame).
+      if (j?.frame_id) {
+        undoStack.current.push({ kind: "frame-add", frameId: j.frame_id });
+      }
+    } catch {
+      /* best-effort; the WS broadcast still shows the frame */
+    }
   }, [mapId]);
 
   // A canvas delete (Backspace/Delete) removes the selected node(s) AND their
@@ -568,7 +672,13 @@ export function MapView({ mapId }: { mapId: string }) {
           ? ((frameNodes[0].data as any)?.title as string) ||
             t("map.frame_untitled")
           : "";
-      const entry = { nodeIds, edgeIds, frameIds, label };
+      const entry: UndoEntry = {
+        kind: "delete",
+        nodeIds,
+        edgeIds,
+        frameIds,
+        label,
+      };
       // Persist EVERY delete BEFORE exposing the undo entry. Otherwise an
       // immediate Cmd+Z could fire /map-restore before a still-in-flight delete
       // POST lands, and that late delete would re-tombstone the row (a silent,
@@ -589,12 +699,12 @@ export function MapView({ mapId }: { mapId: string }) {
               : t("map.deleted_edge");
           showToast(msg, "ok", {
             label: t("map.undo_delete"),
-            onClick: () => restoreEntry(entry),
+            onClick: () => undoEntry(entry),
           });
         })
         .catch(() => {});
     },
-    [mapId, t, restoreEntry],
+    [mapId, t, undoEntry],
   );
 
   // Cmd/Ctrl+Z = undo the most recent deletion. Ignored while typing (so it
@@ -609,11 +719,11 @@ export function MapView({ mapId }: { mapId: string }) {
       const entry = undoStack.current.pop();
       if (!entry) return;
       e.preventDefault();
-      restoreEntry(entry);
+      undoEntry(entry);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [restoreEntry]);
+  }, [undoEntry]);
 
   // Persist a card resize (wired through MapContext → NodeResizer).
   const onResize = useCallback<MapCtx["onResize"]>(
@@ -640,9 +750,19 @@ export function MapView({ mapId }: { mapId: string }) {
             ownerAlive,
             locked,
             onResize,
+            recordFrameUpdate,
+            recordNodeGeom,
           }
         : null,
-    [mapId, view, ownerAlive, locked, onResize],
+    [
+      mapId,
+      view,
+      ownerAlive,
+      locked,
+      onResize,
+      recordFrameUpdate,
+      recordNodeGeom,
+    ],
   );
 
   if (notFound) {
@@ -746,6 +866,7 @@ export function MapView({ mapId }: { mapId: string }) {
                 defaultEdgeOptions={defaultEdgeOptions}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
+                onNodeDragStart={onNodeDragStart}
                 onNodeDragStop={onNodeDragStop}
                 onConnect={onConnect}
                 onReconnect={onReconnect}
