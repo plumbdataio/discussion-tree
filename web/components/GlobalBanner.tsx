@@ -44,11 +44,15 @@ export function GlobalBanner() {
         const msg = JSON.parse(e.data);
         if (msg?.type === "global-banner-update") {
           setBanner(msg.banner ?? null);
-        } else if (msg?.type === "session-stall-update") {
-          // GlobalBanner is mounted on EVERY page, so it's the only socket
-          // that can nudge the sidebar's stall warning on the root / session
-          // dashboards (where no BoardApp / MapView socket exists). On board /
-          // map pages this just double-fires a harmless, idempotent refetch.
+        } else if (
+          msg?.type === "session-stall-update" ||
+          msg?.type === "sidebar-refresh"
+        ) {
+          // GlobalBanner is mounted on EVERY page, so it's the only socket that
+          // can nudge the sidebar on the map / session / home pages (BoardApp
+          // forwards sidebar-refresh only on a board page). Covers stall
+          // warnings, rename, unread shifts, BG markers, schedule markers. On a
+          // board page this just double-fires a harmless, idempotent refetch.
           window.dispatchEvent(new Event("pd-sidebar-refresh"));
         }
       } catch {
