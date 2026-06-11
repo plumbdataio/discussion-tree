@@ -21,6 +21,31 @@ import {
 import { ensureDefaultBoard } from "./default-board.ts";
 import { generateId } from "./helpers.ts";
 import { onSessionsChanged } from "./power.ts";
+import { broadcast } from "./ws.ts";
+
+// Board / map ids owned by the given (about-to-be-reclaimed) sessions. Collected
+// BEFORE the reclaim UPDATE moves them, so afterwards we can nudge any open
+// board/map clients to refetch — otherwise they keep the OLD (now dead) owner
+// session_id in their snapshot and e.g. the CLI command-send button targets the
+// dead session until an unrelated update or a manual reload.
+function ownedBoardsAndMaps(deadIds: string[]): {
+  boards: string[];
+  maps: string[];
+} {
+  if (!deadIds.length) return { boards: [], maps: [] };
+  const ph = deadIds.map(() => "?").join(",");
+  const boards = (
+    db.prepare(`SELECT id FROM boards WHERE session_id IN (${ph})`).all(
+      ...deadIds,
+    ) as { id: string }[]
+  ).map((r) => r.id);
+  const maps = (
+    db.prepare(`SELECT id FROM maps WHERE session_id IN (${ph})`).all(
+      ...deadIds,
+    ) as { id: string }[]
+  ).map((r) => r.id);
+  return { boards, maps };
+}
 
 export function handleRegister(body: any) {
   const id = generateId("s");
@@ -86,6 +111,9 @@ export function handleAttachCCSession(body: any) {
     orphan_boards: 0,
     orphan_messages: 0,
   };
+  // Open board/map clients to nudge once the reclaim is done (see comment on
+  // ownedBoardsAndMaps).
+  const refreshTargets = { boards: [] as string[], maps: [] as string[] };
 
   // Primary reclaim — same cc_session_id, attach was called before the prior
   // MCP died.
@@ -96,6 +124,9 @@ export function handleAttachCCSession(body: any) {
     .all(ccId) as { id: string; name: string | null }[];
   if (deadSessions.length > 0) {
     const deadIds = deadSessions.map((s) => s.id);
+    const before = ownedBoardsAndMaps(deadIds);
+    refreshTargets.boards.push(...before.boards);
+    refreshTargets.maps.push(...before.maps);
     const placeholders = deadIds.map(() => "?").join(",");
     const b = db.run(
       `UPDATE boards SET session_id = ? WHERE session_id IN (${placeholders})`,
@@ -147,6 +178,9 @@ export function handleAttachCCSession(body: any) {
       .all(me.cwd) as { id: string }[];
     if (orphanSessions.length > 0) {
       const orphanIds = orphanSessions.map((s) => s.id);
+      const before = ownedBoardsAndMaps(orphanIds);
+      refreshTargets.boards.push(...before.boards);
+      refreshTargets.maps.push(...before.maps);
       const placeholders = orphanIds.map(() => "?").join(",");
       const b = db.run(
         `UPDATE boards SET session_id = ? WHERE session_id IN (${placeholders})`,
@@ -180,6 +214,17 @@ export function handleAttachCCSession(body: any) {
   // Same cc_session_id ⇒ same default board (carried forward via the reclaim
   // above). Only fresh cc_session_ids get a brand-new one.
   ensureDefaultBoard(sessionId, ccId);
+
+  // Nudge any open board/map clients whose owner just changed to this session,
+  // so their snapshot (board.session_id, owner_can_cli_send, …) refreshes
+  // instead of pointing at the dead session. Board clients fall through to
+  // fetchBoard() on an unrecognized type; map clients refetch on any frame.
+  for (const id of new Set(refreshTargets.boards)) {
+    broadcast(id, { type: "board-owner-changed" });
+  }
+  for (const id of new Set(refreshTargets.maps)) {
+    broadcast(id, { type: "map-owner-changed" });
+  }
 
   return { ok: true, reclaimed };
 }

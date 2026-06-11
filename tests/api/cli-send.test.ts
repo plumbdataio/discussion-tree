@@ -7,6 +7,7 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import {
   startBroker,
   post,
+  get,
   registerSession,
   attachCC,
   type BrokerHandle,
@@ -112,5 +113,48 @@ describe("/cli-send guards", () => {
     );
     expect(r.json.ok).toBe(false);
     expect(r.json.error).toBe("pane_gone");
+  });
+});
+
+// A CC restart re-attaches under the same cc_session_id and reclaims the board
+// to the NEW session row. owner_can_cli_send must follow to the new session so
+// an open board's command button targets the live pane, not the dead session.
+describe("/cli-send across a CC restart", () => {
+  async function defaultBoardId(ccId: string): Promise<string | null> {
+    const r = await get<{ sessions: { cc_session_id?: string; boards: { id: string; is_default?: number }[] }[] }>(
+      `${broker.url}/api/sessions`,
+    );
+    for (const s of r.json.sessions ?? []) {
+      if (s.cc_session_id === ccId) {
+        const def = s.boards?.find((b) => b.is_default);
+        if (def) return def.id;
+      }
+    }
+    return null;
+  }
+
+  test("owner_can_cli_send follows the reclaimed board to the new session", async () => {
+    const ccId = `cc-restart-${Math.random().toString(36).slice(2, 8)}`;
+    // First launch: NOT in tmux.
+    const s1 = await registerSession(broker.url);
+    await attachWithTmux(s1, ccId, null, null);
+    const bid = await defaultBoardId(ccId);
+    expect(bid).toBeTruthy();
+    const before = await get<{ owner_can_cli_send?: boolean; board: { session_id: string } }>(
+      `${broker.url}/api/board/${bid}`,
+    );
+    expect(before.json.owner_can_cli_send).toBe(false);
+    expect(before.json.board.session_id).toBe(s1);
+
+    // Restart: old session dies, new one re-attaches inside tmux.
+    await post(`${broker.url}/unregister`, { session_id: s1 });
+    const s2 = await registerSession(broker.url);
+    await attachWithTmux(s2, ccId, "%7", "/tmp/sock");
+
+    const after = await get<{ owner_can_cli_send?: boolean; board: { session_id: string } }>(
+      `${broker.url}/api/board/${bid}`,
+    );
+    expect(after.json.board.session_id).toBe(s2);
+    expect(after.json.owner_can_cli_send).toBe(true);
   });
 });
