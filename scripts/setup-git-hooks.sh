@@ -5,15 +5,25 @@
 # git's core.hooksPath is all-or-nothing: setting it makes git use ONLY that
 # dir, ignoring any global / other core.hooksPath the developer had. So we:
 #   1. record the dir we're superseding into dt.parentHooksPath, then
-#   2. (re)generate a tiny delegating stub in .githooks/ for EVERY hook that dir
-#      provides, so all of the developer's hooks (commit-msg, pre-push, …) still
-#      run for this repo instead of silently disappearing.
-# Only the guard (pre-commit), the delegate helper, and .gitignore are tracked;
-# the per-developer delegate stubs are generated here and gitignored.
+#   2. (re)generate a tiny delegating stub in .githooks/ for every RECOGNISED
+#      git hook that dir provides, so all of the developer's hooks (commit-msg,
+#      pre-push, …) still run for this repo instead of silently disappearing.
+# Only the guard hooks (pre-commit, commit-msg), the delegate helper, and
+# .gitignore are tracked; the per-developer delegate stubs are generated here
+# and gitignored.
 set -e
 
 HOOKS_DIR=.githooks
 MARK="dt-generated-delegate"
+
+# Recognised client-side git hook names we delegate, EXCLUDING the ones we own
+# as committed hooks (pre-commit, commit-msg — they self-delegate). Using a
+# whitelist means we never generate over a tracked helper like _delegate.sh.
+HOOK_NAMES="applypatch-msg pre-applypatch post-applypatch pre-merge-commit \
+prepare-commit-msg post-commit pre-rebase post-checkout post-merge pre-push \
+pre-receive update post-receive post-update reference-transaction \
+push-to-checkout pre-auto-gc post-rewrite sendemail-validate \
+fsmonitor-watchman post-index-change"
 
 # 1. Record the superseded dir (unless it's already ours / empty), then override.
 prev=$(git config core.hooksPath 2>/dev/null || true)
@@ -29,20 +39,13 @@ for f in "$HOOKS_DIR"/*; do
   if head -n 3 "$f" 2>/dev/null | grep -q "$MARK"; then rm -f "$f"; fi
 done
 
-# Expand a leading ~ in the recorded path WITHOUT eval (config value, untrusted).
-parent=$(git config dt.parentHooksPath 2>/dev/null || true)
-case "$parent" in
-  "~/"*) parent="$HOME/${parent#"~/"}" ;;
-  "~") parent="$HOME" ;;
-esac
+# `--path` lets git expand ~ / ~user in the recorded value (no eval).
+parent=$(git config --path dt.parentHooksPath 2>/dev/null || true)
 if [ -z "$parent" ] || [ ! -d "$parent" ]; then exit 0; fi
 
-# Generate a delegate per executable hook in the parent dir (pre-commit is the
-# committed guard, which already chains to the parent itself).
-for h in "$parent"/*; do
-  [ -f "$h" ] && [ -x "$h" ] || continue
-  name=$(basename "$h")
-  [ "$name" = "pre-commit" ] && continue
+# Generate a delegate for each recognised hook the parent dir actually provides.
+for name in $HOOK_NAMES; do
+  [ -f "$parent/$name" ] && [ -x "$parent/$name" ] || continue
   stub="$HOOKS_DIR/$name"
   printf '%s\n' \
     '#!/bin/sh' \

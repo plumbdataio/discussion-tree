@@ -5,3 +5,4 @@
 !.gitignore
 !_delegate.sh
 !pre-commit
+!commit-msg

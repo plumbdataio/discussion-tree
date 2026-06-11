@@ -19,6 +19,7 @@
 // points, not literal glyphs, so the guard never trips on its own source.
 
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 export const FILE_PRAGMA = "allow-japanese-file";
 export const LINE_PRAGMA = "allow-japanese";
@@ -55,6 +56,19 @@ export function findCjkViolations(file: string, content: string): string[] {
   return out;
 }
 
+// Commit-message variant: the message must be English too (repo surface rule).
+// Skips git's stripped comment lines (#…, the localized template) and honors an
+// inline `allow-japanese` for the rare line that genuinely needs CJK.
+export function checkMessageCjk(content: string): string[] {
+  const out: string[] = [];
+  content.split("\n").forEach((line, i) => {
+    if (line.startsWith("#")) return; // git comment line — removed from the commit
+    if (line.includes(LINE_PRAGMA)) return;
+    if (CJK.test(line)) out.push(`commit message line ${i + 1}: ${line.trim().slice(0, 100)}`);
+  });
+  return out;
+}
+
 function git(args: string[]): string {
   const r = spawnSync("git", args, {
     encoding: "utf8",
@@ -64,6 +78,26 @@ function git(args: string[]): string {
 }
 
 function main(): void {
+  const argv = process.argv.slice(2);
+  // Commit-message mode (the commit-msg hook): scan the message file at argv[1].
+  if (argv[0] === "--commit-msg") {
+    const path = argv[1];
+    const v = path ? checkMessageCjk(readFileSync(path, "utf8")) : [];
+    if (v.length > 0) {
+      console.error(
+        "\nERROR: Japanese / CJK text in the commit message " +
+          "(commit messages must be English):\n",
+      );
+      console.error(v.map((l) => "  " + l).join("\n"));
+      console.error(
+        `\nReword in English. (If a line genuinely needs CJK, add ` +
+          `"${LINE_PRAGMA}" to it.)\n`,
+      );
+      process.exit(1);
+    }
+    return;
+  }
+
   // ACMR: added / copied / modified / RENAMED destinations. Renames must be
   // included or moving (e.g.) web/locales/ja.json onto a .ts path would smuggle
   // its Japanese past the guard.

@@ -1,6 +1,9 @@
 // allow-japanese-file: exercises the CJK detector with CJK sample input
 import { describe, test, expect } from "bun:test";
-import { findCjkViolations } from "../../scripts/check-no-japanese.ts";
+import {
+  findCjkViolations,
+  checkMessageCjk,
+} from "../../scripts/check-no-japanese.ts";
 
 // findCjkViolations is the pure core of the pre-commit guard: given a path +
 // content it returns the offending lines (or [] when exempt / clean).
@@ -48,5 +51,25 @@ describe("findCjkViolations", () => {
   test("reports every offending line", () => {
     const content = 'const a = "ア";\nconst b = "イ";\nconst c = 1;';
     expect(findCjkViolations("web/foo.ts", content).length).toBe(2);
+  });
+});
+
+describe("checkMessageCjk (commit messages)", () => {
+  test("flags Japanese in the message body", () => {
+    expect(checkMessageCjk("fix: 保存ボタンの不具合").length).toBe(1);
+  });
+
+  test("an English message is clean", () => {
+    expect(checkMessageCjk("fix: save button bug\n\nDetails here.")).toEqual([]);
+  });
+
+  test("ignores git comment lines (the stripped # template)", () => {
+    expect(checkMessageCjk("fix: x\n# 変更内容を入力してください")).toEqual([]);
+  });
+
+  test("honors an inline allow-japanese escape", () => {
+    expect(checkMessageCjk("doc: the 「」 bracket case  allow-japanese")).toEqual(
+      [],
+    );
   });
 });

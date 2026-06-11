@@ -1,0 +1,8 @@
+#!/bin/sh
+# discussion-tree commit-msg guard: keep the commit MESSAGE English too (no
+# Japanese / CJK), matching the no-Japanese-in-source rule. $1 is the path to
+# the message file. See scripts/check-no-japanese.ts (--commit-msg) for the
+# rule and the inline `allow-japanese` escape hatch.
+bun run scripts/check-no-japanese.ts --commit-msg "$1" || exit 1
+# Then run any commit-msg from the hooks dir we superseded (global / other).
+exec "$(dirname "$0")/_delegate.sh" commit-msg "$@"
