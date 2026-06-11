@@ -315,7 +315,7 @@ export function MapView({ mapId }: { mapId: string }) {
     pendingFlash.current.clear();
     const timers: ReturnType<typeof setTimeout>[] = [];
     for (const id of ids) {
-      const el = document.querySelector(`.react-flow__node[data-id="${id}"]`);
+      const el = document.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`);
       if (!el) continue;
       el.classList.remove("map-node-flash");
       // force reflow so re-adding the class restarts the animation
@@ -337,7 +337,7 @@ export function MapView({ mapId }: { mapId: string }) {
     const timers: ReturnType<typeof setTimeout>[] = [];
     const applied: string[] = [];
     for (const id of ids) {
-      const el = document.querySelector(`.react-flow__node[data-id="${id}"]`);
+      const el = document.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`);
       if (!el) continue; // not rendered yet — leave it queued for the next paint
       pendingOverlap.current.delete(id);
       applied.push(id);
@@ -361,7 +361,9 @@ export function MapView({ mapId }: { mapId: string }) {
       padding: 0.35,
       maxZoom: 1.2,
     });
-    const el = document.querySelector(`.react-flow__node[data-id="${nodeId}"]`);
+    const el = document.querySelector(
+      `.react-flow__node[data-id="${CSS.escape(nodeId)}"]`,
+    );
     if (!el) return;
     el.classList.remove("map-node-flash");
     void (el as HTMLElement).offsetWidth; // restart the animation
