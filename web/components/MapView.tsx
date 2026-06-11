@@ -113,6 +113,10 @@ export function MapView({ mapId }: { mapId: string }) {
   // Nodes whose content changed in the latest snapshot — flashed (strategy C) after
   // render so the user notices an update WITHOUT the camera jumping to it.
   const pendingFlash = useRef<Set<string>>(new Set());
+  // New nodes the broker said landed across another card / an edge — warned
+  // (amber) after render so the user can drag them clear. Applied like the
+  // strategy-C flash (DOM class, no re-render).
+  const pendingOverlap = useRef<Set<string>>(new Set());
   const didFit = useRef(false);
   const rf = useRef<any>(null);
   // Undo stack for deletions. A single Delete can remove a node AND its
@@ -238,6 +242,14 @@ export function MapView({ mapId }: { mapId: string }) {
           const msg = JSON.parse(ev.data as string);
           if (msg?.type === "session-stall-update") {
             window.dispatchEvent(new Event("pd-sidebar-refresh"));
+          } else if (
+            msg?.type === "map-node-overlap" &&
+            typeof msg.node_id === "string"
+          ) {
+            // A freshly-placed node landed across another card / an edge. Queue
+            // a transient warning flash applied once the node has rendered (the
+            // fetchMap above brings it in) — see the pendingOverlap effect.
+            pendingOverlap.current.add(msg.node_id);
           }
         } catch {
           /* non-JSON frame — ignore */
@@ -298,6 +310,29 @@ export function MapView({ mapId }: { mapId: string }) {
       el.classList.add("map-node-flash");
       timers.push(
         setTimeout(() => el.classList.remove("map-node-flash"), 1400),
+      );
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [rfNodes]);
+
+  // Overlap warning — a new node landed across another card / an edge. Same
+  // DOM-class approach as the flash, but longer (3.5s) and amber, so the user
+  // notices and can drag it clear. Drained once the node is in the DOM.
+  useEffect(() => {
+    if (pendingOverlap.current.size === 0) return;
+    const ids = Array.from(pendingOverlap.current);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const applied: string[] = [];
+    for (const id of ids) {
+      const el = document.querySelector(`.react-flow__node[data-id="${id}"]`);
+      if (!el) continue; // not rendered yet — leave it queued for the next paint
+      pendingOverlap.current.delete(id);
+      applied.push(id);
+      el.classList.remove("map-node-overlap-warn");
+      void (el as HTMLElement).offsetWidth;
+      el.classList.add("map-node-overlap-warn");
+      timers.push(
+        setTimeout(() => el.classList.remove("map-node-overlap-warn"), 3500),
       );
     }
     return () => timers.forEach(clearTimeout);

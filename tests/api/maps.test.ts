@@ -906,3 +906,40 @@ describe("maps — rename", () => {
   });
 });
 
+describe("maps — child placement (grid-wrap, never move existing)", () => {
+  async function positions(
+    mapId: string,
+  ): Promise<Record<string, { x: number; y: number }>> {
+    const v = await get<{ nodes: { id: string; x: number; y: number }[] }>(
+      `${broker.url}/api/map/${mapId}`,
+    );
+    return Object.fromEntries(v.json.nodes.map((n) => [n.id, { x: n.x, y: n.y }]));
+  }
+
+  test("children wrap into >1 column and earlier siblings never move", async () => {
+    const mapId = await createMap("placement");
+    const parent = await addNode(mapId, { title: "P" });
+    const ids: string[] = [];
+    const atCreation: Record<string, { x: number; y: number }> = {};
+    for (let i = 0; i < 6; i++) {
+      const id = await addNode(mapId, { title: `c${i}`, parent });
+      ids.push(id);
+      atCreation[id] = (await positions(mapId))[id];
+    }
+    const final = await positions(mapId);
+
+    // No child moved after it was placed (the user's mental map stays valid).
+    for (const id of ids) {
+      expect(final[id]).toEqual(atCreation[id]);
+    }
+    // 6 children don't stack in a single tall column — they grid-wrap, so there
+    // is more than one distinct x among them.
+    const xs = new Set(ids.map((id) => final[id].x));
+    expect(xs.size).toBeGreaterThanOrEqual(2);
+    // ...and every child sits to the right of the parent.
+    for (const id of ids) {
+      expect(final[id].x).toBeGreaterThan(final[parent].x);
+    }
+  });
+});
+

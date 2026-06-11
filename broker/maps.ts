@@ -83,6 +83,10 @@ const ROW_GAP = 160;
 
 // Gap kept clear around every placed card so auto-placed nodes never touch.
 const PLACE_MARGIN = 28;
+// A parent's children wrap into a new column once a column holds this many,
+// so a parent with lots of children fans into a grid instead of one tall
+// vertical run.
+const MAX_PER_COL = 4;
 
 function placeNode(
   mapId: string,
@@ -108,26 +112,115 @@ function placeNode(
         y < r.y + r.h + PLACE_MARGIN &&
         y + NODE_H + PLACE_MARGIN > r.y,
     );
-  // Scan straight DOWN from the anchor for the first slot that doesn't overlap
-  // any existing card. Children anchor just right of (and level with) their
-  // parent — near it, in the same row band — instead of being stacked far down
-  // a fixed column. COL_GAP (the horizontal gap) is the user-tuned value, kept.
-  let baseX: number;
-  let baseY: number;
   const parent = parentId ? all.find((n) => n.id === parentId) : undefined;
-  if (parent) {
-    baseX = parent.x + (parent.w ?? NODE_W) + COL_GAP;
-    baseY = parent.y;
-  } else {
-    // Root: a node with no incoming edge — start at the top-left band.
-    baseX = 80;
-    baseY = 80;
+  if (!parent) {
+    // Root (no parent): keep the simple top-left downward scan.
+    let y = 80;
+    for (let i = 0; i < 500 && !free(80, y); i++) y += NODE_H + ROW_GAP;
+    return { x: 80, y };
   }
-  let y = baseY;
-  for (let i = 0; i < 500 && !free(baseX, y); i++) {
-    y += NODE_H + ROW_GAP;
+
+  // Children of THIS parent that already exist = this new node's sibling index.
+  // (placeNode runs before the node and its parent edge are inserted, so the
+  // edge set here is the existing siblings only.)
+  const childIds = new Set(
+    edges.filter((e) => e.from_id === parent.id).map((e) => e.to_id),
+  );
+  const k = all.filter((n) => childIds.has(n.id)).length;
+
+  const pw = parent.w ?? NODE_W;
+  const ph = parent.h ?? NODE_H;
+  const parentCenterY = parent.y + ph / 2;
+  const ROW_STRIDE = NODE_H + ROW_GAP;
+  const COL_STRIDE = NODE_W + COL_GAP;
+
+  // (1) Grid-wrap: cap a column at MAX_PER_COL children, then start a new
+  // column to the right. (3) Centered: within a column, fan out from the
+  // parent's centre — slot order 0, +1, -1, +2, -2, … — so siblings straddle
+  // the parent instead of stacking straight down. Deterministic per sibling
+  // index, so adding a child never moves an existing one (the user's mental
+  // map of where things are stays valid).
+  const col = Math.floor(k / MAX_PER_COL);
+  const inCol = k % MAX_PER_COL;
+  const step =
+    inCol === 0 ? 0 : inCol % 2 === 1 ? (inCol + 1) / 2 : -inCol / 2;
+  const idealX = parent.x + pw + COL_GAP + col * COL_STRIDE;
+  const idealY = parentCenterY - NODE_H / 2 + step * ROW_STRIDE;
+
+  // Keep the chosen column, but if that exact slot is already taken (another
+  // branch, or a card the user dragged there) nudge downward to the first free
+  // spot — existing cards are never moved.
+  let y = idealY;
+  for (let i = 0; i < 500 && !free(idealX, y); i++) y += ROW_STRIDE;
+  return { x: idealX, y };
+}
+
+// Does a freshly-placed card (its footprint rect) overlap another node or a
+// non-incident edge? Used to flag the new node so the UI can warn the user
+// (they can drag it clear). Node overlap is normally avoided by placeNode's
+// free() scan; the common real case is a card that landed across an edge.
+function placementOverlaps(
+  mapId: string,
+  nodeId: string,
+  rect: { x: number; y: number; w: number; h: number },
+): boolean {
+  const all = (selectMapNodesByMap.all(mapId) as MapNode[]).filter(
+    (n) => n.id !== nodeId,
+  );
+  const overlapsNode = all.some((n) => {
+    const w = n.w ?? NODE_W;
+    const h = n.h ?? NODE_H;
+    return (
+      rect.x < n.x + w &&
+      rect.x + rect.w > n.x &&
+      rect.y < n.y + h &&
+      rect.y + rect.h > n.y
+    );
+  });
+  if (overlapsNode) return true;
+  // Edges: approximate each as the straight segment between its endpoints'
+  // centres (the floating edge runs roughly border-to-border), and sample it.
+  const center = (id: string) => {
+    const n = all.find((m) => m.id === id);
+    if (!n) return null;
+    return { x: n.x + (n.w ?? NODE_W) / 2, y: n.y + (n.h ?? NODE_H) / 2 };
+  };
+  const inRect = (px: number, py: number) =>
+    px >= rect.x && px <= rect.x + rect.w && py >= rect.y && py <= rect.y + rect.h;
+  const edges = selectMapEdgesByMap.all(mapId) as {
+    from_id: string;
+    to_id: string;
+  }[];
+  return edges.some((e) => {
+    // An edge touching the new node is expected (it connects to it), not an
+    // overlap problem — skip those.
+    if (e.from_id === nodeId || e.to_id === nodeId) return false;
+    const a = center(e.from_id);
+    const b = center(e.to_id);
+    if (!a || !b) return false;
+    for (let t = 0; t <= 1.0001; t += 0.05) {
+      if (inRect(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)) return true;
+    }
+    return false;
+  });
+}
+
+// After a node is auto-placed, broadcast a transient overlap warning if it
+// landed across another node or an edge — the UI flashes that node so the user
+// can nudge it clear. (User-facing only; the AI is never told, since it can't
+// move nodes anyway.)
+function flagPlacementOverlap(mapId: string, nodeId: string): void {
+  const node = selectMapNode.get(mapId, nodeId) as MapNode | undefined;
+  if (!node) return;
+  const rect = {
+    x: node.x,
+    y: node.y,
+    w: node.w ?? NODE_W,
+    h: node.h ?? NODE_H,
+  };
+  if (placementOverlaps(mapId, nodeId, rect)) {
+    broadcast(mapId, { type: "map-node-overlap", node_id: nodeId });
   }
-  return { x: baseX, y };
 }
 
 // --- Map / node / edge CRUD ------------------------------------------------
@@ -193,6 +286,7 @@ export function handleAddMapNode(body: any) {
   if (!selectMap.get(mapId)) return { ok: false, error: "map not found" };
   const node = body?.node ?? body;
   const id = addNode(mapId, node);
+  flagPlacementOverlap(mapId, id);
   emit(mapId);
   return { ok: true, node_id: id };
 }
@@ -570,6 +664,7 @@ export function handleApplyMapOps(body: any) {
       if (op === "add") {
         // addNode resolves parent → auto-edge + placement; no per-op emit.
         const id = addNode(mapId, o);
+        flagPlacementOverlap(mapId, id);
         results.push({ op, ok: true, node_id: id });
       } else if (op === "update") {
         const nodeId = String(o.node_id ?? "");

@@ -4956,3 +4956,24 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
 .react-flow__node.map-node-flash .map-card {
   animation: map-node-flash-kf 1.4s ease-out;
 }
+
+/* Overlap warning — a freshly-placed node landed across another card / an
+   edge. Amber pulsing outline (distinct from the blue update flash and the
+   warm unread border) for a few seconds so the user notices and can drag it
+   clear. */
+@keyframes map-node-overlap-kf {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px rgba(245, 158, 11, 0.55),
+      0 0 10px 2px rgba(245, 158, 11, 0.35);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px rgba(245, 158, 11, 0.95),
+      0 0 18px 5px rgba(245, 158, 11, 0.6);
+  }
+}
+.react-flow__node.map-node-overlap-warn .map-card {
+  animation: map-node-overlap-kf 0.9s ease-in-out 0s 4;
+}
