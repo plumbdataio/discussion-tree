@@ -93,10 +93,6 @@ function placeNode(
   parentId: string | null,
 ): { x: number; y: number } {
   const all = selectMapNodesByMap.all(mapId) as MapNode[];
-  const edges = selectMapEdgesByMap.all(mapId) as {
-    from_id: string;
-    to_id: string;
-  }[];
   // Existing footprints (respect each node's actual resized size).
   const rects = all.map((n) => ({
     x: n.x,
@@ -120,39 +116,40 @@ function placeNode(
     return { x: 80, y };
   }
 
-  // Children of THIS parent that already exist = this new node's sibling index.
-  // (placeNode runs before the node and its parent edge are inserted, so the
-  // edge set here is the existing siblings only.)
-  const childIds = new Set(
-    edges.filter((e) => e.from_id === parent.id).map((e) => e.to_id),
-  );
-  const k = all.filter((n) => childIds.has(n.id)).length;
-
   const pw = parent.w ?? NODE_W;
   const ph = parent.h ?? NODE_H;
   const parentCenterY = parent.y + ph / 2;
   const ROW_STRIDE = NODE_H + ROW_GAP;
   const COL_STRIDE = NODE_W + COL_GAP;
 
-  // (1) Grid-wrap: cap a column at MAX_PER_COL children, then start a new
-  // column to the right. (3) Centered: within a column, fan out from the
-  // parent's centre — slot order 0, +1, -1, +2, -2, … — so siblings straddle
-  // the parent instead of stacking straight down. Deterministic per sibling
-  // index, so adding a child never moves an existing one (the user's mental
-  // map of where things are stays valid).
-  const col = Math.floor(k / MAX_PER_COL);
-  const inCol = k % MAX_PER_COL;
-  const step =
-    inCol === 0 ? 0 : inCol % 2 === 1 ? (inCol + 1) / 2 : -inCol / 2;
-  const idealX = parent.x + pw + COL_GAP + col * COL_STRIDE;
-  const idealY = parentCenterY - NODE_H / 2 + step * ROW_STRIDE;
+  // Slot k of the fan/grid around the parent: (1) grid-wrap — cap a column at
+  // MAX_PER_COL, then start a new column to the right; (3) centered — within a
+  // column, fan out from the parent's centre in slot order 0, +1, -1, +2, …, so
+  // children straddle the parent instead of stacking straight down.
+  const slot = (k: number) => {
+    const col = Math.floor(k / MAX_PER_COL);
+    const inCol = k % MAX_PER_COL;
+    const step =
+      inCol === 0 ? 0 : inCol % 2 === 1 ? (inCol + 1) / 2 : -inCol / 2;
+    return {
+      x: parent.x + pw + COL_GAP + col * COL_STRIDE,
+      y: parentCenterY - NODE_H / 2 + step * ROW_STRIDE,
+    };
+  };
 
-  // Keep the chosen column, but if that exact slot is already taken (another
-  // branch, or a card the user dragged there) nudge downward to the first free
-  // spot — existing cards are never moved.
-  let y = idealY;
-  for (let i = 0; i < 500 && !free(idealX, y); i++) y += ROW_STRIDE;
-  return { x: idealX, y };
+  // Take the FIRST FREE slot (not a sibling count). This way a user-drawn
+  // association out of the parent doesn't inflate the index (those edges are
+  // indistinguishable from parent→child edges in the table), and a deleted
+  // child's slot gets reused — while existing cards are still never moved.
+  for (let k = 0; k < 500; k++) {
+    const s = slot(k);
+    if (free(s.x, s.y)) return s;
+  }
+  // Pathological fallback: stack straight down from the first column.
+  const base = slot(0);
+  let y = base.y;
+  for (let i = 0; i < 500 && !free(base.x, y); i++) y += ROW_STRIDE;
+  return { x: base.x, y };
 }
 
 // Does a freshly-placed card (its footprint rect) overlap another node or a
@@ -178,8 +175,11 @@ function placementOverlaps(
     );
   });
   if (overlapsNode) return true;
-  // Edges: approximate each as the straight segment between its endpoints'
-  // centres (the floating edge runs roughly border-to-border), and sample it.
+  // Edges: APPROXIMATE each as the straight segment between its endpoints'
+  // centres and sample it. The rendered edge is a Bézier curve, so this can
+  // miss a card that only the curve (not the chord) crosses, or fire when only
+  // the chord does — acceptable for a best-effort "you may want to move this"
+  // cue (it isn't load-bearing; the user decides whether to nudge the card).
   const center = (id: string) => {
     const n = all.find((m) => m.id === id);
     if (!n) return null;
