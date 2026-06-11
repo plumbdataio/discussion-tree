@@ -374,6 +374,11 @@ export function handleRestoreMap(body: any) {
   const edgeIds = Array.isArray(body?.edge_ids) ? body.edge_ids : [];
   for (const id of nodeIds) restoreMapNode.run(mapId, String(id));
   for (const id of edgeIds) restoreMapEdge.run(mapId, String(id));
+  // A restored node comes back at its ORIGINAL position (undo must be exact) —
+  // but auto-placement may have reused that slot for a new node in the
+  // meantime. Don't move the restored card; instead flash the overlap warning
+  // so the user notices and can nudge whichever card they like.
+  for (const id of nodeIds) flagPlacementOverlap(mapId, String(id));
   emit(mapId);
   return { ok: true, restored_nodes: nodeIds.length, restored_edges: edgeIds.length };
 }
