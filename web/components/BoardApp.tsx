@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { Activity, BoardView } from "../../shared/types.ts";
 import { ActivityBadge } from "./ActivityBadge.tsx";
 import { BoardStructureRequestModal } from "./BoardStructureRequestModal.tsx";
+import { CliCommandButton } from "./CliCommandButton.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
 import { ConcernColumn } from "./ConcernColumn.tsx";
 import { DefaultBoardLayout } from "./DefaultBoardLayout.tsx";
@@ -438,6 +439,14 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
             groups resizes — the buttons never shift left-then-right. */}
         {headerActivity && <ActivityBadge activity={headerActivity} />}
         <div className="header-right">
+          <CliCommandButton
+            sessionId={ownerSessionId}
+            canCliSend={!!data.owner_can_cli_send}
+            busy={
+              activeActivity?.state === "working" ||
+              activeActivity?.state === "blocked"
+            }
+          />
           {(data.owner_bg_task_count ?? 0) > 0 && (
             <button
               type="button"

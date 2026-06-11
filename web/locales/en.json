@@ -138,8 +138,32 @@
     "power_off": "Off",
     "power_while_mcp": "While MCP sessions are connected",
     "power_while_broker": "While the broker is running",
+    "cli_command_label": "Send commands",
+    "cli_command_help": "Shows a \"Send command\" button in the header. It types a TUI command (e.g. /compact) into the tmux pane running the target CC. Only works for sessions whose CC was launched inside tmux.",
     "footer": "Settings are stored in this device's localStorage (per device).",
     "close": "Close (Esc)"
+  },
+  "cli": {
+    "button_title": "Send a command",
+    "modal_title": "Send a command",
+    "command_label": "Command",
+    "args_label": "Arguments (text after /compact)",
+    "send": "Send",
+    "sending": "Sending…",
+    "cancel": "Cancel",
+    "needs_tmux": "This session's CC wasn't launched inside tmux, so commands can't be sent to it.",
+    "busy_note": "CC is busy (or waiting for input), so a command would be interpreted as a message. Try again when it's idle.",
+    "sent_ok": "Command sent",
+    "explainer_title": "About sending commands",
+    "explainer_body": "To use this, launch Claude Code via tmux (e.g. tmux new -s cc claude). Commands can't be sent to sessions whose CC wasn't started inside tmux.",
+    "explainer_ok": "Got it",
+    "err_no_tmux_pane": "This session wasn't launched inside tmux.",
+    "err_session_busy": "CC is busy, so the command wasn't sent.",
+    "err_pane_gone": "The target tmux pane could not be found.",
+    "err_pane_not_claude": "Aborted: Claude Code isn't running in the target pane.",
+    "err_command_not_allowed": "That command isn't allowed.",
+    "err_generic": "Failed to send the command.",
+    "compact_default_args": "Compact using these rules.\nMost important: prioritize conversational continuity over compression. Even after several compactions, it must always be possible to trace back to the very first message.\n\n[Keep verbatim]\n- Every human (user) message\n- The body of every Claude (assistant) message, including mid-task asides (\"first I'll check…\", \"next I'll…\")\n- discussion-tree / parallel-discussion MCP results and received content (this is effectively the conversation, carried via the WebUI)\n\n[OK to compact]\n- Other tool output details (Bash, Grep, etc.)\n- File contents read via Read\n- thinking blocks\n\n[Note]\nA larger result is fine. Breaking the flow so the same topic no longer makes sense is the real problem."
   },
   "modal": {
     "close": "Close (Esc)"

@@ -5241,3 +5241,89 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
   background: none;
   cursor: pointer;
 }
+
+/* --- CLI command-send (opt-in /compact-from-WebUI) --- */
+.cli-command-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 7px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.cli-command-btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.cli-command-modal {
+  width: min(680px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.cli-command-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cli-command-args {
+  width: 100%;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+}
+.cli-command-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.cli-command-note-warn {
+  color: var(--status-discussing);
+}
+.cli-command-actions,
+.cli-explainer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.cli-command-cancel,
+.cli-command-send,
+.cli-explainer-ok {
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+  font-size: 13px;
+}
+.cli-command-cancel {
+  background: var(--panel);
+  color: var(--text);
+}
+.cli-command-send,
+.cli-explainer-ok {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.cli-command-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.cli-explainer-modal {
+  width: min(440px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cli-explainer-body {
+  white-space: pre-wrap;
+}

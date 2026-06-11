@@ -48,6 +48,7 @@ import { MAP_GENERAL_NODE } from "../../shared/types.ts";
 import { MapNode, MapContext, type MapCtx } from "./MapNode.tsx";
 import { MapFrameNode } from "./MapFrameNode.tsx";
 import { MapNodeModal } from "./MapNodeModal.tsx";
+import { CliCommandButton } from "./CliCommandButton.tsx";
 import { MapTimelineModal } from "./MapTimelineModal.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
@@ -699,6 +700,14 @@ export function MapView({ mapId }: { mapId: string }) {
             </span>
           )}
           <div className="header-right">
+            <CliCommandButton
+              sessionId={view.map.session_id}
+              canCliSend={!!view.owner_can_cli_send}
+              busy={
+                view.activity?.state === "working" ||
+                view.activity?.state === "blocked"
+              }
+            />
             <button
               type="button"
               className="map-timeline-btn"

@@ -173,13 +173,19 @@ export function getBoardView(boardId: string) {
   }
   const activity = activities.get(board.session_id) ?? null;
   const ownerRow = db
-    .prepare("SELECT alive, name, stalled_at FROM sessions WHERE id = ?")
+    .prepare(
+      "SELECT alive, name, stalled_at, tmux_pane FROM sessions WHERE id = ?",
+    )
     .get(board.session_id) as {
     alive: number;
     name: string | null;
     stalled_at: string | null;
+    tmux_pane: string | null;
   } | null;
   const owner_alive = ownerRow?.alive === 1;
+  // The owning CC was launched inside tmux (a pane was captured at attach), so
+  // the WebUI can inject a TUI command (e.g. /compact) into it via /cli-send.
+  const owner_can_cli_send = owner_alive && !!ownerRow?.tmux_pane;
   // The owning CC stopped on an API error — surfaces a header warning.
   const owner_stalled = owner_alive && !!ownerRow?.stalled_at;
   // Exposed so the frontend can update document.title to a meaningful
@@ -202,6 +208,7 @@ export function getBoardView(boardId: string) {
     owner_session_name,
     owner_context_usage,
     owner_bg_task_count,
+    owner_can_cli_send,
   };
 }
 

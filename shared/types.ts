@@ -264,6 +264,10 @@ export interface MapView {
   owner_session_name?: string | null;
   owner_context_usage?: { remaining_pct: number; set_at: string } | null;
   owner_bg_task_count?: number;
+  // The owning CC was launched inside tmux (a pane was captured), so the WebUI
+  // can inject a TUI command (e.g. /compact) via /cli-send. Drives the header
+  // command-send button's enabled/disabled state.
+  owner_can_cli_send?: boolean;
 }
 
 // Lightweight sidebar entry (mirrors BoardListItem).
@@ -529,4 +533,8 @@ export interface BoardView {
   // chip from this when present.
   owner_context_usage?: { remaining_pct: number; set_at: string } | null;
   owner_bg_task_count?: number;
+  // The owning CC was launched inside tmux (a pane was captured), so the WebUI
+  // can inject a TUI command (e.g. /compact) via /cli-send. Drives the header
+  // command-send button's enabled/disabled state.
+  owner_can_cli_send?: boolean;
 }

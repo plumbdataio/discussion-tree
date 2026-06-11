@@ -155,6 +155,25 @@ export function postMapRestoreFrame(mapId: string, frameId: string) {
   });
 }
 
+// Inject a TUI command (e.g. /compact) into the owning CC's tmux pane. The
+// broker enforces an allowlist + "session idle" guard; returns { ok, error }.
+export async function postCliSend(
+  sessionId: string,
+  command: string,
+  args: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const r = await fetch("/cli-send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, command, args }),
+    });
+    return (await r.json()) as { ok: boolean; error?: string };
+  } catch {
+    return { ok: false, error: "network" };
+  }
+}
+
 export async function uploadImage(
   file: File,
   boardId: string,

@@ -46,6 +46,11 @@ export type Settings = {
   // on the map view's wide canvas). A floating reopen button stays visible.
   // The mobile drawer is unaffected — it has its own toggle.
   sidebarCollapsed: boolean;
+  // Opt-in: show the header "send a CLI command" button (currently /compact).
+  // It types the command into the owning CC's tmux pane via the broker — so it
+  // only works for sessions launched inside tmux. Off by default (OSS posture:
+  // the feature is invisible until the user explicitly enables it).
+  cliCommandSend: boolean;
 };
 
 const DEFAULTS: Settings = {
@@ -65,6 +70,7 @@ const DEFAULTS: Settings = {
   shownSessions: null,
   collapsedSessions: {},
   sidebarCollapsed: false,
+  cliCommandSend: false,
 };
 
 const STORAGE_KEY = "pd-settings";

@@ -16,6 +16,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   // selector on platforms we don't (yet) implement a wake-lock for.
   const [powerPref, setPowerPref] = useState<PowerPref>("off");
   const [powerPlatform, setPowerPlatform] = useState<string>("");
+  // Shown once, when the user FIRST enables CLI command-send: it only works for
+  // CC launched inside tmux, which isn't obvious. (9787)
+  const [showCliExplainer, setShowCliExplainer] = useState(false);
   useEffect(() => {
     fetch("/get-power-config", {
       method: "POST",
@@ -152,8 +155,54 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           </p>
         </div>
 
+        <div className="settings-row">
+          <label className="settings-label" htmlFor="settings-cli-command">
+            {t("settings.cli_command_label")}
+          </label>
+          <div className="settings-control">
+            <input
+              id="settings-cli-command"
+              type="checkbox"
+              checked={settings.cliCommandSend}
+              onChange={(e) => {
+                update({ cliCommandSend: e.target.checked });
+                // Explain the tmux requirement the moment it's switched on.
+                if (e.target.checked) setShowCliExplainer(true);
+              }}
+            />
+          </div>
+          <p className="settings-help">{t("settings.cli_command_help")}</p>
+        </div>
+
         <p className="settings-footer">{t("settings.footer")}</p>
       </div>
+      {showCliExplainer &&
+        createPortal(
+          <div
+            className="modal-backdrop"
+            onClick={() => setShowCliExplainer(false)}
+          >
+            <div
+              className="modal-content cli-explainer-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="settings-title">{t("cli.explainer_title")}</h2>
+              <p className="settings-help cli-explainer-body">
+                {t("cli.explainer_body")}
+              </p>
+              <div className="cli-explainer-actions">
+                <button
+                  type="button"
+                  className="cli-explainer-ok"
+                  onClick={() => setShowCliExplainer(false)}
+                >
+                  {t("cli.explainer_ok")}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>,
     document.body,
   );

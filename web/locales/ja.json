@@ -138,8 +138,32 @@
     "power_off": "抑止しない",
     "power_while_mcp": "MCP セッション接続中のみ",
     "power_while_broker": "broker 起動中は常時",
+    "cli_command_label": "コマンド送信",
+    "cli_command_help": "ヘッダーに「コマンド送信」ボタンを表示します。/compact 等の TUI コマンドを、対象 CC を起動している tmux ペインに送信します。tmux 内で起動した CC のセッションでのみ動作します。",
     "footer": "設定はこのデバイスの localStorage に保存されます (デバイスごとに別)。",
     "close": "閉じる (Esc)"
+  },
+  "cli": {
+    "button_title": "コマンドを送信",
+    "modal_title": "コマンドを送信",
+    "command_label": "コマンド",
+    "args_label": "引数 (/compact の後ろに続けるテキスト)",
+    "send": "送信",
+    "sending": "送信中…",
+    "cancel": "キャンセル",
+    "needs_tmux": "このセッションは tmux 内で起動されていないため、コマンドを送信できません。",
+    "busy_note": "CC が処理中 (またはユーザー入力待ち) のため送信できません。コマンドはメッセージとして解釈されてしまいます。",
+    "sent_ok": "コマンドを送信しました",
+    "explainer_title": "コマンド送信について",
+    "explainer_body": "この機能を使うには、Claude Code を tmux 経由で起動してください (例: tmux new -s cc claude)。tmux 内で起動していないセッションにはコマンドを送信できません。",
+    "explainer_ok": "わかりました",
+    "err_no_tmux_pane": "このセッションは tmux 内で起動されていません。",
+    "err_session_busy": "CC が処理中のため送信できませんでした。",
+    "err_pane_gone": "対象の tmux ペインが見つかりませんでした。",
+    "err_pane_not_claude": "対象ペインで Claude Code が動いていないため送信を中止しました。",
+    "err_command_not_allowed": "許可されていないコマンドです。",
+    "err_generic": "コマンドの送信に失敗しました。",
+    "compact_default_args": "以下のルールでコンパクトしてください。\n最重要事項: コンテキスト圧縮よりも「会話の継続性」を優先してください。何度かcompactが実行された後でも、必ず一番最初の発言から遡れるようにすること。\n\n【絶対に保持するもの（一言一句そのまま）】\n- ユーザー(human)の発言すべて\n- Claudeの応答(assistant message)の本文すべて\n  - 最終回答だけでなく、作業途中の呟き（「まず〜を確認します」「次に〜します」等）も含む\n  - これらは会話の文脈理解に必要不可欠\n- discussion-tree/parallel-discussion系MCPの実行結果と受信内容(これはWebUIを経由してやり取りしている実質的な「会話の内容」のため)\n\n【コンパクトしてよいもの】\n- 上記以外のツール実行結果（Bash出力、Grep結果など）の詳細\n- Readツールで読み込んだファイル内容\n- thinkingブロックの内容\n\n【注意】\n圧縮後のサイズが大きくなっても構いません。\n会話の流れが途切れて「同じ話が通じなくなる」方が問題です。"
   },
   "modal": {
     "close": "閉じる (Esc)"

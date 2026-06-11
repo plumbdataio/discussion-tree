@@ -644,11 +644,14 @@ export function getMapView(mapId: string) {
   }
   const activity = activities.get(map.session_id) ?? null;
   const ownerRow = db
-    .prepare("SELECT alive, name, stalled_at FROM sessions WHERE id = ?")
+    .prepare(
+      "SELECT alive, name, stalled_at, tmux_pane FROM sessions WHERE id = ?",
+    )
     .get(map.session_id) as {
     alive: number;
     name: string | null;
     stalled_at: string | null;
+    tmux_pane: string | null;
   } | null;
   return {
     map,
@@ -662,6 +665,7 @@ export function getMapView(mapId: string) {
     owner_session_name: ownerRow?.name ?? null,
     owner_context_usage: getContextUsage(map.session_id),
     owner_bg_task_count: bgTaskCountForSession(map.session_id),
+    owner_can_cli_send: ownerRow?.alive === 1 && !!ownerRow?.tmux_pane,
   };
 }
 
