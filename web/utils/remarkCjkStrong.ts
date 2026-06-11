@@ -25,6 +25,33 @@
 
 const STRONG_RE = /\*\*(?=\S)([^*\n]+?)\*\*/g;
 
+// CommonMark's flanking failure only happens when a CJK punctuation char (a
+// bracket / quote / fullwidth punctuation) sits at the boundary of the bold
+// content — that is precisely what trips the open/close rules. Gating on this
+// keeps the rescue from also "un-escaping" a deliberately escaped run: a user's
+// `\*\*literal\*\*` parses to a plain text node `**literal**` too, but its
+// boundary is an ASCII letter, so it (correctly) stays literal. (Bold with only
+// CJK *letters* at the edges already parses fine, so it never arrives here as
+// literal text — only the bracket/punctuation-edged failures do.) Ranges:
+// CJK symbols & punctuation, plus fullwidth/halfwidth punctuation.
+// Built from code points (not literal glyphs) so this file stays ASCII: ranges
+// are CJK symbols & punctuation (0x3000-0x303F) and fullwidth / halfwidth
+// punctuation (0xFF01-0F, 0xFF1A-20, 0xFF3B-40, 0xFF5B-65) — the bracket /
+// quote / paren glyphs that break flanking.
+const _cp = (n: number) => String.fromCharCode(n);
+const CJK_PUNCT = new RegExp(
+  "[" +
+    _cp(0x3000) + "-" + _cp(0x303f) +
+    _cp(0xff01) + "-" + _cp(0xff0f) +
+    _cp(0xff1a) + "-" + _cp(0xff20) +
+    _cp(0xff3b) + "-" + _cp(0xff40) +
+    _cp(0xff5b) + "-" + _cp(0xff65) +
+    "]",
+);
+function cjkEdged(s: string): boolean {
+  return CJK_PUNCT.test(s[0]) || CJK_PUNCT.test(s[s.length - 1]);
+}
+
 type MdNode = {
   type: string;
   value?: string;
@@ -42,6 +69,9 @@ function rewriteChildren(node: MdNode): void {
       STRONG_RE.lastIndex = 0;
       let m: RegExpExecArray | null;
       while ((m = STRONG_RE.exec(value))) {
+        // Only rescue runs whose failure came from a CJK punctuation boundary;
+        // leave escaped (`\*\*x\*\*`) or other literal ** runs untouched.
+        if (!cjkEdged(m[1])) continue;
         matched = true;
         if (m.index > last) {
           out.push({ type: "text", value: value.slice(last, m.index) });

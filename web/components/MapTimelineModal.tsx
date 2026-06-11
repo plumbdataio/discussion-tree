@@ -117,8 +117,17 @@ export function MapTimelineModal({
                 role="button"
                 tabIndex={0}
                 title={t("map.timeline_jump")}
-                onClick={() => onJump(e.nodeId, e.item.id)}
+                onClick={(ev) => {
+                  // A markdown link / button in the body owns its own click —
+                  // don't also jump (which would navigate AND close the modal).
+                  if ((ev.target as HTMLElement).closest("a, button")) return;
+                  onJump(e.nodeId, e.item.id);
+                }}
                 onKeyDown={(ev) => {
+                  // Only the entry itself activates the jump; Enter/Space on a
+                  // focused inner link must perform the link's default, not be
+                  // hijacked into a jump.
+                  if (ev.target !== ev.currentTarget) return;
                   if (ev.key === "Enter" || ev.key === " ") {
                     ev.preventDefault();
                     onJump(e.nodeId, e.item.id);

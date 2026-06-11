@@ -44,6 +44,22 @@ describe("MDView CJK strong rescue", () => {
     expect(out).not.toContain("<strong>");
     expect(out).toContain("ただの文章です");
   });
+
+  test("escaped asterisks stay literal (rescue must not un-escape)", () => {
+    // `\*\*literal\*\*` parses to a text node `**literal**`; an ASCII boundary
+    // means it was deliberately escaped, so the rescue must leave it alone.
+    const out = html("これは \\*\\*literal\\*\\* です");
+    expect(out).toContain("**literal**");
+    expect(out).not.toContain("<strong>");
+  });
+
+  test("escaped bold with CJK-letter (non-punct) edges stays literal", () => {
+    // Boundary chars are kanji (letters, not punctuation), so this is the
+    // escaped case, not a flanking failure — leave it literal.
+    const out = html("\\*\\*重要\\*\\*");
+    expect(out).toContain("**重要**");
+    expect(out).not.toContain("<strong>");
+  });
 });
 
 describe("MDView GFM tables", () => {
