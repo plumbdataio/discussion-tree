@@ -85,8 +85,11 @@ safeAlter("ALTER TABLE sessions ADD COLUMN tmux_socket TEXT");
 export const setSessionTmux = db.prepare(
   "UPDATE sessions SET tmux_pane = ?, tmux_socket = ? WHERE id = ?",
 );
+// alive = 1 ONLY: a soft-deleted session's saved pane may now sit at a shell
+// prompt (Claude exited), where pasting "/compact <args>" would be run by the
+// shell. Never inject into a dead session.
 export const selectSessionTmux = db.prepare(
-  "SELECT tmux_pane, tmux_socket FROM sessions WHERE id = ?",
+  "SELECT tmux_pane, tmux_socket FROM sessions WHERE id = ? AND alive = 1",
 );
 
 db.run(`

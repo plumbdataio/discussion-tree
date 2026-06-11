@@ -529,20 +529,49 @@ async function runTmux(
   }
 }
 
-async function tmuxPaneExists(base: string[], pane: string): Promise<boolean> {
+// Shells we must NOT paste a command into — if the pane's foreground process is
+// one of these, Claude has exited and a shell took over (the session row can
+// still be alive=1 for up to one watchdog sweep). Pasting "/compact …\n" there
+// would run it as shell input. Allowlisting "claude" instead is too brittle
+// (the binary can present as node etc.), so we denylist shells.
+const PANE_SHELLS = new Set([
+  "bash",
+  "zsh",
+  "sh",
+  "fish",
+  "dash",
+  "tcsh",
+  "csh",
+  "ksh",
+]);
+
+// Look up the pane: returns "missing" if the pane id is gone, "shell" if a
+// shell now owns it (Claude exited), or "ok". One list-panes call carries both
+// the id and its foreground command.
+async function probePane(
+  base: string[],
+  pane: string,
+): Promise<"ok" | "missing" | "shell"> {
   const { code, stdout } = await runTmux([
     ...base,
     "list-panes",
     "-a",
     "-F",
-    "#{pane_id}",
+    "#{pane_id}\t#{pane_current_command}",
   ]);
-  if (code !== 0) return false;
-  return stdout
-    .split("\n")
-    .map((s) => s.trim())
-    .includes(pane);
+  if (code !== 0) return "missing";
+  for (const line of stdout.split("\n")) {
+    const [id, cmd] = line.split("\t");
+    if (id?.trim() === pane) {
+      return PANE_SHELLS.has((cmd ?? "").trim()) ? "shell" : "ok";
+    }
+  }
+  return "missing";
 }
+
+// Monotonic buffer-name counter so concurrent /cli-send calls never share a
+// tmux buffer (a shared name + `-d` lets one request paste another's args).
+let cliSendSeq = 0;
 
 // Paste the text into the pane as ONE bracketed paste (so a multiline prompt
 // arrives intact — newlines stay input, not submit), then press Enter. Mirrors
@@ -552,17 +581,9 @@ async function sendToPane(
   pane: string,
   text: string,
 ): Promise<void> {
-  await runTmux([...base, "load-buffer", "-b", "dt-cli-send", "-"], text);
-  await runTmux([
-    ...base,
-    "paste-buffer",
-    "-t",
-    pane,
-    "-b",
-    "dt-cli-send",
-    "-p",
-    "-d",
-  ]);
+  const buf = `dt-cli-send-${++cliSendSeq}`;
+  await runTmux([...base, "load-buffer", "-b", buf, "-"], text);
+  await runTmux([...base, "paste-buffer", "-t", pane, "-b", buf, "-p", "-d"]);
   await runTmux([...base, "send-keys", "-t", pane, "Enter"]);
 }
 
@@ -578,18 +599,21 @@ export async function handleCliSend(body: any) {
     | undefined;
   if (!sess) return { ok: false, error: "session_not_found" };
   if (!sess.tmux_pane) return { ok: false, error: "no_tmux_pane" };
-  // Refuse while CC is mid-turn (spinner): a command sent then is consumed as a
-  // chat message, not a slash command.
-  if (activities.get(sessionId)?.state === "working") {
+  // Refuse while CC isn't idle: "working" (mid-turn spinner) eats the command as
+  // a chat message; "blocked" (AskUserQuestion / ExitPlanMode) eats it as the
+  // tool's answer. Either way the slash command wouldn't be interpreted.
+  const state = activities.get(sessionId)?.state;
+  if (state === "working" || state === "blocked") {
     return { ok: false, error: "session_busy" };
   }
   const base = sess.tmux_socket
     ? ["tmux", "-S", sess.tmux_socket]
     : ["tmux"];
-  // A killed tmux server / closed pane leaves a stale id — verify before send.
-  if (!(await tmuxPaneExists(base, sess.tmux_pane))) {
-    return { ok: false, error: "pane_gone" };
-  }
+  // A killed tmux server / closed pane leaves a stale id; a shell now owning the
+  // pane means Claude exited (and pasting would run in the shell) — refuse both.
+  const probe = await probePane(base, sess.tmux_pane);
+  if (probe === "missing") return { ok: false, error: "pane_gone" };
+  if (probe === "shell") return { ok: false, error: "pane_not_claude" };
   const text = args.trim() ? `${command} ${args}` : command;
   await sendToPane(base, sess.tmux_pane, text);
   return { ok: true };

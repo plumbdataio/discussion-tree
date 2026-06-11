@@ -86,6 +86,22 @@ describe("/cli-send guards", () => {
     expect(r.json.error).toBe("session_busy");
   });
 
+  test("refuses while the session is blocked on user input", async () => {
+    const sid = await registerSession(broker.url);
+    const ccId = `cc-blocked-${sid}`;
+    await attachWithTmux(sid, ccId, "%3", "/tmp/sock");
+    await post(`${broker.url}/blocked-on-user-start`, {
+      cc_session_id: ccId,
+      question: "pick one",
+    });
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/cli-send`,
+      { session_id: sid, command: "/compact", args: "" },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toBe("session_busy");
+  });
+
   test("reports pane_gone when the captured pane no longer exists", async () => {
     const sid = await registerSession(broker.url);
     // Idle (not working) session with a pane id that exists in no tmux server.
