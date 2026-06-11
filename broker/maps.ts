@@ -223,6 +223,32 @@ function flagPlacementOverlap(mapId: string, nodeId: string): void {
   }
 }
 
+// When a new edge is drawn, warn any existing node the edge passes THROUGH (not
+// its two endpoints) — an existing card sitting under a fresh edge is the case
+// node-placement overlap can't catch. Straight-chord approximation of the
+// rendered Bezier, like placementOverlaps; user-facing flash only.
+function flagEdgeOverlap(mapId: string, fromId: string, toId: string): void {
+  const nodes = selectMapNodesByMap.all(mapId) as MapNode[];
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const a = byId.get(fromId);
+  const b = byId.get(toId);
+  if (!a || !b) return;
+  const ac = { x: a.x + (a.w ?? NODE_W) / 2, y: a.y + (a.h ?? NODE_H) / 2 };
+  const bc = { x: b.x + (b.w ?? NODE_W) / 2, y: b.y + (b.h ?? NODE_H) / 2 };
+  for (const n of nodes) {
+    if (n.id === fromId || n.id === toId) continue;
+    const w = n.w ?? NODE_W;
+    const h = n.h ?? NODE_H;
+    let hit = false;
+    for (let t = 0; t <= 1.0001 && !hit; t += 0.05) {
+      const px = ac.x + (bc.x - ac.x) * t;
+      const py = ac.y + (bc.y - ac.y) * t;
+      if (px >= n.x && px <= n.x + w && py >= n.y && py <= n.y + h) hit = true;
+    }
+    if (hit) broadcast(mapId, { type: "map-node-overlap", node_id: n.id });
+  }
+}
+
 // --- Map / node / edge CRUD ------------------------------------------------
 
 export function handleCreateMap(body: any) {
@@ -277,6 +303,7 @@ function addNode(mapId: string, n: any): string {
       id,
       new Date().toISOString(),
     );
+    flagEdgeOverlap(mapId, parentId, id);
   }
   return id;
 }
@@ -350,6 +377,7 @@ export function handleConnectMap(body: any) {
   if (existing) return { ok: true, edge_id: existing.id, existed: true };
   const edgeId = generateId("me");
   insertMapEdge.run(mapId, edgeId, from, to, new Date().toISOString());
+  flagEdgeOverlap(mapId, from, to);
   emit(mapId);
   return { ok: true, edge_id: edgeId };
 }
@@ -704,6 +732,7 @@ export function handleApplyMapOps(body: any) {
         }
         const eid = generateId("me");
         insertMapEdge.run(mapId, eid, from, to, now());
+        flagEdgeOverlap(mapId, from, to);
         results.push({ op, ok: true, edge_id: eid });
       } else if (op === "delete") {
         const nodeId = String(o.node_id ?? "");
