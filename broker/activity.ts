@@ -32,6 +32,9 @@ const AUTO_CONTINUE_DELAY_MS = Number(process.env.DT_AUTO_CONTINUE_MS) || 30_000
 const selectDefaultBoardForSession = db.prepare(
   "SELECT id FROM boards WHERE session_id = ? AND is_default = 1 LIMIT 1",
 );
+const selectSessionStalledAt = db.prepare(
+  "SELECT stalled_at FROM sessions WHERE id = ?",
+);
 
 function scheduleAutoContinue(sessionId: string): void {
   const prev = autoContinueTimers.get(sessionId);
@@ -40,6 +43,14 @@ function scheduleAutoContinue(sessionId: string): void {
     sessionId,
     setTimeout(() => {
       autoContinueTimers.delete(sessionId);
+      // Re-check right before enqueueing: if the session recovered between this
+      // timer firing and now, clearStall already cleared stalled_at but can no
+      // longer cancel us (we're out of the map) — so don't nudge a live session
+      // into a duplicate turn.
+      const stalled = (
+        selectSessionStalledAt.get(sessionId) as { stalled_at: string | null } | null
+      )?.stalled_at;
+      if (!stalled) return;
       const row = selectDefaultBoardForSession.get(sessionId) as
         | { id: string }
         | null;
