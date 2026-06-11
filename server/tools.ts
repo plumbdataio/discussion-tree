@@ -1149,6 +1149,12 @@ export async function dispatchToolCall(
         }>("/attach-cc-session", {
           session_id: sessionId,
           cc_session_id: a.cc_session_id,
+          // Same tmux pane/socket capture as the auto-attach path (this server
+          // shares CC's pane), so the manual fallback also enables CLI-send.
+          tmux_pane: process.env.TMUX_PANE || null,
+          tmux_socket: process.env.TMUX
+            ? process.env.TMUX.split(",")[0] || null
+            : null,
         });
         const r = res.reclaimed;
         const parts = [

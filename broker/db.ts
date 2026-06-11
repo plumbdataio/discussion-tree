@@ -73,6 +73,21 @@ export const clearSessionStalledStmt = db.prepare(
 safeAlter(
   "ALTER TABLE sessions ADD COLUMN unanswered_user_posts INTEGER NOT NULL DEFAULT 0",
 );
+// The tmux pane id ($TMUX_PANE, e.g. "%3") + socket (first field of $TMUX) of
+// the Claude Code process, captured at attach time from the MCP server's own
+// env (it runs inside the same pane as CC). Present only when CC was launched
+// inside tmux; null otherwise. Lets the broker inject a TUI command (e.g.
+// /compact) the user triggers from the WebUI — channels can only carry user
+// messages, not slash commands. Overwritten on every attach so a relaunch in a
+// fresh pane stays correct.
+safeAlter("ALTER TABLE sessions ADD COLUMN tmux_pane TEXT");
+safeAlter("ALTER TABLE sessions ADD COLUMN tmux_socket TEXT");
+export const setSessionTmux = db.prepare(
+  "UPDATE sessions SET tmux_pane = ?, tmux_socket = ? WHERE id = ?",
+);
+export const selectSessionTmux = db.prepare(
+  "SELECT tmux_pane, tmux_socket FROM sessions WHERE id = ?",
+);
 
 db.run(`
   CREATE TABLE IF NOT EXISTS boards (

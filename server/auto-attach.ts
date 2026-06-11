@@ -39,15 +39,31 @@ function readHintCcId(): string | null {
   }
 }
 
+// The CC process's tmux pane/socket, read from THIS process's env — the MCP
+// server runs inside the same tmux pane as Claude Code, so $TMUX_PANE / $TMUX
+// describe CC's pane. Null when CC wasn't launched inside tmux. Forwarded to
+// the broker so the WebUI can inject a TUI command (e.g. /compact) into it.
+function tmuxEnv(): { pane: string | null; socket: string | null } {
+  const pane = process.env.TMUX_PANE || null;
+  // $TMUX = "<socket_path>,<server_pid>,<session_id>"; the socket is field 1.
+  const socket = process.env.TMUX
+    ? process.env.TMUX.split(",")[0] || null
+    : null;
+  return { pane, socket };
+}
+
 // One POST to /attach-cc-session. Returns true on success, false on any
 // failure. Does NOT throw — caller decides whether to retry.
 async function attemptAttach(ccId: string): Promise<boolean> {
   const sid = getSessionId();
   if (!sid) return false;
+  const { pane, socket } = tmuxEnv();
   try {
     await brokerFetch("/attach-cc-session", {
       session_id: sid,
       cc_session_id: ccId,
+      tmux_pane: pane,
+      tmux_socket: socket,
     });
     return true;
   } catch {

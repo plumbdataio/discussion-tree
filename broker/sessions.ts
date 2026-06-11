@@ -11,7 +11,13 @@ import {
   scheduledSendAtForSession,
 } from "./activity.ts";
 import { getContextUsage } from "./context-usage.ts";
-import { db, insertSession, updateSessionSeen } from "./db.ts";
+import {
+  db,
+  insertSession,
+  selectSessionTmux,
+  setSessionTmux,
+  updateSessionSeen,
+} from "./db.ts";
 import { ensureDefaultBoard } from "./default-board.ts";
 import { generateId } from "./helpers.ts";
 import { onSessionsChanged } from "./power.ts";
@@ -62,6 +68,14 @@ export function handleAttachCCSession(body: any) {
     ccId,
     sessionId,
   ]);
+  // Capture the CC process's tmux pane/socket (the MCP server reads these from
+  // its own env and forwards them). Overwrite on every attach so a relaunch in
+  // a fresh pane stays correct; null when CC wasn't started inside tmux.
+  setSessionTmux.run(
+    body.tmux_pane ? String(body.tmux_pane) : null,
+    body.tmux_socket ? String(body.tmux_socket) : null,
+    sessionId,
+  );
   // A fresh SessionStart / re-attach means Claude Code is back — clear any
   // stall warning left over from an API-error stop in the previous run.
   clearStall(sessionId);
@@ -478,6 +492,109 @@ export function cleanStaleSessions() {
   if (changed) onSessionsChanged();
 }
 
+// --- CLI command injection via tmux (opt-in) -------------------------------
+// channels inject at the user-message layer, so a slash command (e.g. /compact)
+// sent through them is consumed as plain text. To trigger a real TUI command
+// from the WebUI we type it into the CC pane via tmux. The pane/socket were
+// captured at attach time (see handleAttachCCSession). This is gated behind a
+// per-browser opt-in setting on the client; the broker independently enforces
+// an allowlist + the "session is busy" guard so it can never send something
+// unexpected.
+const CLI_ALLOWED_COMMANDS = new Set(["/compact"]);
+
+// Run a tmux subprocess (argv — no shell, so the buffer text can't inject).
+// Optionally pipe `input` to stdin (used by load-buffer to carry arbitrary,
+// possibly multiline, text without ARG_MAX limits).
+async function runTmux(
+  argv: string[],
+  input?: string,
+): Promise<{ code: number; stdout: string }> {
+  try {
+    const proc = Bun.spawn(argv, {
+      stdin: input != null ? "pipe" : "ignore",
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+    if (input != null && proc.stdin) {
+      proc.stdin.write(input);
+      await proc.stdin.end();
+    }
+    const stdout = await new Response(proc.stdout).text();
+    const code = await proc.exited;
+    return { code, stdout };
+  } catch {
+    // tmux not installed / spawn failed — treat as "command unavailable" so the
+    // caller reports pane_gone rather than the broker 500-ing.
+    return { code: 127, stdout: "" };
+  }
+}
+
+async function tmuxPaneExists(base: string[], pane: string): Promise<boolean> {
+  const { code, stdout } = await runTmux([
+    ...base,
+    "list-panes",
+    "-a",
+    "-F",
+    "#{pane_id}",
+  ]);
+  if (code !== 0) return false;
+  return stdout
+    .split("\n")
+    .map((s) => s.trim())
+    .includes(pane);
+}
+
+// Paste the text into the pane as ONE bracketed paste (so a multiline prompt
+// arrives intact — newlines stay input, not submit), then press Enter. Mirrors
+// exactly what a human does: paste the /compact block, hit Enter.
+async function sendToPane(
+  base: string[],
+  pane: string,
+  text: string,
+): Promise<void> {
+  await runTmux([...base, "load-buffer", "-b", "dt-cli-send", "-"], text);
+  await runTmux([
+    ...base,
+    "paste-buffer",
+    "-t",
+    pane,
+    "-b",
+    "dt-cli-send",
+    "-p",
+    "-d",
+  ]);
+  await runTmux([...base, "send-keys", "-t", pane, "Enter"]);
+}
+
+export async function handleCliSend(body: any) {
+  const sessionId = String(body?.session_id ?? "");
+  const command = String(body?.command ?? "");
+  const args = typeof body?.args === "string" ? body.args : "";
+  if (!CLI_ALLOWED_COMMANDS.has(command)) {
+    return { ok: false, error: "command_not_allowed" };
+  }
+  const sess = selectSessionTmux.get(sessionId) as
+    | { tmux_pane: string | null; tmux_socket: string | null }
+    | undefined;
+  if (!sess) return { ok: false, error: "session_not_found" };
+  if (!sess.tmux_pane) return { ok: false, error: "no_tmux_pane" };
+  // Refuse while CC is mid-turn (spinner): a command sent then is consumed as a
+  // chat message, not a slash command.
+  if (activities.get(sessionId)?.state === "working") {
+    return { ok: false, error: "session_busy" };
+  }
+  const base = sess.tmux_socket
+    ? ["tmux", "-S", sess.tmux_socket]
+    : ["tmux"];
+  // A killed tmux server / closed pane leaves a stale id — verify before send.
+  if (!(await tmuxPaneExists(base, sess.tmux_pane))) {
+    return { ok: false, error: "pane_gone" };
+  }
+  const text = args.trim() ? `${command} ${args}` : command;
+  await sendToPane(base, sess.tmux_pane, text);
+  return { ok: true };
+}
+
 // Route table — path-to-handler map merged by broker.ts. Each module owns
 // its endpoints and broker.ts never needs to be touched when a new one is
 // added.
@@ -490,4 +607,5 @@ export const routes = {
   "/set-session-name": handleSetSessionName,
   "/get-unanswered": handleGetUnansweredPosts,
   "/reset-unanswered": handleResetUnansweredPosts,
+  "/cli-send": handleCliSend,
 };
