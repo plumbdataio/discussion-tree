@@ -91,6 +91,12 @@ function MapFrameNodeImpl(props: NodeProps) {
   useEffect(() => {
     setLiveSize(null);
   }, [data.title_size]);
+  // Clear the in-flight colour guard once the authoritative prop catches up (or
+  // is superseded by an undo / newer change) — NOT on HTTP completion, which can
+  // beat the WS snapshot and briefly reopen the rapid-re-pick gap.
+  useEffect(() => {
+    pendingColor.current = null;
+  }, [data.color]);
 
   const commitTitle = () => {
     setEditing(false);
@@ -102,18 +108,14 @@ function MapFrameNodeImpl(props: NodeProps) {
   };
   const setColor = (color: string) => {
     // Guard against the in-flight colour (if any), else the prop — so re-picking
-    // the previous colour before its echo isn't dropped as a no-op.
+    // the previous colour before its echo isn't dropped as a no-op. The guard is
+    // cleared by the effect above when the prop catches up (request resolution
+    // via the snapshot, not the HTTP response).
     const current = pendingColor.current ?? colorValue;
     if (!ctx || color === current) return;
     ctx.recordFrameUpdate?.(props.id, { color: current });
     pendingColor.current = color;
-    postMapUpdateFrame(ctx.mapId, props.id, { color })
-      .catch(() => {})
-      .finally(() => {
-        // Clear only if a newer pick hasn't superseded this request — by now the
-        // broker is authoritative and a fresh snapshot is on its way.
-        if (pendingColor.current === color) pendingColor.current = null;
-      });
+    postMapUpdateFrame(ctx.mapId, props.id, { color }).catch(() => {});
   };
 
   // Drag the label's bottom-right corner to scale the font linearly. Custom
