@@ -66,13 +66,6 @@ function MapFrameNodeImpl(props: NodeProps) {
   // re-pick is never dropped) and only records an undo step for a real change.
   const colorValue = data.color || "";
   const { border, fill } = frameColors(colorValue);
-  // The colour most recently requested from this card — used ONLY to build a
-  // correct undo `prev` during rapid changes, where the snapshot-driven prop
-  // still lags (A->B->C must record B then A, not A twice). It never feeds
-  // rendering and we always post, so it can't reintroduce the strand/race a
-  // pending-colour *guard* would. Re-synced to the prop when it catches up
-  // (e.g. after an undo or an external change).
-  const lastRequestedColor = useRef(colorValue);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(data.title);
   // Same in-flight size capture pattern as MapNode's resizer; the *-Start refs
@@ -98,21 +91,6 @@ function MapFrameNodeImpl(props: NodeProps) {
   useEffect(() => {
     setLiveSize(null);
   }, [data.title_size]);
-  // Re-anchor the undo tracker whenever the authoritative colour changes (an
-  // echo, an undo, or an external edit), so the NEXT change records the right
-  // previous colour. This is correct for every realistic case (single change,
-  // change-then-undo, uninterrupted rapid changes). The ONE residual is purely
-  // an undo-GRANULARITY nit, never a colour-correctness or strand issue: if 3+
-  // colours are picked so fast that an intermediate snapshot lands AFTER a newer
-  // pick, this briefly re-anchors to the older value, so a 4th pick in that
-  // window would record it as prev. Distinguishing our own echo from an external
-  // change is impossible client-side (the broker doesn't tag snapshots with the
-  // request that produced them), and the scenario isn't reachable in normal
-  // single-user frame editing, so it's an accepted limitation rather than more
-  // reconciliation machinery that just moves the edge elsewhere.
-  useEffect(() => {
-    lastRequestedColor.current = data.color || "";
-  }, [data.color]);
 
   const commitTitle = () => {
     setEditing(false);
@@ -124,24 +102,21 @@ function MapFrameNodeImpl(props: NodeProps) {
   };
   const setColor = (color: string) => {
     if (!ctx) return;
-    // Record an undo step (and advance the tracker) only for a real change vs
-    // the LAST REQUESTED colour — so rapid A->B->C records B then A, and
-    // re-selecting the same colour adds no no-op. ALWAYS post regardless: an
-    // unchanged colour is a harmless broker no-op, and never short-circuiting on
-    // the (WS-lagging) state means a quick re-pick of the previous colour is
-    // never dropped — none of the strand/race failure modes of a pending-colour
-    // *guard* can occur, because nothing here gates the request.
-    const prev = lastRequestedColor.current;
-    if (color !== prev) {
-      ctx.recordFrameUpdate?.(props.id, { color: prev });
-      lastRequestedColor.current = color;
+    // Record an undo step only for a real change vs the current (authoritative)
+    // colour. This deliberately keeps NO client-side in-flight tracker: the
+    // broker doesn't tag its WS snapshots with the request that produced them,
+    // so any "pending colour" reconciliation has an unavoidable interleave /
+    // failed-request race (a long string of them was chased here). The only
+    // visible consequence of going without one is that colours changed faster
+    // than the echo settles COALESCE into a single undo step (back to the
+    // pre-burst colour) — like many editors batch rapid edits, and intuitive.
+    // ALWAYS post: an unchanged colour is a harmless broker no-op, so a quick
+    // re-pick of the previous colour is never dropped, and there is no gate that
+    // could strand.
+    if (color !== colorValue) {
+      ctx.recordFrameUpdate?.(props.id, { color: colorValue });
     }
-    postMapUpdateFrame(ctx.mapId, props.id, { color }).catch(() => {
-      // The request failed → the colour was never persisted. Roll the tracker
-      // back (unless a newer pick already advanced it) so the next change
-      // doesn't record a never-applied colour as its undo prev.
-      if (lastRequestedColor.current === color) lastRequestedColor.current = prev;
-    });
+    postMapUpdateFrame(ctx.mapId, props.id, { color }).catch(() => {});
   };
 
   // Drag the label's bottom-right corner to scale the font linearly. Custom
