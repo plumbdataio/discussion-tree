@@ -3490,6 +3490,13 @@ body.concern-resizing * {
 }
 .md-body thead th {
   font-weight: 700;
+  /* Light grey fill so the header row reads as a header at a glance (cells are
+     otherwise white). Hardcoded + a dark-theme override since there's no
+     suitable grey var. */
+  background: #f0f2f5;
+}
+:root[data-theme="dark"] .md-body thead th {
+  background: #1d2433;
 }
 
 .md-body ul,
