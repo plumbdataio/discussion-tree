@@ -5,7 +5,7 @@
 // serialises the whole map into one timeline; clicking an entry jumps to the
 // node it belongs to (via the same MapNodeModal scroll-to-item the cards use).
 
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -86,6 +86,13 @@ export function MapTimelineModal({
     [nodes, threads, t],
   );
 
+  // Open at the newest message (bottom), like every other thread preview.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [entries.length]);
+
   return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
       <div
@@ -106,7 +113,7 @@ export function MapTimelineModal({
             {t("map.timeline_count", { count: entries.length })}
           </span>
         </div>
-        <div className="node-modal-scroll timeline-scroll">
+        <div className="node-modal-scroll timeline-scroll" ref={scrollRef}>
           {entries.length === 0 ? (
             <p className="timeline-empty">{t("map.timeline_empty")}</p>
           ) : (

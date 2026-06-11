@@ -4755,8 +4755,9 @@ button.secondary {
   font-weight: 600;
 }
 .timeline-time {
+  /* Right next to the speaker (like every other thread preview), not pushed to
+     the far edge. */
   color: var(--muted);
-  margin-left: auto;
 }
 .timeline-node-chip {
   display: inline-flex;
