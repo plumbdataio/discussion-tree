@@ -92,6 +92,15 @@ function MapFrameNodeImpl(props: NodeProps) {
   useEffect(() => {
     setLiveColor(null);
   }, [data.color]);
+  // Fallback: an undo (or a no-op) before the echo can persist a colour that
+  // equals the CURRENT data.color, so the effect above never fires and the
+  // optimistic colour would strand. Clear it a beat after the last change so it
+  // can never display an undone/stale value indefinitely.
+  useEffect(() => {
+    if (liveColor === null) return;
+    const h = setTimeout(() => setLiveColor(null), 800);
+    return () => clearTimeout(h);
+  }, [liveColor]);
 
   const commitTitle = () => {
     setEditing(false);
