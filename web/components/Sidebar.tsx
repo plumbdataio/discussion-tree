@@ -694,7 +694,7 @@ export function Sidebar({
       {settings.sidebarCollapsed && (
         <button
           type="button"
-          className="sidebar-reopen"
+          className={"sidebar-reopen" + (peek ? " peeked" : "")}
           aria-label={t("sidebar.expand_label")}
           title={t("sidebar.expand_label")}
           onMouseEnter={openPeek}
@@ -737,14 +737,28 @@ export function Sidebar({
           <button
             type="button"
             className="sidebar-collapse-btn"
-            aria-label={t("sidebar.collapse_label")}
-            title={t("sidebar.collapse_label")}
+            aria-label={
+              settings.sidebarCollapsed
+                ? t("sidebar.expand_label")
+                : t("sidebar.collapse_label")
+            }
+            title={
+              settings.sidebarCollapsed
+                ? t("sidebar.expand_label")
+                : t("sidebar.collapse_label")
+            }
             onClick={() => {
-              updateSettings({ sidebarCollapsed: true });
+              updateSettings({
+                sidebarCollapsed: !settings.sidebarCollapsed,
+              });
               setDrawerOpen(false);
             }}
           >
-            <ChevronsLeft size={22} strokeWidth={2.25} />
+            {settings.sidebarCollapsed ? (
+              <ChevronsRight size={22} strokeWidth={2.25} />
+            ) : (
+              <ChevronsLeft size={22} strokeWidth={2.25} />
+            )}
           </button>
         </div>
 

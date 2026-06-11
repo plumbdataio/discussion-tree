@@ -4884,6 +4884,10 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
   /* Collapse only applies on desktop; the mobile drawer has its own toggle. */
   .sidebar.collapsed { display: none; }
   .sidebar-reopen { display: inline-flex; }
+  /* While peeked the sidebar is open and carries its own pin-open button in the
+     header, so hide this floating tab — it would otherwise sit on top of the
+     "Sessions" title. */
+  .sidebar-reopen.peeked { display: none; }
   /* Hover-peek: a collapsed sidebar reappears as a temporary OVERLAY while the
      pointer is over the reopen tab or the sidebar itself (it leaves again on
      mouseout). position:absolute over .app-body means it floats above the
