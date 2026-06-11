@@ -57,11 +57,14 @@ function MapFrameNodeImpl(props: NodeProps) {
   const data = props.data as unknown as MapFrameData;
   const locked = !!ctx?.locked;
   const selected = !!props.selected;
-  // Optimistic colour: render (and compare against) the value the user last
-  // picked, not the WS-lagging prop — so rapidly re-picking the previous colour
-  // before the broker echo lands isn't dropped as a no-op. Cleared on echo.
-  const [liveColor, setLiveColor] = useState<string | null>(null);
-  const colorValue = liveColor ?? data.color ?? "";
+  // Colour renders straight from the authoritative prop (WS-driven) — no
+  // optimistic display, so it can never strand on an undone/stale value. The
+  // only thing the prop can't do is guard a *quick re-pick of the previous
+  // colour* before its echo lands (the prop is still the old value then); for
+  // that we track the in-flight colour in a ref (see setColor), cleared when our
+  // own request resolves — not on a fixed timeout.
+  const pendingColor = useRef<string | null>(null);
+  const colorValue = data.color || "";
   const { border, fill } = frameColors(colorValue);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(data.title);
@@ -84,23 +87,10 @@ function MapFrameNodeImpl(props: NodeProps) {
   useEffect(() => {
     if (!editing) setDraft(data.title);
   }, [data.title, editing]);
-  // Drop the live previews once the persisted value catches up (no flicker /
-  // no stale optimistic colour).
+  // Drop the live label-size preview once the persisted value catches up.
   useEffect(() => {
     setLiveSize(null);
   }, [data.title_size]);
-  useEffect(() => {
-    setLiveColor(null);
-  }, [data.color]);
-  // Fallback: an undo (or a no-op) before the echo can persist a colour that
-  // equals the CURRENT data.color, so the effect above never fires and the
-  // optimistic colour would strand. Clear it a beat after the last change so it
-  // can never display an undone/stale value indefinitely.
-  useEffect(() => {
-    if (liveColor === null) return;
-    const h = setTimeout(() => setLiveColor(null), 800);
-    return () => clearTimeout(h);
-  }, [liveColor]);
 
   const commitTitle = () => {
     setEditing(false);
@@ -111,11 +101,19 @@ function MapFrameNodeImpl(props: NodeProps) {
     }
   };
   const setColor = (color: string) => {
-    // Compare against the optimistic value so a quick re-pick isn't dropped.
-    if (!ctx || color === colorValue) return;
-    ctx.recordFrameUpdate?.(props.id, { color: colorValue });
-    setLiveColor(color);
-    postMapUpdateFrame(ctx.mapId, props.id, { color }).catch(() => {});
+    // Guard against the in-flight colour (if any), else the prop — so re-picking
+    // the previous colour before its echo isn't dropped as a no-op.
+    const current = pendingColor.current ?? colorValue;
+    if (!ctx || color === current) return;
+    ctx.recordFrameUpdate?.(props.id, { color: current });
+    pendingColor.current = color;
+    postMapUpdateFrame(ctx.mapId, props.id, { color })
+      .catch(() => {})
+      .finally(() => {
+        // Clear only if a newer pick hasn't superseded this request — by now the
+        // broker is authoritative and a fresh snapshot is on its way.
+        if (pendingColor.current === color) pendingColor.current = null;
+      });
   };
 
   // Drag the label's bottom-right corner to scale the font linearly. Custom
