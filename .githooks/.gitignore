@@ -1,0 +1,7 @@
+# scripts/setup-git-hooks.sh generates one delegate stub here per hook in the
+# dir our core.hooksPath superseded (per-developer). Only the guard, the
+# delegate helper, and this file are tracked.
+*
+!.gitignore
+!_delegate.sh
+!pre-commit

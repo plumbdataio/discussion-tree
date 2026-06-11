@@ -1,5 +1,0 @@
-#!/bin/sh
-# We only set core.hooksPath for our pre-commit guard, but doing so makes git
-# ignore the developer's global hooks dir entirely — so delegate this event
-# back to it (no-op if they have no global post-checkout).
-exec "$(dirname "$0")/_delegate.sh" post-checkout "$@"
