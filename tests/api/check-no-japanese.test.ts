@@ -72,4 +72,11 @@ describe("checkMessageCjk (commit messages)", () => {
       [],
     );
   });
+
+  test("respects a custom comment character (core.commentChar)", () => {
+    // With ";" as the comment char, ";" lines are stripped comments, while a
+    // "#" line is real content that must still be scanned.
+    expect(checkMessageCjk("fix: x\n; コメント行", ";")).toEqual([]);
+    expect(checkMessageCjk("# 重要な本文", ";").length).toBe(1);
+  });
 });

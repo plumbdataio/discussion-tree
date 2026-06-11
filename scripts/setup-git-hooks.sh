@@ -21,9 +21,10 @@ MARK="dt-generated-delegate"
 # whitelist means we never generate over a tracked helper like _delegate.sh.
 HOOK_NAMES="applypatch-msg pre-applypatch post-applypatch pre-merge-commit \
 prepare-commit-msg post-commit pre-rebase post-checkout post-merge pre-push \
-pre-receive update post-receive post-update reference-transaction \
+pre-receive update proc-receive post-receive post-update reference-transaction \
 push-to-checkout pre-auto-gc post-rewrite sendemail-validate \
-fsmonitor-watchman post-index-change"
+fsmonitor-watchman post-index-change p4-changelist p4-prepare-changelist \
+p4-post-changelist p4-pre-submit"
 
 # 1. Record the superseded dir (unless it's already ours / empty), then override.
 prev=$(git config core.hooksPath 2>/dev/null || true)

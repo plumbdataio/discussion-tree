@@ -57,12 +57,14 @@ export function findCjkViolations(file: string, content: string): string[] {
 }
 
 // Commit-message variant: the message must be English too (repo surface rule).
-// Skips git's stripped comment lines (#…, the localized template) and honors an
+// Skips git's stripped comment lines (the localized template) and honors an
 // inline `allow-japanese` for the rare line that genuinely needs CJK.
-export function checkMessageCjk(content: string): string[] {
+// commentChar mirrors git's core.commentChar (default "#"); "auto"/empty -> "#".
+export function checkMessageCjk(content: string, commentChar = "#"): string[] {
+  const cc = commentChar && commentChar !== "auto" ? commentChar[0] : "#";
   const out: string[] = [];
   content.split("\n").forEach((line, i) => {
-    if (line.startsWith("#")) return; // git comment line — removed from the commit
+    if (line.startsWith(cc)) return; // git comment line — removed from the commit
     if (line.includes(LINE_PRAGMA)) return;
     if (CJK.test(line)) out.push(`commit message line ${i + 1}: ${line.trim().slice(0, 100)}`);
   });
@@ -82,7 +84,10 @@ function main(): void {
   // Commit-message mode (the commit-msg hook): scan the message file at argv[1].
   if (argv[0] === "--commit-msg") {
     const path = argv[1];
-    const v = path ? checkMessageCjk(readFileSync(path, "utf8")) : [];
+    const commentChar = git(["config", "core.commentChar"]).trim() || "#";
+    const v = path
+      ? checkMessageCjk(readFileSync(path, "utf8"), commentChar)
+      : [];
     if (v.length > 0) {
       console.error(
         "\nERROR: Japanese / CJK text in the commit message " +
