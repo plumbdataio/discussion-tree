@@ -1,3 +1,4 @@
+// allow-japanese-file: the instructions string shows CJK punctuation examples for CC
 // MCP `instructions` payload — the long system message Claude Code reads when
 // it loads this server. Kept in its own file so server.ts entry stays
 // readable; nothing else imports it.

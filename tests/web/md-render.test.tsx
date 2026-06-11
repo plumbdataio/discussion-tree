@@ -1,3 +1,4 @@
+// allow-japanese-file: CJK-rendering tests need CJK input/expected strings
 import { describe, test, expect } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";

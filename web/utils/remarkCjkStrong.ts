@@ -1,3 +1,4 @@
+// allow-japanese-file: comments document the CJK bracket glyphs that break flanking
 // remark plugin: rescue **strong** runs that CommonMark's flanking rules
 // refuse to parse next to CJK punctuation.
 //

@@ -1,0 +1,6 @@
+#!/bin/sh
+# discussion-tree pre-commit guard: keep source free of Japanese / CJK text
+# (UI strings live in web/locales/*.json). Wired via core.hooksPath=.githooks,
+# which package.json's "prepare" script sets on install. See
+# scripts/check-no-japanese.ts for the rules and escape hatches.
+bun run scripts/check-no-japanese.ts

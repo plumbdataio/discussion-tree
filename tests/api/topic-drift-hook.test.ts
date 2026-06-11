@@ -1,3 +1,4 @@
+// allow-japanese-file: tests feed Japanese sample text to the drift detector
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";

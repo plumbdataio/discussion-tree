@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+// allow-japanese-file: contains the Japanese drift-phrase detection patterns
 // discussion-tree TOPIC-DRIFT hook (recommended: PostToolUse on the
 // "post_to_node" tool, OR Stop).
 //

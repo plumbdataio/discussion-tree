@@ -14,7 +14,9 @@
     "broker": "bun broker.ts",
     "server": "bun server.ts",
     "test": "playwright test",
-    "test:update": "playwright test --update-snapshots"
+    "test:update": "playwright test --update-snapshots",
+    "check:no-japanese": "bun run scripts/check-no-japanese.ts",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
