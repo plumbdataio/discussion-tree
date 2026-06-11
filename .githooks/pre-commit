@@ -3,4 +3,6 @@
 # (UI strings live in web/locales/*.json). Wired via core.hooksPath=.githooks,
 # which package.json's "prepare" script sets on install. See
 # scripts/check-no-japanese.ts for the rules and escape hatches.
-bun run scripts/check-no-japanese.ts
+bun run scripts/check-no-japanese.ts || exit 1
+# Then run any pre-commit from the hooks dir we superseded (global / other).
+exec "$(dirname "$0")/_delegate.sh" pre-commit "$@"

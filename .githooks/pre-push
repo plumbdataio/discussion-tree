@@ -1,0 +1,4 @@
+#!/bin/sh
+# See post-checkout: delegate this event back to the hooks dir our repo-local
+# core.hooksPath superseded (no-op if the developer has no global pre-push).
+exec "$(dirname "$0")/_delegate.sh" pre-push "$@"
