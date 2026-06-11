@@ -3,7 +3,7 @@
 // requirement live here too because they're create-time invariants.
 
 import { closeBoardStmt, db, insertBoard } from "./db.ts";
-import { broadcast } from "./ws.ts";
+import { broadcast, broadcastToAll } from "./ws.ts";
 import { PUBLIC_URL } from "./config.ts";
 import {
   generateId,
@@ -109,10 +109,39 @@ export function handleUnarchiveBoard(body: any) {
   return { ok: true };
 }
 
+// Rename a board. The default conversation board is excluded: its title is a
+// localized fixed label in the UI (it ignores the stored title), so renaming
+// it would do nothing visible — reject it with a clear message instead.
+export function handleRenameBoard(body: any) {
+  const boardId = String(body?.board_id ?? "");
+  const title = String(body?.title ?? "").trim();
+  if (!boardId || !title) {
+    return { ok: false, error: "board_id and a non-empty title are required" };
+  }
+  const board = db
+    .prepare("SELECT is_default FROM boards WHERE id = ?")
+    .get(boardId) as { is_default: number } | undefined;
+  if (!board) return { ok: false, error: "board not found" };
+  if (board.is_default) {
+    return {
+      ok: false,
+      error:
+        "the default conversation board's title is a fixed localized label and can't be renamed.",
+    };
+  }
+  db.run("UPDATE boards SET title = ? WHERE id = ?", [title, boardId]);
+  // Board header (document title + breadcrumb) refetches on a board update;
+  // the sidebar shows board titles too, so nudge it.
+  broadcast(boardId, { type: "structure-update" });
+  broadcastToAll({ type: "sidebar-refresh" });
+  return { ok: true };
+}
+
 export const routes = {
   "/create-board": handleCreateBoard,
   "/close-board": handleCloseBoardReq,
   "/set-board-status": handleSetBoardStatus,
+  "/rename-board": handleRenameBoard,
   "/archive-board": handleArchiveBoard,
   "/unarchive-board": handleUnarchiveBoard,
 };

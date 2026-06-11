@@ -158,6 +158,7 @@ Available tools:
 - update_node: Edit a node's title or context after creation (typo fixes / evolving descriptions)
 - close_board: Legacy shortcut for setting status="completed" (use set_board_status for explicit choice)
 - set_board_status: Set the explicit lifecycle status (completed / withdrawn / paused). 'discussing' and 'settled' are auto-managed by the broker (rolled up from item-node statuses) — don't set those by hand. Legacy 'active' is still accepted and maps to 'discussing'.
+- rename_board: Change a board's title (not the default conversation board).
 - attach_cc_session: Fallback only — call this when the MCP server has channel-notified you that the automatic startup attach failed
 - set_session_name: Set a human-readable name for the current session (shown in sidebar); call once near startup
 - attach_to_board: Take over a single board's ownership (manual fallback when attach_cc_session can't help)
@@ -181,6 +182,7 @@ Available tools:
 - post_to_map_node: Mirror your reply into a map node's thread (or "__general__" for the map-wide chat).
 - get_map: Load a map's full state (nodes + edges + threads). Call BEFORE acting on structure — the user's drags/edges/deletes are silent.
 - list_maps / search_maps: Enumerate / substring-search this session's maps.
+- rename_map: Change a map's title.
 - mark_map_checklist_node: Flag a map node as a checklist node (renders items, not a thread).
 - record_map_decision / update_map_decision: Add / advance a line on a map checklist node (summary + status).
 

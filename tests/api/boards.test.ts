@@ -166,3 +166,64 @@ describe("boards", () => {
     }
   });
 });
+
+describe("rename board", () => {
+  async function createBoard(title: string): Promise<string> {
+    const r = await post<{ board_id: string }>(`${broker.url}/create-board`, {
+      session_id: sessionId,
+      structure: { title, concerns: [{ id: "c1", title: "c1" }] },
+    });
+    return r.json.board_id;
+  }
+  async function boardTitle(id: string): Promise<string | undefined> {
+    const v = await get<{ board?: { title: string } }>(
+      `${broker.url}/api/board/${id}`,
+    );
+    return v.json.board?.title;
+  }
+
+  test("/rename-board changes the title", async () => {
+    const id = await createBoard("Old title");
+    expect(await boardTitle(id)).toBe("Old title");
+    const r = await post<{ ok: boolean }>(`${broker.url}/rename-board`, {
+      board_id: id,
+      title: "New title",
+    });
+    expect(r.json.ok).toBe(true);
+    expect(await boardTitle(id)).toBe("New title");
+  });
+
+  test("rejects an empty title (leaves the board unchanged)", async () => {
+    const id = await createBoard("Keep me");
+    const r = await post<{ ok: boolean }>(`${broker.url}/rename-board`, {
+      board_id: id,
+      title: "   ",
+    });
+    expect(r.json.ok).toBe(false);
+    expect(await boardTitle(id)).toBe("Keep me");
+  });
+
+  test("rejects a missing board", async () => {
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/rename-board`,
+      { board_id: "bd_does_not_exist", title: "x" },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toMatch(/not found/);
+  });
+
+  test("refuses to rename the default conversation board", async () => {
+    const s = await get<{
+      sessions: { id: string; boards: { id: string; is_default?: number }[] }[];
+    }>(`${broker.url}/api/sessions`);
+    const me = s.json.sessions.find((x) => x.id === sessionId)!;
+    const def = me.boards.find((b) => b.is_default)!;
+    expect(def).toBeTruthy();
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/rename-board`,
+      { board_id: def.id, title: "renamed default" },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toMatch(/default/);
+  });
+});

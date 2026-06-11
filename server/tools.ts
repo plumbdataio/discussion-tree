@@ -830,6 +830,32 @@ export const TOOLS = [
       required: ["item_id"],
     },
   },
+  {
+    name: "rename_board",
+    description:
+      "Change a board's title. Use when the user asks to rename a board, or when the working title no longer fits the discussion. (The default conversation board can't be renamed — its title is a fixed localized label.)",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        board_id: { type: "string" as const },
+        title: { type: "string" as const, description: "The new title." },
+      },
+      required: ["board_id", "title"],
+    },
+  },
+  {
+    name: "rename_map",
+    description:
+      "Change a map's title. Use when the user asks to rename a map, or when the map's focus has shifted from its original title.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        map_id: { type: "string" as const },
+        title: { type: "string" as const, description: "The new title." },
+      },
+      required: ["map_id", "title"],
+    },
+  },
 ];
 
 function textResult(text: string, isError = false) {
@@ -1650,6 +1676,28 @@ export async function dispatchToolCall(
         if (!res.ok)
           return textResult(res.error ?? "update_map_decision failed", true);
         return textResult(`Map checklist item ${a.item_id} updated.`);
+      }
+
+      case "rename_board": {
+        ensureSession();
+        const a = args as { board_id: string; title: string };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/rename-board",
+          a,
+        );
+        if (!res.ok) return textResult(res.error ?? "rename_board failed", true);
+        return textResult(`Board ${a.board_id} renamed to "${a.title}".`);
+      }
+
+      case "rename_map": {
+        ensureSession();
+        const a = args as { map_id: string; title: string };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/map-rename",
+          a,
+        );
+        if (!res.ok) return textResult(res.error ?? "rename_map failed", true);
+        return textResult(`Map ${a.map_id} renamed to "${a.title}".`);
       }
 
       default:

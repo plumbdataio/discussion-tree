@@ -50,7 +50,7 @@ import {
 import { activities, bgTaskCountForSession, markWorkingFromUserSubmit } from "./activity.ts";
 import { getContextUsage } from "./context-usage.ts";
 import { generateId } from "./helpers.ts";
-import { broadcast } from "./ws.ts";
+import { broadcast, broadcastToAll } from "./ws.ts";
 import { PUBLIC_URL, SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
 
 const KINDS = new Set(["question", "idea", "research", "note", "selection"]);
@@ -290,7 +290,8 @@ export function handleRenameMap(body: any) {
   if (!selectMap.get(mapId)) return { ok: false, error: "map not found" };
   if (!title) return { ok: false, error: "title required" };
   renameMap.run(title, mapId);
-  emit(mapId);
+  emit(mapId); // the open map view refetches (header + breadcrumb title)
+  broadcastToAll({ type: "sidebar-refresh" }); // sidebar shows map titles too
   return { ok: true };
 }
 

@@ -867,3 +867,42 @@ describe("maps — checklist nodes", () => {
   });
 });
 
+describe("maps — rename", () => {
+  async function mapTitle(mapId: string): Promise<string | undefined> {
+    const v = await get<{ map?: { title: string } }>(
+      `${broker.url}/api/map/${mapId}`,
+    );
+    return v.json.map?.title;
+  }
+
+  test("/map-rename changes the title", async () => {
+    const mapId = await createMap("Original");
+    expect(await mapTitle(mapId)).toBe("Original");
+    const r = await post<{ ok: boolean }>(`${broker.url}/map-rename`, {
+      map_id: mapId,
+      title: "Renamed",
+    });
+    expect(r.json.ok).toBe(true);
+    expect(await mapTitle(mapId)).toBe("Renamed");
+  });
+
+  test("rejects an empty title", async () => {
+    const mapId = await createMap("Stay");
+    const r = await post<{ ok: boolean }>(`${broker.url}/map-rename`, {
+      map_id: mapId,
+      title: "  ",
+    });
+    expect(r.json.ok).toBe(false);
+    expect(await mapTitle(mapId)).toBe("Stay");
+  });
+
+  test("rejects a missing map", async () => {
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/map-rename`,
+      { map_id: "map_nope", title: "x" },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toMatch(/not found/);
+  });
+});
+
