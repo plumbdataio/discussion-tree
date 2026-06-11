@@ -19,6 +19,56 @@ import { broadcastToAll } from "./ws.ts";
 export const activities = new Map<string, Activity>();
 const toolHeartbeats = new Map<string, number>();
 
+// Auto-continue: when a session stalls on an API error (StopFailure), nudge it
+// back to life by injecting a "continue" through the channel after a short
+// delay — UNLESS it recovers on its own first (clearStall cancels the timer).
+// Hook-driven (not /usage API scraping), so unlike the 5h auto-resume in the
+// external cc-usage bridge this can live in dt itself. The delay lets a
+// transient "temporarily limiting requests" 429 clear before we resume; it's
+// harmless if it ever fires for a 5h cap (the message just waits at the choice
+// prompt and is picked up once a choice is made).
+const autoContinueTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const AUTO_CONTINUE_DELAY_MS = Number(process.env.DT_AUTO_CONTINUE_MS) || 30_000;
+const selectDefaultBoardForSession = db.prepare(
+  "SELECT id FROM boards WHERE session_id = ? AND is_default = 1 LIMIT 1",
+);
+
+function scheduleAutoContinue(sessionId: string): void {
+  const prev = autoContinueTimers.get(sessionId);
+  if (prev) clearTimeout(prev);
+  autoContinueTimers.set(
+    sessionId,
+    setTimeout(() => {
+      autoContinueTimers.delete(sessionId);
+      const row = selectDefaultBoardForSession.get(sessionId) as
+        | { id: string }
+        | null;
+      if (!row) return;
+      // Dynamic import avoids a static cycle (threads.ts imports this module).
+      // Same channel path the cc-usage bridge uses for the 5h auto-resume; a
+      // delivery timeout (CC alive but parked at a choice prompt) is fine — the
+      // message is queued and picked up when it resumes.
+      void import("./threads.ts")
+        .then((m) =>
+          m.handleSubmitAnswer({
+            board_id: row.id,
+            node_id: "main",
+            text: "continue",
+          }),
+        )
+        .catch(() => {});
+    }, AUTO_CONTINUE_DELAY_MS),
+  );
+}
+
+function cancelAutoContinue(sessionId: string): void {
+  const t = autoContinueTimers.get(sessionId);
+  if (t) {
+    clearTimeout(t);
+    autoContinueTimers.delete(sessionId);
+  }
+}
+
 // In-flight background-task counters per broker session_id. Driven from
 // PreToolUse(Bash) (run_in_background:true → add) and from the CC-side
 // report_bg_task_done MCP tool (→ delete). Frontend renders a BG marker
@@ -91,6 +141,7 @@ export function handleSessionStalled(body: {
     broadcastActivity(sessionId, null);
   }
   broadcastToAll({ type: "session-stall-update" });
+  scheduleAutoContinue(sessionId);
   return { ok: true };
 }
 
@@ -100,7 +151,10 @@ export function handleSessionStalled(body: {
 // changed (the prepared statement's WHERE guards that).
 export function clearStall(sessionId: string): void {
   const res = clearSessionStalledStmt.run(sessionId);
-  if (res.changes > 0) broadcastToAll({ type: "session-stall-update" });
+  if (res.changes > 0) {
+    cancelAutoContinue(sessionId); // recovered on its own — don't nudge it
+    broadcastToAll({ type: "session-stall-update" });
+  }
 }
 
 export function handleSetActivity(body: SetActivityRequest) {
