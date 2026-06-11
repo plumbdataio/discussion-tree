@@ -57,7 +57,12 @@ function MapFrameNodeImpl(props: NodeProps) {
   const data = props.data as unknown as MapFrameData;
   const locked = !!ctx?.locked;
   const selected = !!props.selected;
-  const { border, fill } = frameColors(data.color || "");
+  // Optimistic colour: render (and compare against) the value the user last
+  // picked, not the WS-lagging prop — so rapidly re-picking the previous colour
+  // before the broker echo lands isn't dropped as a no-op. Cleared on echo.
+  const [liveColor, setLiveColor] = useState<string | null>(null);
+  const colorValue = liveColor ?? data.color ?? "";
+  const { border, fill } = frameColors(colorValue);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(data.title);
   // Same in-flight size capture pattern as MapNode's resizer; the *-Start refs
@@ -79,10 +84,14 @@ function MapFrameNodeImpl(props: NodeProps) {
   useEffect(() => {
     if (!editing) setDraft(data.title);
   }, [data.title, editing]);
-  // Drop the live preview once the persisted size catches up (no flicker).
+  // Drop the live previews once the persisted value catches up (no flicker /
+  // no stale optimistic colour).
   useEffect(() => {
     setLiveSize(null);
   }, [data.title_size]);
+  useEffect(() => {
+    setLiveColor(null);
+  }, [data.color]);
 
   const commitTitle = () => {
     setEditing(false);
@@ -93,8 +102,10 @@ function MapFrameNodeImpl(props: NodeProps) {
     }
   };
   const setColor = (color: string) => {
-    if (!ctx || color === (data.color || "")) return;
-    ctx.recordFrameUpdate?.(props.id, { color: data.color });
+    // Compare against the optimistic value so a quick re-pick isn't dropped.
+    if (!ctx || color === colorValue) return;
+    ctx.recordFrameUpdate?.(props.id, { color: colorValue });
+    setLiveColor(color);
     postMapUpdateFrame(ctx.mapId, props.id, { color }).catch(() => {});
   };
 
@@ -233,7 +244,7 @@ function MapFrameNodeImpl(props: NodeProps) {
               key={c || "default"}
               type="button"
               className={`map-frame-swatch${
-                (data.color || "") === c ? " active" : ""
+                colorValue === c ? " active" : ""
               }${c ? "" : " is-default"}`}
               style={c ? { background: c } : undefined}
               title={c || t("map.frame_color_default")}
@@ -244,7 +255,7 @@ function MapFrameNodeImpl(props: NodeProps) {
           <input
             type="color"
             className="map-frame-color-input"
-            value={HEX6.test(data.color || "") ? data.color : "#2563eb"}
+            value={HEX6.test(colorValue) ? colorValue : "#2563eb"}
             title={t("map.frame_color_custom")}
             aria-label={t("map.frame_color_custom")}
             onChange={(e) => setColor(e.target.value)}
