@@ -56,7 +56,14 @@ export function getEdgeParams(source: any, target: any) {
   };
 }
 
-export function FloatingEdge({ id, source, target, markerEnd, style }: any) {
+export function FloatingEdge({
+  id,
+  source,
+  target,
+  markerEnd,
+  style,
+  selected,
+}: any) {
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
   // Guard the whole geometry chain: during a remount/measure gap a node can
@@ -80,7 +87,22 @@ export function FloatingEdge({ id, source, target, markerEnd, style }: any) {
     targetX: tx,
     targetY: ty,
   });
-  return <BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} />;
+  // Clicking an edge selects it → highlight it (thicker + accent stroke + a
+  // glow via .map-edge-selected) and, with elevateEdgesOnSelect on the canvas,
+  // lift it above the nodes so a path hidden behind an unrelated card becomes
+  // traceable end to end.
+  const edgeStyle = selected
+    ? { ...(style ?? {}), stroke: "#7c3aed", strokeWidth: 3 }
+    : style;
+  return (
+    <BaseEdge
+      id={id}
+      path={path}
+      markerEnd={markerEnd}
+      style={edgeStyle}
+      className={selected ? "map-edge-selected" : undefined}
+    />
+  );
 }
 
 // Drag-preview line while the user is pulling a new edge out of a node.

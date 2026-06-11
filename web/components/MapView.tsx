@@ -578,6 +578,10 @@ export function MapView({ mapId }: { mapId: string }) {
                 // Lock only freezes STRUCTURE: drag (above), connect (above),
                 // resize (NodeResizer hidden when locked), and edge edit (below).
                 elementsSelectable
+                // Clicking an edge selects it; lift the selected edge above the
+                // nodes so a path that runs behind an unrelated card is visible
+                // (and highlighted by FloatingEdge) end to end.
+                elevateEdgesOnSelect
                 edgesReconnectable={!locked}
                 minZoom={0.15}
                 maxZoom={2}

@@ -4932,6 +4932,12 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
 }
 .map-handle:hover { opacity: 1; transform: scale(1.3); }
 
+/* A clicked (selected) edge: a soft glow on top of the thicker accent stroke
+   so the highlighted path stands out when it's lifted above the cards. */
+.map-edge-selected {
+  filter: drop-shadow(0 0 4px rgba(124, 58, 237, 0.65));
+}
+
 /* Unread map node — same warm thick border + glow as a board's unread card,
    so you can see which node on the canvas has new CC messages. */
 .map-card.has-unread {
