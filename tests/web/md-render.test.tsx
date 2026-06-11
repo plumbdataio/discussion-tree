@@ -6,10 +6,10 @@ import { MDView } from "../../web/components/MDView.tsx";
 
 // MDView renders message markdown via react-markdown. Two dt-specific behaviours
 // are pinned here:
-//  1. CJK **bold** rescue (remarkCjkStrong): CommonMark's flanking rules drop a
+//  1. CJK **bold** (via remark-cjk-friendly): CommonMark's flanking rules drop a
 //     bold span whose content is edged by Japanese punctuation, leaving literal
-//     asterisks. We re-parse those into <strong> without touching the cases that
-//     already work or `**` inside code.
+//     asterisks. The extension fixes this at parse time, while honoring escapes
+//     and not touching `**` inside code.
 //  2. GFM tables get wrapped in .md-table-wrap so they scroll inside dt's narrow
 //     columns.
 const html = (text: string) =>
@@ -78,6 +78,25 @@ describe("MDView CJK strong rescue", () => {
     const out = html("\\*\\*「A」\\*\\*と**「B」**を");
     expect(out).toContain("**「A」**"); // escaped one stays literal
     expect(out).toContain("<strong>「B」</strong>"); // genuine failure rescued
+  });
+
+  test("identical escaped + genuine content on one line resolve independently", () => {
+    // Same content 「A」 both escaped and genuine — a parse-time extension can
+    // tell them apart (a post-parse fixup could not).
+    const out = html("\\*\\*「A」\\*\\*と**「A」**を");
+    expect((out.match(/<strong>/g) || []).length).toBe(1);
+    expect(out).toContain("**「A」**"); // the escaped occurrence stays literal
+  });
+
+  test("a bracket from a character reference at the edge stays literal (known edge)", () => {
+    // When the boundary bracket comes from an entity (&#x300c; = 「), the char
+    // at the PARSE-level boundary is '&', not 「 — so neither CommonMark nor the
+    // CJK extension treats it as emphasis. The entity still decodes; the
+    // asterisks just stay literal. Astronomically rare in real messages; pinned
+    // so a behavior change is noticed.
+    const out = html("x**&#x300c;A」**y");
+    expect(out).toContain("x**「A」**y");
+    expect(out).not.toContain("<strong>");
   });
 });
 

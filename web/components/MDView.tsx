@@ -3,7 +3,12 @@ import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { MarkdownAnchor, urlTransform } from "./MarkdownAnchor.tsx";
-import { remarkCjkStrong } from "../utils/remarkCjkStrong.ts";
+// CommonMark's flanking rules drop **bold** whose content is edged by CJK
+// punctuation (a corner bracket / fullwidth paren), so it renders with literal
+// asterisks. This maintained micromark-level extension fixes it at parse time —
+// handling escapes / entities / multiple runs correctly, which a post-parse
+// fixup cannot. Must come after remark-gfm (per its docs).
+import remarkCjkFriendly from "remark-cjk-friendly";
 
 function MDViewImpl({
   text,
@@ -20,7 +25,7 @@ function MDViewImpl({
           users type in the textarea expect to see — the "GitHub
           comment / chat" feel rather than strict CommonMark. */}
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks, remarkCjkStrong]}
+        remarkPlugins={[remarkGfm, remarkCjkFriendly, remarkBreaks]}
         urlTransform={urlTransform}
         components={{
           a: ({ node, ...props }) => <MarkdownAnchor {...props} />,
