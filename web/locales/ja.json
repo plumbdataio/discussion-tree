@@ -268,6 +268,11 @@
     "timeline_count": "{{count}} 件",
     "timeline_empty": "まだコメントがありません",
     "timeline_jump": "このコメントのノードへ移動",
+    "frame_add": "グルーピング枠を追加",
+    "frame_untitled": "(無題の枠)",
+    "frame_color_default": "デフォルト色",
+    "frame_color_custom": "カスタム色",
+    "deleted_frame": "枠を削除しました",
     "kind": {
       "question": "Question",
       "idea": "Idea",

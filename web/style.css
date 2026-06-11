@@ -14,6 +14,9 @@
   --status-pending: #9ca3af;
   --status-discussing: #f59e0b;
   --status-resolved: #10b981;
+  /* Default (colourless) grouping frame on the map. */
+  --frame-border: #94a3b8;
+  --frame-fill: rgba(148, 163, 184, 0.08);
 }
 
 * {
@@ -3682,6 +3685,8 @@ button.secondary {
   --status-pending: #6b7280;
   --status-discussing: #fbbf24;
   --status-resolved: #34d399;
+  --frame-border: #475569;
+  --frame-fill: rgba(71, 85, 105, 0.16);
 }
 
 /* Sidebar error chip (#b91c1c on #fee2e2) — invert lightness. */
@@ -5124,4 +5129,115 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
 }
 .react-flow__node.map-node-overlap-warn .map-card {
   animation: map-node-overlap-kf 0.9s ease-in-out 0s 4;
+}
+
+/* --- Grouping frames: a user-drawn backdrop rectangle behind the nodes/edges.
+   The wrapper is forced behind everything (defeats React Flow's
+   elevateNodesOnSelect, which would otherwise lift a selected frame above the
+   cards). The frame body still receives pointer events where no card covers it,
+   so it stays draggable/selectable by its visible border + label strip. --- */
+.react-flow__node-frame {
+  z-index: -1 !important;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+.map-frame {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 2px dashed var(--frame-border);
+  border-radius: 14px;
+  /* background (fill) set inline from the frame colour */
+  cursor: grab;
+}
+.map-frame:active {
+  cursor: grabbing;
+}
+.map-frame.selected {
+  border-style: solid;
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.map-frame.locked {
+  cursor: default;
+}
+/* The label strip sits on the top edge so it stays visible above the grouped
+   cards; it doubles as the drag handle. */
+.map-frame-bar {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  max-width: calc(100% + 2px);
+  display: flex;
+  align-items: center;
+  padding: 3px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  background: var(--panel);
+  border-top-left-radius: 13px;
+  border-bottom-right-radius: 10px;
+  user-select: none;
+}
+.map-frame.locked .map-frame-bar {
+  cursor: default;
+}
+.map-frame-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.map-frame-title-input {
+  font: inherit;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 0 4px;
+  min-width: 140px;
+}
+/* Colour controls — a floating toolbar above the frame's top edge. */
+.map-frame-toolbar {
+  position: absolute;
+  top: -36px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+}
+.map-frame-swatch {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+}
+.map-frame-swatch.is-default {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--border) 0,
+    var(--border) 3px,
+    var(--panel) 3px,
+    var(--panel) 6px
+  );
+}
+.map-frame-swatch.active {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.map-frame-color-input {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
 }

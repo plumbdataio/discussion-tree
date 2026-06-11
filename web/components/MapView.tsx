@@ -28,6 +28,7 @@ import {
 import {
   AlertTriangle,
   ChartNetwork,
+  Frame,
   Lock,
   Maximize2,
   ScrollText,
@@ -45,6 +46,7 @@ import { useTranslation } from "react-i18next";
 import type { MapView as MapViewData, ThreadItem } from "../../shared/types.ts";
 import { MAP_GENERAL_NODE } from "../../shared/types.ts";
 import { MapNode, MapContext, type MapCtx } from "./MapNode.tsx";
+import { MapFrameNode } from "./MapFrameNode.tsx";
 import { MapNodeModal } from "./MapNodeModal.tsx";
 import { MapTimelineModal } from "./MapTimelineModal.tsx";
 import { Sidebar } from "./Sidebar.tsx";
@@ -55,12 +57,16 @@ import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useDocumentTitle } from "../utils/useDocumentTitle.ts";
 import {
   extractImageFiles,
+  postMapAddFrame,
   postMapChat,
   postMapConnect,
+  postMapDeleteFrame,
   postMapDeleteNode,
   postMapDisconnect,
   postMapMoveNode,
   postMapRestore,
+  postMapRestoreFrame,
+  postMapUpdateFrame,
   uploadImage,
 } from "../utils/api.ts";
 import { showToast } from "./Toast.tsx";
@@ -69,7 +75,7 @@ const NODE_W_DEFAULT = 320;
 const NODE_H_DEFAULT = 340;
 
 // Stable type maps (React Flow warns if these identities change each render).
-const nodeTypes = { mapCard: MapNode };
+const nodeTypes = { mapCard: MapNode, frame: MapFrameNode };
 const edgeTypes = { floating: FloatingEdge };
 
 const defaultEdgeOptions = {
@@ -132,11 +138,13 @@ export function MapView({ mapId }: { mapId: string }) {
   const pendingOverlap = useRef<Set<string>>(new Set());
   const didFit = useRef(false);
   const rf = useRef<any>(null);
-  // Undo stack for deletions. A single Delete can remove a node AND its
-  // incident edges, so each entry batches them and is restored as a unit
-  // (Cmd/Ctrl+Z, or the "Undo" button on the delete toast).
+  // The canvas element — used to compute the viewport centre when adding a frame.
+  const canvasRef = useRef<HTMLDivElement>(null);
+  // Undo stack for deletions. A single Delete can remove node(s) AND their
+  // incident edges AND grouping frame(s), so each entry batches them and is
+  // restored as a unit (Cmd/Ctrl+Z, or the "Undo" button on the delete toast).
   const undoStack = useRef<
-    { nodeIds: string[]; edgeIds: string[]; label: string }[]
+    { nodeIds: string[]; edgeIds: string[]; frameIds: string[]; label: string }[]
   >([]);
 
   // A cheap content signature so we can flash only the nodes that actually
@@ -203,7 +211,34 @@ export function MapView({ mapId }: { mapId: string }) {
       // the updater so `changed` is actually computed (React defers updaters).
       // Skip the first paint — only live updates glow.
       if (didFit.current) for (const id of changed) pendingFlash.current.add(id);
-      return next;
+      // Grouping frames — packed as RF nodes of type "frame" with a low zIndex
+      // (CSS forces -1) so they render BEHIND the cards/edges. Reconciled by id
+      // like cards (preserve selected / in-flight geometry through WS snapshots).
+      // Frame ids never collide with node ids, so the same prevById map is safe.
+      const frameNodes = (v.frames ?? []).map((f) => {
+        const existing = prevById.get(f.id);
+        const fdata = { title: f.title, color: f.color, frame: true };
+        const inflight =
+          (draggingIds.current.has(f.id) || resizingIds.current.has(f.id)) &&
+          !!existing;
+        if (inflight) {
+          return { ...existing!, id: f.id, type: "frame", data: fdata, zIndex: -1 } as RFNode;
+        }
+        return {
+          ...(existing ?? {}),
+          id: f.id,
+          type: "frame",
+          position: { x: f.x, y: f.y },
+          data: fdata,
+          width: f.w,
+          height: f.h,
+          style: { width: f.w, height: f.h },
+          zIndex: -1,
+        } as RFNode;
+      });
+      // Frames first in the array (belt-and-suspenders with zIndex) so they paint
+      // behind everything else.
+      return [...frameNodes, ...next];
     });
     setRfEdges((prev) => mergeEdges(prev, v));
   }, []);
@@ -412,6 +447,14 @@ export function MapView({ mapId }: { mapId: string }) {
   const onNodeDragStop = useCallback(
     (_e: any, node: RFNode) => {
       draggingIds.current.delete(node.id);
+      if (node.type === "frame") {
+        // Frames persist via their own endpoint (they're not map_nodes).
+        postMapUpdateFrame(mapId, node.id, {
+          x: Math.round(node.position.x),
+          y: Math.round(node.position.y),
+        }).catch(() => {});
+        return;
+      }
       postMapMoveNode(
         mapId,
         node.id,
@@ -452,19 +495,56 @@ export function MapView({ mapId }: { mapId: string }) {
     [mapId],
   );
 
-  // Restore a batched deletion (node(s) + their edges): un-tombstone on the
-  // broker, then refetch so the canvas shows them again.
+  // Restore a batched deletion (node(s) + their edges + frame(s)): un-tombstone
+  // on the broker, then refetch so the canvas shows them again.
   const restoreEntry = useCallback(
-    (entry: { nodeIds: string[]; edgeIds: string[]; label: string }) => {
+    (entry: {
+      nodeIds: string[];
+      edgeIds: string[];
+      frameIds: string[];
+      label: string;
+    }) => {
       const i = undoStack.current.indexOf(entry);
       if (i >= 0) undoStack.current.splice(i, 1);
-      postMapRestore(mapId, { nodeIds: entry.nodeIds, edgeIds: entry.edgeIds })
+      const jobs: Promise<unknown>[] = [];
+      if (entry.nodeIds.length || entry.edgeIds.length) {
+        jobs.push(
+          postMapRestore(mapId, {
+            nodeIds: entry.nodeIds,
+            edgeIds: entry.edgeIds,
+          }),
+        );
+      }
+      for (const id of entry.frameIds) jobs.push(postMapRestoreFrame(mapId, id));
+      Promise.all(jobs)
         .then(() => fetchMap())
         .catch(() => {});
       showToast(t("map.restored"), "ok");
     },
     [mapId, fetchMap, t],
   );
+
+  // Add a grouping frame at the current viewport centre. User-only (the AI
+  // never creates frames); works regardless of lock — but a frame can only be
+  // moved/resized once unlocked, like everything else on the canvas.
+  const addFrame = useCallback(() => {
+    const inst = rf.current;
+    const el = canvasRef.current;
+    if (!inst || !el) return;
+    const rect = el.getBoundingClientRect();
+    const w = 380;
+    const h = 280;
+    const c = inst.screenToFlowPosition({
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    });
+    postMapAddFrame(mapId, {
+      x: Math.round(c.x - w / 2),
+      y: Math.round(c.y - h / 2),
+      w,
+      h,
+    }).catch(() => {});
+  }, [mapId]);
 
   // A canvas delete (Backspace/Delete) removes the selected node(s) AND their
   // incident edges in one shot — onDelete hands us both together. Persist the
@@ -473,13 +553,21 @@ export function MapView({ mapId }: { mapId: string }) {
   // apply the local removal; they no longer persist.)
   const onDelete = useCallback(
     ({ nodes, edges }: { nodes: RFNode[]; edges: RFEdge[] }) => {
-      const nodeIds = nodes.map((n) => n.id);
+      // Cards and grouping frames both arrive in `nodes` — split by type so each
+      // hits its own delete/restore endpoint.
+      const cardNodes = nodes.filter((n) => n.type !== "frame");
+      const frameNodes = nodes.filter((n) => n.type === "frame");
+      const nodeIds = cardNodes.map((n) => n.id);
+      const frameIds = frameNodes.map((n) => n.id);
       const edgeIds = edges.map((e) => e.id);
-      if (!nodeIds.length && !edgeIds.length) return;
+      if (!nodeIds.length && !edgeIds.length && !frameIds.length) return;
       const label = nodeIds.length
-        ? ((nodes[0].data as any)?.title as string) || t("map.untitled")
-        : "";
-      const entry = { nodeIds, edgeIds, label };
+        ? ((cardNodes[0].data as any)?.title as string) || t("map.untitled")
+        : frameIds.length
+          ? ((frameNodes[0].data as any)?.title as string) ||
+            t("map.frame_untitled")
+          : "";
+      const entry = { nodeIds, edgeIds, frameIds, label };
       // Persist EVERY delete BEFORE exposing the undo entry. Otherwise an
       // immediate Cmd+Z could fire /map-restore before a still-in-flight delete
       // POST lands, and that late delete would re-tombstone the row (a silent,
@@ -489,16 +577,19 @@ export function MapView({ mapId }: { mapId: string }) {
       Promise.all([
         ...nodeIds.map((id) => postMapDeleteNode(mapId, id)),
         ...edgeIds.map((id) => postMapDisconnect(mapId, id)),
+        ...frameIds.map((id) => postMapDeleteFrame(mapId, id)),
       ])
         .then(() => {
           undoStack.current.push(entry);
-          showToast(
-            nodeIds.length
-              ? t("map.deleted_node", { title: label })
-              : t("map.deleted_edge"),
-            "ok",
-            { label: t("map.undo_delete"), onClick: () => restoreEntry(entry) },
-          );
+          const msg = nodeIds.length
+            ? t("map.deleted_node", { title: label })
+            : frameIds.length
+              ? t("map.deleted_frame")
+              : t("map.deleted_edge");
+          showToast(msg, "ok", {
+            label: t("map.undo_delete"),
+            onClick: () => restoreEntry(entry),
+          });
         })
         .catch(() => {});
     },
@@ -611,6 +702,15 @@ export function MapView({ mapId }: { mapId: string }) {
             <button
               type="button"
               className="map-timeline-btn"
+              title={t("map.frame_add")}
+              aria-label={t("map.frame_add")}
+              onClick={addFrame}
+            >
+              <Frame size={16} strokeWidth={1.9} />
+            </button>
+            <button
+              type="button"
+              className="map-timeline-btn"
               title={t("map.timeline_button")}
               aria-label={t("map.timeline_button")}
               onClick={() => setTimelineOpen(true)}
@@ -626,7 +726,7 @@ export function MapView({ mapId }: { mapId: string }) {
         <div className="app-body">
           <Sidebar currentBoardId={null} currentMapId={mapId} />
           <div className="map-main">
-            <div className="map-canvas">
+            <div className="map-canvas" ref={canvasRef}>
               <ReactFlow
                 nodes={rfNodes}
                 edges={rfEdges}
