@@ -65,30 +65,29 @@ function rewriteChildren(node: MdNode, src: string | null): void {
   const out: MdNode[] = [];
   for (const child of node.children) {
     if (child.type === "text" && child.value && child.value.includes("**")) {
-      // If the SOURCE for this text node escaped its asterisks (`\*\*…\*\*`),
-      // the user wants them literal — never rescue. The mdast value already has
-      // escapes resolved (so `**「重要」**` from an escape looks identical to a
-      // flanking failure); checking the original source span is the only way to
-      // tell. Without a position we can't verify, so we conservatively skip.
+      // The mdast value has escapes resolved, so an escaped `\*\*…\*\*` looks
+      // identical to a real flanking failure. We disambiguate PER CANDIDATE
+      // against the original source span in the loop below (so an escaped run
+      // and a genuine failure can coexist in one text node).
       const start = child.position?.start?.offset;
       const end = child.position?.end?.offset;
       const srcSlice =
         src != null && typeof start === "number" && typeof end === "number"
           ? src.slice(start, end)
           : null;
-      if (srcSlice === null || srcSlice.includes("\\*")) {
-        out.push(child);
-        continue;
-      }
       const value = child.value;
       let last = 0;
       let matched = false;
       STRONG_RE.lastIndex = 0;
       let m: RegExpExecArray | null;
       while ((m = STRONG_RE.exec(value))) {
-        // Only rescue runs whose failure came from a CJK punctuation boundary
-        // (escaped runs were already filtered out above by the source check).
+        // Only rescue CJK-punctuation-edged runs (the flanking-failure shape).
         if (!cjkEdged(m[1])) continue;
+        // And only when THIS run is unescaped: an unescaped failing run appears
+        // verbatim as adjacent `**X**` in the source, whereas an escaped one is
+        // `\*\*X\*\*` (the asterisks are never adjacent there). No source
+        // position -> can't verify -> leave it literal.
+        if (srcSlice === null || !srcSlice.includes("**" + m[1] + "**")) continue;
         matched = true;
         if (m.index > last) {
           out.push({ type: "text", value: value.slice(last, m.index) });

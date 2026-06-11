@@ -70,6 +70,15 @@ describe("MDView CJK strong rescue", () => {
     expect(out).toContain("**「重要」**");
     expect(out).not.toContain("<strong>");
   });
+
+  test("escaped and genuine bracket-bold in ONE text node are handled per-run", () => {
+    // `\*\*「A」\*\*` is escaped (must stay literal); `**「B」**` jammed between
+    // CJK letters is a real flanking failure (must be rescued) — and both land
+    // in the same text node, so the escape check has to be per-candidate.
+    const out = html("\\*\\*「A」\\*\\*と**「B」**を");
+    expect(out).toContain("**「A」**"); // escaped one stays literal
+    expect(out).toContain("<strong>「B」</strong>"); // genuine failure rescued
+  });
 });
 
 describe("MDView GFM tables", () => {
