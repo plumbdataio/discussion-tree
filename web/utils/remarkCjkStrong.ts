@@ -57,21 +57,37 @@ type MdNode = {
   type: string;
   value?: string;
   children?: MdNode[];
+  position?: { start?: { offset?: number }; end?: { offset?: number } };
 };
 
-function rewriteChildren(node: MdNode): void {
+function rewriteChildren(node: MdNode, src: string | null): void {
   if (!node.children || node.children.length === 0) return;
   const out: MdNode[] = [];
   for (const child of node.children) {
     if (child.type === "text" && child.value && child.value.includes("**")) {
+      // If the SOURCE for this text node escaped its asterisks (`\*\*…\*\*`),
+      // the user wants them literal — never rescue. The mdast value already has
+      // escapes resolved (so `**「重要」**` from an escape looks identical to a
+      // flanking failure); checking the original source span is the only way to
+      // tell. Without a position we can't verify, so we conservatively skip.
+      const start = child.position?.start?.offset;
+      const end = child.position?.end?.offset;
+      const srcSlice =
+        src != null && typeof start === "number" && typeof end === "number"
+          ? src.slice(start, end)
+          : null;
+      if (srcSlice === null || srcSlice.includes("\\*")) {
+        out.push(child);
+        continue;
+      }
       const value = child.value;
       let last = 0;
       let matched = false;
       STRONG_RE.lastIndex = 0;
       let m: RegExpExecArray | null;
       while ((m = STRONG_RE.exec(value))) {
-        // Only rescue runs whose failure came from a CJK punctuation boundary;
-        // leave escaped (`\*\*x\*\*`) or other literal ** runs untouched.
+        // Only rescue runs whose failure came from a CJK punctuation boundary
+        // (escaped runs were already filtered out above by the source check).
         if (!cjkEdged(m[1])) continue;
         matched = true;
         if (m.index > last) {
@@ -88,7 +104,7 @@ function rewriteChildren(node: MdNode): void {
         out.push(child);
       }
     } else {
-      rewriteChildren(child);
+      rewriteChildren(child, src);
       out.push(child);
     }
   }
@@ -96,7 +112,8 @@ function rewriteChildren(node: MdNode): void {
 }
 
 export function remarkCjkStrong() {
-  return (tree: MdNode): void => {
-    rewriteChildren(tree);
+  return (tree: MdNode, file?: { value?: unknown }): void => {
+    const src = file && file.value != null ? String(file.value) : null;
+    rewriteChildren(tree, src);
   };
 }

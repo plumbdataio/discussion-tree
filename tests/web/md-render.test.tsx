@@ -61,6 +61,15 @@ describe("MDView CJK strong rescue", () => {
     expect(out).toContain("**重要**");
     expect(out).not.toContain("<strong>");
   });
+
+  test("escaped bold with CJK-PUNCTUATION edges stays literal", () => {
+    // The hard case: escaped content that is ALSO bracket-edged. It parses to
+    // the same text as a flanking failure, so the rescue must consult the
+    // source position (which still shows the backslashes) to leave it literal.
+    const out = html("\\*\\*「重要」\\*\\*");
+    expect(out).toContain("**「重要」**");
+    expect(out).not.toContain("<strong>");
+  });
 });
 
 describe("MDView GFM tables", () => {

@@ -64,7 +64,10 @@ function git(args: string[]): string {
 }
 
 function main(): void {
-  const files = git(["diff", "--cached", "--name-only", "--diff-filter=ACM"])
+  // ACMR: added / copied / modified / RENAMED destinations. Renames must be
+  // included or moving (e.g.) web/locales/ja.json onto a .ts path would smuggle
+  // its Japanese past the guard.
+  const files = git(["diff", "--cached", "--name-only", "--diff-filter=ACMR"])
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean);
