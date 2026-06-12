@@ -651,6 +651,28 @@ body {
   animation: activity-badge-blink 1.6s ease-in-out infinite;
 }
 
+/* Transient "just re-attached" spinner — flashed for a few seconds when the
+   MCP server's heartbeat self-heal re-binds a session whose broker binding was
+   lost. Same spinner look as the working badge (the user asked for the
+   familiar "kurukuru"); only shown when there's no real activity badge, so it
+   never double-spins. A brief fade-in keeps it from popping harshly. */
+.session-reattach-indicator {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+  color: var(--status-discussing);
+  cursor: help;
+  flex: 0 0 auto;
+  animation: pd-fade-in 0.2s ease-out;
+}
+.session-reattach-indicator svg {
+  animation: pd-spin 1s linear infinite;
+}
+@keyframes pd-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* Background-task marker — sits to the right of the activity spinner
    in the sidebar (and inside the board header next to the activity
    badge). Renders a small cog + a count so the user can see at a

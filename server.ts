@@ -180,6 +180,15 @@ async function main() {
       const reattached = await selfHealAttachOnce(hb.cc_session_id);
       if (reattached) {
         await notifyAttachRecovered(reattached);
+        // Flash a transient spinner in the sidebar so the human sees the
+        // recovery too. Best-effort: a missed flash is cosmetic only.
+        try {
+          await brokerFetch("/session-reattached", {
+            cc_session_id: reattached,
+          });
+        } catch {
+          /* best effort — purely a UI cue */
+        }
       } else if (!hb.cc_session_id && getAttachedCcId() === null) {
         // Still unbound and no hint to act on yet — make sure the agent
         // has been told (covers the case where startup notify itself

@@ -115,6 +115,30 @@ function SessionItem({
   // mouse Y vs the item's rect midpoint on every dragover.
   const [dropPosition, setDropPosition] = useState<DropPosition | null>(null);
 
+  // Transient "just re-attached" spinner. The MCP server's heartbeat self-heal
+  // re-bound this session after its broker binding was lost; GlobalBanner relays
+  // that as a `pd-session-reattached` window event. We flash a brief spinner so
+  // the human sees the recovery (the agent gets a channel notice separately).
+  // A nonce (not a bool) so a second event mid-flash re-arms the auto-clear.
+  // Purely momentary — independent of the working / stall / compacting states.
+  const REATTACH_FLASH_MS = 4000;
+  const [reattachNonce, setReattachNonce] = useState(0);
+  const reattaching = reattachNonce > 0;
+  useEffect(() => {
+    const onReattach = (e: Event) => {
+      const detail = (e as CustomEvent<{ session_id?: string }>).detail;
+      if (detail?.session_id === s.id) setReattachNonce((n) => n + 1);
+    };
+    window.addEventListener("pd-session-reattached", onReattach);
+    return () =>
+      window.removeEventListener("pd-session-reattached", onReattach);
+  }, [s.id]);
+  useEffect(() => {
+    if (reattachNonce === 0) return;
+    const tid = setTimeout(() => setReattachNonce(0), REATTACH_FLASH_MS);
+    return () => clearTimeout(tid);
+  }, [reattachNonce]);
+
   // Visibility = default board OR currently-open board OR passes the status
   // filter. See isBoardVisible for why the first two bypass the filter.
   const visibleBoards = s.boards.filter((b) =>
@@ -224,6 +248,15 @@ function SessionItem({
             aria-label={t("sidebar.compacting_aria")}
           >
             <Shrink size={15} strokeWidth={2.5} />
+          </span>
+        )}
+        {reattaching && !activity && (
+          <span
+            className="session-reattach-indicator"
+            title={t("sidebar.reattached_title")}
+            aria-label={t("sidebar.reattached_aria")}
+          >
+            <RefreshCw size={14} strokeWidth={2.75} />
           </span>
         )}
         {activity && (

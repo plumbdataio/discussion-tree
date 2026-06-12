@@ -226,6 +226,25 @@ export function handleSessionCompactingDone(body: {
   return { ok: true };
 }
 
+// --- Self-heal re-attach (transient UI cue) --------------------------------
+// The MCP server's heartbeat self-healing loop re-bound a session whose broker
+// binding had been lost (selfHealAttachOnce succeeded). Broadcast a one-shot
+// signal so the sidebar can flash a brief spinner for that session — the human
+// sees the recovery too, not just the agent (which gets a channel notice).
+// Purely transient: NO DB state, no badge to clear; the client self-clears the
+// flash after a few seconds. Distinct from a plain attach, which the broker
+// can't tell apart from a self-heal — only the MCP server knows, so it POSTs
+// here exclusively on the self-heal path.
+export function handleSessionReattached(body: {
+  cc_session_id?: string;
+}): { ok: boolean } {
+  if (!body.cc_session_id) return { ok: false };
+  const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
+  if (!sessionId) return { ok: false };
+  broadcastToAll({ type: "session-reattached", session_id: sessionId });
+  return { ok: true };
+}
+
 export function handleSetActivity(body: SetActivityRequest) {
   const sessionId = body.session_id;
   if (!body.state) {
@@ -529,6 +548,7 @@ export const routes = {
   "/session-stalled": handleSessionStalled,
   "/session-compacting": handleSessionCompacting,
   "/session-compacting-done": handleSessionCompactingDone,
+  "/session-reattached": handleSessionReattached,
   "/clear-activities-for-sessions": handleClearActivitiesForSessions,
   "/blocked-on-user-start": handleBlockedOnUserStart,
   "/blocked-on-user-clear": handleBlockedOnUserClear,

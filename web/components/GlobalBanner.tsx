@@ -55,6 +55,20 @@ export function GlobalBanner() {
         const msg = JSON.parse(e.data);
         if (msg?.type === "global-banner-update") {
           setBanner(msg.banner ?? null);
+        } else if (
+          msg?.type === "session-reattached" &&
+          typeof msg.session_id === "string"
+        ) {
+          // The MCP server's heartbeat self-healing loop re-bound this session
+          // after its broker binding was lost. One-shot signal — let the
+          // sidebar flash a brief spinner so the human sees the recovery too
+          // (the agent gets a channel notice separately). Not a sidebar-refresh:
+          // there's no /api/sessions change, just a transient UI flash.
+          window.dispatchEvent(
+            new CustomEvent("pd-session-reattached", {
+              detail: { session_id: msg.session_id },
+            }),
+          );
         } else if (SIDEBAR_REFRESH_TYPES.has(msg?.type)) {
           // GlobalBanner is mounted on EVERY page, so it's the only socket that
           // can nudge the sidebar on the map / session / home pages (BoardApp

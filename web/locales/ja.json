@@ -29,6 +29,8 @@
     "stalled_aria": "停止中",
     "compacting_title": "Claude Code がコンテキストを compact 中です",
     "compacting_aria": "compact中",
+    "reattached_title": "Claude Code に再アタッチしました(broker の紐付けが self-heal で復旧)",
+    "reattached_aria": "再アタッチ",
     "inactive_label": "非アクティブ ({{count}})",
     "toggle_label": "サイドバーを開閉",
     "filter_label": "表示",

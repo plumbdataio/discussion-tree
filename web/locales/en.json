@@ -29,6 +29,8 @@
     "stalled_aria": "stalled",
     "compacting_title": "Claude Code is compacting its context",
     "compacting_aria": "compacting",
+    "reattached_title": "Re-attached to Claude Code (the broker binding self-healed)",
+    "reattached_aria": "re-attached",
     "inactive_label": "Inactive ({{count}})",
     "toggle_label": "Toggle sidebar",
     "filter_label": "Show",
