@@ -618,6 +618,14 @@ async function probePane(
 // tmux buffer (a shared name + `-d` lets one request paste another's args).
 let cliSendSeq = 0;
 
+// Delay between the paste and the submit Enter. The CC TUI ingests a bracketed
+// paste asynchronously; if Enter arrives before it has settled, the keystroke
+// lands inside/before the paste and is dropped — the text appears but never
+// submits (observed against the real CC TUI). Wait a beat so Enter is a clean,
+// separate submit. Tunable via env for slow terminals.
+const CLI_SEND_ENTER_DELAY_MS =
+  Number(process.env.DT_CLI_SEND_ENTER_DELAY_MS) || 250;
+
 // Paste the text into the pane as ONE bracketed paste (so a multiline prompt
 // arrives intact — newlines stay input, not submit), then press Enter. Mirrors
 // exactly what a human does: paste the /compact block, hit Enter.
@@ -629,6 +637,7 @@ async function sendToPane(
   const buf = `dt-cli-send-${++cliSendSeq}`;
   await runTmux([...base, "load-buffer", "-b", buf, "-"], text);
   await runTmux([...base, "paste-buffer", "-t", pane, "-b", buf, "-p", "-d"]);
+  await new Promise((r) => setTimeout(r, CLI_SEND_ENTER_DELAY_MS));
   await runTmux([...base, "send-keys", "-t", pane, "Enter"]);
 }
 
