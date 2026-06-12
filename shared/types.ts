@@ -263,6 +263,8 @@ export interface MapView {
   owner_alive?: boolean;
   // Owning CC stopped on an API error — drives the header stall warning.
   owner_stalled?: boolean;
+  // Owning CC is compacting its context — drives the header "compacting" badge.
+  owner_compacting?: boolean;
   owner_session_name?: string | null;
   owner_context_usage?: { remaining_pct: number; set_at: string } | null;
   owner_bg_task_count?: number;
@@ -486,6 +488,11 @@ export interface SessionListItem {
   // and hasn't shown life since. The sidebar renders a prominent warning icon
   // so the user notices the stall without watching the CLI.
   stalled?: boolean;
+  // True while the owning Claude Code is compacting its context (PreCompact
+  // hook fired, post-compact hook hasn't cleared it). The sidebar renders a
+  // distinct "compacting" badge so the user knows the session is busy rather
+  // than idle (compaction runs no tools, so the working spinner times out).
+  compacting?: boolean;
   // Live in-memory activity entry (working / blocked / etc) if the broker
   // currently has one for this session. Sidebar uses this to show the
   // per-session activity indicator so the user can see at a glance which
@@ -526,6 +533,8 @@ export interface BoardView {
   owner_alive?: boolean;
   // Owning CC stopped on an API error — drives the header stall warning.
   owner_stalled?: boolean;
+  // Owning CC is compacting its context — drives the header "compacting" badge.
+  owner_compacting?: boolean;
   // null when the owning session has no human-set name yet — the frontend
   // falls back to the session id in that case (or just omits the segment).
   owner_session_name?: string | null;

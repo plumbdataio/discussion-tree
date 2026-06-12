@@ -17,6 +17,7 @@ import type { GlobalBanner as GlobalBannerData } from "../../shared/types.ts";
 // (BoardApp handles them too, but only on a board page).
 const SIDEBAR_REFRESH_TYPES = new Set([
   "session-stall-update",
+  "session-compacting-update",
   "sidebar-refresh",
   "bg-tasks-update",
   "schedule-marker-update",

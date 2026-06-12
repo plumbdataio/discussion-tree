@@ -60,6 +60,12 @@ sid=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null || true)
 port="${DISCUSSION_TREE_PORT:-7898}"
 if [ -n "${sid:-}" ]; then
   body=$(jq -n --arg s "$sid" '{cc_session_id:$s}' 2>/dev/null || true)
+  # Compaction finished and the session resumed — clear the "compacting" badge
+  # the PreCompact hook set. Best-effort; the broker also self-heals on the next
+  # tool heartbeat / re-attach if this doesn't land.
+  curl -sS --max-time 1 -X POST -H "Content-Type: application/json" \
+    -d "$body" "http://127.0.0.1:${port}/session-compacting-done" \
+    >/dev/null 2>&1 || true
   resp=$(curl -sS --max-time 1 -X POST -H "Content-Type: application/json" \
     -d "$body" "http://127.0.0.1:${port}/get-incomplete-checklists" \
     2>/dev/null || echo '{}')

@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Send,
   Settings,
+  Shrink,
   ChartNetwork,
   Network,
 } from "lucide-react";
@@ -214,6 +215,15 @@ function SessionItem({
             aria-label={t("sidebar.stalled_aria")}
           >
             <AlertTriangle size={15} strokeWidth={2.5} />
+          </span>
+        )}
+        {s.compacting && !s.stalled && (
+          <span
+            className="session-compacting-indicator"
+            title={t("sidebar.compacting_title")}
+            aria-label={t("sidebar.compacting_aria")}
+          >
+            <Shrink size={15} strokeWidth={2.5} />
           </span>
         )}
         {activity && (

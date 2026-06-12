@@ -61,6 +61,22 @@ export const setSessionStalledStmt = db.prepare(
 export const clearSessionStalledStmt = db.prepare(
   "UPDATE sessions SET stalled_at = NULL WHERE id = ? AND stalled_at IS NOT NULL",
 );
+// Set to an ISO timestamp while Claude Code is compacting its context (the
+// PreCompact hook fires) and cleared once it resumes (the post-compact
+// SessionStart hook, or the next tool heartbeat / re-attach as a self-heal).
+// Compaction runs no tools, so the normal "working" badge would time out mid-
+// compact and read as idle — this dedicated flag drives a distinct "compacting"
+// badge in the sidebar + header so the user knows the session is busy, not
+// stuck. Benign-by-design (unlike stalled_at, which marks an error stop).
+safeAlter("ALTER TABLE sessions ADD COLUMN compacting_at TEXT");
+export const setSessionCompactingStmt = db.prepare(
+  "UPDATE sessions SET compacting_at = ? WHERE id = ?",
+);
+// AND compacting_at IS NOT NULL so `changes` is 0 when nothing was actually
+// cleared — lets callers skip a redundant broadcast.
+export const clearSessionCompactingStmt = db.prepare(
+  "UPDATE sessions SET compacting_at = NULL WHERE id = ? AND compacting_at IS NOT NULL",
+);
 // Counter of user UI submissions that haven't been matched by a CC
 // post_to_node yet. Incremented when a user_input_relay is delivered to CC,
 // decremented when CC posts back into any node on a board owned by this

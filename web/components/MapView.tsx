@@ -32,6 +32,7 @@ import {
   Lock,
   Maximize2,
   ScrollText,
+  Shrink,
   Unlock,
 } from "lucide-react";
 import { FloatingEdge, FloatingConnectionLine } from "./mapFloatingEdge.tsx";
@@ -328,7 +329,10 @@ export function MapView({ mapId }: { mapId: string }) {
         // (on a map page) only this socket can nudge.
         try {
           const msg = JSON.parse(ev.data as string);
-          if (msg?.type === "session-stall-update") {
+          if (
+            msg?.type === "session-stall-update" ||
+            msg?.type === "session-compacting-update"
+          ) {
             window.dispatchEvent(new Event("pd-sidebar-refresh"));
           } else if (
             msg?.type === "map-node-overlap" &&
@@ -817,6 +821,15 @@ export function MapView({ mapId }: { mapId: string }) {
             >
               <AlertTriangle size={15} strokeWidth={2.5} />
               <span>{t("header.stalled")}</span>
+            </span>
+          )}
+          {view.owner_compacting && !view.owner_stalled && (
+            <span
+              className="header-compacting-badge"
+              title={t("header.compacting_title")}
+            >
+              <Shrink size={15} strokeWidth={2.5} />
+              <span>{t("header.compacting")}</span>
             </span>
           )}
           <div className="header-right">

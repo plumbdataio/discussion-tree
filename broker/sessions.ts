@@ -7,6 +7,7 @@
 import {
   activities,
   bgTaskCountForSession,
+  clearCompacting,
   clearStall,
   scheduledSendAtForSession,
 } from "./activity.ts";
@@ -102,8 +103,10 @@ export function handleAttachCCSession(body: any) {
     sessionId,
   );
   // A fresh SessionStart / re-attach means Claude Code is back — clear any
-  // stall warning left over from an API-error stop in the previous run.
+  // stall warning left over from an API-error stop in the previous run, and
+  // self-heal a compacting badge if the post-compact hook didn't clear it.
   clearStall(sessionId);
+  clearCompacting(sessionId);
 
   const reclaimed = {
     boards: 0,
@@ -300,6 +303,7 @@ export function handleListSessions() {
     alive: number;
     cc_session_id: string | null;
     stalled_at: string | null;
+    compacting_at: string | null;
   };
 
   // Hide alive husks: a bare registration (a CC whose SessionStart hook
@@ -309,7 +313,7 @@ export function handleListSessions() {
   // the default board, so any genuinely-in-use session qualifies immediately).
   const aliveSessions = db
     .prepare(
-      `SELECT id, pid, cwd, name, alive, cc_session_id, stalled_at
+      `SELECT id, pid, cwd, name, alive, cc_session_id, stalled_at, compacting_at
        FROM sessions
        WHERE alive = 1
          AND (
@@ -336,7 +340,7 @@ export function handleListSessions() {
   // alive=0.
   const inactiveSessions = db
     .prepare(
-      `SELECT id, pid, cwd, name, alive, cc_session_id, stalled_at
+      `SELECT id, pid, cwd, name, alive, cc_session_id, stalled_at, compacting_at
        FROM sessions
        WHERE alive = 0
          AND (
@@ -501,6 +505,8 @@ export function handleListSessions() {
       cc_session_id: s.cc_session_id,
       // A dead session can't be "stalled" — only flag alive ones.
       stalled: s.alive === 1 && !!s.stalled_at,
+      // Likewise a dead session can't be mid-compaction.
+      compacting: s.alive === 1 && !!s.compacting_at,
       activity,
       context_usage,
       bg_task_count: bgTaskCountForSession(s.id),

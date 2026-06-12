@@ -10,8 +10,10 @@
 
 import type { Activity, SetActivityRequest } from "../shared/types.ts";
 import {
+  clearSessionCompactingStmt,
   clearSessionStalledStmt,
   db,
+  setSessionCompactingStmt,
   setSessionStalledStmt,
 } from "./db.ts";
 import { broadcastToAll } from "./ws.ts";
@@ -168,6 +170,62 @@ export function clearStall(sessionId: string): void {
   }
 }
 
+// --- Compacting (Claude Code is compressing its context) -------------------
+// compacting_at lives on the sessions row; the sidebar / header read it via
+// /api/sessions + the board/map view. Driven by the PreCompact hook (set) and
+// cleared on resume (the post-compact SessionStart hook) or as a self-heal by
+// the next tool heartbeat / re-attach. A "session-compacting-update" broadcast
+// nudges every client to refetch so the badge appears (or clears) instantly.
+
+// PreCompact hook entry — Claude Code is about to compact (manual /compact or
+// an auto-compaction). Flag the owning session so the UI shows a "compacting"
+// badge for the duration. cc_session_id, not session_id: hooks only know the
+// CC side.
+export function handleSessionCompacting(body: {
+  cc_session_id?: string;
+}): { ok: boolean } {
+  if (!body.cc_session_id) return { ok: false };
+  const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
+  if (!sessionId) return { ok: false };
+  setSessionCompactingStmt.run(new Date().toISOString(), sessionId);
+  // Compaction runs no tools, so the last PreToolUse heartbeat would leave a
+  // "working" badge spinning the whole time. Clear the hook-managed working
+  // state (but leave an explicit LLM-set state like "blocked" alone, same
+  // posture as the Stop / stall paths) so only the compacting badge shows.
+  toolHeartbeats.delete(sessionId);
+  const cur = activities.get(sessionId);
+  if (cur && cur.state === "working") {
+    activities.delete(sessionId);
+    broadcastActivity(sessionId, null);
+  }
+  broadcastToAll({ type: "session-compacting-update" });
+  return { ok: true };
+}
+
+// Clear the compacting flag — called from the post-compact SessionStart hook
+// (the deterministic path) and, as a self-heal, from the tool heartbeat and
+// re-attach (so an aborted/cancelled compaction never leaves the badge stuck).
+// Broadcasts only when something actually changed (the prepared statement's
+// WHERE guards that).
+export function clearCompacting(sessionId: string): void {
+  const res = clearSessionCompactingStmt.run(sessionId);
+  if (res.changes > 0) {
+    broadcastToAll({ type: "session-compacting-update" });
+  }
+}
+
+// Post-compact SessionStart hook entry — compaction finished and the session
+// resumed. Clear the badge.
+export function handleSessionCompactingDone(body: {
+  cc_session_id?: string;
+}): { ok: boolean } {
+  if (!body.cc_session_id) return { ok: false };
+  const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
+  if (!sessionId) return { ok: false };
+  clearCompacting(sessionId);
+  return { ok: true };
+}
+
 export function handleSetActivity(body: SetActivityRequest) {
   const sessionId = body.session_id;
   if (!body.state) {
@@ -195,8 +253,10 @@ export function handleHeartbeatTool(body: {
   if (!body.cc_session_id) return { ok: false };
   const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
   if (!sessionId) return { ok: false };
-  // A tool firing means the session is alive again — clear any stall warning.
+  // A tool firing means the session is alive again — clear any stall warning,
+  // and self-heal a compacting badge a missed post-compact hook left stuck.
   clearStall(sessionId);
+  clearCompacting(sessionId);
   // Don't stomp an explicit non-working state (e.g. "blocked" set by the
   // AskUserQuestion / ExitPlanMode hook). PreToolUse hooks fire in
   // unspecified order — if heartbeat ran AFTER the blocked-on-user hook,
@@ -247,8 +307,10 @@ export function handleClearToolActivity(body: { cc_session_id?: string }): {
   if (!sessionId) return { ok: false };
   // A normal turn end (Stop hook) means the session recovered — clear any
   // stall. (On an API-error stop the StopFailure hook fires instead of Stop,
-  // so this only runs on a clean finish.)
+  // so this only runs on a clean finish.) Also self-heal a stuck compacting
+  // badge in case the post-compact hook didn't reach the broker.
   clearStall(sessionId);
+  clearCompacting(sessionId);
   toolHeartbeats.delete(sessionId);
   // Only clear the hook-managed "working" state. Explicit set_activity
   // entries (e.g. "blocked") are preserved.
@@ -465,6 +527,8 @@ export const routes = {
   "/heartbeat-tool": handleHeartbeatTool,
   "/clear-tool-activity": handleClearToolActivity,
   "/session-stalled": handleSessionStalled,
+  "/session-compacting": handleSessionCompacting,
+  "/session-compacting-done": handleSessionCompactingDone,
   "/clear-activities-for-sessions": handleClearActivitiesForSessions,
   "/blocked-on-user-start": handleBlockedOnUserStart,
   "/blocked-on-user-clear": handleBlockedOnUserClear,

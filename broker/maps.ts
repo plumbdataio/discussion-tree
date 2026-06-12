@@ -652,12 +652,13 @@ export function getMapView(mapId: string) {
   const activity = activities.get(map.session_id) ?? null;
   const ownerRow = db
     .prepare(
-      "SELECT alive, name, stalled_at, tmux_pane FROM sessions WHERE id = ?",
+      "SELECT alive, name, stalled_at, compacting_at, tmux_pane FROM sessions WHERE id = ?",
     )
     .get(map.session_id) as {
     alive: number;
     name: string | null;
     stalled_at: string | null;
+    compacting_at: string | null;
     tmux_pane: string | null;
   } | null;
   return {
@@ -669,6 +670,7 @@ export function getMapView(mapId: string) {
     activity,
     owner_alive: ownerRow?.alive === 1,
     owner_stalled: ownerRow?.alive === 1 && !!ownerRow?.stalled_at,
+    owner_compacting: ownerRow?.alive === 1 && !!ownerRow?.compacting_at,
     owner_session_name: ownerRow?.name ?? null,
     owner_context_usage: getContextUsage(map.session_id),
     owner_bg_task_count: bgTaskCountForSession(map.session_id),

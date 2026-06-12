@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Cog, Wand2 } from "lucide-react";
+import { AlertTriangle, Cog, Shrink, Wand2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Activity, BoardView } from "../../shared/types.ts";
 import { ActivityBadge } from "./ActivityBadge.tsx";
@@ -230,6 +230,13 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           window.dispatchEvent(new Event("pd-sidebar-refresh"));
           fetchBoard();
           return;
+        } else if (msg.type === "session-compacting-update") {
+          // A session started or finished compacting its context. Same shape as
+          // the stall update — refresh the sidebar (per-session badge) and the
+          // board (header owner_compacting chip).
+          window.dispatchEvent(new Event("pd-sidebar-refresh"));
+          fetchBoard();
+          return;
         } else if (msg.type === "bg-tasks-update") {
           // BG marker rides on the same sidebar-poll pipe — nudge the
           // sidebar to refetch /api/sessions (carries bg_task_count).
@@ -430,6 +437,15 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           >
             <AlertTriangle size={15} strokeWidth={2.5} />
             <span>{t("header.stalled")}</span>
+          </span>
+        )}
+        {data.owner_compacting && !data.owner_stalled && (
+          <span
+            className="header-compacting-badge"
+            title={t("header.compacting_title")}
+          >
+            <Shrink size={15} strokeWidth={2.5} />
+            <span>{t("header.compacting")}</span>
           </span>
         )}
         {/* Working / activity badge sits at the right end of the LEFT
