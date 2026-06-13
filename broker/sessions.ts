@@ -22,7 +22,7 @@ import {
 import { ensureDefaultBoard } from "./default-board.ts";
 import { generateId } from "./helpers.ts";
 import { onSessionsChanged } from "./power.ts";
-import { broadcast } from "./ws.ts";
+import { broadcast, broadcastToAll } from "./ws.ts";
 
 // Board / map ids owned by the given (about-to-be-reclaimed) sessions. Collected
 // BEFORE the reclaim UPDATE moves them, so afterwards we can nudge any open
@@ -228,6 +228,15 @@ export function handleAttachCCSession(body: any) {
   for (const id of new Set(refreshTargets.maps)) {
     broadcast(id, { type: "map-owner-changed" });
   }
+
+  // Nudge the sidebar on EVERY attach (not just reclaims). The session list is
+  // gated behind a ~10s /api/sessions poll, so a freshly-bound session — and
+  // the default board that lets the user start typing — would otherwise take up
+  // to 10s to appear. owner_alive drives the input's enabled state, so this is
+  // what makes "unbound session → bound → input becomes possible" feel instant.
+  // The sidebar's only socket is GlobalBanner's /ws/_banner, which broadcast()
+  // (board/map-scoped) never reaches — so this must be broadcastToAll.
+  broadcastToAll({ type: "sidebar-refresh" });
 
   return { ok: true, reclaimed };
 }
