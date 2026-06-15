@@ -263,7 +263,16 @@ export function MapView({ mapId }: { mapId: string }) {
           (draggingIds.current.has(f.id) || resizingIds.current.has(f.id)) &&
           !!existing;
         if (inflight) {
-          return { ...existing!, id: f.id, type: "frame", data: fdata, zIndex: -1 } as RFNode;
+          return {
+            ...existing!,
+            id: f.id,
+            type: "frame",
+            data: fdata,
+            zIndex: -1,
+            // Only the top-right grip drags a frame; the body is click-through
+            // (pointer-events:none) so panning the canvas over a frame works.
+            dragHandle: ".map-frame-drag-handle",
+          } as RFNode;
         }
         return {
           ...(existing ?? {}),
@@ -275,6 +284,7 @@ export function MapView({ mapId }: { mapId: string }) {
           height: f.h,
           style: { width: f.w, height: f.h },
           zIndex: -1,
+          dragHandle: ".map-frame-drag-handle",
         } as RFNode;
       });
       // Frames first in the array (belt-and-suspenders with zIndex) so they paint

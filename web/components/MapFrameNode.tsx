@@ -9,6 +9,7 @@
 import React, { useContext, useEffect, useRef, useState } from "react";
 import { NodeResizer, useStore } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
+import { GripVertical } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MapContext } from "./MapNode.tsx";
 import { postMapUpdateFrame } from "../utils/api.ts";
@@ -201,8 +202,21 @@ function MapFrameNodeImpl(props: NodeProps) {
           }
         }}
       />
-      {/* Top strip = the label (and the drag handle). Double-click to rename
-          (unlocked only); the input opts out of dragging via nodrag. */}
+      {/* Drag handle — the ONLY way to move a frame. The body is click-through
+          (pointer-events:none) so the user can pan the canvas over a frame
+          instead of accidentally dragging it; React Flow's dragHandle (set on
+          the node) restricts the move to this grip, matching how cards work. */}
+      {!locked && (
+        <span
+          className="map-frame-drag-handle"
+          title={t("map.drag_handle")}
+          aria-label={t("map.drag_handle")}
+        >
+          <GripVertical size={14} strokeWidth={2} />
+        </span>
+      )}
+      {/* Top strip = the label. Double-click to rename (unlocked only); the
+          input opts out of dragging via nodrag. */}
       <div
         className="map-frame-bar"
         style={{ color: border, fontSize: `${titleSize}px` }}

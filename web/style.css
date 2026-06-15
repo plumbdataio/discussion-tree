@@ -5271,6 +5271,20 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
   padding: 0;
   border: none;
   background: transparent;
+  /* Click-through body: a pointerdown anywhere on the frame backdrop passes to
+     the canvas (so the user pans instead of dragging the frame). Only the
+     interactive chrome re-enables pointer-events (drag handle / label /
+     toolbar / resize handles) — see below. The grip is the only move affordance
+     (React Flow dragHandle = .map-frame-drag-handle). */
+  pointer-events: none !important;
+}
+.react-flow__node-frame .map-frame-drag-handle,
+.react-flow__node-frame .map-frame-bar,
+.react-flow__node-frame .map-frame-toolbar,
+.react-flow__node-frame .map-frame-size-handle,
+.react-flow__node-frame .map-frame-resize-handle,
+.react-flow__node-frame .map-frame-resize-line {
+  pointer-events: auto;
 }
 .map-frame {
   width: 100%;
@@ -5279,9 +5293,30 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
   border: 2px dashed var(--frame-border);
   border-radius: 14px;
   /* background (fill) set inline from the frame colour */
-  cursor: grab;
+  cursor: default;
 }
-.map-frame:active {
+/* Top-right grip — the only handle that moves a frame (mirrors the card grip).
+   Hidden when locked (the JSX omits it then). */
+.map-frame-drag-handle {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  cursor: grab;
+  touch-action: none;
+}
+.map-frame-drag-handle:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.map-frame-drag-handle:active {
   cursor: grabbing;
 }
 .map-frame.selected {
