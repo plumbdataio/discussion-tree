@@ -238,6 +238,11 @@ function SessionItem({
         <a className="session-name" href={"/session/" + s.id}>
           {s.name ?? <em className="unnamed">{s.id}</em>}
         </a>
+        {/* All per-session status indicators live in ONE grid cell (a flex
+            row) so the fixed 4-column .session-header (chevron | name |
+            indicators | drag-handle) never overflows to a second row no
+            matter how many indicators are active at once. */}
+        <span className="session-indicators">
         {s.stalled && (
           <span
             className="session-stall-indicator"
@@ -338,6 +343,7 @@ function SessionItem({
             />
           </span>
         )}
+        </span>
         {draggable && (
           <span className="session-drag-handle" aria-hidden="true">
             <GripVertical size={12} strokeWidth={1.75} />

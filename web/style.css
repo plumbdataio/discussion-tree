@@ -573,6 +573,20 @@ body {
   grid-column: 1 / -1;
 }
 
+/* All per-session status indicators (stall / compacting / ctx-low / reattach /
+   activity / bg / schedule) share ONE grid cell so the fixed 4-column
+   .session-header never wraps the drag handle to a second row, however many
+   indicators are active. Individual gap matches the grid's column-gap. */
+.session-indicators {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.session-indicators:empty {
+  display: none;
+}
+
 /* Per-session live-activity indicator. A small spinning two-arrow loop
    next to the session name shows that the OTHER session is currently busy
    (tool use / thinking / blocked) so the user can tell at a glance from
