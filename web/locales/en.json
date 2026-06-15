@@ -31,6 +31,8 @@
     "compacting_aria": "compacting",
     "reattached_title": "Re-attached to Claude Code (the broker binding self-healed)",
     "reattached_aria": "re-attached",
+    "ctx_low_title": "Context low — {{pct}}% free; a compact will be needed soon",
+    "ctx_low_aria": "context low",
     "inactive_label": "Inactive ({{count}})",
     "toggle_label": "Toggle sidebar",
     "filter_label": "Show",

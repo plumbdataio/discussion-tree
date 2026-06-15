@@ -24,6 +24,7 @@ import type { TFunction } from "i18next";
 import type { Activity, SessionListItem } from "../../shared/types.ts";
 import { BOARD_STATUSES, normalizeBoardStatus } from "../utils/constants.ts";
 import { isBoardVisible } from "../utils/boardFilter.ts";
+import { contextWarnBand } from "../utils/contextBand.ts";
 import {
   type BoardStatusFilter,
   useSettings,
@@ -151,6 +152,11 @@ function SessionItem({
     currentBoardId != null &&
     s.boards.some((b) => b.id === currentBoardId);
 
+  // Context-low warning chip. Band derived in one place (contextWarnBand):
+  // <15% free shows the chip, <=10% is critical (red) to match ContextMeter.
+  const ctxPct = s.context_usage?.remaining_pct;
+  const ctxBand = contextWarnBand(ctxPct);
+
   return (
     <div
       key={s.id}
@@ -248,6 +254,18 @@ function SessionItem({
             aria-label={t("sidebar.compacting_aria")}
           >
             <Shrink size={15} strokeWidth={2.5} />
+          </span>
+        )}
+        {ctxBand && (
+          <span
+            className={`session-ctx-indicator${ctxBand === "critical" ? " ctx-critical" : ""}`}
+            title={t("sidebar.ctx_low_title", { pct: Math.round(ctxPct as number) })}
+            aria-label={t("sidebar.ctx_low_aria")}
+          >
+            CTX
+            <span className="ctx-bang" aria-hidden="true">
+              !
+            </span>
           </span>
         )}
         {reattaching && !activity && (
