@@ -5336,13 +5336,12 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
   position: absolute;
   top: -1px;
   left: -1px;
-  /* Reserve the top-right corner for the drag grip so a long title (and the
-     label's bottom-right font-size handle, which rides the bar's right edge)
-     never reach it. border-box so the reservation counts the bar's own 20px
-     padding — otherwise max-width caps only the content and padding pushes the
-     edge back under the grip. */
+  /* border-box so any right-edge reservation counts the bar's own 20px padding
+     (otherwise max-width caps only the content and padding pushes the edge back
+     under the grip). Locked frames have NO grip / font-size handle, so the bar
+     keeps full width here; the reservation is scoped to unlocked frames below. */
   box-sizing: border-box;
-  max-width: calc(100% - 44px);
+  max-width: calc(100% + 2px);
   display: flex;
   align-items: center;
   padding: 3px 10px;
@@ -5353,6 +5352,12 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
   border-top-left-radius: 13px;
   border-bottom-right-radius: 10px;
   user-select: none;
+}
+/* Unlocked only: reserve the top-right corner so a long title (and the label's
+   bottom-right font-size handle) never reach the drag grip. Locked frames omit
+   both controls, so they keep the full-width rule above. */
+.map-frame:not(.locked) .map-frame-bar {
+  max-width: calc(100% - 44px);
 }
 .map-frame.locked .map-frame-bar {
   cursor: default;
