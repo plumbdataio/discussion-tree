@@ -5301,6 +5301,10 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
   position: absolute;
   top: 4px;
   right: 4px;
+  /* Above the label bar: the bar renders later in the DOM, so without this a
+     wide title would paint over the grip AND swallow its pointer events —
+     leaving the frame immovable (the grip is the only move affordance). */
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5332,7 +5336,9 @@ ul.maps li.current .sidebar-map-link { background: var(--cc); }
   position: absolute;
   top: -1px;
   left: -1px;
-  max-width: calc(100% + 2px);
+  /* Reserve the top-right corner for the drag grip so a long title never
+     reaches it (the grip also sits above via z-index as a backstop). */
+  max-width: calc(100% - 38px);
   display: flex;
   align-items: center;
   padding: 3px 10px;
