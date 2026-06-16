@@ -25,7 +25,15 @@ function MDViewImpl({
           users type in the textarea expect to see — the "GitHub
           comment / chat" feel rather than strict CommonMark. */}
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkCjkFriendly, remarkBreaks]}
+        // singleTilde:false — GFM defaults to treating a SINGLE ~x~ as
+        // strikethrough, so a message with two home-dir paths ("~/foo ... ~/bar")
+        // strikes everything between them. Require the standard double ~~x~~ for
+        // strikethrough instead, so bare ~/paths render literally.
+        remarkPlugins={[
+          [remarkGfm, { singleTilde: false }],
+          remarkCjkFriendly,
+          remarkBreaks,
+        ]}
         urlTransform={urlTransform}
         components={{
           a: ({ node, ...props }) => <MarkdownAnchor {...props} />,

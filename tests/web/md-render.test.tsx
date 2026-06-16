@@ -115,3 +115,19 @@ describe("MDView GFM tables", () => {
     expect(out).toContain("<th>A</th>");
   });
 });
+
+describe("MDView tilde / strikethrough", () => {
+  test("two home-dir paths do NOT strike the text between them", () => {
+    // GFM's default singleTilde would treat ~ … ~ as strikethrough, eating the
+    // text between two "~/" paths. We disabled it, so they render literally.
+    const out = html("見て ~/Codes/foo と ~/Codes/bar を比較");
+    expect(out).not.toContain("<del>");
+    expect(out).toContain("~/Codes/foo");
+    expect(out).toContain("~/Codes/bar");
+  });
+
+  test("standard double-tilde strikethrough still works", () => {
+    const out = html("これは ~~取り消し~~ です");
+    expect(out).toContain("<del>取り消し</del>");
+  });
+});
