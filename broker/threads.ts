@@ -316,9 +316,19 @@ export async function handleSubmitAnswer(body: any): Promise<
   // that landed at the buzzer (poll ran, thread item + message_id created) is
   // not clobbered. No thread-item cleanup needed: the row is only created at
   // delivery, so a timed-out (never-delivered) message left none behind.
-  db.run("UPDATE pending_messages SET cancelled = 1 WHERE id = ? AND delivered = 0", [
-    pendingId,
-  ]);
+  const cancel = db
+    .prepare(
+      "UPDATE pending_messages SET cancelled = 1 WHERE id = ? AND delivered = 0",
+    )
+    .run(pendingId);
+  // changes === 0 ⇒ delivery won the race at the buzzer (delivered flipped to 1
+  // during the final sleep, after the loop's last check), so the cancel was a
+  // no-op. The message WAS delivered = CC is alive and processing, so clear the
+  // stall the in-loop branch would have — otherwise a tool-less continue could
+  // leave a stale ⚠️ on a session that actually resumed.
+  if (cancel.changes === 0) {
+    clearStall(board.session_id);
+  }
   return {
     ok: false,
     error: "errors.delivery_timeout",
