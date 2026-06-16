@@ -339,6 +339,28 @@ export function handleHeartbeatCcPid(body: { cc_pid?: number }): {
   return { ok: true };
 }
 
+// The per-CC MCP poller just pushed a channel message to this session and the
+// `notifications/claude/channel` write RESOLVED. That's the strongest signal dt
+// has that the session is alive and about to process a turn — stronger than the
+// broker-side `delivered` flag, which flips when the poller DRAINS the queue,
+// before the stdio notification is even attempted. So the stall warning (and
+// the pending auto-continue nudge) is cleared here, tied to push-success,
+// rather than in handleSubmitAnswer on the delivered flag: a push that throws
+// (transport hiccup, CC restarting) now leaves the honest stalled state instead
+// of wiping a ⚠️ on a session that never actually received the "continue".
+// Residual: a resolved stdio write proves CC got the bytes, not that the LLM
+// accepted them — but a tool-less thinking turn fires no hook, so this is the
+// best available signal (the same inherent ceiling as stall detection itself).
+// session_id is the broker id the poller already holds; clearStall is a no-op
+// when the session isn't stalled, so a duplicate ack per drain is harmless.
+export function handleChannelPushed(body: { session_id?: string }): {
+  ok: boolean;
+} {
+  if (!body.session_id) return { ok: false };
+  clearStall(body.session_id);
+  return { ok: true };
+}
+
 export function handleClearToolActivity(body: { cc_session_id?: string }): {
   ok: boolean;
 } {
@@ -566,6 +588,7 @@ export const routes = {
   "/set-activity": handleSetActivity,
   "/heartbeat-tool": handleHeartbeatTool,
   "/heartbeat-cc-pid": handleHeartbeatCcPid,
+  "/channel-pushed": handleChannelPushed,
   "/clear-tool-activity": handleClearToolActivity,
   "/session-stalled": handleSessionStalled,
   "/session-compacting": handleSessionCompacting,

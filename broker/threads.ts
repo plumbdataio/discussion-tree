@@ -24,7 +24,7 @@ import { onBoardSettled, onNodeSettled } from "./checklist.ts";
 import { SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
 import { buildNodePath } from "./helpers.ts";
 import { ensureBoardLogNode } from "./structure-log.ts";
-import { clearStall, markWorkingFromUserSubmit } from "./activity.ts";
+import { markWorkingFromUserSubmit } from "./activity.ts";
 
 // Same helper as broker/nodes.ts — node status mutations may flip the
 // parent board's auto-rollup, broadcast lets the sidebar follow. Returns
@@ -226,14 +226,11 @@ export async function handleSubmitAnswer(body: any): Promise<
       | { delivered: number; thread_item_id: number | null }
       | null;
     if (row?.delivered === 1) {
-      // CC actually picked the message up — it's alive and processing, so clear
-      // any stall warning (the UI flips from a stuck ⚠️ to the working spinner
-      // set above). This is what un-sticks the ⚠️ after the auto-continue's
-      // "continue", since a tool-less thinking turn never fires clearStall on
-      // its own. Done on delivery (not at enqueue) so a nudge that times out
-      // undelivered leaves the honest stalled state — a genuine re-stall
-      // re-warns via StopFailure.
-      clearStall(board.session_id);
+      // `delivered` flips when the poller DRAINS this row, which happens before
+      // its channel notification to CC is actually attempted — so the stall is
+      // NOT cleared here (that would wipe the ⚠️ even if the push then throws and
+      // CC never gets the "continue"). The poller clears it via /channel-pushed
+      // only once the notification write resolves. See handleChannelPushed.
       // Bump the owning session's unanswered-user-post counter. Counts both
       // kinds for now — a structure request also expects an ack from CC, and
       // overcounting is recoverable via /reset-unanswered.
@@ -316,19 +313,14 @@ export async function handleSubmitAnswer(body: any): Promise<
   // that landed at the buzzer (poll ran, thread item + message_id created) is
   // not clobbered. No thread-item cleanup needed: the row is only created at
   // delivery, so a timed-out (never-delivered) message left none behind.
-  const cancel = db
-    .prepare(
-      "UPDATE pending_messages SET cancelled = 1 WHERE id = ? AND delivered = 0",
-    )
-    .run(pendingId);
-  // changes === 0 ⇒ delivery won the race at the buzzer (delivered flipped to 1
-  // during the final sleep, after the loop's last check), so the cancel was a
-  // no-op. The message WAS delivered = CC is alive and processing, so clear the
-  // stall the in-loop branch would have — otherwise a tool-less continue could
-  // leave a stale ⚠️ on a session that actually resumed.
-  if (cancel.changes === 0) {
-    clearStall(board.session_id);
-  }
+  db.prepare(
+    "UPDATE pending_messages SET cancelled = 1 WHERE id = ? AND delivered = 0",
+  ).run(pendingId);
+  // If the cancel was a no-op (changes === 0) the delivery won the race at the
+  // buzzer, but we still don't clear the stall here: a drained row only means
+  // the poller has the message, not that its channel push to CC succeeded. The
+  // poller clears the stall via /channel-pushed once the notification resolves
+  // (handleChannelPushed) — so a push that throws keeps the honest ⚠️.
   return {
     ok: false,
     error: "errors.delivery_timeout",
