@@ -61,12 +61,14 @@ export const setSessionStalledStmt = db.prepare(
 export const clearSessionStalledStmt = db.prepare(
   "UPDATE sessions SET stalled_at = NULL WHERE id = ? AND stalled_at IS NOT NULL",
 );
-// Identity-guarded clear: only wipe the stall if it's STILL the exact one whose
-// timestamp the caller observed (used by /channel-pushed, where a delayed push
-// ack must not clear a NEWER stall recorded after the push). changes === 0 when
-// a fresh stall (different stalled_at) has since replaced it, or it cleared.
-export const clearSessionStalledIfAtStmt = db.prepare(
-  "UPDATE sessions SET stalled_at = NULL WHERE id = ? AND stalled_at = ?",
+// Time-guarded clear: only wipe a stall recorded BEFORE the moment a channel
+// push provably resolved (used by /channel-pushed). A push that reached CC is
+// proof it was alive at that instant, so any older stall is stale and clears;
+// a NEWER stall (recorded after the push, e.g. the pushed turn then failed) is
+// a fresh problem a delayed ack must NOT wipe. changes === 0 when the current
+// stall is newer than the push, or there's nothing stalled.
+export const clearSessionStalledBeforeStmt = db.prepare(
+  "UPDATE sessions SET stalled_at = NULL WHERE id = ? AND stalled_at IS NOT NULL AND stalled_at < ?",
 );
 // Set to an ISO timestamp while Claude Code is compacting its context (the
 // PreCompact hook fires) and cleared once it resumes (the post-compact

@@ -86,81 +86,78 @@ describe("session stall (StopFailure → UI warning)", () => {
     expect(await isStalled(sessionId)).toBe(false);
   });
 
-  test("/channel-pushed clears the stall (poller acked a resolved push)", async () => {
+  test("/channel-pushed clears a stall older than the push (pushed_at)", async () => {
     await stall();
     expect(await isStalled(sessionId)).toBe(true);
-    // The poller learns stalled_at from the /poll-messages drain and echoes it.
-    const poll = await post<{ stalled_at: string | null }>(
-      `${broker.url}/poll-messages`,
-      { session_id: sessionId },
-    );
-    expect(poll.json.stalled_at).toBeTruthy();
+    // The poller stamps pushed_at when the notification resolves — in practice
+    // well after the stall (auto-continue is +30s, a user reply seconds later).
+    // Nudge past the same-millisecond boundary so the test mirrors that margin.
+    await new Promise((r) => setTimeout(r, 5));
     const r = await post<{ ok: boolean }>(`${broker.url}/channel-pushed`, {
       session_id: sessionId,
-      stalled_at: poll.json.stalled_at,
+      pushed_at: new Date().toISOString(),
     });
     expect(r.json.ok).toBe(true);
     expect(await isStalled(sessionId)).toBe(false);
   });
 
-  test("/channel-pushed needs a session_id and a MATCHING stalled_at", async () => {
+  test("/channel-pushed needs a session_id and a pushed_at after the stall", async () => {
     const r1 = await post<{ ok: boolean }>(`${broker.url}/channel-pushed`, {});
     expect(r1.json.ok).toBe(false);
-    // Unknown id: identity-guarded clear is a no-op but the endpoint returns ok.
+    // Unknown id: the guarded clear is a no-op but the endpoint returns ok.
     const r2 = await post<{ ok: boolean }>(`${broker.url}/channel-pushed`, {
       session_id: "sess-does-not-exist",
-      stalled_at: new Date().toISOString(),
+      pushed_at: new Date().toISOString(),
     });
     expect(r2.json.ok).toBe(true);
 
     await stall();
     expect(await isStalled(sessionId)).toBe(true);
-    // An ack with NO stalled_at must not clear a real stall (drain wasn't stalled).
+    // An ack with NO pushed_at must not clear a real stall.
     await post(`${broker.url}/channel-pushed`, { session_id: sessionId });
     expect(await isStalled(sessionId)).toBe(true);
-    // An ack with a stale (non-matching) stalled_at must not clear it either.
+    // An ack whose push resolved BEFORE the stall must not clear it either.
     await post(`${broker.url}/channel-pushed`, {
       session_id: sessionId,
-      stalled_at: "1999-01-01T00:00:00.000Z",
+      pushed_at: "1999-01-01T00:00:00.000Z",
     });
     expect(await isStalled(sessionId)).toBe(true);
     await post(`${broker.url}/clear-tool-activity`, { cc_session_id: ccId });
   });
 
   test("a stale push ack does NOT clear a newer stall (codex P2)", async () => {
-    // The pushed turn can fail and record a NEW stall (different stalled_at)
-    // before this push's fire-and-forget ack lands. The ack carries the OLD
-    // stalled_at, so the identity guard must make it a no-op on the fresh stall.
-    await stall();
-    const poll1 = await post<{ stalled_at: string | null }>(
-      `${broker.url}/poll-messages`,
-      { session_id: sessionId },
-    );
-    const oldStalledAt = poll1.json.stalled_at!;
-    expect(oldStalledAt).toBeTruthy();
-
-    // Simulate the turn failing → a fresh stall with a distinct timestamp.
-    await post(`${broker.url}/clear-tool-activity`, { cc_session_id: ccId });
-    await new Promise((r) => setTimeout(r, 20)); // ensure a distinct ISO ms
+    // The fire-and-forget ack can land after the pushed turn already failed and
+    // recorded a NEW stall. The ack carries the EARLIER push-resolve instant, so
+    // the time guard must make it a no-op on the fresh (later) stall.
+    const pushedAt = new Date().toISOString();
+    await new Promise((r) => setTimeout(r, 20)); // the new stall is later
     await stall();
     expect(await isStalled(sessionId)).toBe(true);
 
-    // The delayed ack carries the OLD stalled_at → must be a no-op.
+    // The delayed ack carries the OLD push instant → must be a no-op.
     await post(`${broker.url}/channel-pushed`, {
       session_id: sessionId,
-      stalled_at: oldStalledAt,
+      pushed_at: pushedAt,
     });
     expect(await isStalled(sessionId)).toBe(true);
 
-    // A matching ack (the fresh stalled_at) DOES clear it.
-    const poll2 = await post<{ stalled_at: string | null }>(
-      `${broker.url}/poll-messages`,
-      { session_id: sessionId },
-    );
-    expect(poll2.json.stalled_at).not.toBe(oldStalledAt);
+    // A fresh ack (push instant after the new stall) DOES clear it.
     await post(`${broker.url}/channel-pushed`, {
       session_id: sessionId,
-      stalled_at: poll2.json.stalled_at,
+      pushed_at: new Date().toISOString(),
+    });
+    expect(await isStalled(sessionId)).toBe(false);
+  });
+
+  test("a push resolving AFTER a stall recorded post-drain still clears it (codex P2 r3)", async () => {
+    // The mirror race: /poll-messages drains BEFORE the stall is recorded, so
+    // the drain saw no stall; the stall lands, then the push resolves. The push
+    // is proof of life AFTER the stall, so it must still clear it.
+    await stall(); // stands in for "stall recorded after the (earlier) drain"
+    await new Promise((r) => setTimeout(r, 5));
+    await post(`${broker.url}/channel-pushed`, {
+      session_id: sessionId,
+      pushed_at: new Date().toISOString(), // resolves after the stall
     });
     expect(await isStalled(sessionId)).toBe(false);
   });
@@ -181,26 +178,22 @@ describe("session stall (StopFailure → UI warning)", () => {
 
     // Fire a submit (blocks until delivered/timeout) WITHOUT awaiting, then drain
     // it via /poll-messages so its row flips delivered=1 — exactly the broker
-    // state right before the MCP poller attempts the channel notification. The
-    // drain also returns the stall timestamp the poller will echo on its ack.
+    // state right before the MCP poller attempts the channel notification.
     const submitP = post(`${broker.url}/submit-answer`, {
       board_id: boardId,
       node_id: "main",
       text: "continue",
     });
     await new Promise((r) => setTimeout(r, 150));
-    const poll = await post<{ stalled_at: string | null }>(
-      `${broker.url}/poll-messages`,
-      { session_id: sessionId },
-    );
+    await post(`${broker.url}/poll-messages`, { session_id: sessionId });
 
     // Delivered, but the push hasn't been acked → still stalled.
     expect(await isStalled(sessionId)).toBe(true);
 
-    // Poller acks the resolved push (echoing the drained stalled_at) → clears.
+    // Poller acks the resolved push (stamped after the stall) → clears.
     await post(`${broker.url}/channel-pushed`, {
       session_id: sessionId,
-      stalled_at: poll.json.stalled_at,
+      pushed_at: new Date().toISOString(),
     });
     expect(await isStalled(sessionId)).toBe(false);
 

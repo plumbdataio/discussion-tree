@@ -164,17 +164,18 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
           },
         },
       });
-      // The channel write to CC resolved → this session is alive and about to
-      // process the turn. Tell the broker so it can clear any stall warning and
-      // cancel the pending auto-continue. Tied to push-success (not the broker's
-      // `delivered` flag, which flips at queue-drain BEFORE this notification is
-      // attempted) so a failed push leaves the honest stalled state. Echo the
-      // stalled_at observed at drain so the clear is identity-guarded: a delayed
-      // ack can't wipe a NEWER stall recorded after this push. Best-effort and
-      // idempotent broker-side, so a duplicate ack per drain is harmless.
+      // The channel write to CC resolved → this session was alive at THIS
+      // instant. Tell the broker so it can clear a stall warning + cancel the
+      // pending auto-continue. Tied to push-success (not the broker's `delivered`
+      // flag, which flips at queue-drain BEFORE this notification is attempted)
+      // so a failed push leaves the honest stalled state. Send the resolve
+      // instant: the broker clears only a stall OLDER than it, so even a delayed
+      // ack can't wipe a NEWER stall (the pushed turn then failing). Best-effort
+      // and idempotent broker-side, so a duplicate ack per drain is harmless.
+      const pushedAt = new Date().toISOString();
       void brokerFetch("/channel-pushed", {
         session_id: sessionId,
-        stalled_at: result.stalled_at ?? null,
+        pushed_at: pushedAt,
       }).catch(() => {});
       log(
         `Pushed [${kind}] for ${msg.node_id || "(meta)"} ${

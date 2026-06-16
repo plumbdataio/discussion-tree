@@ -12,7 +12,7 @@ import type { Activity, SetActivityRequest } from "../shared/types.ts";
 import {
   clearSessionCompactingStmt,
   clearSessionStalledStmt,
-  clearSessionStalledIfAtStmt,
+  clearSessionStalledBeforeStmt,
   db,
   selectAliveSessionByCcPid,
   setSessionCompactingStmt,
@@ -172,12 +172,13 @@ export function clearStall(sessionId: string): void {
   }
 }
 
-// Identity-guarded variant: clear ONLY the stall whose timestamp the caller
-// observed (`stalledAt`). If a newer stall has since replaced it (different
-// stalled_at) the run is a no-op, so a late /channel-pushed ack can't wipe a
-// fresh warning. Same cancel + broadcast as clearStall when it actually clears.
-export function clearStallIfAt(sessionId: string, stalledAt: string): void {
-  const res = clearSessionStalledIfAtStmt.run(sessionId, stalledAt);
+// Time-guarded variant: clear only a stall recorded BEFORE `pushedAt` — the
+// instant a channel push to this session provably resolved (so CC was alive
+// then). An older stall is stale and clears; a stall recorded after the push
+// (a fresh failure the push didn't cause) survives a delayed ack. Same cancel +
+// broadcast as clearStall when it actually clears.
+export function clearStallBefore(sessionId: string, pushedAt: string): void {
+  const res = clearSessionStalledBeforeStmt.run(sessionId, pushedAt);
   if (res.changes > 0) {
     cancelAutoContinue(sessionId);
     broadcastToAll({ type: "session-stall-update" });
@@ -364,22 +365,24 @@ export function handleHeartbeatCcPid(body: { cc_pid?: number }): {
 // Residual: a resolved stdio write proves CC got the bytes, not that the LLM
 // accepted them — but a tool-less thinking turn fires no hook, so this is the
 // best available signal (the same inherent ceiling as stall detection itself).
-// session_id is the broker id the poller already holds. `stalled_at` is the
-// session's stall timestamp AS OF the drain (it rode along in the
-// /poll-messages response): the ack clears ONLY that exact stall. A null means
-// the session wasn't stalled at drain time — nothing to clear, and we must NOT
-// clear a stall that appeared AFTER the drain. If a newer stall replaced it
-// (different stalled_at), this ack is stale → no-op (clearStallIfAt guards it).
-// This closes the race where a delayed ack would wipe a fresh stall + cancel
-// its auto-continue. Idempotent, so a duplicate ack per drain is harmless.
+// session_id is the broker id the poller already holds. `pushed_at` is the
+// instant the channel notification RESOLVED (captured by the poller, not at
+// ack-processing time — so a delayed ack still carries the early push moment).
+// Clear only a stall older than that moment: the push proves CC was alive then,
+// so any earlier stall is stale; a stall recorded after the push (the pushed
+// turn then failed) is a fresh problem this ack must not wipe — that's the race
+// where a delayed ack would otherwise cancel a live session's auto-continue.
+// Missing pushed_at is a no-op. Idempotent, so a duplicate ack per drain is
+// harmless. (Symmetric residual, both benign: a stall in the drain→resolve gap
+// clears; a same-millisecond collision lingers to the turn's natural Stop.)
 export function handleChannelPushed(body: {
   session_id?: string;
-  stalled_at?: string | null;
+  pushed_at?: string | null;
 }): {
   ok: boolean;
 } {
   if (!body.session_id) return { ok: false };
-  if (body.stalled_at) clearStallIfAt(body.session_id, body.stalled_at);
+  if (body.pushed_at) clearStallBefore(body.session_id, body.pushed_at);
   return { ok: true };
 }
 
