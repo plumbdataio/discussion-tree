@@ -172,6 +172,14 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
       // instant: the broker clears only a stall OLDER than it, so even a delayed
       // ack can't wipe a NEWER stall (the pushed turn then failing). Best-effort
       // and idempotent broker-side, so a duplicate ack per drain is harmless.
+      //
+      // INVARIANT: stamp pushedAt on the line immediately after the await, with
+      // NO yield in between — so it is fixed nanoseconds after the bytes hit the
+      // pipe, BEFORE CC has even read them. Any stall the pushed turn then
+      // produces is seconds later (receive → run → fail → StopFailure →
+      // /session-stalled), hence stalled_at > pushedAt, and the broker's strict
+      // `<` guard preserves it. Do NOT move this above the await (that would re-
+      // break the mirror race: a stall in the drain→resolve gap must still clear).
       const pushedAt = new Date().toISOString();
       void brokerFetch("/channel-pushed", {
         session_id: sessionId,

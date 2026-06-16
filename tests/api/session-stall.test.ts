@@ -141,7 +141,10 @@ describe("session stall (StopFailure → UI warning)", () => {
     });
     expect(await isStalled(sessionId)).toBe(true);
 
-    // A fresh ack (push instant after the new stall) DOES clear it.
+    // A fresh ack (push instant strictly after the new stall) DOES clear it.
+    // Nudge past the same-millisecond boundary so the strict `<` guard is
+    // deterministic on fast runs (mirrors the real seconds-apart timing).
+    await new Promise((r) => setTimeout(r, 5));
     await post(`${broker.url}/channel-pushed`, {
       session_id: sessionId,
       pushed_at: new Date().toISOString(),
