@@ -9,6 +9,9 @@ import { MarkdownAnchor, urlTransform } from "./MarkdownAnchor.tsx";
 // handling escapes / entities / multiple runs correctly, which a post-parse
 // fixup cannot. Must come after remark-gfm (per its docs).
 import remarkCjkFriendly from "remark-cjk-friendly";
+// remark-cjk-friendly only fixes emphasis (** / *); its companion does the same
+// for GFM strikethrough (~~) so a ~~struck~~ span jammed against CJK still renders.
+import remarkCjkFriendlyGfmStrikethrough from "remark-cjk-friendly-gfm-strikethrough";
 
 function MDViewImpl({
   text,
@@ -32,6 +35,7 @@ function MDViewImpl({
         remarkPlugins={[
           [remarkGfm, { singleTilde: false }],
           remarkCjkFriendly,
+          remarkCjkFriendlyGfmStrikethrough,
           remarkBreaks,
         ]}
         urlTransform={urlTransform}

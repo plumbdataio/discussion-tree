@@ -130,4 +130,11 @@ describe("MDView tilde / strikethrough", () => {
     const out = html("これは ~~取り消し~~ です");
     expect(out).toContain("<del>取り消し</del>");
   });
+
+  test("double-tilde jammed against CJK still strikes (cjk-friendly-gfm)", () => {
+    // GFM flanking drops ~~x~~ edged by CJK/fullwidth punctuation, like it does
+    // for **bold**. The cjk-friendly-gfm-strikethrough companion rescues it.
+    expect(html("標準だと~~○×△~~だったり")).toContain("<del>○×△</del>");
+    expect(html("これは~~取り消し~~です")).toContain("<del>取り消し</del>");
+  });
 });

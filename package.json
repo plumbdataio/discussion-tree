@@ -30,6 +30,7 @@
     "react-markdown": "^9.0.0",
     "remark-breaks": "^4.0.0",
     "remark-cjk-friendly": "^2.0.1",
+    "remark-cjk-friendly-gfm-strikethrough": "^2.1.0",
     "remark-gfm": "^4.0.0"
   },
   "devDependencies": {
