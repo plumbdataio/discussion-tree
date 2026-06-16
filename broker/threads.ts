@@ -330,6 +330,15 @@ export async function handleSubmitAnswer(body: any): Promise<
 
 export function handlePollMessages(body: any) {
   const messages = selectPending.all(body.session_id) as any[];
+  // Capture the session's stall timestamp at drain time so the poller can echo
+  // it on /channel-pushed: the post-push ack then clears ONLY this exact stall,
+  // never a newer one recorded after the push (see handleChannelPushed).
+  const stalled_at =
+    (
+      db
+        .prepare("SELECT stalled_at FROM sessions WHERE id = ?")
+        .get(body.session_id) as { stalled_at: string | null } | null
+    )?.stalled_at ?? null;
   for (const m of messages) {
     const kind = m.kind ?? "user_input_relay";
     // Materialize a user reply into its node's thread AT delivery and capture
@@ -356,7 +365,7 @@ export function handlePollMessages(body: any) {
     }
     markDelivered.run(m.id);
   }
-  return { messages };
+  return { messages, stalled_at };
 }
 
 function broadcastUnreadAll() {

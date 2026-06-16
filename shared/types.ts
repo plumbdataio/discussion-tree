@@ -409,6 +409,10 @@ export interface PollMessagesRequest {
 }
 export interface PollMessagesResponse {
   messages: PendingMessage[];
+  // The owning session's stall timestamp at drain time (null when not stalled).
+  // The poller echoes it back on /channel-pushed so the stall is cleared by
+  // identity — a later, different stall is never wiped by a stale push ack.
+  stalled_at?: string | null;
 }
 
 export interface Activity {

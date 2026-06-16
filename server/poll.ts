@@ -168,11 +168,14 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
       // process the turn. Tell the broker so it can clear any stall warning and
       // cancel the pending auto-continue. Tied to push-success (not the broker's
       // `delivered` flag, which flips at queue-drain BEFORE this notification is
-      // attempted) so a failed push leaves the honest stalled state. Best-effort
-      // and idempotent broker-side, so a duplicate ack per drain is harmless.
-      void brokerFetch("/channel-pushed", { session_id: sessionId }).catch(
-        () => {},
-      );
+      // attempted) so a failed push leaves the honest stalled state. Echo the
+      // stalled_at observed at drain so the clear is identity-guarded: a delayed
+      // ack can't wipe a NEWER stall recorded after this push. Best-effort and
+      // idempotent broker-side, so a duplicate ack per drain is harmless.
+      void brokerFetch("/channel-pushed", {
+        session_id: sessionId,
+        stalled_at: result.stalled_at ?? null,
+      }).catch(() => {});
       log(
         `Pushed [${kind}] for ${msg.node_id || "(meta)"} ${
           msg.node_path ? `(${msg.node_path.slice(0, 60)})` : ""

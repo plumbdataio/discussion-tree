@@ -12,6 +12,7 @@ import type { Activity, SetActivityRequest } from "../shared/types.ts";
 import {
   clearSessionCompactingStmt,
   clearSessionStalledStmt,
+  clearSessionStalledIfAtStmt,
   db,
   selectAliveSessionByCcPid,
   setSessionCompactingStmt,
@@ -167,6 +168,18 @@ export function clearStall(sessionId: string): void {
   const res = clearSessionStalledStmt.run(sessionId);
   if (res.changes > 0) {
     cancelAutoContinue(sessionId); // recovered on its own — don't nudge it
+    broadcastToAll({ type: "session-stall-update" });
+  }
+}
+
+// Identity-guarded variant: clear ONLY the stall whose timestamp the caller
+// observed (`stalledAt`). If a newer stall has since replaced it (different
+// stalled_at) the run is a no-op, so a late /channel-pushed ack can't wipe a
+// fresh warning. Same cancel + broadcast as clearStall when it actually clears.
+export function clearStallIfAt(sessionId: string, stalledAt: string): void {
+  const res = clearSessionStalledIfAtStmt.run(sessionId, stalledAt);
+  if (res.changes > 0) {
+    cancelAutoContinue(sessionId);
     broadcastToAll({ type: "session-stall-update" });
   }
 }
@@ -351,13 +364,22 @@ export function handleHeartbeatCcPid(body: { cc_pid?: number }): {
 // Residual: a resolved stdio write proves CC got the bytes, not that the LLM
 // accepted them — but a tool-less thinking turn fires no hook, so this is the
 // best available signal (the same inherent ceiling as stall detection itself).
-// session_id is the broker id the poller already holds; clearStall is a no-op
-// when the session isn't stalled, so a duplicate ack per drain is harmless.
-export function handleChannelPushed(body: { session_id?: string }): {
+// session_id is the broker id the poller already holds. `stalled_at` is the
+// session's stall timestamp AS OF the drain (it rode along in the
+// /poll-messages response): the ack clears ONLY that exact stall. A null means
+// the session wasn't stalled at drain time — nothing to clear, and we must NOT
+// clear a stall that appeared AFTER the drain. If a newer stall replaced it
+// (different stalled_at), this ack is stale → no-op (clearStallIfAt guards it).
+// This closes the race where a delayed ack would wipe a fresh stall + cancel
+// its auto-continue. Idempotent, so a duplicate ack per drain is harmless.
+export function handleChannelPushed(body: {
+  session_id?: string;
+  stalled_at?: string | null;
+}): {
   ok: boolean;
 } {
   if (!body.session_id) return { ok: false };
-  clearStall(body.session_id);
+  if (body.stalled_at) clearStallIfAt(body.session_id, body.stalled_at);
   return { ok: true };
 }
 
