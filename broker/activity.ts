@@ -58,6 +58,16 @@ function scheduleAutoContinue(sessionId: string): void {
         | { id: string }
         | null;
       if (!row) return;
+      // Clear the stall NOW (synchronously), before the submit: handleSubmitAnswer
+      // marks the session "working" but then BLOCKS polling for delivery, so a
+      // .then() after it would only clear the ⚠️ once that poll finishes. We
+      // want the UI to flip from "stuck ⚠️" to "working spinner" the instant we
+      // nudge it — otherwise the ⚠️ sits through the (tool-less) thinking that
+      // follows, since clearStall otherwise only fires on a tool call / Stop /
+      // re-attach. A genuine re-stall re-warns via the StopFailure hook.
+      // (cancelAutoContinue inside clearStall is a no-op here — this timer has
+      // already removed itself from the map above.)
+      clearStall(sessionId);
       // Dynamic import avoids a static cycle (threads.ts imports this module).
       // Same channel path the cc-usage bridge uses for the 5h auto-resume; a
       // delivery timeout (CC alive but parked at a choice prompt) is fine — the
