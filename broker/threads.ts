@@ -215,14 +215,6 @@ export async function handleSubmitAnswer(body: any): Promise<
   // Immediate "working" feedback: the user just sent something, show the
   // badge now rather than waiting for the CC's first PreToolUse hook.
   markWorkingFromUserSubmit(board.session_id);
-  // The message is now QUEUED (insertPending above succeeded) = the nudge is
-  // accepted, so clear any stall warning: the UI flips from a stuck ⚠️ to the
-  // working spinner. The auto-continue path submits through here too, and since
-  // a tool-less "thinking" turn never fires clearStall on its own, this is what
-  // un-sticks the ⚠️ after a continue. A genuine re-stall re-warns via
-  // StopFailure. Done only AFTER the insert so a failed / early-returned submit
-  // never clears a stall while the session is actually still stuck.
-  clearStall(board.session_id);
 
   // Poll until /poll-messages flips delivered=1, or we time out.
   const deadline = Date.now() + SUBMIT_DELIVERY_TIMEOUT_MS;
@@ -234,6 +226,14 @@ export async function handleSubmitAnswer(body: any): Promise<
       | { delivered: number; thread_item_id: number | null }
       | null;
     if (row?.delivered === 1) {
+      // CC actually picked the message up — it's alive and processing, so clear
+      // any stall warning (the UI flips from a stuck ⚠️ to the working spinner
+      // set above). This is what un-sticks the ⚠️ after the auto-continue's
+      // "continue", since a tool-less thinking turn never fires clearStall on
+      // its own. Done on delivery (not at enqueue) so a nudge that times out
+      // undelivered leaves the honest stalled state — a genuine re-stall
+      // re-warns via StopFailure.
+      clearStall(board.session_id);
       // Bump the owning session's unanswered-user-post counter. Counts both
       // kinds for now — a structure request also expects an ack from CC, and
       // overcounting is recoverable via /reset-unanswered.
