@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
 import { SquareTerminal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSettings } from "../utils/settings.ts";
-import { postCliSend } from "../utils/api.ts";
+import { getCliHistory, postCliSend } from "../utils/api.ts";
 import { showToast } from "./Toast.tsx";
 
 // The commands the user can pick. Mirrors the broker allowlist; today just one.
@@ -71,9 +71,13 @@ function CliCommandModal({
 }) {
   const { t } = useTranslation();
   const [command, setCommand] = useState<string>(CLI_COMMANDS[0]);
-  // Prefill with the user's usual /compact rules; they can edit before sending.
-  const [args, setArgs] = useState<string>(() => t("cli.compact_default_args"));
+  // Empty by default — the user picks from their own past prompts (history)
+  // rather than a baked-in personal default.
+  const [args, setArgs] = useState<string>("");
   const [sending, setSending] = useState(false);
+  const [history, setHistory] = useState<
+    { args: string; last_used_at: string }[]
+  >([]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -82,6 +86,17 @@ function CliCommandModal({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Load the de-duplicated arg history for the selected command.
+  useEffect(() => {
+    let cancelled = false;
+    getCliHistory(command).then((h) => {
+      if (!cancelled) setHistory(h);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [command]);
 
   const send = async () => {
     if (sending || busy || !canCliSend) return;
@@ -147,6 +162,26 @@ function CliCommandModal({
             onChange={(e) => setArgs(e.target.value)}
           />
         </div>
+
+        {history.length > 0 && (
+          <div className="cli-command-field">
+            <label className="settings-label">{t("cli.history_title")}</label>
+            <ul className="cli-history-list">
+              {history.map((h, i) => (
+                <li key={i}>
+                  <button
+                    type="button"
+                    className={`cli-history-item${args === h.args ? " active" : ""}`}
+                    title={h.args}
+                    onClick={() => setArgs(h.args)}
+                  >
+                    {h.args.length > 90 ? h.args.slice(0, 90) + "…" : h.args}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {!canCliSend && (
           <p className="cli-command-note cli-command-note-warn">

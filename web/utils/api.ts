@@ -182,6 +182,27 @@ export async function postCliSend(
   }
 }
 
+// De-duplicated history of args previously sent with a CLI command (newest
+// first), so the command modal can offer past prompts to re-use.
+export async function getCliHistory(
+  command: string,
+): Promise<{ args: string; last_used_at: string }[]> {
+  try {
+    const r = await fetch("/cli-history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command }),
+    });
+    const j = (await r.json()) as {
+      ok: boolean;
+      history?: { args: string; last_used_at: string }[];
+    };
+    return j.ok ? j.history ?? [] : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function uploadImage(
   file: File,
   boardId: string,

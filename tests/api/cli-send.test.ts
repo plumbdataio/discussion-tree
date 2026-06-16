@@ -158,3 +158,23 @@ describe("/cli-send across a CC restart", () => {
     expect(after.json.owner_can_cli_send).toBe(true);
   });
 });
+
+describe("/cli-history", () => {
+  test("rejects a non-allowlisted command", async () => {
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/cli-history`,
+      { command: "/rm-rf" },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toBe("command_not_allowed");
+  });
+
+  test("returns an (initially empty) history array for /compact", async () => {
+    const r = await post<{
+      ok: boolean;
+      history?: { args: string; last_used_at: string }[];
+    }>(`${broker.url}/cli-history`, { command: "/compact" });
+    expect(r.json.ok).toBe(true);
+    expect(Array.isArray(r.json.history)).toBe(true);
+  });
+});

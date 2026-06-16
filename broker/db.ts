@@ -90,6 +90,27 @@ export const setSessionCcPid = db.prepare(
 export const selectAliveSessionByCcPid = db.prepare(
   "SELECT id FROM sessions WHERE cc_pid = ? AND alive = 1 ORDER BY last_seen DESC LIMIT 1",
 );
+
+// History of args the user has sent with a WebUI CLI command (e.g. the /compact
+// prompt). The default arg is empty, so the user picks from past entries
+// instead of a baked-in personal default. Deduplicated by (command, args): a
+// re-send just bumps last_used_at so identical prompts collapse to one row.
+db.run(`
+  CREATE TABLE IF NOT EXISTS cli_command_history (
+    command TEXT NOT NULL,
+    args TEXT NOT NULL,
+    last_used_at TEXT NOT NULL,
+    PRIMARY KEY (command, args)
+  )
+`);
+export const upsertCliHistory = db.prepare(
+  `INSERT INTO cli_command_history (command, args, last_used_at) VALUES (?, ?, ?)
+   ON CONFLICT(command, args) DO UPDATE SET last_used_at = excluded.last_used_at`,
+);
+export const selectCliHistory = db.prepare(
+  `SELECT args, last_used_at FROM cli_command_history
+   WHERE command = ? ORDER BY last_used_at DESC LIMIT 50`,
+);
 // Counter of user UI submissions that haven't been matched by a CC
 // post_to_node yet. Incremented when a user_input_relay is delivered to CC,
 // decremented when CC posts back into any node on a board owned by this

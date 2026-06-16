@@ -171,7 +171,7 @@
     "err_pane_not_claude": "Aborted: Claude Code isn't running in the target pane.",
     "err_command_not_allowed": "That command isn't allowed.",
     "err_generic": "Failed to send the command.",
-    "compact_default_args": "Compact using these rules.\nMost important: prioritize conversational continuity over compression. Even after several compactions, it must always be possible to trace back to the very first message.\n\n[Keep verbatim]\n- Every human (user) message\n- The body of every Claude (assistant) message, including mid-task asides (\"first I'll check…\", \"next I'll…\")\n- discussion-tree / parallel-discussion MCP results and received content (this is effectively the conversation, carried via the WebUI)\n\n[OK to compact]\n- Other tool output details (Bash, Grep, etc.)\n- File contents read via Read\n- thinking blocks\n\n[Note]\nA larger result is fine. Breaking the flow so the same topic no longer makes sense is the real problem."
+    "history_title": "Recent prompts (click to fill)"
   },
   "modal": {
     "close": "Close (Esc)"

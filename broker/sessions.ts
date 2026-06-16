@@ -15,10 +15,12 @@ import { getContextUsage } from "./context-usage.ts";
 import {
   db,
   insertSession,
+  selectCliHistory,
   selectSessionTmux,
   setSessionCcPid,
   setSessionTmux,
   updateSessionSeen,
+  upsertCliHistory,
 } from "./db.ts";
 import { ensureDefaultBoard } from "./default-board.ts";
 import { generateId } from "./helpers.ts";
@@ -693,7 +695,27 @@ export async function handleCliSend(body: any) {
   if (probe === "shell") return { ok: false, error: "pane_not_claude" };
   const text = args.trim() ? `${command} ${args}` : command;
   await sendToPane(base, sess.tmux_pane, text);
+  // Remember the args so the user can re-pick them later. Dedup by exact text
+  // (upsert just bumps last_used_at). The default arg is empty, so only
+  // deliberately-typed prompts get saved — no baked-in personal default.
+  if (args.trim()) {
+    upsertCliHistory.run(command, args, new Date().toISOString());
+  }
   return { ok: true };
+}
+
+// The de-duplicated history of args used with a given CLI command (newest
+// first), so the WebUI command modal can offer past prompts to re-use.
+export function handleCliHistory(body: any) {
+  const command = String(body?.command ?? "");
+  if (!CLI_ALLOWED_COMMANDS.has(command)) {
+    return { ok: false, error: "command_not_allowed" };
+  }
+  const history = selectCliHistory.all(command) as {
+    args: string;
+    last_used_at: string;
+  }[];
+  return { ok: true, history };
 }
 
 // Route table — path-to-handler map merged by broker.ts. Each module owns
@@ -709,4 +731,5 @@ export const routes = {
   "/get-unanswered": handleGetUnansweredPosts,
   "/reset-unanswered": handleResetUnansweredPosts,
   "/cli-send": handleCliSend,
+  "/cli-history": handleCliHistory,
 };
