@@ -16,6 +16,7 @@ import {
   db,
   insertSession,
   selectSessionTmux,
+  setSessionCcPid,
   setSessionTmux,
   updateSessionSeen,
 } from "./db.ts";
@@ -52,6 +53,13 @@ export function handleRegister(body: any) {
   const id = generateId("s");
   const now = new Date().toISOString();
   insertSession.run(id, body.pid, body.cwd, now, now);
+  // cc_pid = the owning Claude Code process's PID (the dt MCP server's
+  // process.ppid). A sibling MCP server under the same CC (e.g. claude-peers)
+  // can mark this session working via /heartbeat-cc-pid using only this shared
+  // id. Optional / best-effort: older MCP servers don't send it.
+  if (typeof body.cc_pid === "number") {
+    setSessionCcPid.run(body.cc_pid, id);
+  }
   onSessionsChanged();
   return { session_id: id };
 }

@@ -13,6 +13,7 @@ import {
   clearSessionCompactingStmt,
   clearSessionStalledStmt,
   db,
+  selectAliveSessionByCcPid,
   setSessionCompactingStmt,
   setSessionStalledStmt,
 } from "./db.ts";
@@ -318,6 +319,26 @@ export function markWorkingFromUserSubmit(sessionId: string) {
   broadcastActivity(sessionId, entry);
 }
 
+// A sibling MCP server living under the SAME Claude Code (e.g. claude-peers)
+// received an inbound peer message and pushed it into this CC — a turn it
+// triggered that dt has no hook for (channel pushes don't fire any hook, and
+// UserPromptSubmit doesn't fire for MCP-injected turns). The sibling can't know
+// our cc_session_id, but it shares the CC's PID, so it pings here with cc_pid
+// to light the "working" spinner for that turn. Resolves cc_pid -> the one
+// alive session and reuses the user-submit working mark (the turn's Stop hook
+// clears it as usual). Best-effort: unknown / non-numeric pid is a no-op.
+export function handleHeartbeatCcPid(body: { cc_pid?: number }): {
+  ok: boolean;
+} {
+  if (typeof body.cc_pid !== "number") return { ok: false };
+  const row = selectAliveSessionByCcPid.get(body.cc_pid) as
+    | { id: string }
+    | null;
+  if (!row) return { ok: false };
+  markWorkingFromUserSubmit(row.id);
+  return { ok: true };
+}
+
 export function handleClearToolActivity(body: { cc_session_id?: string }): {
   ok: boolean;
 } {
@@ -544,6 +565,7 @@ export function handleClearScheduleMarker(body: {
 export const routes = {
   "/set-activity": handleSetActivity,
   "/heartbeat-tool": handleHeartbeatTool,
+  "/heartbeat-cc-pid": handleHeartbeatCcPid,
   "/clear-tool-activity": handleClearToolActivity,
   "/session-stalled": handleSessionStalled,
   "/session-compacting": handleSessionCompacting,

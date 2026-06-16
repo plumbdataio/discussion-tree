@@ -77,6 +77,19 @@ export const setSessionCompactingStmt = db.prepare(
 export const clearSessionCompactingStmt = db.prepare(
   "UPDATE sessions SET compacting_at = NULL WHERE id = ? AND compacting_at IS NOT NULL",
 );
+// The PID of the Claude Code process that owns this session — i.e. the dt MCP
+// server's own process.ppid, captured at register. This is the ONE id another
+// MCP server living under the SAME CC (e.g. claude-peers) also knows about its
+// own parent, so it lets such a sibling mark this session "working" without
+// knowing dt's internal cc_session_id (see /heartbeat-cc-pid). Unique among
+// alive sessions (live PIDs aren't reused).
+safeAlter("ALTER TABLE sessions ADD COLUMN cc_pid INTEGER");
+export const setSessionCcPid = db.prepare(
+  "UPDATE sessions SET cc_pid = ? WHERE id = ?",
+);
+export const selectAliveSessionByCcPid = db.prepare(
+  "SELECT id FROM sessions WHERE cc_pid = ? AND alive = 1 ORDER BY last_seen DESC LIMIT 1",
+);
 // Counter of user UI submissions that haven't been matched by a CC
 // post_to_node yet. Incremented when a user_input_relay is delivered to CC,
 // decremented when CC posts back into any node on a board owned by this

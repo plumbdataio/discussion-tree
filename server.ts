@@ -114,6 +114,10 @@ async function main() {
   const reg = await brokerFetch<RegisterResponse>("/register", {
     pid: process.pid,
     cwd: myCwd,
+    // The owning CC's PID (our parent). A sibling MCP server under the same CC
+    // (e.g. claude-peers) shares this ppid, so it can mark this session working
+    // via /heartbeat-cc-pid without knowing our cc_session_id.
+    cc_pid: process.ppid,
   });
   setSessionId(reg.session_id);
   log(`Registered as session ${reg.session_id} (cwd: ${myCwd})`);
