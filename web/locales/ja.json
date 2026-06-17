@@ -105,7 +105,8 @@
   "node_status_filter": {
     "trigger_title": "ノードステータスでフィルタ",
     "summary": "フィルタ {{visible}}/{{total}}",
-    "reset": "全表示に戻す"
+    "reset": "全表示に戻す",
+    "show_unread_always": "未読ありは除外対象でも表示"
   },
   "anchor": {
     "add_title": "このメッセージにしおりを挟む",

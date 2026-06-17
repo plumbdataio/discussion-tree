@@ -105,7 +105,8 @@
   "node_status_filter": {
     "trigger_title": "Filter nodes by status",
     "summary": "Filter {{visible}}/{{total}}",
-    "reset": "Show all"
+    "reset": "Show all",
+    "show_unread_always": "Show unread even if excluded"
   },
   "anchor": {
     "add_title": "Bookmark this message",

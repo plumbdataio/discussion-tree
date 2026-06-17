@@ -95,3 +95,65 @@ export function isNodeVisible(
 ): boolean {
   return filter[status] !== false;
 }
+
+// Full per-node visibility decision including the unread override. A node shows
+// if its status passes the filter, OR the "show unread even if excluded" toggle
+// is on AND it either has unread now OR was already revealed this session
+// (isSticky) — the sticky arm keeps a revealed node on screen after its unread
+// clears, so reading it doesn't make it vanish out from under the user.
+export function isNodeVisibleWithUnread(
+  status: NodeStatus,
+  filter: NodeStatusFilter,
+  unreadOverride: boolean,
+  hasUnread: boolean,
+  isSticky: boolean,
+): boolean {
+  if (isNodeVisible(status, filter)) return true;
+  if (unreadOverride && (hasUnread || isSticky)) return true;
+  return false;
+}
+
+// Separate per-board toggle: "show a node that has unread even if its status is
+// excluded by the status filter above". Kept in its own localStorage key (not
+// folded into NodeStatusFilter) so the status-record format stays untouched.
+// Shares the same listener set as useNodeStatusFilter so both re-render together.
+const UNREAD_OVERRIDE_PREFIX = "dt-node-unread-override:";
+const unreadOverrideByBoard = new Map<string, boolean>();
+function unreadOverrideKey(boardId: string): string {
+  return UNREAD_OVERRIDE_PREFIX + boardId;
+}
+function readUnreadOverrideLS(boardId: string): boolean {
+  try {
+    return localStorage.getItem(unreadOverrideKey(boardId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function useNodeUnreadOverride(
+  boardId: string,
+): [boolean, (value: boolean) => void] {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const fn = () => force((n) => n + 1);
+    listeners.add(fn);
+    return () => {
+      listeners.delete(fn);
+    };
+  }, []);
+  let cached = unreadOverrideByBoard.get(boardId);
+  if (cached === undefined) {
+    cached = readUnreadOverrideLS(boardId);
+    unreadOverrideByBoard.set(boardId, cached);
+  }
+  const set = (value: boolean) => {
+    unreadOverrideByBoard.set(boardId, value);
+    try {
+      localStorage.setItem(unreadOverrideKey(boardId), value ? "1" : "0");
+    } catch {
+      /* private mode etc */
+    }
+    notify();
+  };
+  return [cached, set];
+}

@@ -3,7 +3,10 @@ import { createPortal } from "react-dom";
 import { Filter } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { NODE_STATUSES } from "../utils/constants.ts";
-import { useNodeStatusFilter } from "../utils/nodeStatusFilter.ts";
+import {
+  useNodeStatusFilter,
+  useNodeUnreadOverride,
+} from "../utils/nodeStatusFilter.ts";
 
 // Board-view header trigger that drops down a per-status checkbox
 // popover. Filter state is per-board (keyed by boardId) via
@@ -19,6 +22,7 @@ import { useNodeStatusFilter } from "../utils/nodeStatusFilter.ts";
 export function NodeStatusFilterButton({ boardId }: { boardId: string }) {
   const { t } = useTranslation();
   const [filter, setOne, reset] = useNodeStatusFilter(boardId);
+  const [unreadOverride, setUnreadOverride] = useNodeUnreadOverride(boardId);
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -114,6 +118,16 @@ export function NodeStatusFilterButton({ boardId }: { boardId: string }) {
                 </label>
               ))}
             </div>
+            <label className="node-status-filter-row node-status-filter-extra">
+              <input
+                type="checkbox"
+                checked={unreadOverride}
+                onChange={(e) => setUnreadOverride(e.target.checked)}
+              />
+              <span className="node-status-filter-label">
+                {t("node_status_filter.show_unread_always")}
+              </span>
+            </label>
             {isFiltered && (
               <button
                 type="button"

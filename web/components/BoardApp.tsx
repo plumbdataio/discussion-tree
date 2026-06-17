@@ -20,7 +20,9 @@ import {
 import { NodeStatusFilterButton } from "./NodeStatusFilterButton.tsx";
 import {
   isNodeVisible,
+  isNodeVisibleWithUnread,
   useNodeStatusFilter,
+  useNodeUnreadOverride,
 } from "../utils/nodeStatusFilter.ts";
 import { Sidebar } from "./Sidebar.tsx";
 import { postSubmitAnswer } from "../utils/api.ts";
@@ -63,6 +65,29 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   // each board keeps its own filter (boardId is the URL board id, the
   // same value the NodeStatusFilterButton below is keyed on).
   const [nodeStatusFilter] = useNodeStatusFilter(boardId ?? "");
+  // "Show unread even if the status filter would hide it" toggle + a STICKY set
+  // of the nodes that toggle has revealed. Once a filtered-out node is shown for
+  // having unread, it stays shown even after the unread clears — otherwise
+  // reading it would make it vanish out from under the user mid-view. The set is
+  // reset only on board change or when the toggle flips (not on every read-clear)
+  // so the visible list is stable while the user is looking at it.
+  const [unreadOverride] = useNodeUnreadOverride(boardId ?? "");
+  const unreadStickyRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    unreadStickyRef.current = new Set();
+  }, [boardId, unreadOverride]);
+  useEffect(() => {
+    if (!unreadOverride || !data) return;
+    const sticky = unreadStickyRef.current;
+    for (const n of data.nodes) {
+      if (n.kind !== "item") continue;
+      if (isNodeVisible(n.status, nodeStatusFilter)) continue;
+      const hasUnread = (data.threads[n.id] ?? []).some(
+        (it) => it.source === "cc" && !it.read_at,
+      );
+      if (hasUnread) sticky.add(n.id);
+    }
+  }, [data, unreadOverride, nodeStatusFilter]);
 
   const fetchBoard = useCallback(async () => {
     if (!boardId) return;
@@ -360,7 +385,16 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
         parent,
         kids.filter((n) => {
           if (n.kind !== "item") return true;
-          return isNodeVisible(n.status, nodeStatusFilter);
+          const hasUnread = (data.threads[n.id] ?? []).some(
+            (it) => it.source === "cc" && !it.read_at,
+          );
+          return isNodeVisibleWithUnread(
+            n.status,
+            nodeStatusFilter,
+            unreadOverride,
+            hasUnread,
+            unreadStickyRef.current.has(n.id),
+          );
         }),
       );
     }

@@ -2791,6 +2791,13 @@ body.concern-resizing * {
 .node-status-filter-row input {
   margin: 0;
 }
+/* "Show unread even if excluded" toggle — separated from the per-status rows by
+   a divider since it is an override of, not one of, the status checkboxes. */
+.node-status-filter-extra {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
 .node-status-filter-reset {
   font-size: 12px;
   padding: 4px 10px;
