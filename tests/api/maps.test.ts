@@ -326,6 +326,51 @@ describe("maps — messages + chat delivery", () => {
       true,
     );
   });
+
+  test("/delivery-failed re-queues a map_chat without duplicating or losing it (Option B)", async () => {
+    const mapId = await createMap("requeue-map");
+    const n = await addNode(mapId, { title: "n" });
+    const chatPromise = post<{ ok: boolean }>(`${broker.url}/map-chat`, {
+      map_id: mapId,
+      node_id: n,
+      text: "map-requeue-99",
+    });
+    await new Promise((r) => setTimeout(r, 150));
+    const poll1 = await post<{ messages: any[] }>(
+      `${broker.url}/poll-messages`,
+      { session_id: sessionId },
+    );
+    const m = poll1.json.messages.find((x) => x.text === "map-requeue-99");
+    expect(m).toBeTruthy();
+    const itemId = m.thread_item_id;
+    expect((await chatPromise).json.ok).toBe(true);
+
+    // Simulate the channel push throwing → re-queue.
+    expect(
+      (
+        await post<{ ok: boolean }>(`${broker.url}/delivery-failed`, {
+          message_id: m.id,
+        })
+      ).json.ok,
+    ).toBe(true);
+
+    // Re-drains the same map_chat row, reusing its thread item.
+    const poll2 = await post<{ messages: any[] }>(
+      `${broker.url}/poll-messages`,
+      { session_id: sessionId },
+    );
+    const m2 = poll2.json.messages.find((x) => x.text === "map-requeue-99");
+    expect(m2).toBeTruthy();
+    expect(m2.id).toBe(m.id);
+    expect(m2.thread_item_id).toBe(itemId);
+
+    // Exactly one user copy in the node thread (no duplicate).
+    const view = await get<any>(`${broker.url}/api/map/${mapId}`);
+    const matches = view.json.threads[n].filter(
+      (t: any) => t.text === "map-requeue-99",
+    );
+    expect(matches.length).toBe(1);
+  });
 });
 
 describe("maps — list + search", () => {

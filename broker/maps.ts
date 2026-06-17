@@ -609,8 +609,11 @@ export async function handleMapChat(body: any): Promise<
     }
     await new Promise((r) => setTimeout(r, 100));
   }
+  // AND requeued=0 (Option B): map_chat rides the same pending_messages queue,
+  // so a push that threw and was re-queued for retry must not be cancelled here
+  // — that would re-introduce the silent loss. Mirrors handleSubmitAnswer.
   db.run(
-    "UPDATE pending_messages SET cancelled = 1 WHERE id = ? AND delivered = 0",
+    "UPDATE pending_messages SET cancelled = 1 WHERE id = ? AND delivered = 0 AND requeued = 0",
     [pendingId],
   );
   return { ok: false, error: "errors.delivery_timeout", reason: "timeout" };
