@@ -13,6 +13,7 @@ import {
   insertPending,
   insertThread,
   markDelivered,
+  resetDeliveredForRepushStmt,
   recomputeBoardStatus,
   selectBoard,
   selectPending,
@@ -311,10 +312,13 @@ export async function handleSubmitAnswer(body: any): Promise<
   // Timeout: mark cancelled so a late MCP poll won't deliver a stale message
   // the user has likely retried by hand. Guard on delivered=0 so a delivery
   // that landed at the buzzer (poll ran, thread item + message_id created) is
-  // not clobbered. No thread-item cleanup needed: the row is only created at
-  // delivery, so a timed-out (never-delivered) message left none behind.
+  // not clobbered. AND requeued=0 so a message mid-retry (Option B: pushed,
+  // threw, reset to delivered=0) is NOT cancelled — it WAS delivered once and is
+  // being re-pushed, so cancelling it would re-introduce the silent loss. No
+  // thread-item cleanup: a never-delivered timeout left none behind, and a
+  // requeued one keeps its already-materialized item for the retry.
   db.prepare(
-    "UPDATE pending_messages SET cancelled = 1 WHERE id = ? AND delivered = 0",
+    "UPDATE pending_messages SET cancelled = 1 WHERE id = ? AND delivered = 0 AND requeued = 0",
   ).run(pendingId);
   // If the cancel was a no-op (changes === 0) the delivery won the race at the
   // buzzer, but we still don't clear the stall here: a drained row only means
@@ -343,7 +347,14 @@ export function handlePollMessages(body: any) {
     // map_chat is the map equivalent: board_id holds the map_id, node_id is a
     // map node id (or MAP_GENERAL_NODE). It rides the same thread_items table,
     // so materializing here gives its reply a message_id on the channel push.
-    if ((kind === "user_input_relay" || kind === "map_chat") && m.node_id) {
+    // Guard on thread_item_id == null so a RE-DRAIN (Option B: a prior push
+    // threw and reset delivered=0) reuses the existing thread item instead of
+    // inserting a duplicate user message into the UI thread.
+    if (
+      (kind === "user_input_relay" || kind === "map_chat") &&
+      m.node_id &&
+      m.thread_item_id == null
+    ) {
       const r = insertThread.run(
         m.board_id,
         m.node_id,
@@ -357,6 +368,22 @@ export function handlePollMessages(body: any) {
     markDelivered.run(m.id);
   }
   return { messages };
+}
+
+// Option B re-delivery: the per-CC poller calls this when a channel push to CC
+// THROWS (transport hiccup / CC restarting). The row was marked delivered at
+// drain, before the push, so without this the message would be silently lost
+// (selectPending only re-drains delivered=0). Reset delivered=0 + flag requeued
+// so the next poll re-pushes it and the submit-timeout cancel leaves it alone.
+// Idempotent; unknown id / already-cancelled is a no-op. Does NOT cover a
+// SILENT drop (CC resolves then discards a bad payload — no throw, undetectable
+// here; mitigated by sending valid payloads, e.g. the string-only channel meta).
+export function handleDeliveryFailed(body: { message_id?: number }): {
+  ok: boolean;
+} {
+  if (typeof body.message_id !== "number") return { ok: false };
+  resetDeliveredForRepushStmt.run(body.message_id);
+  return { ok: true };
 }
 
 function broadcastUnreadAll() {
@@ -410,6 +437,7 @@ export const routes = {
   "/post-to-node": handlePostToNode,
   "/submit-answer": handleSubmitAnswer,
   "/poll-messages": handlePollMessages,
+  "/delivery-failed": handleDeliveryFailed,
   "/mark-thread-items-read": handleMarkThreadItemsRead,
   "/mark-board-read": handleMarkBoardRead,
 };

@@ -258,6 +258,15 @@ safeAlter(
 // channel push can surface it to CC as message_id (lets a reply reference the
 // exact human message). NULL for structure-requests / plain notes.
 safeAlter("ALTER TABLE pending_messages ADD COLUMN thread_item_id INTEGER");
+// Option B re-delivery: the row is marked delivered at DRAIN, before the
+// channel push is attempted, so a push that throws would otherwise be lost
+// (selectPending only re-drains delivered=0). On a thrown push the broker
+// resets delivered=0 to retry on the next poll; `requeued` records that so the
+// submit-timeout cancel leaves a mid-retry message alone (see handleSubmitAnswer
+// + handleDeliveryFailed).
+safeAlter(
+  "ALTER TABLE pending_messages ADD COLUMN requeued INTEGER NOT NULL DEFAULT 0",
+);
 
 // Anchors (= per-session pinned thread items). The "favorites" name is the
 // implementation-level term; user-facing UI calls these "anchors".
@@ -595,6 +604,12 @@ export const selectPending = db.prepare(
 );
 export const markDelivered = db.prepare(
   `UPDATE pending_messages SET delivered = 1 WHERE id = ?`,
+);
+// Re-queue a message whose channel push threw: clear delivered so it re-drains,
+// and flag requeued so the submit-timeout cancel can't drop it mid-retry. The
+// cancelled=0 guard never resurrects a message the user already abandoned.
+export const resetDeliveredForRepushStmt = db.prepare(
+  `UPDATE pending_messages SET delivered = 0, requeued = 1 WHERE id = ? AND cancelled = 0`,
 );
 // Links a pending message to the thread_items row created for it at delivery
 // (see handlePollMessages), so message_id can ride the channel push.

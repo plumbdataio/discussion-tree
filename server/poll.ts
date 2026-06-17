@@ -134,7 +134,8 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
         reminderParts.length > 0
           ? `${msg.text}\n\n---\n${reminderParts.join("\n\n")}`
           : msg.text;
-      await mcp.notification({
+      try {
+        await mcp.notification({
         method: "notifications/claude/channel",
         params: {
           content,
@@ -163,7 +164,27 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
             ...(kind === "map_chat" ? { map_id: String(msg.board_id) } : {}),
           },
         },
-      });
+        });
+      } catch (err) {
+        // Option B (push failed): the broker marked this row delivered at
+        // DRAIN, before this push, so without intervention selectPending would
+        // never re-drain it and the user's message would be silently lost. Ask
+        // the broker to reset delivered=0 + flag requeued so the next poll
+        // re-pushes it (the thread item was already materialized, so the re-push
+        // won't duplicate it in the UI). Skip the stall-clear ack — a throw is
+        // NOT proof of life. NOTE: a SILENT drop (CC resolves then discards a
+        // bad payload, no throw) is undetectable here; the string-only channel
+        // meta exists to prevent that class.
+        log(
+          `Push FAILED for ${msg.id} [${kind}]; re-queued: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        void brokerFetch("/delivery-failed", { message_id: msg.id }).catch(
+          () => {},
+        );
+        continue;
+      }
       // The channel write to CC resolved → this session was alive at THIS
       // instant. Tell the broker so it can clear a stall warning + cancel the
       // pending auto-continue. Tied to push-success (not the broker's `delivered`
