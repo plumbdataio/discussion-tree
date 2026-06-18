@@ -235,13 +235,11 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
             ...prev,
             [sid]: msg.activity ?? null,
           }));
-          // Forward the activity to the sidebar so its per-session
-          // indicator updates without waiting for the 10s sessions poll.
-          window.dispatchEvent(
-            new CustomEvent("pd-activity-update", {
-              detail: { session_id: sid, activity: msg.activity ?? null },
-            }),
-          );
+          // NOTE: the sidebar's pd-activity-update is dispatched SOLELY by
+          // GlobalBanner now (its always-on socket covers every page). Forwarding
+          // here too would mean two independent sockets feeding the same event —
+          // ordering is only guaranteed within one socket, so a quick
+          // working→clear could land out of order and strand the spinner.
           return; // activity events don't affect board data
         } else if (msg.type === "sidebar-refresh") {
           // Sidebar polls /api/sessions on its own schedule; nudge it to
