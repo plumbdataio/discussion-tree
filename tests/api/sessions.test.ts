@@ -355,7 +355,18 @@ describe("sessions", () => {
     expect(giveUp.json.count).toBe(1);
     expect(giveUp.json.block).toBe(false);
 
-    // A NEW delivery bumps the count → fresh situation → the nag re-arms.
+    // A reply zeroes the count directly (1→0, no intervening get-unanswered at
+    // count 0) — this must also clear the streak fields.
+    await post(`${broker.url}/post-to-node`, {
+      board_id: board.json.board_id,
+      node_id: "i1",
+      message: "ack",
+      status: "discussing",
+    });
+
+    // codex P2: a FRESH submission at the SAME count (1) right after the backlog
+    // hit the cap must re-arm the nag (block=true). Without the zeroing path
+    // clearing the streak, count===stale nag_count would keep returning false.
     const sp2 = post(`${broker.url}/submit-answer`, {
       board_id: board.json.board_id,
       node_id: "i1",
@@ -368,22 +379,8 @@ describe("sessions", () => {
       `${broker.url}/get-unanswered`,
       { cc_session_id: ccId },
     );
-    expect(reArmed.json.count).toBe(2);
+    expect(reArmed.json.count).toBe(1);
     expect(reArmed.json.block).toBe(true);
-
-    // A reply zeroes the count → no block.
-    await post(`${broker.url}/post-to-node`, {
-      board_id: board.json.board_id,
-      node_id: "i1",
-      message: "ack",
-      status: "discussing",
-    });
-    const cleared = await post<{ count: number; block: boolean }>(
-      `${broker.url}/get-unanswered`,
-      { cc_session_id: ccId },
-    );
-    expect(cleared.json.count).toBe(0);
-    expect(cleared.json.block).toBe(false);
   });
 
   test("/reset-unanswered (by cc_session_id) zeros the counter", async () => {

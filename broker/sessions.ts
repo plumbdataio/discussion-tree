@@ -329,9 +329,12 @@ export function handleResetUnansweredPosts(body: {
     sessionId = row?.id ?? null;
   }
   if (!sessionId) return { ok: false };
-  db.run("UPDATE sessions SET unanswered_user_posts = 0 WHERE id = ?", [
-    sessionId,
-  ]);
+  // Clear the nag streak alongside the count (see handlePostToNode) so a fresh
+  // submission after a capped backlog re-arms the Stop-hook nag.
+  db.run(
+    "UPDATE sessions SET unanswered_user_posts = 0, unanswered_nag_streak = 0, unanswered_nag_count = 0 WHERE id = ?",
+    [sessionId],
+  );
   return { ok: true, session_id: sessionId };
 }
 

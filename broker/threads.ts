@@ -99,9 +99,14 @@ export function handlePostToNode(body: any) {
     .prepare("SELECT session_id FROM boards WHERE id = ?")
     .get(body.board_id) as { session_id: string } | null;
   if (ownerRow) {
-    db.run("UPDATE sessions SET unanswered_user_posts = 0 WHERE id = ?", [
-      ownerRow.session_id,
-    ]);
+    // Also clear the nag streak: zeroing the count must reset the streak so a
+    // FRESH later submission re-arms the nag even if a prior backlog had hit
+    // the MAX_NAG_STREAK cap at the same count (handleGetUnansweredPosts only
+    // resets on an observed count==0, which a direct 1→0→1 can skip).
+    db.run(
+      "UPDATE sessions SET unanswered_user_posts = 0, unanswered_nag_streak = 0, unanswered_nag_count = 0 WHERE id = ?",
+      [ownerRow.session_id],
+    );
   }
 
   // 1. CC message goes in first so it appears before any status_change in
