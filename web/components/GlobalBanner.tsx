@@ -26,6 +26,11 @@ const SIDEBAR_REFRESH_TYPES = new Set([
 export function GlobalBanner() {
   const [banner, setBanner] = useState<GlobalBannerData | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(null);
+  // Bumped on a Page Lifecycle "resume" so the _banner WS effect below re-runs
+  // and re-establishes a fresh socket after the tab unfreezes (a frozen tab's
+  // socket is dead). GlobalBanner is the SOLE forwarder of sidebar activity, so
+  // its socket must survive resume the way BoardApp's board socket does.
+  const [wsEpoch, setWsEpoch] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,6 +116,16 @@ export function GlobalBanner() {
         /* race with native teardown — ignore */
       }
     };
+  }, [wsEpoch]);
+
+  // Page Lifecycle: when the tab unfreezes, bump wsEpoch so the WS effect above
+  // tears down + re-establishes a fresh socket (a frozen tab's socket is dead).
+  // Without this the sole sidebar-activity source would go silent after a resume
+  // until the 10s /api/sessions poll. Mirrors BoardApp's resume handling.
+  useEffect(() => {
+    const onResume = () => setWsEpoch((n) => n + 1);
+    document.addEventListener("resume", onResume as any);
+    return () => document.removeEventListener("resume", onResume as any);
   }, []);
 
   // Auto-clear stale entries client-side too: the broker schedules its
