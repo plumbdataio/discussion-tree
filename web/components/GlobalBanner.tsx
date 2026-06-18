@@ -69,6 +69,25 @@ export function GlobalBanner() {
               detail: { session_id: msg.session_id },
             }),
           );
+        } else if (
+          msg?.type === "activity" &&
+          typeof msg.session_id === "string"
+        ) {
+          // GlobalBanner is mounted on EVERY page, so forward live activity to
+          // the sidebar here too. Otherwise the immediate "working" spinner on a
+          // user submit only shows on a board page (BoardApp forwards it) — on
+          // the map / session / home pages, or right after a board-WS reconnect,
+          // the sidebar would wait for the 10s /api/sessions poll. The sidebar's
+          // handler just sets activitiesBySession[sid], so the double-fire on a
+          // board page is harmless and idempotent.
+          window.dispatchEvent(
+            new CustomEvent("pd-activity-update", {
+              detail: {
+                session_id: msg.session_id,
+                activity: msg.activity ?? null,
+              },
+            }),
+          );
         } else if (SIDEBAR_REFRESH_TYPES.has(msg?.type)) {
           // GlobalBanner is mounted on EVERY page, so it's the only socket that
           // can nudge the sidebar on the map / session / home pages (BoardApp
