@@ -261,18 +261,6 @@ function SessionItem({
             <Shrink size={15} strokeWidth={2.5} />
           </span>
         )}
-        {ctxBand && (
-          <span
-            className={`session-ctx-indicator${ctxBand === "critical" ? " ctx-critical" : ""}`}
-            title={t("sidebar.ctx_low_title", { pct: Math.round(ctxPct as number) })}
-            aria-label={t("sidebar.ctx_low_aria")}
-          >
-            CTX
-            <span className="ctx-bang" aria-hidden="true">
-              !
-            </span>
-          </span>
-        )}
         {reattaching && !activity && (
           <span
             className="session-reattach-indicator"
@@ -326,6 +314,22 @@ function SessionItem({
             <Cog size={14} strokeWidth={2.25} />
             <span className="session-bg-count">{s.bg_task_count}</span>
           </button>
+        )}
+        {/* CTX chip is rendered LAST so it sits at the right edge of the
+            right-aligned indicators cell. The working spinner (and the other
+            transient indicators) appear to its LEFT, so they no longer push the
+            CTX chip left/right as they toggle. */}
+        {ctxBand && (
+          <span
+            className={`session-ctx-indicator${ctxBand === "critical" ? " ctx-critical" : ""}`}
+            title={t("sidebar.ctx_low_title", { pct: Math.round(ctxPct as number) })}
+            aria-label={t("sidebar.ctx_low_aria")}
+          >
+            CTX
+            <span className="ctx-bang" aria-hidden="true">
+              !
+            </span>
+          </span>
         )}
         {s.scheduled_send_at && (
           <span
