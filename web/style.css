@@ -5066,7 +5066,16 @@ ul.maps {
   padding: 0;
 }
 ul.maps li { margin: 0; }
-ul.maps li.current .sidebar-map-link { background: var(--cc); }
+/* Match the board current-page highlight (.boards li.current a) exactly so the
+   selected board and selected map read at the same strength in the sidebar. */
+ul.maps li.current .sidebar-map-link {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+:root[data-theme="dark"] ul.maps li.current .sidebar-map-link {
+  color: #93c5fd;
+}
 .sidebar-map-link {
   display: flex;
   align-items: center;
