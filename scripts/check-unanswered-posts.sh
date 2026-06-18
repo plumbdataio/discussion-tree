@@ -5,9 +5,10 @@
 # if the count is desynced).
 #
 # Mechanism: emit JSON {"decision":"block","reason":"..."} on stdout to block
-# the Stop event and inject the reason as Claude's next input. Use the
-# stop_hook_active flag on stdin to avoid an infinite loop — if the previous
-# Stop hook already blocked, don't block again.
+# the Stop event and inject the reason as Claude's next input. We block on EVERY
+# stop while a post is unanswered (count>0); the broker caps consecutive nags on
+# the same count (MAX_NAG_STREAK) and returns block=false past that, so a stuck
+# CC can't infinite-loop the turn.
 #
 # Wire as a Stop hook (no matcher). Failures swallowed.
 
@@ -20,12 +21,13 @@ port="${DISCUSSION_TREE_PORT:-7898}"
 
 [ -z "$sid" ] && exit 0
 
-# Already blocked once this stop chain — don't block again. Claude has had its
-# chance to react; if the counter is still non-zero it's probably desynced and
-# Claude should be allowed to actually finish so the user can intervene.
-if [ "$stop_hook_active" = "true" ]; then
-  exit 0
-fi
+# We deliberately do NOT bail on stop_hook_active. The hook blocks on EVERY stop
+# while there's an unanswered post (count>0 = the user's latest message is still
+# unmirrored, no matter how many round-trips happened in the turn). Loop
+# protection lives BROKER-side: /get-unanswered returns block=false once the same
+# count has been nagged MAX_NAG_STREAK times in a row, so a CC that genuinely
+# can't post still eventually yields and the user can intervene.
+: "${stop_hook_active:=false}"
 
 body=$(jq -n --arg s "$sid" '{cc_session_id:$s}')
 resp=$(curl -sS --max-time 1 \
@@ -35,12 +37,14 @@ resp=$(curl -sS --max-time 1 \
   "http://127.0.0.1:${port}/get-unanswered" 2>/dev/null || echo '{}')
 
 count=$(printf '%s' "$resp" | jq -r '.count // 0')
+# Broker's verdict: block while count>0, but false once the streak cap is hit.
+block=$(printf '%s' "$resp" | jq -r '.block // false')
 
 if ! [[ "$count" =~ ^[0-9]+$ ]]; then
   exit 0
 fi
 
-if [ "$count" -gt 0 ]; then
+if [ "$count" -gt 0 ] && [ "$block" = "true" ]; then
   # Stop is about to block-and-resume the turn. Re-arm the "working" badge
   # for THIS cc_session_id so the UI keeps spinning while the LLM silently
   # thinks between the block decision and its next tool call. Without

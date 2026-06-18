@@ -132,6 +132,19 @@ export const selectCliHistory = db.prepare(
 safeAlter(
   "ALTER TABLE sessions ADD COLUMN unanswered_user_posts INTEGER NOT NULL DEFAULT 0",
 );
+// The Stop hook blocks on EVERY stop while unanswered_user_posts>0 (not once per
+// chain). To keep a stuck/broken CC from infinite-looping on the block, the
+// broker tracks how many consecutive stops have hit the SAME count without it
+// changing (nag_streak): after MAX_NAG_STREAK it tells the hook to give up and
+// let the turn end so the user can intervene. nag_count remembers the count we
+// were streaking on, so a new delivery (count up) or a post (count to 0) resets
+// the streak and re-arms the nag. See handleGetUnansweredPosts.
+safeAlter(
+  "ALTER TABLE sessions ADD COLUMN unanswered_nag_streak INTEGER NOT NULL DEFAULT 0",
+);
+safeAlter(
+  "ALTER TABLE sessions ADD COLUMN unanswered_nag_count INTEGER NOT NULL DEFAULT 0",
+);
 // The tmux pane id ($TMUX_PANE, e.g. "%3") + socket (first field of $TMUX) of
 // the Claude Code process, captured at attach time from the MCP server's own
 // env (it runs inside the same pane as CC). Present only when CC was launched

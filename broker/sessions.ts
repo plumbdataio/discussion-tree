@@ -260,21 +260,56 @@ export function handleSetSessionName(body: any) {
   return { ok: true };
 }
 
+// How many consecutive stops we'll block on the SAME unanswered count before
+// giving up (so a CC that genuinely can't post can't infinite-loop the turn).
+const MAX_NAG_STREAK = 8;
+
 // Read the unanswered-user-post counter for the alive session bound to a CC
-// session_id. Used by the Stop hook to decide whether to nag.
+// session_id, and decide whether the Stop hook should block. The hook blocks
+// EVERY stop while count>0 (count>0 means the user's latest message is still
+// unanswered, regardless of how many round-trips happened) — but we cap the
+// number of consecutive blocks at the SAME count via a streak, so a stuck CC
+// eventually yields and the user can step in. A changing count (new delivery /
+// a post) resets the streak and re-arms the nag.
 export function handleGetUnansweredPosts(body: {
   cc_session_id?: string;
-}): { ok: boolean; count: number; session_id?: string } {
+}): { ok: boolean; count: number; block?: boolean; session_id?: string } {
   if (!body.cc_session_id) return { ok: false, count: 0 };
   const row = db
     .prepare(
-      "SELECT id, unanswered_user_posts FROM sessions WHERE cc_session_id = ? AND alive = 1 ORDER BY last_seen DESC LIMIT 1",
+      "SELECT id, unanswered_user_posts, unanswered_nag_streak, unanswered_nag_count FROM sessions WHERE cc_session_id = ? AND alive = 1 ORDER BY last_seen DESC LIMIT 1",
     )
     .get(body.cc_session_id) as
-    | { id: string; unanswered_user_posts: number }
+    | {
+        id: string;
+        unanswered_user_posts: number;
+        unanswered_nag_streak: number;
+        unanswered_nag_count: number;
+      }
     | null;
   if (!row) return { ok: false, count: 0 };
-  return { ok: true, count: row.unanswered_user_posts, session_id: row.id };
+
+  const count = row.unanswered_user_posts;
+  if (count <= 0) {
+    // Nothing pending — clear any streak so the next backlog starts fresh.
+    if (row.unanswered_nag_streak !== 0 || row.unanswered_nag_count !== 0) {
+      db.run(
+        "UPDATE sessions SET unanswered_nag_streak = 0, unanswered_nag_count = 0 WHERE id = ?",
+        [row.id],
+      );
+    }
+    return { ok: true, count: 0, block: false, session_id: row.id };
+  }
+
+  // count > 0: same count as last stop ⇒ continue the streak; a different count
+  // (delivery bumped it / a partial reset) ⇒ a fresh situation, restart at 1.
+  const streak = count === row.unanswered_nag_count ? row.unanswered_nag_streak + 1 : 1;
+  db.run(
+    "UPDATE sessions SET unanswered_nag_streak = ?, unanswered_nag_count = ? WHERE id = ?",
+    [streak, count, row.id],
+  );
+  const block = streak <= MAX_NAG_STREAK;
+  return { ok: true, count, block, session_id: row.id };
 }
 
 // Force the unanswered counter to zero. Two ways in: cc_session_id (the hook

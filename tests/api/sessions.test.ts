@@ -312,6 +312,80 @@ describe("sessions", () => {
     ).toBe(1);
   });
 
+  test("/get-unanswered blocks on EVERY stop while count>0, gives up after the streak cap, re-arms on change", async () => {
+    const sid = await registerSession(broker.url);
+    const ccId = await attachCC(broker.url, sid);
+    const board = await post<{ board_id: string }>(
+      `${broker.url}/create-board`,
+      {
+        session_id: sid,
+        structure: {
+          title: "streak",
+          concerns: [
+            { id: "c1", title: "C1", items: [{ id: "i1", title: "I1" }] },
+          ],
+        },
+      },
+    );
+    // submit + drain → count = 1.
+    const sp = post(`${broker.url}/submit-answer`, {
+      board_id: board.json.board_id,
+      node_id: "i1",
+      text: "ping",
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    await post(`${broker.url}/poll-messages`, { session_id: sid });
+    await sp;
+
+    // Blocks on EVERY stop while the count stays 1 (not once-per-chain) — up to
+    // the MAX_NAG_STREAK cap of 8 consecutive nags at the same count.
+    for (let i = 0; i < 8; i++) {
+      const r = await post<{ count: number; block: boolean }>(
+        `${broker.url}/get-unanswered`,
+        { cc_session_id: ccId },
+      );
+      expect(r.json.count).toBe(1);
+      expect(r.json.block).toBe(true);
+    }
+    // 9th consecutive nag at the same count → give up so the turn can end.
+    const giveUp = await post<{ count: number; block: boolean }>(
+      `${broker.url}/get-unanswered`,
+      { cc_session_id: ccId },
+    );
+    expect(giveUp.json.count).toBe(1);
+    expect(giveUp.json.block).toBe(false);
+
+    // A NEW delivery bumps the count → fresh situation → the nag re-arms.
+    const sp2 = post(`${broker.url}/submit-answer`, {
+      board_id: board.json.board_id,
+      node_id: "i1",
+      text: "ping2",
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    await post(`${broker.url}/poll-messages`, { session_id: sid });
+    await sp2;
+    const reArmed = await post<{ count: number; block: boolean }>(
+      `${broker.url}/get-unanswered`,
+      { cc_session_id: ccId },
+    );
+    expect(reArmed.json.count).toBe(2);
+    expect(reArmed.json.block).toBe(true);
+
+    // A reply zeroes the count → no block.
+    await post(`${broker.url}/post-to-node`, {
+      board_id: board.json.board_id,
+      node_id: "i1",
+      message: "ack",
+      status: "discussing",
+    });
+    const cleared = await post<{ count: number; block: boolean }>(
+      `${broker.url}/get-unanswered`,
+      { cc_session_id: ccId },
+    );
+    expect(cleared.json.count).toBe(0);
+    expect(cleared.json.block).toBe(false);
+  });
+
   test("/reset-unanswered (by cc_session_id) zeros the counter", async () => {
     const sid = await registerSession(broker.url);
     const ccId = await attachCC(broker.url, sid);
