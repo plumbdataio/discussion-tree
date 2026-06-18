@@ -47,8 +47,11 @@ function ThreadMessageImpl({
   const isPinned = useFavorited(item.id);
 
   if (item.source === "system") {
+    // A cli_command marker (e.g. "cli_command:/compact") renders as a distinct
+    // pale-green "system command" chip rather than the muted status-change line.
+    const isCommand = item.text.startsWith("cli_command:");
     return (
-      <div className="thread-msg from-system">
+      <div className={`thread-msg from-system${isCommand ? " is-command" : ""}`}>
         {renderSystemMessage(item.text)}
       </div>
     );

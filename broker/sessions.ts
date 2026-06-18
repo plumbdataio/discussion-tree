@@ -15,6 +15,7 @@ import { getContextUsage } from "./context-usage.ts";
 import {
   db,
   insertSession,
+  insertThread,
   selectCliHistory,
   selectSessionTmux,
   setSessionCcPid,
@@ -666,6 +667,12 @@ async function sendToPane(
   await runTmux([...base, "send-keys", "-t", pane, "Enter"]);
 }
 
+// The session's default (conversation) board — where a sent CLI command is
+// logged as a green "system command" notice so the user has a record of it.
+const selectDefaultBoardForCliNotice = db.prepare(
+  "SELECT id FROM boards WHERE session_id = ? AND is_default = 1 LIMIT 1",
+);
+
 export async function handleCliSend(body: any) {
   const sessionId = String(body?.session_id ?? "");
   const command = String(body?.command ?? "");
@@ -695,6 +702,28 @@ export async function handleCliSend(body: any) {
   if (probe === "shell") return { ok: false, error: "pane_not_claude" };
   const text = args.trim() ? `${command} ${args}` : command;
   await sendToPane(base, sess.tmux_pane, text);
+  // Log the issued command on the session's default (conversation) board as a
+  // "system command" notice (source=system, NOT a user message) so the user has
+  // a record of it — rendered as a pale-green chip. Best-effort: a session with
+  // no default board just skips this. Only the command name is recorded, not the
+  // (possibly long) args.
+  const def = selectDefaultBoardForCliNotice.get(sessionId) as
+    | { id: string }
+    | undefined;
+  if (def) {
+    insertThread.run(
+      def.id,
+      "main",
+      "system",
+      `cli_command:${command}`,
+      new Date().toISOString(),
+    );
+    broadcast(def.id, {
+      type: "thread-update",
+      node_id: "main",
+      source: "system",
+    });
+  }
   // Remember the args so the user can re-pick them later. Dedup by exact text
   // (upsert just bumps last_used_at). The default arg is empty, so only
   // deliberately-typed prompts get saved — no baked-in personal default.

@@ -11,6 +11,10 @@
   --user-border: #fde68a;
   --cc: #f0f9ff;
   --cc-border: #bae6fd;
+  /* System-command notices (e.g. a /compact sent from the WebUI) — pale green,
+     distinct from user (yellow) and CC (blue) bubbles. */
+  --command: #f0fdf4;
+  --command-border: #bbf7d0;
   --status-pending: #9ca3af;
   --status-discussing: #f59e0b;
   --status-resolved: #10b981;
@@ -3496,6 +3500,22 @@ body.concern-resizing * {
   font-style: italic;
 }
 
+/* A system COMMAND notice (e.g. a /compact sent from the WebUI). Unlike the
+   muted, centered status-change system line, this is a left-aligned pale-green
+   chip so it reads as a distinct "system command was issued" event. */
+.thread-msg.from-system.is-command {
+  background: var(--command);
+  border: 1px solid var(--command-border);
+  text-align: left;
+  color: var(--text);
+  font-size: 12.5px;
+  padding: 6px 10px;
+  font-style: normal;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .thread-msg .who {
   font-size: 11px;
   font-weight: 600;
@@ -3819,6 +3839,8 @@ button.secondary {
   --user-border: #5a4f1f;
   --cc: #102536;
   --cc-border: #1f4669;
+  --command: #102a1c;
+  --command-border: #1f5237;
   --status-pending: #6b7280;
   --status-discussing: #fbbf24;
   --status-resolved: #34d399;

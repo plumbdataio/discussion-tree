@@ -194,7 +194,8 @@
     "context_label": "コンテキスト"
   },
   "system_message": {
-    "status_label": "ステータス:"
+    "status_label": "ステータス:",
+    "cli_command": "コマンド送信: {{command}}"
   },
   "node_status": {
     "pending": "未着手",

@@ -194,7 +194,8 @@
     "context_label": "Context"
   },
   "system_message": {
-    "status_label": "Status:"
+    "status_label": "Status:",
+    "cli_command": "Command sent: {{command}}"
   },
   "node_status": {
     "pending": "Pending",
