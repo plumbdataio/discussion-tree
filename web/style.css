@@ -1471,6 +1471,7 @@ a.session-name:hover {
   grid-column: 2;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   min-height: 32px;
 }
 .settings-control input[type="checkbox"] {
@@ -1478,6 +1479,57 @@ a.session-name:hover {
   height: 18px;
   cursor: pointer;
   margin: 0;
+}
+
+/* On/off switch (Toggle.tsx) — a visually-hidden checkbox + styled track. */
+.toggle {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.toggle.is-disabled {
+  opacity: 0.5;
+}
+.toggle-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.toggle-input:disabled {
+  cursor: not-allowed;
+}
+.toggle-track {
+  display: inline-flex;
+  align-items: center;
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition: background 0.15s ease;
+  pointer-events: none;
+}
+.toggle-thumb {
+  width: 16px;
+  height: 16px;
+  margin: 0 3px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+.toggle-input:checked + .toggle-track {
+  background: var(--accent);
+}
+.toggle-input:checked + .toggle-track .toggle-thumb {
+  transform: translateX(18px);
+}
+.toggle-input:focus-visible + .toggle-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .settings-select {
   font-size: 14px;
@@ -2814,6 +2866,77 @@ body.concern-resizing * {
 }
 .node-status-filter-reset:hover {
   border-color: var(--text);
+}
+
+/* Board settings panel (gear → popover): the per-board auto-status toggle +
+   the node-status filter. Trigger/popover mirror the filter button's look. */
+.board-settings-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.board-settings-trigger:hover {
+  border-color: var(--text);
+}
+.board-settings-trigger.is-active {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+.board-settings-popover {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2000;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  padding: 12px 14px;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.board-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.board-settings-section + .board-settings-section {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.board-settings-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.board-settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.board-settings-toggle-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.board-settings-help {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 /* Global banner — fixed at the very top of the viewport, above the

@@ -2,7 +2,12 @@
 // unarchive. The structure-shape rejection (sub-items) and the cc_session_id
 // requirement live here too because they're create-time invariants.
 
-import { closeBoardStmt, db, insertBoard } from "./db.ts";
+import {
+  closeBoardStmt,
+  db,
+  insertBoard,
+  recomputeBoardStatus,
+} from "./db.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
 import { PUBLIC_URL } from "./config.ts";
 import {
@@ -137,10 +142,35 @@ export function handleRenameBoard(body: any) {
   return { ok: true };
 }
 
+// Toggle the per-board automatic status rollup. Off freezes the board status so
+// a status-tracking board doesn't auto-flip to settled (and vanish behind the
+// sidebar filter) once all its nodes are marked done. On re-enable we recompute
+// immediately so the frozen status catches up to the current node states.
+export function handleSetBoardAutoStatus(body: any) {
+  const boardId = String(body?.board_id ?? "");
+  if (!boardId) return { ok: false, error: "board_id is required" };
+  const enabled = body?.enabled ? 1 : 0;
+  db.run("UPDATE boards SET auto_status_sync = ? WHERE id = ?", [
+    enabled,
+    boardId,
+  ]);
+  if (enabled) {
+    // Re-enabling: catch the frozen status up to the current node rollup.
+    const next = recomputeBoardStatus(boardId);
+    if (next) broadcast(boardId, { type: "board-status-update", status: next });
+  }
+  // The board header renders the toggle state; nudge a board refetch. The
+  // sidebar filters on board status, so refresh it too.
+  broadcast(boardId, { type: "structure-update" });
+  broadcastToAll({ type: "sidebar-refresh" });
+  return { ok: true, auto_status_sync: enabled };
+}
+
 export const routes = {
   "/create-board": handleCreateBoard,
   "/close-board": handleCloseBoardReq,
   "/set-board-status": handleSetBoardStatus,
+  "/set-board-auto-status": handleSetBoardAutoStatus,
   "/rename-board": handleRenameBoard,
   "/archive-board": handleArchiveBoard,
   "/unarchive-board": handleUnarchiveBoard,

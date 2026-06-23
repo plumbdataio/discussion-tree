@@ -25,6 +25,16 @@ export function postBoardStructureRequest(boardId: string, text: string) {
   });
 }
 
+// Toggle a board's automatic status rollup. Off freezes the board status so a
+// status-tracking board doesn't auto-settle and slip behind the sidebar filter.
+export function postSetBoardAutoStatus(boardId: string, enabled: boolean) {
+  return fetch("/set-board-auto-status", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ board_id: boardId, enabled }),
+  });
+}
+
 // --- Maps ---
 // The map's general chat + per-node inputs post here. Blocking on the broker
 // (mirrors /submit-answer): resolves once the owning CC polls. node_id

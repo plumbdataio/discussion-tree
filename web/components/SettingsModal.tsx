@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { SupportedLanguage } from "../i18n.ts";
 import { type ThemeChoice, useSettings } from "../utils/settings.ts";
+import { Toggle } from "./Toggle.tsx";
 
 type PowerPref = "off" | "while-broker" | "while-mcp-active";
 
@@ -76,13 +77,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             {t("settings.auto_read_label")}
           </label>
           <div className="settings-control">
-            <input
+            <Toggle
               id="settings-auto-read"
-              type="checkbox"
               checked={settings.autoReadEnabled}
-              onChange={(e) =>
-                update({ autoReadEnabled: e.target.checked })
-              }
+              onChange={(v) => update({ autoReadEnabled: v })}
             />
           </div>
           <p className="settings-help">{t("settings.auto_read_help")}</p>
@@ -160,14 +158,13 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             {t("settings.cli_command_label")}
           </label>
           <div className="settings-control">
-            <input
+            <Toggle
               id="settings-cli-command"
-              type="checkbox"
               checked={settings.cliCommandSend}
-              onChange={(e) => {
-                update({ cliCommandSend: e.target.checked });
+              onChange={(v) => {
+                update({ cliCommandSend: v });
                 // Explain the tmux requirement the moment it's switched on.
-                if (e.target.checked) setShowCliExplainer(true);
+                if (v) setShowCliExplainer(true);
               }}
             />
           </div>

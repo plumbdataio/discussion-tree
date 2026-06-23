@@ -17,7 +17,7 @@ import {
   consumePendingJump,
   subscribePendingJump,
 } from "../utils/anchorJump.ts";
-import { NodeStatusFilterButton } from "./NodeStatusFilterButton.tsx";
+import { BoardSettingsPanel } from "./BoardSettingsPanel.tsx";
 import {
   isNodeVisible,
   isNodeVisibleWithUnread,
@@ -63,7 +63,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   // across the early-return branches below. The downstream filtering
   // happens after `data` is known to be present. Keyed by boardId so
   // each board keeps its own filter (boardId is the URL board id, the
-  // same value the NodeStatusFilterButton below is keyed on).
+  // same value the BoardSettingsPanel filter below is keyed on).
   const [nodeStatusFilter] = useNodeStatusFilter(boardId ?? "");
   // "Show unread even if the status filter would hide it" toggle + a STICKY set
   // of the nodes that toggle has revealed. Once a filtered-out node is shown for
@@ -516,7 +516,10 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
             </button>
           )}
           {!data.board.is_default && (
-            <NodeStatusFilterButton boardId={boardId ?? ""} />
+            <BoardSettingsPanel
+              boardId={boardId ?? ""}
+              autoStatusSync={data.board.auto_status_sync !== 0}
+            />
           )}
           {!data.board.is_default && (
             <button

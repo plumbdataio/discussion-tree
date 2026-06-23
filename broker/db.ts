@@ -219,6 +219,14 @@ safeAlter(
 safeAlter(
   "ALTER TABLE boards ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0",
 );
+// Per-board opt-out of the automatic board-status rollup (recomputeBoardStatus).
+// On (default 1) the board status auto-derives from its item nodes
+// (discussing → settled → completed). Off (0) freezes the status at whatever the
+// user/CC set it to — for status-tracking boards where every node hitting "done"
+// shouldn't flip the board to settled and hide it behind the sidebar filter.
+safeAlter(
+  "ALTER TABLE boards ADD COLUMN auto_status_sync INTEGER NOT NULL DEFAULT 1",
+);
 
 db.run(`
   CREATE TABLE IF NOT EXISTS nodes (
@@ -744,9 +752,13 @@ export const restoreMapFrame = db.prepare(
 
 export function recomputeBoardStatus(boardId: string): BoardStatus | null {
   const cur = db
-    .prepare("SELECT status FROM boards WHERE id = ?")
-    .get(boardId) as { status: string } | null;
+    .prepare("SELECT status, auto_status_sync FROM boards WHERE id = ?")
+    .get(boardId) as { status: string; auto_status_sync: number } | null;
   if (!cur) return null;
+  // Per-board opt-out: when auto status sync is off, the board status is fully
+  // user/CC-controlled — never auto-roll it up. Return it as-is so callers see
+  // "no change" (before === next) and skip the transition side effects.
+  if (cur.auto_status_sync === 0) return cur.status as BoardStatus;
   const isAuto = (AUTO_BOARD_STATUSES as readonly string[]).includes(cur.status);
   const isLegacyActive = cur.status === "active";
   if (!isAuto && !isLegacyActive) return cur.status as BoardStatus;

@@ -72,6 +72,9 @@ export interface Board {
   archived?: number;
   is_default?: number;
   status?: BoardStatus;
+  // 1 (default) = board status auto-derives from node rollup; 0 = frozen
+  // (user/CC-controlled) so a status-tracking board doesn't auto-settle.
+  auto_status_sync?: number;
 }
 
 export interface Node {

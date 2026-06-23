@@ -108,6 +108,13 @@
     "reset": "全表示に戻す",
     "show_unread_always": "未読ありは除外対象でも表示"
   },
+  "board_settings": {
+    "trigger_title": "ボード設定 & フィルタ",
+    "board_section": "ボード",
+    "auto_status_label": "ステータス自動切替",
+    "auto_status_help": "オンの間、ボードのステータスはノードから自動算出されます(議論中 → 方針確定)。ステータス管理用ボードではオフにすると、全ノード完了でも勝手に切り替わらず、サイドバーのフィルタで隠れなくなります。",
+    "filter_section": "ステータスで絞り込み"
+  },
   "anchor": {
     "add_title": "このメッセージにしおりを挟む",
     "remove_title": "しおりを外す",

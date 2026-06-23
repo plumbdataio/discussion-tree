@@ -72,6 +72,50 @@ describe("board status auto-rollup (discussing / settled)", () => {
     expect(await getBoardStatus(id)).toBe("settled");
   });
 
+  test("auto_status_sync off freezes the board status; re-enabling catches it up", async () => {
+    const id = await createBoard({
+      title: "StatusTracker",
+      concerns: [
+        {
+          id: "c1",
+          title: "C1",
+          items: [
+            { id: "i1", title: "I1" },
+            { id: "i2", title: "I2" },
+          ],
+        },
+      ],
+    });
+    // Turn OFF the per-board auto status rollup.
+    const off = await post<{ ok: boolean; auto_status_sync: number }>(
+      `${broker.url}/set-board-auto-status`,
+      { board_id: id, enabled: false },
+    );
+    expect(off.json.ok).toBe(true);
+    expect(off.json.auto_status_sync).toBe(0);
+
+    // Settle every node — with auto sync OFF the board must NOT flip to settled.
+    await post(`${broker.url}/set-node-status`, {
+      board_id: id,
+      node_id: "i1",
+      status: "adopted",
+    });
+    await post(`${broker.url}/set-node-status`, {
+      board_id: id,
+      node_id: "i2",
+      status: "rejected",
+    });
+    expect(await getBoardStatus(id)).toBe("discussing"); // frozen
+
+    // Re-enable → it catches up to the current rollup (all nodes settled).
+    const on = await post<{ ok: boolean; auto_status_sync: number }>(
+      `${broker.url}/set-board-auto-status`,
+      { board_id: id, enabled: true },
+    );
+    expect(on.json.auto_status_sync).toBe(1);
+    expect(await getBoardStatus(id)).toBe("settled");
+  });
+
   test("flipping any node back to in-progress reverts the board to 'discussing'", async () => {
     const id = await createBoard({
       title: "Revert",
