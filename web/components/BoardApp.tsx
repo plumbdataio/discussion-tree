@@ -17,6 +17,7 @@ import {
   consumePendingJump,
   subscribePendingJump,
 } from "../utils/anchorJump.ts";
+import { NodeStatusFilterButton } from "./NodeStatusFilterButton.tsx";
 import { BoardSettingsPanel } from "./BoardSettingsPanel.tsx";
 import {
   isNodeVisible,
@@ -514,6 +515,9 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
               <Cog size={14} strokeWidth={2.25} />
               <span className="header-bg-count">{data.owner_bg_task_count}</span>
             </button>
+          )}
+          {!data.board.is_default && (
+            <NodeStatusFilterButton boardId={boardId ?? ""} />
           )}
           {!data.board.is_default && (
             <BoardSettingsPanel

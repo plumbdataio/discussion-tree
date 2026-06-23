@@ -109,11 +109,9 @@
     "show_unread_always": "Show unread even if excluded"
   },
   "board_settings": {
-    "trigger_title": "Board settings & filter",
-    "board_section": "Board",
+    "trigger_title": "Board settings",
     "auto_status_label": "Auto status",
-    "auto_status_help": "When on, the board status auto-derives from its nodes (discussing → settled). Turn off for a status-tracking board so it stays put even when every node is done (and won't slip behind the sidebar filter).",
-    "filter_section": "Filter by status"
+    "auto_status_help": "When on, the board status auto-derives from its nodes (discussing → settled). Turn off for a status-tracking board so it stays put even when every node is done (and won't slip behind the sidebar filter)."
   },
   "anchor": {
     "add_title": "Bookmark this message",
