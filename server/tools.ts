@@ -401,7 +401,7 @@ export const TOOLS = [
   {
     name: "reset_unanswered_posts",
     description:
-      "Force the unanswered-user-post counter for THIS session to zero. post_to_node already zeroes the counter every time it's called (bundled-reply pattern: one CC post covers every outstanding submission so far), so you rarely need this — it's an escape hatch for cases where you want to yield without posting at all (e.g. the user explicitly told you not to mirror this turn). No arguments — it always targets the current session.",
+      "Clear THIS session's entire unanswered-node set at once. The Stop hook tracks PER-NODE which user submissions you haven't replied to; a post_to_node carrying a real message clears only the node it targets (a status-only post clears nothing). Use this to yield when you've handled the outstanding submissions some OTHER way — you replied on a different node, or the user told you not to mirror this turn. No arguments — it always targets the current session.",
     inputSchema: {
       type: "object" as const,
       properties: {},

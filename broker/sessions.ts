@@ -283,13 +283,13 @@ export function handleGetUnansweredPosts(body: {
   if (!body.cc_session_id) return { ok: false, count: 0 };
   const row = db
     .prepare(
-      "SELECT id, unanswered_nag_streak, unanswered_nag_count FROM sessions WHERE cc_session_id = ? AND alive = 1 ORDER BY last_seen DESC LIMIT 1",
+      "SELECT id, unanswered_nag_streak, unanswered_nag_sig FROM sessions WHERE cc_session_id = ? AND alive = 1 ORDER BY last_seen DESC LIMIT 1",
     )
     .get(body.cc_session_id) as
     | {
         id: string;
         unanswered_nag_streak: number;
-        unanswered_nag_count: number;
+        unanswered_nag_sig: string;
       }
     | null;
   if (!row) return { ok: false, count: 0 };
@@ -305,23 +305,29 @@ export function handleGetUnansweredPosts(body: {
   const count = nodes.length;
   if (count <= 0) {
     // Nothing pending — clear any streak so the next backlog starts fresh.
-    if (row.unanswered_nag_streak !== 0 || row.unanswered_nag_count !== 0) {
+    if (row.unanswered_nag_streak !== 0 || row.unanswered_nag_sig !== "") {
       db.run(
-        "UPDATE sessions SET unanswered_nag_streak = 0, unanswered_nag_count = 0 WHERE id = ?",
+        "UPDATE sessions SET unanswered_nag_streak = 0, unanswered_nag_count = 0, unanswered_nag_sig = '' WHERE id = ?",
         [row.id],
       );
     }
     return { ok: true, count: 0, block: false, nodes: [], session_id: row.id };
   }
 
-  // count > 0: same count as last stop ⇒ continue the streak; a different count
-  // (delivery added a node / a reply cleared one) ⇒ fresh situation, restart at
-  // 1. Keyed on count — cheap hang-safety so a stuck CC eventually yields.
+  // Hang-safety streak keys on the SET signature (sorted "board:node" keys), NOT
+  // the count: same set as last stop ⇒ continue the streak; ANY membership change
+  // (a reply cleared one node, a delivery added another — even if the count is
+  // unchanged) ⇒ fresh situation, restart at 1, so the give-up cap can't get
+  // stuck on a stale set and silently swallow a brand-new unanswered node.
+  const sig = nodes
+    .map((n) => `${n.board_id}:${n.node_id}`)
+    .sort()
+    .join("|");
   const streak =
-    count === row.unanswered_nag_count ? row.unanswered_nag_streak + 1 : 1;
+    sig === row.unanswered_nag_sig ? row.unanswered_nag_streak + 1 : 1;
   db.run(
-    "UPDATE sessions SET unanswered_nag_streak = ?, unanswered_nag_count = ? WHERE id = ?",
-    [streak, count, row.id],
+    "UPDATE sessions SET unanswered_nag_streak = ?, unanswered_nag_count = ?, unanswered_nag_sig = ? WHERE id = ?",
+    [streak, count, sig, row.id],
   );
   const block = streak <= MAX_NAG_STREAK;
   return { ok: true, count, block, nodes, session_id: row.id };
@@ -351,7 +357,7 @@ export function handleResetUnansweredPosts(body: {
   // for backward-compat but is no longer the nag's source of truth.
   db.run("DELETE FROM unanswered_nodes WHERE session_id = ?", [sessionId]);
   db.run(
-    "UPDATE sessions SET unanswered_user_posts = 0, unanswered_nag_streak = 0, unanswered_nag_count = 0 WHERE id = ?",
+    "UPDATE sessions SET unanswered_user_posts = 0, unanswered_nag_streak = 0, unanswered_nag_count = 0, unanswered_nag_sig = '' WHERE id = ?",
     [sessionId],
   );
   return { ok: true, session_id: sessionId };

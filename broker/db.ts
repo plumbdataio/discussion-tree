@@ -145,6 +145,14 @@ safeAlter(
 safeAlter(
   "ALTER TABLE sessions ADD COLUMN unanswered_nag_count INTEGER NOT NULL DEFAULT 0",
 );
+// Fingerprint of the unanswered-node SET we last streaked on (sorted
+// "board:node" keys joined). The hang-safety streak keys on this, not on the
+// set SIZE — otherwise a churn that preserves the count (answer one node while a
+// new one arrives) would keep the give-up flag stuck and never re-nag the fresh
+// node. Any membership change flips the fingerprint and re-arms the nag.
+safeAlter(
+  "ALTER TABLE sessions ADD COLUMN unanswered_nag_sig TEXT NOT NULL DEFAULT ''",
+);
 // Per-node unanswered tracking (supersedes the coarse unanswered_user_posts
 // integer for the Stop-hook nag). One row per (session, board, node) that has a
 // delivered UI submission the CC hasn't replied to with a non-empty post_to_node

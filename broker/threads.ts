@@ -101,7 +101,7 @@ export function handlePostToNode(body: any) {
       [ownerRow.session_id, body.board_id, body.node_id],
     );
     db.run(
-      "UPDATE sessions SET unanswered_nag_streak = 0, unanswered_nag_count = 0 WHERE id = ?",
+      "UPDATE sessions SET unanswered_nag_streak = 0, unanswered_nag_count = 0, unanswered_nag_sig = '' WHERE id = ?",
       [ownerRow.session_id],
     );
   }
@@ -235,18 +235,22 @@ export async function handleSubmitAnswer(body: any): Promise<
       // CC never gets the "continue"). The poller clears it via /channel-pushed
       // only once the notification write resolves. See handleChannelPushed.
       // Record this (board, node) as having a delivered, unreplied submission
-      // for the Stop-hook nag. Per-node (not a coarse count) so the nag can
-      // name the node, and so a status-only or cross-node post doesn't falsely
-      // clear it. Both kinds are tracked — a structure request also expects an
-      // ack; for it nodeId is the synthetic "__board__". Upsert so a
-      // re-submission to the same node refreshes rather than duplicates.
-      db.run(
-        `INSERT INTO unanswered_nodes (session_id, board_id, node_id, node_path, created_at)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(session_id, board_id, node_id)
-         DO UPDATE SET node_path = excluded.node_path, created_at = excluded.created_at`,
-        [board.session_id, body.board_id, nodeId, path, now],
-      );
+      // for the Stop-hook nag — node-targeted submissions only. A structure
+      // request has no node to post_to_node a reply to (its "__board__" id is
+      // not a real node, so a reply can never clear it), so tracking it here
+      // would nag forever with reset as the only out; skip it. Per-node so the
+      // nag names the node and a status-only / cross-node post doesn't falsely
+      // clear it. Upsert dedups a re-submission to the same node; keep the
+      // ORIGINAL created_at so the longest-waiting node stays first in the nag.
+      if (!isStructureRequest) {
+        db.run(
+          `INSERT INTO unanswered_nodes (session_id, board_id, node_id, node_path, created_at)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(session_id, board_id, node_id)
+           DO UPDATE SET node_path = excluded.node_path`,
+          [board.session_id, body.board_id, nodeId, path, now],
+        );
+      }
 
       // board_structure_request: no node-level mirror or status bump on
       // any user content node, but we DO append the raw request text to

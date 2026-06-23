@@ -271,6 +271,38 @@ describe("sessions", () => {
     ).toBe(0);
   });
 
+  test("board_structure_request submissions are NOT tracked (no unclearable nag)", async () => {
+    // A structure request has no node to post_to_node a reply to (its synthetic
+    // "__board__" id can't be posted to), so tracking it would nag forever with
+    // reset as the only out. It must stay out of the unanswered set entirely.
+    const sid = await registerSession(broker.url);
+    const ccId = await attachCC(broker.url, sid);
+    const board = await post<{ board_id: string }>(
+      `${broker.url}/create-board`,
+      {
+        session_id: sid,
+        structure: {
+          title: "struct-board",
+          concerns: [
+            { id: "c1", title: "C1", items: [{ id: "i1", title: "I1" }] },
+          ],
+        },
+      },
+    );
+    const sp = post(`${broker.url}/submit-answer`, {
+      board_id: board.json.board_id,
+      kind: "board_structure_request",
+      text: "please add a concern about X",
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    await post(`${broker.url}/poll-messages`, { session_id: sid });
+    await sp;
+    const r = await post<{ count: number }>(`${broker.url}/get-unanswered`, {
+      cc_session_id: ccId,
+    });
+    expect(r.json.count).toBe(0);
+  });
+
   test("/post-to-node then a fresh /submit-answer pushes the counter back to 1", async () => {
     // Verifies the turn-aware reconcile: bundled reply zeroes the counter,
     // but a NEW submission afterwards still nags correctly. Without this
