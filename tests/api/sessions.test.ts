@@ -167,12 +167,12 @@ describe("sessions", () => {
     expect(r.json.count).toBe(0);
   });
 
-  test("/post-to-node zeroes the unanswered counter (bundled-reply pattern)", async () => {
-    // 2 user submissions → counter = 2.
-    // 1 CC reply → counter = 0 immediately. We treat one post_to_node as
-    // covering every outstanding submission so far; the Stop hook then
-    // only fires if NEW submissions arrive after this reply (covered by
-    // the next test).
+  test("/post-to-node clears only the replied node; status-only does not clear (per-node)", async () => {
+    // Per-node nag: each (board, node) with a delivered submission is tracked
+    // independently. Two submissions to the SAME node collapse to one row;
+    // a submission to a different node adds another. A reply (non-empty
+    // message) clears ONLY that node — not the whole backlog — and a
+    // status-only post (empty message) clears nothing.
     const sid = await registerSession(broker.url);
     const ccId = await attachCC(broker.url, sid);
     const board = await post<{ board_id: string }>(
@@ -180,63 +180,95 @@ describe("sessions", () => {
       {
         session_id: sid,
         structure: {
-          title: "counter-board",
+          title: "per-node-board",
           concerns: [
-            { id: "c1", title: "C1", items: [{ id: "i1", title: "I1" }] },
+            {
+              id: "c1",
+              title: "C1",
+              items: [
+                { id: "i1", title: "I1" },
+                { id: "i2", title: "I2" },
+              ],
+            },
           ],
         },
       },
     );
 
-    const submitP1 = post(`${broker.url}/submit-answer`, {
+    // Two submissions to i1 collapse to one unanswered node...
+    for (const text of ["first", "again"]) {
+      const p = post(`${broker.url}/submit-answer`, {
+        board_id: board.json.board_id,
+        node_id: "i1",
+        text,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+      await post(`${broker.url}/poll-messages`, { session_id: sid });
+      await p;
+    }
+    // ...while a submission to i2 adds a second.
+    const p2 = post(`${broker.url}/submit-answer`, {
       board_id: board.json.board_id,
-      node_id: "i1",
-      text: "first",
+      node_id: "i2",
+      text: "other",
     });
     await new Promise((r) => setTimeout(r, 50));
     await post(`${broker.url}/poll-messages`, { session_id: sid });
-    await submitP1;
+    await p2;
 
-    const submitP2 = post(`${broker.url}/submit-answer`, {
-      board_id: board.json.board_id,
-      node_id: "i1",
-      text: "second",
-    });
-    await new Promise((r) => setTimeout(r, 50));
-    await post(`${broker.url}/poll-messages`, { session_id: sid });
-    await submitP2;
+    const afterSubmit = await post<{
+      count: number;
+      nodes: { node_id: string }[];
+    }>(`${broker.url}/get-unanswered`, { cc_session_id: ccId });
+    expect(afterSubmit.json.count).toBe(2); // i1 (collapsed) + i2
+    expect(afterSubmit.json.nodes.map((n) => n.node_id).sort()).toEqual([
+      "i1",
+      "i2",
+    ]);
 
-    const afterSubmit = await post<{ ok: boolean; count: number }>(
-      `${broker.url}/get-unanswered`,
-      { cc_session_id: ccId },
-    );
-    expect(afterSubmit.json.count).toBe(2);
-
-    // Single bundled reply → counter zeroes.
+    // A status-only post (empty message) must NOT clear i1.
     await post(`${broker.url}/post-to-node`, {
       board_id: board.json.board_id,
       node_id: "i1",
-      message: "bundled ack",
+      message: "",
       status: "discussing",
     });
-    const afterPost = await post<{ ok: boolean; count: number }>(
-      `${broker.url}/get-unanswered`,
-      { cc_session_id: ccId },
-    );
-    expect(afterPost.json.count).toBe(0);
+    expect(
+      (
+        await post<{ count: number }>(`${broker.url}/get-unanswered`, {
+          cc_session_id: ccId,
+        })
+      ).json.count,
+    ).toBe(2);
 
-    // Extra reply when nothing is outstanding → still 0.
+    // A real reply to i1 clears ONLY i1 → i2 still outstanding.
     await post(`${broker.url}/post-to-node`, {
       board_id: board.json.board_id,
       node_id: "i1",
-      message: "extra",
+      message: "ack i1",
       status: "discussing",
     });
-    const afterExtra = await post<{ ok: boolean; count: number }>(
-      `${broker.url}/get-unanswered`,
-      { cc_session_id: ccId },
-    );
-    expect(afterExtra.json.count).toBe(0);
+    const afterI1 = await post<{
+      count: number;
+      nodes: { node_id: string }[];
+    }>(`${broker.url}/get-unanswered`, { cc_session_id: ccId });
+    expect(afterI1.json.count).toBe(1);
+    expect(afterI1.json.nodes[0].node_id).toBe("i2");
+
+    // Reply to i2 → empty set.
+    await post(`${broker.url}/post-to-node`, {
+      board_id: board.json.board_id,
+      node_id: "i2",
+      message: "ack i2",
+      status: "discussing",
+    });
+    expect(
+      (
+        await post<{ count: number }>(`${broker.url}/get-unanswered`, {
+          cc_session_id: ccId,
+        })
+      ).json.count,
+    ).toBe(0);
   });
 
   test("/post-to-node then a fresh /submit-answer pushes the counter back to 1", async () => {

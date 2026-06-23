@@ -81,30 +81,27 @@ export function handlePostToNode(body: any) {
     };
   }
 
-  // Zero the owning session's unanswered counter. We treat a single CC
-  // post as covering every outstanding user submission so far (the
-  // "bundled-reply" pattern — the standard case when the user fires N
-  // channel pushes in quick succession and the CC answers them in one
-  // synthesized reply). If a FRESH user submission arrives after this
-  // post, handleSubmitAnswer bumps the counter back to 1 and the Stop
-  // hook nags correctly.
-  //
-  // This used to be `MAX(0, n - 1)` (= per-post decrement), but that
-  // produced spurious nags every time the CC bundled a reply: the user
-  // sent 3 submissions, the CC posted once, the counter stayed at 2,
-  // and the Stop hook insisted on more replies even though there was
-  // nothing left to answer. reset_unanswered_posts now serves only as
-  // an escape hatch for "yield without posting" cases.
+  // Clear THIS (board, node) from the unanswered set — but ONLY when the post
+  // carries an actual reply message. A status-only post_to_node (empty message)
+  // must NOT count as answering the user: the per-node nag clears a node only on
+  // a real reply. Other tools (set_node_status, record_decision, …) don't go
+  // through here, so they never clear it either. A cross-node reply leaves the
+  // original node flagged; that's intentional — the CC clears it via
+  // reset_unanswered_posts if the reply elsewhere was the right move. Clearing
+  // also resets the nag streak so a later submission re-arms the nag even if a
+  // prior backlog had hit the MAX_NAG_STREAK cap.
   const ownerRow = db
     .prepare("SELECT session_id FROM boards WHERE id = ?")
     .get(body.board_id) as { session_id: string } | null;
-  if (ownerRow) {
-    // Also clear the nag streak: zeroing the count must reset the streak so a
-    // FRESH later submission re-arms the nag even if a prior backlog had hit
-    // the MAX_NAG_STREAK cap at the same count (handleGetUnansweredPosts only
-    // resets on an observed count==0, which a direct 1→0→1 can skip).
+  const hasMessage =
+    typeof body.message === "string" && body.message.trim().length > 0;
+  if (ownerRow && hasMessage) {
     db.run(
-      "UPDATE sessions SET unanswered_user_posts = 0, unanswered_nag_streak = 0, unanswered_nag_count = 0 WHERE id = ?",
+      "DELETE FROM unanswered_nodes WHERE session_id = ? AND board_id = ? AND node_id = ?",
+      [ownerRow.session_id, body.board_id, body.node_id],
+    );
+    db.run(
+      "UPDATE sessions SET unanswered_nag_streak = 0, unanswered_nag_count = 0 WHERE id = ?",
       [ownerRow.session_id],
     );
   }
@@ -237,12 +234,18 @@ export async function handleSubmitAnswer(body: any): Promise<
       // NOT cleared here (that would wipe the ⚠️ even if the push then throws and
       // CC never gets the "continue"). The poller clears it via /channel-pushed
       // only once the notification write resolves. See handleChannelPushed.
-      // Bump the owning session's unanswered-user-post counter. Counts both
-      // kinds for now — a structure request also expects an ack from CC, and
-      // overcounting is recoverable via /reset-unanswered.
+      // Record this (board, node) as having a delivered, unreplied submission
+      // for the Stop-hook nag. Per-node (not a coarse count) so the nag can
+      // name the node, and so a status-only or cross-node post doesn't falsely
+      // clear it. Both kinds are tracked — a structure request also expects an
+      // ack; for it nodeId is the synthetic "__board__". Upsert so a
+      // re-submission to the same node refreshes rather than duplicates.
       db.run(
-        "UPDATE sessions SET unanswered_user_posts = unanswered_user_posts + 1 WHERE id = ?",
-        [board.session_id],
+        `INSERT INTO unanswered_nodes (session_id, board_id, node_id, node_path, created_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(session_id, board_id, node_id)
+         DO UPDATE SET node_path = excluded.node_path, created_at = excluded.created_at`,
+        [board.session_id, body.board_id, nodeId, path, now],
       );
 
       // board_structure_request: no node-level mirror or status bump on

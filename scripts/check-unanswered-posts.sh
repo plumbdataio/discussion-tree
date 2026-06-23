@@ -1,14 +1,19 @@
 #!/bin/bash
-# discussion-tree Stop hook — prevent the turn from ending if the user has
-# UI submissions that weren't mirrored via post_to_node, and feed Claude a
-# message telling it to finish the replies (or to call reset_unanswered_posts
-# if the count is desynced).
+# discussion-tree Stop hook — prevent the turn from ending while the user has
+# UI submissions that weren't replied to via post_to_node, and feed Claude a
+# message naming the unreplied nodes (or telling it to call reset_unanswered_posts
+# if the omission is intentional).
+#
+# Per-node: the broker tracks WHICH (board, node) have an unreplied submission
+# (unanswered_nodes). A post_to_node carrying a non-empty message clears that
+# node; a status-only post or a reply on a different node does NOT. So the nag
+# names the exact nodes instead of just a count.
 #
 # Mechanism: emit JSON {"decision":"block","reason":"..."} on stdout to block
 # the Stop event and inject the reason as Claude's next input. We block on EVERY
-# stop while a post is unanswered (count>0); the broker caps consecutive nags on
-# the same count (MAX_NAG_STREAK) and returns block=false past that, so a stuck
-# CC can't infinite-loop the turn.
+# stop while any node is unanswered (count>0); the broker caps consecutive nags
+# on the same count (MAX_NAG_STREAK) and returns block=false past that, so a
+# stuck CC can't infinite-loop the turn.
 #
 # Wire as a Stop hook (no matcher). Failures swallowed.
 
@@ -63,11 +68,15 @@ if [ "$count" -gt 0 ] && [ "$block" = "true" ]; then
     "http://127.0.0.1:${port}/heartbeat-tool" \
     >/dev/null 2>&1 || true
 
-  if [ "$count" -eq 1 ]; then
-    msg="discussion-tree: there is 1 UI submission from the user that you haven't acknowledged with post_to_node yet. Please send the corresponding reply (or, if you already bundled it into another post and the count is desynced, call reset_unanswered_posts) before yielding the turn."
-  else
-    msg="discussion-tree: there are ${count} UI submissions from the user that you haven't acknowledged with post_to_node yet. Please send the corresponding replies (or, if you already bundled them into other posts and the count is desynced, call reset_unanswered_posts) before yielding the turn."
-  fi
+  # Per-node: name the exact nodes whose user submission is still unreplied so
+  # the CC can act precisely. Soft framing — replying on a different node, or the
+  # user simply not wanting a reply, are legitimate, so the escape hatch
+  # (reset_unanswered_posts) is offered as a first-class option, not a "desync"
+  # afterthought.
+  nodes=$(printf '%s' "$resp" | jq -r '.nodes[]?.node_path | "  - " + .')
+  msg="discussion-tree: these node(s) have a user submission you have not replied to with a post_to_node message yet:
+${nodes}
+Is that intentional? If you already handled it (you replied on a different node, or the user doesn't want a reply), call reset_unanswered_posts to yield. Otherwise post_to_node an actual reply message to the node(s) above — a status-only post does NOT count."
   jq -n --arg reason "$msg" '{decision:"block", reason:$reason}'
 fi
 

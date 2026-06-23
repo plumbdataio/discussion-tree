@@ -145,6 +145,24 @@ safeAlter(
 safeAlter(
   "ALTER TABLE sessions ADD COLUMN unanswered_nag_count INTEGER NOT NULL DEFAULT 0",
 );
+// Per-node unanswered tracking (supersedes the coarse unanswered_user_posts
+// integer for the Stop-hook nag). One row per (session, board, node) that has a
+// delivered UI submission the CC hasn't replied to with a non-empty post_to_node
+// message yet. A submission upserts its row; a post_to_node carrying a non-empty
+// message to that node deletes it (a status-only post does NOT clear it). This
+// lets the nag say WHICH nodes are unanswered instead of just a count, and lets
+// the CC legitimately reply on a different node (it then clears the original via
+// reset_unanswered_posts, the documented "intentional, yield anyway" escape).
+db.run(
+  `CREATE TABLE IF NOT EXISTS unanswered_nodes (
+    session_id TEXT NOT NULL,
+    board_id TEXT NOT NULL,
+    node_id TEXT NOT NULL,
+    node_path TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, board_id, node_id)
+  )`,
+);
 // The tmux pane id ($TMUX_PANE, e.g. "%3") + socket (first field of $TMUX) of
 // the Claude Code process, captured at attach time from the MCP server's own
 // env (it runs inside the same pane as CC). Present only when CC was launched

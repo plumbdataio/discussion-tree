@@ -273,23 +273,36 @@ const MAX_NAG_STREAK = 8;
 // a post) resets the streak and re-arms the nag.
 export function handleGetUnansweredPosts(body: {
   cc_session_id?: string;
-}): { ok: boolean; count: number; block?: boolean; session_id?: string } {
+}): {
+  ok: boolean;
+  count: number;
+  block?: boolean;
+  nodes?: { board_id: string; node_id: string; node_path: string }[];
+  session_id?: string;
+} {
   if (!body.cc_session_id) return { ok: false, count: 0 };
   const row = db
     .prepare(
-      "SELECT id, unanswered_user_posts, unanswered_nag_streak, unanswered_nag_count FROM sessions WHERE cc_session_id = ? AND alive = 1 ORDER BY last_seen DESC LIMIT 1",
+      "SELECT id, unanswered_nag_streak, unanswered_nag_count FROM sessions WHERE cc_session_id = ? AND alive = 1 ORDER BY last_seen DESC LIMIT 1",
     )
     .get(body.cc_session_id) as
     | {
         id: string;
-        unanswered_user_posts: number;
         unanswered_nag_streak: number;
         unanswered_nag_count: number;
       }
     | null;
   if (!row) return { ok: false, count: 0 };
 
-  const count = row.unanswered_user_posts;
+  // Per-node: the unanswered set is the rows in unanswered_nodes for this
+  // session. The nag names these nodes so the CC knows exactly which user
+  // submissions are still unreplied (oldest first).
+  const nodes = db
+    .prepare(
+      "SELECT board_id, node_id, node_path FROM unanswered_nodes WHERE session_id = ? ORDER BY created_at ASC",
+    )
+    .all(row.id) as { board_id: string; node_id: string; node_path: string }[];
+  const count = nodes.length;
   if (count <= 0) {
     // Nothing pending — clear any streak so the next backlog starts fresh.
     if (row.unanswered_nag_streak !== 0 || row.unanswered_nag_count !== 0) {
@@ -298,18 +311,20 @@ export function handleGetUnansweredPosts(body: {
         [row.id],
       );
     }
-    return { ok: true, count: 0, block: false, session_id: row.id };
+    return { ok: true, count: 0, block: false, nodes: [], session_id: row.id };
   }
 
   // count > 0: same count as last stop ⇒ continue the streak; a different count
-  // (delivery bumped it / a partial reset) ⇒ a fresh situation, restart at 1.
-  const streak = count === row.unanswered_nag_count ? row.unanswered_nag_streak + 1 : 1;
+  // (delivery added a node / a reply cleared one) ⇒ fresh situation, restart at
+  // 1. Keyed on count — cheap hang-safety so a stuck CC eventually yields.
+  const streak =
+    count === row.unanswered_nag_count ? row.unanswered_nag_streak + 1 : 1;
   db.run(
     "UPDATE sessions SET unanswered_nag_streak = ?, unanswered_nag_count = ? WHERE id = ?",
     [streak, count, row.id],
   );
   const block = streak <= MAX_NAG_STREAK;
-  return { ok: true, count, block, session_id: row.id };
+  return { ok: true, count, block, nodes, session_id: row.id };
 }
 
 // Force the unanswered counter to zero. Two ways in: cc_session_id (the hook
@@ -329,8 +344,12 @@ export function handleResetUnansweredPosts(body: {
     sessionId = row?.id ?? null;
   }
   if (!sessionId) return { ok: false };
-  // Clear the nag streak alongside the count (see handlePostToNode) so a fresh
-  // submission after a capped backlog re-arms the Stop-hook nag.
+  // Drop the whole per-node unanswered set for this session — the explicit
+  // "I've handled these (or won't), yield anyway" escape. Clear the nag streak
+  // too (see handlePostToNode) so a fresh submission after a capped backlog
+  // re-arms the Stop-hook nag. The legacy unanswered_user_posts int is kept at 0
+  // for backward-compat but is no longer the nag's source of truth.
+  db.run("DELETE FROM unanswered_nodes WHERE session_id = ?", [sessionId]);
   db.run(
     "UPDATE sessions SET unanswered_user_posts = 0, unanswered_nag_streak = 0, unanswered_nag_count = 0 WHERE id = ?",
     [sessionId],
