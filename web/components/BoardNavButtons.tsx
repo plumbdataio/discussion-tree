@@ -81,37 +81,49 @@ export function BoardNavButtons({
     card?.scrollIntoView({ behavior: "smooth", inline, block: "nearest" });
   };
 
-  // Index of the concern currently anchored at the viewport's left edge: the
-  // rightmost concern whose first card has started scrolling past the left.
-  const currentConcernIdx = (
-    el: HTMLElement,
-    groups: { cards: HTMLElement[] }[],
-  ) => {
-    const left = el.getBoundingClientRect().left;
-    let idx = 0;
-    groups.forEach((g, i) => {
-      if (g.cards[0].getBoundingClientRect().left <= left + 8) idx = i;
-    });
-    return idx;
-  };
-
   const go = (which: "first" | "prev" | "next" | "last") => {
     const el = getScroller();
     if (!el) return;
     const groups = concernGroups(el);
     if (!groups.length) return;
+    const last = groups.length - 1;
     if (which === "first") {
       scrollToCard(groups[0].cards[0], "start");
-    } else if (which === "last") {
-      const g = groups[groups.length - 1];
+      return;
+    }
+    if (which === "last") {
+      const g = groups[last];
       scrollToCard(g.cards[g.cards.length - 1], "end");
+      return;
+    }
+    // prev/next page by VISIBILITY, not index: each concern's left/right edge in
+    // viewport coords vs the scroller's edges. The chosen concern's left edge is
+    // aligned to the viewport left ("comes to the left edge").
+    const r = el.getBoundingClientRect();
+    const EPS = 4;
+    const bounds = groups.map((g) => ({
+      group: g,
+      left: g.cards[0].getBoundingClientRect().left,
+      right: g.cards[g.cards.length - 1].getBoundingClientRect().right,
+    }));
+    if (which === "next") {
+      // Next concern whose RIGHT edge is cut off (not fully visible) and which
+      // begins to the right of the viewport left — i.e. skip concerns already
+      // fully shown and the current straddling one. Fall back to the next
+      // concern start, then to the very end.
+      const t =
+        bounds.find((b) => b.right > r.right + EPS && b.left > r.left + EPS) ??
+        bounds.find((b) => b.left > r.left + EPS);
+      if (t) scrollToCard(t.group.cards[0], "start");
+      else
+        scrollToCard(groups[last].cards[groups[last].cards.length - 1], "end");
     } else {
-      const cur = currentConcernIdx(el, groups);
-      const target =
-        which === "prev"
-          ? groups[Math.max(0, cur - 1)]
-          : groups[Math.min(groups.length - 1, cur + 1)];
-      scrollToCard(target.cards[0], "start");
+      // prev: the nearest concern whose LEFT edge is off the viewport left (cut
+      // off) — reveals the current straddling concern's start first, then steps
+      // back one concern at a time.
+      let t: (typeof bounds)[number] | null = null;
+      for (const b of bounds) if (b.left < r.left - EPS) t = b;
+      scrollToCard((t ?? bounds[0]).group.cards[0], "start");
     }
   };
 
