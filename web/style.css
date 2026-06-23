@@ -3008,6 +3008,21 @@ body.concern-resizing * {
   text-align: center;
   box-sizing: border-box;
 }
+/* Mobile: the composer textarea occupies the bottom of the board, and the
+   floating nav pill (bottom:18px + 34px buttons) overlapped its typing area.
+   Shrink the pill and tuck it lower — above the iOS home indicator via the
+   safe-area inset — so it clears the input. */
+@media (max-width: 768px) {
+  .board-nav {
+    bottom: max(6px, env(safe-area-inset-bottom));
+    padding: 4px;
+    gap: 4px;
+  }
+  .board-nav-btn {
+    width: 30px;
+    height: 30px;
+  }
+}
 
 /* Mermaid diagram surface (DiagramView) — a read-only rendered .mmd page. */
 /* Mermaid diagram surface (3rd surface). Reuses the .app/.header/.sidebar
