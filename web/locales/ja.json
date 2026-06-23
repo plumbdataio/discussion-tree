@@ -112,7 +112,8 @@
     "home": "← ホーム",
     "untitled": "無題の図",
     "not_found": "図が見つかりません。",
-    "parse_error": "Mermaid パースエラー"
+    "parse_error": "Mermaid パースエラー",
+    "zoom_hint": "ホイールでズーム・ドラッグで移動・ダブルクリックでリセット"
   },
   "board_nav": {
     "first": "先頭ノード",

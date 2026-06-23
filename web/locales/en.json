@@ -112,7 +112,8 @@
     "home": "← Home",
     "untitled": "Untitled diagram",
     "not_found": "Diagram not found.",
-    "parse_error": "Mermaid parse error"
+    "parse_error": "Mermaid parse error",
+    "zoom_hint": "Scroll to zoom · drag to pan · double-click to reset"
   },
   "board_nav": {
     "first": "First node",

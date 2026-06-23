@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import mermaid from "mermaid";
+import panzoom from "panzoom";
 import { useTranslation } from "react-i18next";
 import { Sidebar } from "./Sidebar.tsx";
 
@@ -14,6 +15,8 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const renderSeq = useRef(0);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const pzRef = useRef<{ dispose: () => void; moveTo: (x: number, y: number) => void; zoomAbs: (x: number, y: number, z: number) => void } | null>(null);
 
   const fetchDiagram = () => {
     fetch(`/api/diagram/${diagramId}`)
@@ -78,6 +81,36 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
       });
   }, [source]);
 
+  // Wheel-zoom + drag-pan the rendered SVG. Re-attach whenever the SVG is
+  // replaced (a fresh render). Double-click (handler on the canvas) resets.
+  useEffect(() => {
+    pzRef.current?.dispose();
+    pzRef.current = null;
+    if (!svg) return;
+    const el = canvasRef.current?.querySelector("svg") as SVGElement | null;
+    if (!el) return;
+    el.style.maxWidth = "none";
+    try {
+      pzRef.current = panzoom(el, {
+        maxZoom: 8,
+        minZoom: 0.2,
+        bounds: true,
+        boundsPadding: 0.1,
+      }) as unknown as typeof pzRef.current;
+    } catch {
+      /* zoom/pan is an enhancement — never let it break the render */
+    }
+    return () => {
+      pzRef.current?.dispose();
+      pzRef.current = null;
+    };
+  }, [svg]);
+
+  const resetView = () => {
+    pzRef.current?.zoomAbs(0, 0, 1);
+    pzRef.current?.moveTo(0, 0);
+  };
+
   return (
     <div className="app-body">
       <Sidebar currentBoardId={null} />
@@ -97,7 +130,10 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
           </div>
         ) : (
           <div
+            ref={canvasRef}
             className="diagram-canvas"
+            title={t("diagram.zoom_hint")}
+            onDoubleClick={resetView}
             // mermaid sanitizes with securityLevel:strict; the SVG is its output.
             dangerouslySetInnerHTML={{ __html: svg }}
           />
