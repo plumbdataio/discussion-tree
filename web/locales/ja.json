@@ -110,12 +110,20 @@
   },
   "diagram": {
     "home": "← ホーム",
+    "badge_title": "Mermaid 図",
     "untitled": "無題の図",
     "not_found": "図が見つかりません。",
     "parse_error": "Mermaid パースエラー",
     "zoom_hint": "ホイールでズーム・ドラッグで移動・ダブルクリックでリセット",
-    "chat_placeholder": "図の編集を CC に依頼… (⌘/Ctrl+Enter で送信)",
-    "chat_send": "送信"
+    "chat_title": "チャット（図全体）",
+    "chat_note": "ここでのメッセージは、この図を管理する Claude に届きます。Claude はこのチャットで返信するか、図を更新（その場で再描画）して応答します。",
+    "chat_placeholder": "図についてのメッセージ… (Enter で改行 / ⌘Enter で送信)",
+    "input_disabled": "CC が未接続のため投稿できません",
+    "send": "送信",
+    "uploading": "アップロード中…",
+    "send_failed": "送信に失敗しました",
+    "image_failed": "画像のアップロードに失敗しました",
+    "expand_node": "チャットを拡大"
   },
   "board_nav": {
     "first": "先頭ノード",

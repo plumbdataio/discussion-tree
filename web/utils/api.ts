@@ -47,6 +47,18 @@ export function postMapChat(mapId: string, nodeId: string, text: string) {
   });
 }
 
+// --- Diagrams ---
+// The diagram's right-side chat posts here (mirrors postMapChat). Blocking on
+// the broker until the owning CC polls; CC replies by upserting the diagram
+// source (live re-render) and/or posting back to the chat thread.
+export function postDiagramChat(diagramId: string, text: string) {
+  return fetch("/diagram-chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ diagram_id: diagramId, text }),
+  });
+}
+
 // Persist a node's position/size after a drag/resize. SILENT in the pull
 // model — the broker records it and broadcasts to other browsers, but does
 // not push to the CC (it re-reads on next act).

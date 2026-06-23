@@ -2,60 +2,134 @@ import React, { useEffect, useRef, useState } from "react";
 import mermaid from "mermaid";
 import panzoom from "panzoom";
 import { useTranslation } from "react-i18next";
+import { AlertTriangle, Maximize2, Shrink, Workflow } from "lucide-react";
+import type { ThreadItem } from "../../shared/types.ts";
 import { Sidebar } from "./Sidebar.tsx";
+import { ContextMeter } from "./ContextMeter.tsx";
+import { CliCommandButton } from "./CliCommandButton.tsx";
+import { ThreadMessage } from "./ThreadMessage.tsx";
+import { MapNodeModal } from "./MapNodeModal.tsx";
+import { useDraft } from "../utils/drafts.ts";
+import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
+import { useDocumentTitle } from "../utils/useDocumentTitle.ts";
+import {
+  extractImageFiles,
+  postDiagramChat,
+  uploadImage,
+} from "../utils/api.ts";
+import { showToast } from "./Toast.tsx";
+
+// Synthetic node id for the diagram's chat thread (matches the broker's
+// DIAGRAM_CHAT_NODE so thread_items / read-state line up).
+const DIAGRAM_CHAT_NODE = "__chat__";
+
+// The shape /api/diagram/:id returns (see broker getDiagramView): the diagram
+// row + its chat thread + the same owner_* enrichment a board/map view carries.
+interface DiagramViewData {
+  diagram: {
+    id: string;
+    session_id: string;
+    title: string;
+    source: string;
+    created_at: string;
+    updated_at: string;
+  };
+  thread: ThreadItem[];
+  activity?: { state: string } | null;
+  owner_alive?: boolean;
+  owner_stalled?: boolean;
+  owner_compacting?: boolean;
+  owner_session_name?: string | null;
+  owner_context_usage?: { remaining_pct: number; set_at: string } | null;
+  owner_can_cli_send?: boolean;
+}
 
 // Read-only Mermaid diagram surface (a 3rd surface alongside boards & maps).
-// The source is owned by CC via the upsert_diagram MCP tool; this page renders
-// it and live-re-renders on the diagram's WS channel whenever CC upserts.
+// Reuses the shared .app/.header/.sidebar chrome and the map's right-hand chat
+// panel so a diagram feels like the rest of dt. The source is owned by CC via
+// the upsert_diagram MCP tool; this page renders it and live-re-renders on the
+// diagram's WS channel whenever CC upserts. The right chat lets the user ask CC
+// to edit it (→ upsert → live re-render).
 export function DiagramView({ diagramId }: { diagramId: string }) {
   const { t } = useTranslation();
-  const [title, setTitle] = useState("");
-  const [source, setSource] = useState<string | null>(null);
+  const [view, setView] = useState<DiagramViewData | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const [svg, setSvg] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [notFound, setNotFound] = useState(false);
-  const [chat, setChat] = useState<
-    { id: number; source: string; text: string }[]
-  >([]);
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
   const renderSeq = useRef(0);
   const canvasRef = useRef<HTMLDivElement>(null);
-  const pzRef = useRef<{ dispose: () => void; moveTo: (x: number, y: number) => void; zoomAbs: (x: number, y: number, z: number) => void } | null>(null);
+  const pzRef = useRef<{
+    dispose: () => void;
+    moveTo: (x: number, y: number) => void;
+    zoomAbs: (x: number, y: number, z: number) => void;
+  } | null>(null);
+
+  const source = view?.diagram?.source ?? null;
 
   const fetchDiagram = () => {
     fetch(`/api/diagram/${diagramId}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((j) => {
-        setTitle(j.diagram?.title ?? "");
-        setSource(j.diagram?.source ?? "");
-        setChat(j.chat ?? []);
+      .then((r) => {
+        if (r.status === 404) {
+          setNotFound(true);
+          return null;
+        }
+        return r.ok ? r.json() : Promise.reject(r.status);
+      })
+      .then((j: DiagramViewData | null) => {
+        if (!j) return;
+        setView(j);
         setNotFound(false);
       })
-      .catch(() => setNotFound(true));
+      .catch(() => {
+        /* transient — the WS reconnect will retry */
+      });
   };
 
   useEffect(fetchDiagram, [diagramId]);
 
-  // Live update: the broker broadcasts on the diagram's id channel.
+  // Browser-tab breadcrumb (same format as every other page).
+  useDocumentTitle([
+    view?.owner_session_name,
+    view ? view.diagram.title || t("diagram.untitled") : undefined,
+  ]);
+
+  // Live update + reconnect: the broker broadcasts on the diagram's id channel
+  // (diagram-update on upsert, thread-update on a chat post, diagram-deleted on
+  // delete). Mirror the map's resilient connect/retry so a freeze/resume or a
+  // broker bounce re-subscribes instead of going silent.
   useEffect(() => {
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${proto}://${location.host}/ws/${diagramId}`);
-    const onMsg = (e: MessageEvent) => {
-      try {
-        const m = JSON.parse(e.data);
-        if (m?.type === "diagram-update" || m?.type === "thread-update")
-          fetchDiagram();
-        else if (m?.type === "diagram-deleted") setNotFound(true);
-      } catch {
-        /* ignore */
-      }
+    let ws: WebSocket | null = null;
+    let closed = false;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    const connect = () => {
+      if (closed) return;
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      ws = new WebSocket(`${proto}://${location.host}/ws/${diagramId}`);
+      ws.onopen = () => setWsConnected(true);
+      ws.onclose = () => {
+        setWsConnected(false);
+        if (!closed) retry = setTimeout(connect, 1500);
+      };
+      ws.onmessage = (e) => {
+        try {
+          const m = JSON.parse(e.data as string);
+          if (m?.type === "diagram-update" || m?.type === "thread-update") {
+            fetchDiagram();
+          } else if (m?.type === "diagram-deleted") {
+            setNotFound(true);
+          }
+        } catch {
+          /* non-JSON frame — ignore */
+        }
+      };
     };
-    ws.addEventListener("message", onMsg);
+    connect();
     return () => {
-      ws.removeEventListener("message", onMsg);
+      closed = true;
+      if (retry) clearTimeout(retry);
       try {
-        ws.close();
+        ws?.close();
       } catch {
         /* race with teardown */
       }
@@ -118,77 +192,280 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
     pzRef.current?.moveTo(0, 0);
   };
 
-  const sendChat = () => {
+  if (notFound) {
+    return (
+      <div className="app">
+        <div className="app-body">
+          <Sidebar currentBoardId={null} currentMapId={null} />
+          <div className="map-missing">{t("diagram.not_found")}</div>
+        </div>
+      </div>
+    );
+  }
+  if (!view) {
+    return (
+      <div className="app">
+        <div className="app-body">
+          <Sidebar currentBoardId={null} currentMapId={null} />
+          <div className="map-missing">{t("map.loading")}</div>
+        </div>
+      </div>
+    );
+  }
+
+  const ownerAlive = view.owner_alive !== false;
+
+  return (
+    <div className="app">
+      <header className="header">
+        <a className="breadcrumb" href={`/session/${view.diagram.session_id}`}>
+          {t("header.back_to_session")}
+        </a>
+        <h1>
+          <Workflow
+            className="map-title-icon"
+            size={18}
+            strokeWidth={1.9}
+            aria-label={t("diagram.badge_title")}
+          />
+          {view.diagram.title || t("diagram.untitled")}
+        </h1>
+        <ContextMeter usage={view.owner_context_usage} prefix="Context: " />
+        {!ownerAlive && (
+          <span
+            className="owner-warning"
+            title={t("header.owner_warning_title")}
+          >
+            {t("header.owner_warning")}
+          </span>
+        )}
+        {view.owner_stalled && (
+          <span
+            className="header-stall-warning"
+            title={t("header.stalled_title")}
+          >
+            <AlertTriangle size={15} strokeWidth={2.5} />
+            <span>{t("header.stalled")}</span>
+          </span>
+        )}
+        {view.owner_compacting && !view.owner_stalled && (
+          <span
+            className="header-compacting-badge"
+            title={t("header.compacting_title")}
+          >
+            <Shrink size={15} strokeWidth={2.5} />
+            <span>{t("header.compacting")}</span>
+          </span>
+        )}
+        <div className="header-right">
+          <CliCommandButton
+            sessionId={view.diagram.session_id}
+            canCliSend={!!view.owner_can_cli_send}
+            busy={
+              view.activity?.state === "working" ||
+              view.activity?.state === "blocked"
+            }
+          />
+          <span className="ws-status">
+            <span className={`ws-dot ${wsConnected ? "connected" : ""}`} />
+            {wsConnected ? t("header.live") : t("header.offline")}
+          </span>
+        </div>
+      </header>
+      <div className="app-body">
+        <Sidebar currentBoardId={null} currentMapId={null} />
+        <div className="diagram-main">
+          <div className="diagram-canvas-wrap">
+            {error ? (
+              <div className="diagram-error">
+                <strong>{t("diagram.parse_error")}</strong>
+                <pre>{error}</pre>
+              </div>
+            ) : (
+              <div
+                ref={canvasRef}
+                className="diagram-canvas"
+                title={t("diagram.zoom_hint")}
+                onDoubleClick={resetView}
+                // mermaid sanitizes with securityLevel:strict; the SVG is its output.
+                dangerouslySetInnerHTML={{ __html: svg }}
+              />
+            )}
+          </div>
+          <DiagramChat
+            diagramId={diagramId}
+            sessionId={view.diagram.session_id}
+            ownerAlive={ownerAlive}
+            thread={view.thread}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The diagram's right-hand chat panel — the same thread + composer model as the
+// map's general chat (ThreadMessage markdown, image upload, draft persistence,
+// mark-read on dwell, whole-thread expand modal), posting to the diagram's
+// synthetic "__chat__" node. CC replies by upserting the source (live
+// re-render) and/or posting back into this thread.
+function DiagramChat({
+  diagramId,
+  sessionId,
+  ownerAlive,
+  thread,
+}: {
+  diagramId: string;
+  sessionId: string;
+  ownerAlive: boolean;
+  thread: ThreadItem[];
+}) {
+  const { t } = useTranslation();
+  const [draft, setDraft, clearDraft] = useDraft(diagramId, DIAGRAM_CHAT_NODE);
+  const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // Whole-thread preview — reuses the map's node modal (with the diagram chat
+  // endpoint), optionally scrolled to one message.
+  const [expanded, setExpanded] = useState(false);
+  const [msgTarget, setMsgTarget] = useState<number | null>(null);
+  // Auto-read the chat's CC messages while the panel is on screen.
+  useMarkReadOnVisible(bodyRef, thread);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [thread.length]);
+
+  const appendImage = async (files: File[]) => {
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      for (const f of files) {
+        const { url, path } = await uploadImage(f, diagramId);
+        setDraft(
+          (prev) =>
+            `${prev}${prev && !prev.endsWith("\n") ? "\n" : ""}![image](${url})\n[image] [${path}](${url})\n`,
+        );
+      }
+    } catch {
+      showToast(t("diagram.image_failed"), "error");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const send = async () => {
     const text = draft.trim();
-    if (!text || sending) return;
+    if (!text || sending || !ownerAlive) return;
     setSending(true);
-    fetch("/diagram-chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ diagram_id: diagramId, text }),
-    })
-      .then(() => setDraft(""))
-      .catch(() => {
-        /* delivery surfaces via the chat thread once CC picks it up */
-      })
-      .finally(() => setSending(false));
+    clearDraft();
+    try {
+      const res = await postDiagramChat(diagramId, text);
+      if (!res.ok) {
+        setDraft(text);
+        showToast(t("diagram.send_failed"), "error");
+      }
+    } catch {
+      setDraft(text);
+      showToast(t("diagram.send_failed"), "error");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
-    <div className="app-body">
-      <Sidebar currentBoardId={null} />
-      <div className="diagram-container">
-        <header className="diagram-header">
-          <a className="diagram-back" href="/">
-            {t("diagram.home")}
-          </a>
-          <h1 className="diagram-title">{title || t("diagram.untitled")}</h1>
-        </header>
-        {notFound ? (
-          <div className="diagram-message">{t("diagram.not_found")}</div>
-        ) : error ? (
-          <div className="diagram-error">
-            <strong>{t("diagram.parse_error")}</strong>
-            <pre>{error}</pre>
-          </div>
-        ) : (
-          <div
-            ref={canvasRef}
-            className="diagram-canvas"
-            title={t("diagram.zoom_hint")}
-            onDoubleClick={resetView}
-            // mermaid sanitizes with securityLevel:strict; the SVG is its output.
-            dangerouslySetInnerHTML={{ __html: svg }}
-          />
-        )}
+    <aside className="map-chat">
+      <div className="map-chat-head">
+        <span>{t("diagram.chat_title")}</span>
+        <button
+          type="button"
+          className="map-node-expand"
+          title={t("diagram.expand_node")}
+          onClick={() => {
+            setMsgTarget(null);
+            setExpanded(true);
+          }}
+        >
+          <Maximize2 size={14} strokeWidth={1.75} />
+        </button>
       </div>
-      <aside className="diagram-chat">
-        <div className="diagram-chat-thread">
-          {chat.map((c) => (
-            <div key={c.id} className={"diagram-chat-msg from-" + c.source}>
-              {c.text}
-            </div>
-          ))}
-        </div>
-        <div className="diagram-chat-composer">
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") sendChat();
+      <div className="map-chat-body" ref={bodyRef}>
+        <p className="map-chat-note">{t("diagram.chat_note")}</p>
+        {thread.map((it) => (
+          <ThreadMessage
+            key={it.id}
+            item={it}
+            boardId={diagramId}
+            nodeId={DIAGRAM_CHAT_NODE}
+            sessionId={sessionId}
+            enableAnchor={false}
+            onExpand={(it) => {
+              setMsgTarget(it.id);
+              setExpanded(true);
             }}
-            placeholder={t("diagram.chat_placeholder")}
-            rows={2}
           />
+        ))}
+        <div ref={bottomRef} />
+      </div>
+      <div className="map-chat-input">
+        <textarea
+          value={draft}
+          rows={2}
+          disabled={!ownerAlive}
+          placeholder={
+            ownerAlive
+              ? t("diagram.chat_placeholder")
+              : t("diagram.input_disabled")
+          }
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              send();
+            }
+          }}
+          onPaste={(e) => {
+            const imgs = extractImageFiles(e.clipboardData?.items ?? null);
+            if (imgs.length) {
+              e.preventDefault();
+              appendImage(imgs);
+            }
+          }}
+          onDrop={(e) => {
+            const imgs = extractImageFiles(e.dataTransfer?.files ?? null);
+            if (imgs.length) {
+              e.preventDefault();
+              appendImage(imgs);
+            }
+          }}
+        />
+        <div className="map-chat-send-row">
           <button
             type="button"
-            onClick={sendChat}
-            disabled={sending || !draft.trim()}
+            disabled={sending || uploading || !draft.trim() || !ownerAlive}
+            onClick={send}
           >
-            {t("diagram.chat_send")}
+            {uploading ? t("diagram.uploading") : t("diagram.send")}
           </button>
         </div>
-      </aside>
-    </div>
+      </div>
+      {expanded && (
+        <MapNodeModal
+          mapId={diagramId}
+          nodeId={DIAGRAM_CHAT_NODE}
+          title={t("diagram.chat_title")}
+          context=""
+          messages={thread}
+          ownerAlive={ownerAlive}
+          scrollToItemId={msgTarget}
+          sendChat={(text) => postDiagramChat(diagramId, text)}
+          onClose={() => {
+            setExpanded(false);
+            setMsgTarget(null);
+          }}
+        />
+      )}
+    </aside>
   );
 }

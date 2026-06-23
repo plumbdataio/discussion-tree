@@ -6,7 +6,12 @@
 import { db, insertPending, insertThread } from "./db.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
 import { generateId } from "./helpers.ts";
-import { markWorkingFromUserSubmit } from "./activity.ts";
+import {
+  activities,
+  bgTaskCountForSession,
+  markWorkingFromUserSubmit,
+} from "./activity.ts";
+import { getContextUsage } from "./context-usage.ts";
 import { SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
 
 // Synthetic node id for the diagram's right-side chat thread.
@@ -62,17 +67,47 @@ function validateSource(src: string): string | null {
   return null;
 }
 
+// The diagram view mirrors getMapView: the diagram row + its chat thread +
+// the same owner_* enrichment the board/map headers need (alive / stalled /
+// compacting / session name / context usage / bg tasks / cli-send capability),
+// so the diagram page renders the shared header chrome instead of a bespoke
+// one. The chat thread is ThreadItem-shaped (board_id = diagram id, node_id =
+// __chat__) so the frontend can render it with the same ThreadMessage/MDView
+// components as a board node or the map's general chat.
 export function getDiagramView(id: string) {
   const row = db.prepare("SELECT * FROM diagrams WHERE id = ?").get(id) as
     | Record<string, unknown>
     | undefined;
   if (!row) return null;
-  const chat = db
+  const thread = db
     .prepare(
-      "SELECT id, source, text, created_at, read_at FROM thread_items WHERE board_id = ? AND node_id = ? ORDER BY id",
+      "SELECT id, board_id, node_id, source, text, created_at, read_at FROM thread_items WHERE board_id = ? AND node_id = ? ORDER BY id",
     )
     .all(id, DIAGRAM_CHAT_NODE);
-  return { diagram: row, chat };
+  const sessionId = String((row as any).session_id ?? "");
+  const ownerRow = db
+    .prepare(
+      "SELECT alive, name, stalled_at, compacting_at, tmux_pane FROM sessions WHERE id = ?",
+    )
+    .get(sessionId) as {
+    alive: number;
+    name: string | null;
+    stalled_at: string | null;
+    compacting_at: string | null;
+    tmux_pane: string | null;
+  } | null;
+  return {
+    diagram: row,
+    thread,
+    activity: activities.get(sessionId) ?? null,
+    owner_alive: ownerRow?.alive === 1,
+    owner_stalled: ownerRow?.alive === 1 && !!ownerRow?.stalled_at,
+    owner_compacting: ownerRow?.alive === 1 && !!ownerRow?.compacting_at,
+    owner_session_name: ownerRow?.name ?? null,
+    owner_context_usage: getContextUsage(sessionId),
+    owner_bg_task_count: bgTaskCountForSession(sessionId),
+    owner_can_cli_send: ownerRow?.alive === 1 && !!ownerRow?.tmux_pane,
+  };
 }
 
 // Create (no id / unknown id) or replace (existing id) a diagram's whole source.

@@ -34,6 +34,7 @@ export function MapNodeModal({
   ownerAlive,
   onClose,
   scrollToItemId = null,
+  sendChat,
 }: {
   mapId: string;
   nodeId: string;
@@ -45,6 +46,9 @@ export function MapNodeModal({
   ownerAlive: boolean;
   onClose: () => void;
   scrollToItemId?: number | null;
+  // Override the post endpoint. Defaults to the map chat (/map-chat); the
+  // diagram surface reuses this modal but posts to /diagram-chat instead.
+  sendChat?: (text: string) => Promise<Response>;
 }) {
   const { t } = useTranslation();
   // Same localStorage draft key as the inline card composer, so the draft
@@ -116,7 +120,9 @@ export function MapNodeModal({
     setSending(true);
     setDraft("");
     try {
-      const res = await postMapChat(mapId, nodeId, text);
+      const res = sendChat
+        ? await sendChat(text)
+        : await postMapChat(mapId, nodeId, text);
       if (!res.ok) {
         setDraft(text);
         showToast(t("map.send_failed"), "error");
