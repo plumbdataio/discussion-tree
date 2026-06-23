@@ -54,8 +54,22 @@ const DIAGRAM_HEADERS = [
   "C4Context",
 ];
 function validateSource(src: string): string | null {
-  const trimmed = (src ?? "").trim();
+  let trimmed = (src ?? "").trim();
   if (!trimmed) return "diagram source is empty";
+  // Mermaid supports a leading YAML frontmatter block (--- … ---) carrying
+  // title/config/theme. Strip a well-formed one before hunting for the
+  // diagram-type line, otherwise a frontmatter BODY line (e.g. "title: t")
+  // would be mistaken for the first content line and wrongly rejected.
+  if (trimmed.startsWith("---")) {
+    const close = trimmed.indexOf("\n---", 3);
+    if (close !== -1) {
+      const afterFence = trimmed.indexOf("\n", close + 1);
+      trimmed = afterFence !== -1 ? trimmed.slice(afterFence + 1).trim() : "";
+    }
+  }
+  if (!trimmed) return "diagram source has no content";
+  // Skip %% comment lines and any stray --- (covers a malformed/unclosed
+  // frontmatter that the block-strip above left in place).
   const firstLine = trimmed
     .split("\n")
     .map((l) => l.trim())
