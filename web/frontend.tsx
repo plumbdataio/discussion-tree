@@ -6,6 +6,7 @@ import { BoardApp } from "./components/BoardApp.tsx";
 import { GearButton } from "./components/GearButton.tsx";
 import { GlobalBanner } from "./components/GlobalBanner.tsx";
 import { MapView } from "./components/MapView.tsx";
+import { DiagramView } from "./components/DiagramView.tsx";
 import { RootDashboard } from "./components/RootDashboard.tsx";
 import { SessionDashboard } from "./components/SessionDashboard.tsx";
 import { ToastContainer } from "./components/Toast.tsx";
@@ -13,6 +14,7 @@ import { useSettings } from "./utils/settings.ts";
 import { installLinkInterceptor, useRoute } from "./utils/router.ts";
 import {
   getBoardIdFromUrl,
+  getDiagramIdFromUrl,
   getMapIdFromUrl,
   getSessionIdFromUrl,
 } from "./utils/url.ts";
@@ -26,6 +28,7 @@ function App() {
   const sessionId = getSessionIdFromUrl(path);
   const boardId = getBoardIdFromUrl(path);
   const mapId = getMapIdFromUrl(path);
+  const diagramId = getDiagramIdFromUrl(path);
   const [settings] = useSettings();
 
   // Keep i18next in sync with the user's language setting. When set to
@@ -80,6 +83,8 @@ function App() {
     page = <SessionDashboard key={`s:${sessionId}`} sessionId={sessionId} />;
   } else if (mapId) {
     page = <MapView mapId={mapId} />;
+  } else if (diagramId) {
+    page = <DiagramView diagramId={diagramId} />;
   } else if (boardId) {
     page = <BoardApp boardId={boardId} />;
   } else if (path === "/" || path === "") {

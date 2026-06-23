@@ -3009,6 +3009,75 @@ body.concern-resizing * {
   box-sizing: border-box;
 }
 
+/* Mermaid diagram surface (DiagramView) — a read-only rendered .mmd page. */
+.diagram-container {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--bg);
+}
+.diagram-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 2;
+}
+.diagram-back {
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.diagram-back:hover {
+  color: var(--text);
+}
+.diagram-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.diagram-canvas {
+  flex: 1;
+  padding: 24px;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+}
+.diagram-canvas svg {
+  max-width: 100%;
+  height: auto;
+}
+.diagram-message {
+  padding: 32px;
+  color: var(--muted);
+}
+.diagram-error {
+  margin: 24px;
+  padding: 16px;
+  border: 1px solid #fca5a5;
+  background: #fef2f2;
+  border-radius: 8px;
+  color: #991b1b;
+}
+.diagram-error pre {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+:root[data-theme="dark"] .diagram-error {
+  background: #2a1515;
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+
 /* Global banner — fixed at the very top of the viewport, above the
    board header and the corner FABs. Sized for a single message line
    plus a dismiss button. Three tones (info / warn / error) cover the

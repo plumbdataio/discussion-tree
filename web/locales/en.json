@@ -108,6 +108,12 @@
     "reset": "Show all",
     "show_unread_always": "Show unread even if excluded"
   },
+  "diagram": {
+    "home": "← Home",
+    "untitled": "Untitled diagram",
+    "not_found": "Diagram not found.",
+    "parse_error": "Mermaid parse error"
+  },
   "board_nav": {
     "first": "First node",
     "prev": "Previous concern",

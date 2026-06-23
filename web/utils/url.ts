@@ -22,3 +22,10 @@ export function getMapIdFromUrl(
   const m = pathname.match(/^\/map\/([^/]+)/);
   return m ? m[1] : null;
 }
+
+export function getDiagramIdFromUrl(
+  pathname: string = window.location.pathname,
+): string | null {
+  const m = pathname.match(/^\/diagram\/([^/]+)/);
+  return m ? m[1] : null;
+}

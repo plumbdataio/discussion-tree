@@ -108,6 +108,12 @@
     "reset": "全表示に戻す",
     "show_unread_always": "未読ありは除外対象でも表示"
   },
+  "diagram": {
+    "home": "← ホーム",
+    "untitled": "無題の図",
+    "not_found": "図が見つかりません。",
+    "parse_error": "Mermaid パースエラー"
+  },
   "board_nav": {
     "first": "先頭ノード",
     "prev": "前の concern",

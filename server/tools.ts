@@ -856,6 +856,53 @@ export const TOOLS = [
       required: ["map_id", "title"],
     },
   },
+  {
+    name: "upsert_diagram",
+    description:
+      "Create or replace a Mermaid diagram on its own rendered page (a 3rd surface alongside boards & maps). Omit `id` (or pass an unknown one) to CREATE; pass an existing `id` to REPLACE its whole source (no partial edits). `source` is raw Mermaid — ONE diagram per source (e.g. one `flowchart` / `sequenceDiagram`). The broker rejects empty / non-Mermaid sources; the page shows any residual parse error and re-renders live on every upsert.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: {
+          type: "string" as const,
+          description: "Existing diagram id to replace; omit to create a new one.",
+        },
+        title: {
+          type: "string" as const,
+          description: "Short diagram title (shown in the sidebar).",
+        },
+        source: {
+          type: "string" as const,
+          description: "Raw Mermaid source — ONE diagram (e.g. starts with `flowchart TD`).",
+        },
+      },
+      required: ["source"],
+    },
+  },
+  {
+    name: "get_diagram",
+    description:
+      "Fetch a diagram's current title + Mermaid source by id (the 'download' — e.g. read it before an upsert so you replace the whole source intentionally).",
+    inputSchema: {
+      type: "object" as const,
+      properties: { id: { type: "string" as const } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "list_diagrams",
+    description: "List this session's Mermaid diagrams (id / title / updated_at).",
+    inputSchema: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "delete_diagram",
+    description: "Delete a Mermaid diagram by id.",
+    inputSchema: {
+      type: "object" as const,
+      properties: { id: { type: "string" as const } },
+      required: ["id"],
+    },
+  },
 ];
 
 function textResult(text: string, isError = false) {
@@ -1704,6 +1751,61 @@ export async function dispatchToolCall(
         );
         if (!res.ok) return textResult(res.error ?? "rename_map failed", true);
         return textResult(`Map ${a.map_id} renamed to "${a.title}".`);
+      }
+
+      case "upsert_diagram": {
+        const sessionId = ensureSession();
+        const a = args as { id?: string; title?: string; source: string };
+        const res = await brokerFetch<{
+          ok: boolean;
+          id?: string;
+          error?: string;
+        }>("/upsert-diagram", {
+          session_id: sessionId,
+          id: a.id,
+          title: a.title,
+          source: a.source,
+        });
+        if (!res.ok)
+          return textResult(res.error ?? "upsert_diagram failed", true);
+        return textResult(
+          `Diagram saved. id = ${res.id}\nThe user views it at /diagram/${res.id} (it re-renders live on every upsert). To edit, call upsert_diagram again with this exact id and the FULL new source.`,
+        );
+      }
+      case "get_diagram": {
+        const a = args as { id: string };
+        const res = await brokerFetch<{
+          ok: boolean;
+          title?: string;
+          source?: string;
+          error?: string;
+        }>("/get-diagram", { id: a.id });
+        if (!res.ok) return textResult(res.error ?? "get_diagram failed", true);
+        return textResult(`title: ${res.title}\n\n${res.source}`);
+      }
+      case "list_diagrams": {
+        const sessionId = ensureSession();
+        const res = await brokerFetch<{
+          ok: boolean;
+          diagrams?: { id: string; title: string }[];
+          error?: string;
+        }>("/list-diagrams", { session_id: sessionId });
+        if (!res.ok)
+          return textResult(res.error ?? "list_diagrams failed", true);
+        const list = (res.diagrams ?? [])
+          .map((d) => `- ${d.id}  ${d.title}`)
+          .join("\n");
+        return textResult(list || "No diagrams yet.");
+      }
+      case "delete_diagram": {
+        const a = args as { id: string };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/delete-diagram",
+          { id: a.id },
+        );
+        if (!res.ok)
+          return textResult(res.error ?? "delete_diagram failed", true);
+        return textResult(`Diagram ${a.id} deleted.`);
       }
 
       default:

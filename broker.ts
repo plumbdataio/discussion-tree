@@ -27,6 +27,10 @@ import { routes as favoritesRoutes } from "./broker/favorites.ts";
 import { routes as feedbackRoutes } from "./broker/feedback.ts";
 import { routes as globalBannerRoutes } from "./broker/global-banner.ts";
 import { routes as mapRoutes, getMapView } from "./broker/maps.ts";
+import {
+  routes as diagramsRoutes,
+  getDiagramView,
+} from "./broker/diagrams.ts";
 import { routes as mapChecklistRoutes } from "./broker/map-checklist.ts";
 import { getBoardView } from "./broker/helpers.ts";
 import { routes as nodesRoutes } from "./broker/nodes.ts";
@@ -74,6 +78,7 @@ const POST_ROUTES: Record<string, RouteHandler> = {
   ...globalBannerRoutes,
   ...mapRoutes,
   ...mapChecklistRoutes,
+  ...diagramsRoutes,
 };
 
 // --- HTTP + WebSocket server ---
@@ -99,6 +104,7 @@ const server = Bun.serve({
     "/board/:id": indexHtml,
     "/session/:id": indexHtml,
     "/map/:id": indexHtml,
+    "/diagram/:id": indexHtml,
   },
   async fetch(req, server) {
     const url = new URL(req.url);
@@ -149,6 +155,13 @@ const server = Bun.serve({
     if (req.method === "GET" && path.startsWith("/api/map/")) {
       const id = path.slice("/api/map/".length);
       const view = getMapView(id);
+      if (!view) return Response.json({ error: "Not found" }, { status: 404 });
+      return Response.json(view);
+    }
+
+    if (req.method === "GET" && path.startsWith("/api/diagram/")) {
+      const id = path.slice("/api/diagram/".length);
+      const view = getDiagramView(id);
       if (!view) return Response.json({ error: "Not found" }, { status: 404 });
       return Response.json(view);
     }
