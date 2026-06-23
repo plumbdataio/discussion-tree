@@ -580,6 +580,12 @@ export function handleListSessions() {
         unread_count: unread + checklistUnread,
       };
     });
+    // Mermaid diagrams owned by this session (id + title only).
+    const diagrams = db
+      .prepare(
+        "SELECT id, title FROM diagrams WHERE session_id = ? ORDER BY updated_at DESC",
+      )
+      .all(s.id) as { id: string; title: string }[];
     return {
       id: s.id,
       name: s.name,
@@ -597,6 +603,7 @@ export function handleListSessions() {
       boards: enrichBoards(activeBoards),
       archived_boards: enrichBoards(archivedBoards),
       maps,
+      diagrams,
     };
   };
 

@@ -16,6 +16,7 @@ import {
   Settings,
   Shrink,
   ChartNetwork,
+  Workflow,
   Network,
 } from "lucide-react";
 import { HelpBubbleIcon } from "./HelpBubbleIcon.tsx";
@@ -23,6 +24,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { Activity, SessionListItem } from "../../shared/types.ts";
 import { BOARD_STATUSES, normalizeBoardStatus } from "../utils/constants.ts";
+import { getDiagramIdFromUrl } from "../utils/url.ts";
 import { isBoardVisible } from "../utils/boardFilter.ts";
 import { contextWarnBand } from "../utils/contextBand.ts";
 import {
@@ -507,6 +509,29 @@ function SessionItem({
               </li>
             );
           })}
+        </ul>
+      )}
+      {/* Mermaid diagrams owned by this session — a 3rd surface. Reuses the
+          map list styling; distinct icon so it reads apart from maps. */}
+      {!collapsed && (((s as any).diagrams?.length ?? 0) as number) > 0 && (
+        <ul className="maps diagrams">
+          {(s as any).diagrams.map((d: { id: string; title: string }) => (
+            <li
+              key={d.id}
+              className={d.id === getDiagramIdFromUrl() ? "current" : ""}
+            >
+              <a href={"/diagram/" + d.id} className="sidebar-map-link">
+                <span className="sidebar-map-title">
+                  <Workflow
+                    className="sidebar-map-icon"
+                    size={13}
+                    strokeWidth={1.75}
+                  />
+                  {d.title}
+                </span>
+              </a>
+            </li>
+          ))}
         </ul>
       )}
     </div>
