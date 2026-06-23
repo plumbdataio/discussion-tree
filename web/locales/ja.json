@@ -108,6 +108,13 @@
     "reset": "全表示に戻す",
     "show_unread_always": "未読ありは除外対象でも表示"
   },
+  "board_nav": {
+    "first": "先頭ノード",
+    "prev": "前の concern",
+    "next": "次の concern",
+    "last": "末尾ノード",
+    "unread": "次の未読"
+  },
   "board_settings": {
     "trigger_title": "ボード設定",
     "auto_status_label": "ステータス自動切替",

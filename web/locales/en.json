@@ -108,6 +108,13 @@
     "reset": "Show all",
     "show_unread_always": "Show unread even if excluded"
   },
+  "board_nav": {
+    "first": "First node",
+    "prev": "Previous concern",
+    "next": "Next concern",
+    "last": "Last node",
+    "unread": "Next unread"
+  },
   "board_settings": {
     "trigger_title": "Board settings",
     "auto_status_label": "Auto status",

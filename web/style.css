@@ -2948,6 +2948,67 @@ body.concern-resizing * {
   line-height: 1.5;
 }
 
+/* Bottom-centre board navigation cluster (BoardNavButtons): ⏮ ◀ [unread] ▶ ⏭.
+   Fixed to the viewport bottom so it floats over the horizontally-scrolling
+   board. Only mounted when the board overflows horizontally. */
+.board-nav {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+.board-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.board-nav-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.board-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.board-nav-unread {
+  position: relative;
+}
+.board-nav-unread.has-unread {
+  color: var(--accent);
+}
+.board-nav-unread-badge {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
 /* Global banner — fixed at the very top of the viewport, above the
    board header and the corner FABs. Sized for a single message line
    plus a dismiss button. Three tones (info / warn / error) cover the

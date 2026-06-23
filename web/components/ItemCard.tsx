@@ -171,6 +171,8 @@ export function ItemCard({
   return (
     <div
       ref={cardRef}
+      data-node-id={node.id}
+      data-concern-id={node.parent_id ?? ""}
       className={`item-card status-${node.status}${flashing ? " flashing" : ""}${isActive ? " active" : ""}${hasUnread ? " has-unread" : ""}`}
     >
       <div className="title-row">

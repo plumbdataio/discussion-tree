@@ -19,6 +19,7 @@ import {
 } from "../utils/anchorJump.ts";
 import { NodeStatusFilterButton } from "./NodeStatusFilterButton.tsx";
 import { BoardSettingsPanel } from "./BoardSettingsPanel.tsx";
+import { BoardNavButtons } from "./BoardNavButtons.tsx";
 import {
   isNodeVisible,
   isNodeVisibleWithUnread,
@@ -596,21 +597,24 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
               ownerSessionId={ownerSessionId}
             />
           ) : (
-            <div className="concerns-row">
-              {visibleConcerns.map((c) => (
-                <ConcernColumn
-                  key={c.id}
-                  concern={c}
-                  childrenByParent={filteredChildrenByParent}
-                  threads={data.threads}
-                  flashingNodes={flashingNodes}
-                  activity={nodeActivity}
-                  ownerAlive={ownerAlive}
-                  ownerSessionId={ownerSessionId}
-                  onSubmit={handleSubmit}
-                />
-              ))}
-            </div>
+            <>
+              <div className="concerns-row">
+                {visibleConcerns.map((c) => (
+                  <ConcernColumn
+                    key={c.id}
+                    concern={c}
+                    childrenByParent={filteredChildrenByParent}
+                    threads={data.threads}
+                    flashingNodes={flashingNodes}
+                    activity={nodeActivity}
+                    ownerAlive={ownerAlive}
+                    ownerSessionId={ownerSessionId}
+                    onSubmit={handleSubmit}
+                  />
+                ))}
+              </div>
+              <BoardNavButtons boardId={boardId ?? ""} dataVersion={data} />
+            </>
           )}
         </div>
       </div>
