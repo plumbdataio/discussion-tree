@@ -235,13 +235,12 @@ export async function handleSubmitAnswer(body: any): Promise<
       // CC never gets the "continue"). The poller clears it via /channel-pushed
       // only once the notification write resolves. See handleChannelPushed.
       // Record this (board, node) as having a delivered, unreplied submission
-      // for the Stop-hook nag — node-targeted submissions only. A structure
-      // request has no node to post_to_node a reply to (its "__board__" id is
-      // not a real node, so a reply can never clear it), so tracking it here
-      // would nag forever with reset as the only out; skip it. Per-node so the
-      // nag names the node and a status-only / cross-node post doesn't falsely
-      // clear it. Upsert dedups a re-submission to the same node; keep the
-      // ORIGINAL created_at so the longest-waiting node stays first in the nag.
+      // for the Stop-hook nag — node-targeted submissions here; a structure
+      // request is tracked separately below, on its real log node (its
+      // synthetic "__board__" id isn't a node). Per-node so the nag names the
+      // node and a status-only / cross-node post doesn't falsely clear it.
+      // Upsert dedups a re-submission to the same node; keep the ORIGINAL
+      // created_at so the longest-waiting node stays first in the nag.
       if (!isStructureRequest) {
         db.run(
           `INSERT INTO unanswered_nodes (session_id, board_id, node_id, node_path, created_at)
@@ -262,6 +261,23 @@ export async function handleSubmitAnswer(body: any): Promise<
         const log = ensureBoardLogNode(body.board_id);
         if (log) {
           insertThread.run(body.board_id, log.nodeId, "user", body.text, now);
+          // Track the structure request as unanswered ON the LOG node (a real
+          // node, unlike the synthetic "__board__"): the CC is expected to
+          // reply to a structure request with a summary post_to_node to this
+          // same log node, which then clears the nag like any other node reply.
+          db.run(
+            `INSERT INTO unanswered_nodes (session_id, board_id, node_id, node_path, created_at)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(session_id, board_id, node_id)
+             DO UPDATE SET node_path = excluded.node_path`,
+            [
+              board.session_id,
+              body.board_id,
+              log.nodeId,
+              buildNodePath(body.board_id, log.nodeId),
+              now,
+            ],
+          );
           broadcast(body.board_id, {
             type: "thread-update",
             node_id: log.nodeId,

@@ -271,10 +271,11 @@ describe("sessions", () => {
     ).toBe(0);
   });
 
-  test("board_structure_request submissions are NOT tracked (no unclearable nag)", async () => {
-    // A structure request has no node to post_to_node a reply to (its synthetic
-    // "__board__" id can't be posted to), so tracking it would nag forever with
-    // reset as the only out. It must stay out of the unanswered set entirely.
+  test("a board_structure_request is tracked on the log node and clears on a reply there", async () => {
+    // A structure request has no user content node, but it IS mirrored onto the
+    // board's structure-change LOG node and the CC replies there — so it's
+    // tracked on that real node and a post_to_node to it clears the nag (rather
+    // than nagging forever or being silently un-tracked).
     const sid = await registerSession(broker.url);
     const ccId = await attachCC(broker.url, sid);
     const board = await post<{ board_id: string }>(
@@ -297,10 +298,27 @@ describe("sessions", () => {
     await new Promise((r) => setTimeout(r, 50));
     await post(`${broker.url}/poll-messages`, { session_id: sid });
     await sp;
-    const r = await post<{ count: number }>(`${broker.url}/get-unanswered`, {
-      cc_session_id: ccId,
+    const after = await post<{
+      count: number;
+      nodes: { node_id: string }[];
+    }>(`${broker.url}/get-unanswered`, { cc_session_id: ccId });
+    expect(after.json.count).toBe(1); // tracked on the log node
+    const logNodeId = after.json.nodes[0].node_id;
+
+    // The CC's summary reply to a structure request goes to that same log node.
+    await post(`${broker.url}/post-to-node`, {
+      board_id: board.json.board_id,
+      node_id: logNodeId,
+      message: "done: added a concern about X",
+      status: "discussing",
     });
-    expect(r.json.count).toBe(0);
+    expect(
+      (
+        await post<{ count: number }>(`${broker.url}/get-unanswered`, {
+          cc_session_id: ccId,
+        })
+      ).json.count,
+    ).toBe(0);
   });
 
   test("/post-to-node then a fresh /submit-answer pushes the counter back to 1", async () => {
