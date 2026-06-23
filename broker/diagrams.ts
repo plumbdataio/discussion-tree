@@ -3,9 +3,14 @@
 // tools (upsert / get / list / delete); there is NO user upload path. Upsert
 // replaces the whole source (no partial update) and broadcasts so the open page
 // re-renders live.
-import { db } from "./db.ts";
+import { db, insertPending, insertThread } from "./db.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
 import { generateId } from "./helpers.ts";
+import { markWorkingFromUserSubmit } from "./activity.ts";
+import { SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
+
+// Synthetic node id for the diagram's right-side chat thread.
+const DIAGRAM_CHAT_NODE = "__chat__";
 
 db.run(`
   CREATE TABLE IF NOT EXISTS diagrams (
@@ -62,7 +67,12 @@ export function getDiagramView(id: string) {
     | Record<string, unknown>
     | undefined;
   if (!row) return null;
-  return { diagram: row };
+  const chat = db
+    .prepare(
+      "SELECT id, source, text, created_at, read_at FROM thread_items WHERE board_id = ? AND node_id = ? ORDER BY id",
+    )
+    .all(id, DIAGRAM_CHAT_NODE);
+  return { diagram: row, chat };
 }
 
 // Create (no id / unknown id) or replace (existing id) a diagram's whole source.
@@ -127,7 +137,69 @@ export function handleDeleteDiagram(body: any) {
   return { ok: true };
 }
 
+// Right-side chat: enqueue a pending message (kind=diagram_chat) for the owning
+// CC and wait for delivery, mirroring handleMapChat. The poller materializes the
+// user message into the diagram's chat thread; CC replies by upserting the
+// source (live re-render) and/or posting back to this thread.
+export async function handleDiagramChat(body: any) {
+  const id = String(body?.diagram_id ?? "");
+  const text = String(body?.text ?? "").trim();
+  const row = db
+    .prepare("SELECT session_id, title FROM diagrams WHERE id = ?")
+    .get(id) as { session_id: string; title: string } | undefined;
+  if (!row)
+    return { ok: false, error: "diagram not found", reason: "no_recipient" };
+  if (!text) return { ok: false, error: "text required" };
+  const owner = db
+    .prepare("SELECT alive, cc_session_id FROM sessions WHERE id = ?")
+    .get(row.session_id) as
+    | { alive: number; cc_session_id: string | null }
+    | null;
+  if (!owner || owner.alive !== 1 || !owner.cc_session_id) {
+    return { ok: false, error: "errors.no_recipient", reason: "no_recipient" };
+  }
+  const now = new Date().toISOString();
+  const insertResult = insertPending.run(
+    row.session_id,
+    id,
+    DIAGRAM_CHAT_NODE,
+    `${row.title} > chat`,
+    text,
+    now,
+    "diagram_chat",
+  );
+  const pendingId = Number(insertResult.lastInsertRowid);
+  markWorkingFromUserSubmit(row.session_id);
+  const deadline = Date.now() + SUBMIT_DELIVERY_TIMEOUT_MS;
+  const checkDelivered = db.prepare(
+    "SELECT delivered, thread_item_id FROM pending_messages WHERE id = ?",
+  );
+  while (Date.now() < deadline) {
+    const d = checkDelivered.get(pendingId) as
+      | { delivered: number; thread_item_id: number | null }
+      | null;
+    if (d?.delivered === 1) {
+      if (d.thread_item_id == null) {
+        insertThread.run(id, DIAGRAM_CHAT_NODE, "user", text, now);
+      }
+      broadcast(id, {
+        type: "thread-update",
+        node_id: DIAGRAM_CHAT_NODE,
+        source: "user",
+      });
+      return { ok: true };
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  db.run(
+    "UPDATE pending_messages SET cancelled = 1 WHERE id = ? AND delivered = 0 AND requeued = 0",
+    [pendingId],
+  );
+  return { ok: false, error: "errors.timeout", reason: "timeout" };
+}
+
 export const routes = {
+  "/diagram-chat": handleDiagramChat,
   "/upsert-diagram": handleUpsertDiagram,
   "/get-diagram": handleGetDiagram,
   "/list-diagrams": handleListDiagrams,
