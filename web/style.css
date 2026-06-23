@@ -45,6 +45,15 @@ body {
      and caret share the same metrics. Harmless on every other browser. */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* Block the horizontal swipe-to-go-back/forward history gesture across
+     devices: a two-finger / touch swipe over a horizontally-scrolling board
+     should ONLY scroll, never navigate browser history. The mobile media
+     query below already locks html/body, but desktop browsers (Mac trackpad
+     swipe-nav) need this on the base rule too. `-x` only, so vertical
+     pull-to-refresh / rubber-band is untouched. Supported in Chrome and
+     Safari 16+; iOS Safari still honours an OS-level screen-EDGE swipe, which
+     CSS can't suppress (hence the in-board nav buttons as a complement). */
+  overscroll-behavior-x: none;
 }
 
 #root {
