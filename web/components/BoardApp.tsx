@@ -489,6 +489,41 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
             groups resizes — the buttons never shift left-then-right. */}
         {headerActivity && <ActivityBadge activity={headerActivity} />}
         <div className="header-right">
+          {/* "Mark all read" unread indicator lives FIRST in this
+              right-anchored cluster (.header-right has margin-left:auto, so it
+              grows leftward): inserting at the front extends the row LEFT and
+              leaves every action button to its right pinned in place, so its
+              appear/disappear never shifts what the user is reaching for. */}
+          {(() => {
+            const unread = Object.values(data.threads)
+              .flat()
+              .filter((it) => it.source === "cc" && !it.read_at).length;
+            if (unread === 0) return null;
+            return (
+              <button
+                type="button"
+                className="mark-all-read"
+                title={t("header.unread_count_title", { count: unread })}
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      t("header.unread_confirm", { count: unread }),
+                    )
+                  )
+                    return;
+                  fetch("/mark-board-read", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ board_id: data.board.id }),
+                  })
+                    .then(() => fetchBoard())
+                    .catch(() => alert(t("header.mark_all_read_failed")));
+                }}
+              >
+                {t("header.unread_count_button", { count: unread })}
+              </button>
+            );
+          })()}
           <CliCommandButton
             sessionId={ownerSessionId}
             canCliSend={!!data.owner_can_cli_send}
@@ -542,36 +577,6 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
               {logUnreadCount > 0 && <span className="unread-dot" />}
             </button>
           )}
-          {(() => {
-            const unread = Object.values(data.threads)
-              .flat()
-              .filter((it) => it.source === "cc" && !it.read_at).length;
-            if (unread === 0) return null;
-            return (
-              <button
-                type="button"
-                className="mark-all-read"
-                title={t("header.unread_count_title", { count: unread })}
-                onClick={() => {
-                  if (
-                    !window.confirm(
-                      t("header.unread_confirm", { count: unread }),
-                    )
-                  )
-                    return;
-                  fetch("/mark-board-read", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ board_id: data.board.id }),
-                  })
-                    .then(() => fetchBoard())
-                    .catch(() => alert(t("header.mark_all_read_failed")));
-                }}
-              >
-                {t("header.unread_count_button", { count: unread })}
-              </button>
-            );
-          })()}
           <span className="ws-status">
             <span className={`ws-dot ${wsConnected ? "connected" : ""}`} />
             {wsConnected ? t("header.live") : t("header.offline")}
