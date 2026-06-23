@@ -14,6 +14,11 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
   const [svg, setSvg] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [chat, setChat] = useState<
+    { id: number; source: string; text: string }[]
+  >([]);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
   const renderSeq = useRef(0);
   const canvasRef = useRef<HTMLDivElement>(null);
   const pzRef = useRef<{ dispose: () => void; moveTo: (x: number, y: number) => void; zoomAbs: (x: number, y: number, z: number) => void } | null>(null);
@@ -24,6 +29,7 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
       .then((j) => {
         setTitle(j.diagram?.title ?? "");
         setSource(j.diagram?.source ?? "");
+        setChat(j.chat ?? []);
         setNotFound(false);
       })
       .catch(() => setNotFound(true));
@@ -38,7 +44,8 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
     const onMsg = (e: MessageEvent) => {
       try {
         const m = JSON.parse(e.data);
-        if (m?.type === "diagram-update") fetchDiagram();
+        if (m?.type === "diagram-update" || m?.type === "thread-update")
+          fetchDiagram();
         else if (m?.type === "diagram-deleted") setNotFound(true);
       } catch {
         /* ignore */
@@ -111,6 +118,22 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
     pzRef.current?.moveTo(0, 0);
   };
 
+  const sendChat = () => {
+    const text = draft.trim();
+    if (!text || sending) return;
+    setSending(true);
+    fetch("/diagram-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ diagram_id: diagramId, text }),
+    })
+      .then(() => setDraft(""))
+      .catch(() => {
+        /* delivery surfaces via the chat thread once CC picks it up */
+      })
+      .finally(() => setSending(false));
+  };
+
   return (
     <div className="app-body">
       <Sidebar currentBoardId={null} />
@@ -139,6 +162,33 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
           />
         )}
       </div>
+      <aside className="diagram-chat">
+        <div className="diagram-chat-thread">
+          {chat.map((c) => (
+            <div key={c.id} className={"diagram-chat-msg from-" + c.source}>
+              {c.text}
+            </div>
+          ))}
+        </div>
+        <div className="diagram-chat-composer">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") sendChat();
+            }}
+            placeholder={t("diagram.chat_placeholder")}
+            rows={2}
+          />
+          <button
+            type="button"
+            onClick={sendChat}
+            disabled={sending || !draft.trim()}
+          >
+            {t("diagram.chat_send")}
+          </button>
+        </div>
+      </aside>
     </div>
   );
 }

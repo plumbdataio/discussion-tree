@@ -113,7 +113,9 @@
     "untitled": "無題の図",
     "not_found": "図が見つかりません。",
     "parse_error": "Mermaid パースエラー",
-    "zoom_hint": "ホイールでズーム・ドラッグで移動・ダブルクリックでリセット"
+    "zoom_hint": "ホイールでズーム・ドラッグで移動・ダブルクリックでリセット",
+    "chat_placeholder": "図の編集を CC に依頼… (⌘/Ctrl+Enter で送信)",
+    "chat_send": "送信"
   },
   "board_nav": {
     "first": "先頭ノード",
