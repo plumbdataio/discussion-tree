@@ -187,9 +187,11 @@ export function handleDeleteDiagram(body: any) {
 }
 
 // Right-side chat: enqueue a pending message (kind=diagram_chat) for the owning
-// CC and wait for delivery, mirroring handleMapChat. The poller materializes the
-// user message into the diagram's chat thread; CC replies by upserting the
-// source (live re-render) and/or posting back to this thread.
+// CC and wait for delivery, mirroring handleMapChat. Unlike map_chat the poller
+// does NOT materialize diagram_chat, so on delivery this handler inserts the
+// user message into the chat thread itself (the thread_item_id == null branch
+// below). CC replies by upserting the source (live re-render) and/or posting
+// back to this thread via post_diagram_chat.
 export async function handleDiagramChat(body: any) {
   const id = String(body?.diagram_id ?? "");
   const text = String(body?.text ?? "").trim();
