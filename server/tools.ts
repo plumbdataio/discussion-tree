@@ -903,6 +903,19 @@ export const TOOLS = [
       required: ["id"],
     },
   },
+  {
+    name: "post_diagram_chat",
+    description:
+      "Post a TEXT reply into a diagram's right-side chat thread (e.g. to confirm/explain an edit). The diagram itself is changed via upsert_diagram; this is just the conversational reply the user sees in the chat. Arrives in the page live. Use after a `diagram_chat` channel message.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        diagram_id: { type: "string" as const },
+        message: { type: "string" as const },
+      },
+      required: ["diagram_id", "message"],
+    },
+  },
 ];
 
 function textResult(text: string, isError = false) {
@@ -1806,6 +1819,16 @@ export async function dispatchToolCall(
         if (!res.ok)
           return textResult(res.error ?? "delete_diagram failed", true);
         return textResult(`Diagram ${a.id} deleted.`);
+      }
+      case "post_diagram_chat": {
+        const a = args as { diagram_id: string; message: string };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/post-diagram-chat",
+          { diagram_id: a.diagram_id, message: a.message },
+        );
+        if (!res.ok)
+          return textResult(res.error ?? "post_diagram_chat failed", true);
+        return textResult("Posted to the diagram chat.");
       }
 
       default:

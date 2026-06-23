@@ -198,8 +198,25 @@ export async function handleDiagramChat(body: any) {
   return { ok: false, error: "errors.timeout", reason: "timeout" };
 }
 
+// CC posts a text reply into the diagram's chat thread (the diagram edit itself
+// goes through upsert_diagram). Broadcasts so the open page appends it live.
+export function handlePostDiagramChat(body: any) {
+  const id = String(body?.diagram_id ?? "");
+  const message = String(body?.message ?? "");
+  const row = db.prepare("SELECT id FROM diagrams WHERE id = ?").get(id);
+  if (!row) return { ok: false, error: "diagram not found" };
+  insertThread.run(id, DIAGRAM_CHAT_NODE, "cc", message, new Date().toISOString());
+  broadcast(id, {
+    type: "thread-update",
+    node_id: DIAGRAM_CHAT_NODE,
+    source: "cc",
+  });
+  return { ok: true };
+}
+
 export const routes = {
   "/diagram-chat": handleDiagramChat,
+  "/post-diagram-chat": handlePostDiagramChat,
   "/upsert-diagram": handleUpsertDiagram,
   "/get-diagram": handleGetDiagram,
   "/list-diagrams": handleListDiagrams,
