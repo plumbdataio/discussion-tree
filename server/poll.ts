@@ -111,7 +111,7 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
       const reminderParts: string[] = [];
       if (kind === "user_input_relay" && msg.board_id && msg.node_id) {
         reminderParts.push(
-          `[discussion-tree] Also mirror your reply via post_to_node(board_id="${msg.board_id}", node_id="${msg.node_id}", status=…).`,
+          `[discussion-tree] Also mirror your reply via post_to_node(board_id="${msg.board_id}", node_id="${msg.node_id}", status=…). Even when this message calls for work, REPLY FIRST (CLI + post_to_node) and THEN start — especially when it is a question that sets the direction, or something you could begin acting on: the user is waiting on your answer and generally prefers to confirm before you proceed.`,
         );
         if (activeBoardLine) reminderParts.push(activeBoardLine);
       } else if (kind === "board_structure_request" && msg.board_id) {
