@@ -15,6 +15,7 @@ import {
   insertNodesRecursive,
   structureHasSubItems,
 } from "./helpers.ts";
+import { onBoardSettled } from "./checklist.ts";
 
 export function handleCreateBoard(body: any):
   | { board_id: string; url: string }
@@ -149,15 +150,27 @@ export function handleRenameBoard(body: any) {
 export function handleSetBoardAutoStatus(body: any) {
   const boardId = String(body?.board_id ?? "");
   if (!boardId) return { ok: false, error: "board_id is required" };
+  const before = db
+    .prepare("SELECT status FROM boards WHERE id = ?")
+    .get(boardId) as { status: string } | null;
+  if (!before) return { ok: false, error: "board not found" };
   const enabled = body?.enabled ? 1 : 0;
   db.run("UPDATE boards SET auto_status_sync = ? WHERE id = ?", [
     enabled,
     boardId,
   ]);
   if (enabled) {
-    // Re-enabling: catch the frozen status up to the current node rollup.
+    // Re-enabling: catch the frozen status up to the current node rollup. Fire
+    // onBoardSettled on a FRESH settle so the checklist reconcile reminder
+    // matches what an organic node-driven settle (via syncBoardStatus, which
+    // owns that side effect) would have produced.
     const next = recomputeBoardStatus(boardId);
-    if (next) broadcast(boardId, { type: "board-status-update", status: next });
+    if (next) {
+      broadcast(boardId, { type: "board-status-update", status: next });
+      if (next === "settled" && before.status !== "settled") {
+        onBoardSettled(boardId);
+      }
+    }
   }
   // The board header renders the toggle state; nudge a board refetch. The
   // sidebar filters on board status, so refresh it too.

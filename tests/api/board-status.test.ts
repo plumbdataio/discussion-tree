@@ -116,6 +116,14 @@ describe("board status auto-rollup (discussing / settled)", () => {
     expect(await getBoardStatus(id)).toBe("settled");
   });
 
+  test("set-board-auto-status rejects an unknown board_id", async () => {
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/set-board-auto-status`,
+      { board_id: "bd_does_not_exist", enabled: false },
+    );
+    expect(r.json.ok).toBe(false);
+  });
+
   test("flipping any node back to in-progress reverts the board to 'discussing'", async () => {
     const id = await createBoard({
       title: "Revert",
