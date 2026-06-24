@@ -597,6 +597,45 @@ export function Sidebar({
     return () => window.removeEventListener("pd-activity-update", handler);
   }, []);
 
+  // Preserve the sidebar's scroll across full-page navigations. The sidebar
+  // links are plain <a href>, so every navigation reloads the SPA and remounts
+  // the sidebar — which would otherwise reset its scroll to the top. Save
+  // scrollTop on pagehide (i.e. at navigation) and restore it once the session
+  // list has rendered. Restore only ONCE so the 10s poll re-render can't yank
+  // the user's scroll back. (Phase B / client-side routing would make this
+  // automatic by not remounting the sidebar at all.)
+  const scrollRestoredRef = React.useRef(false);
+  useEffect(() => {
+    const el = document.querySelector(".sidebar") as HTMLElement | null;
+    if (!el) return;
+    const save = () => {
+      try {
+        sessionStorage.setItem("pd-sidebar-scroll", String(el.scrollTop));
+      } catch {
+        /* private mode — non-fatal */
+      }
+    };
+    window.addEventListener("pagehide", save);
+    return () => window.removeEventListener("pagehide", save);
+  }, []);
+  useEffect(() => {
+    if (scrollRestoredRef.current || sessions == null) return;
+    const el = document.querySelector(".sidebar") as HTMLElement | null;
+    if (!el) return;
+    scrollRestoredRef.current = true;
+    try {
+      const saved = sessionStorage.getItem("pd-sidebar-scroll");
+      if (saved != null) {
+        const y = parseInt(saved, 10) || 0;
+        requestAnimationFrame(() => {
+          el.scrollTop = y;
+        });
+      }
+    } catch {
+      /* private mode — non-fatal */
+    }
+  }, [sessions]);
+
   // Close the mobile drawer on navigation so the user lands on the new view
   // without the panel still covering it.
   useEffect(() => {
