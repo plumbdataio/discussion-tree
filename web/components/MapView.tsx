@@ -53,7 +53,9 @@ import { CliCommandButton } from "./CliCommandButton.tsx";
 import { MapTimelineModal } from "./MapTimelineModal.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
+import { ActivityBadge } from "./ActivityBadge.tsx";
 import { ThreadMessage } from "./ThreadMessage.tsx";
+import { useHeaderActivity } from "../utils/useHeaderActivity.ts";
 import { useDraft } from "../utils/drafts.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useDocumentTitle } from "../utils/useDocumentTitle.ts";
@@ -779,6 +781,13 @@ export function MapView({ mapId }: { mapId: string }) {
     ],
   );
 
+  // The owning session's live working/blocked chip (same source as the sidebar
+  // + board header). Called unconditionally so the hook order is stable.
+  const headerActivity = useHeaderActivity(
+    view?.map.session_id,
+    view?.activity,
+  );
+
   // Loading / not-found render the SAME shell (header bar + sidebar) as the
   // loaded page so the header doesn't pop in after the fetch and the layout
   // doesn't shift — only the main pane changes.
@@ -855,6 +864,7 @@ export function MapView({ mapId }: { mapId: string }) {
               <span>{t("header.compacting")}</span>
             </span>
           )}
+          {headerActivity && <ActivityBadge activity={headerActivity} />}
           <div className="header-right">
             <CliCommandButton
               sessionId={view.map.session_id}

@@ -13,10 +13,12 @@ import {
 } from "lucide-react";
 import { DiagramIcon } from "./DiagramIcon.tsx";
 import { MDView } from "./MDView.tsx";
-import type { ThreadItem } from "../../shared/types.ts";
+import type { Activity, ThreadItem } from "../../shared/types.ts";
 import { Sidebar } from "./Sidebar.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
+import { ActivityBadge } from "./ActivityBadge.tsx";
 import { CliCommandButton } from "./CliCommandButton.tsx";
+import { useHeaderActivity } from "../utils/useHeaderActivity.ts";
 import { ThreadMessage } from "./ThreadMessage.tsx";
 import { MapNodeModal } from "./MapNodeModal.tsx";
 import { useDraft } from "../utils/drafts.ts";
@@ -46,7 +48,7 @@ interface DiagramViewData {
     updated_at: string;
   };
   thread: ThreadItem[];
-  activity?: { state: string } | null;
+  activity?: Activity | null;
   owner_alive?: boolean;
   owner_stalled?: boolean;
   owner_compacting?: boolean;
@@ -232,6 +234,13 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
     pzRef.current?.moveTo(0, 0);
   };
 
+  // The owning session's live working/blocked chip (same source as the sidebar
+  // + board header). Called unconditionally so the hook order is stable.
+  const headerActivity = useHeaderActivity(
+    view?.diagram.session_id,
+    view?.activity,
+  );
+
   // Loading / not-found render the SAME shell (header bar + sidebar) as the
   // loaded page — only the main pane changes — so the header doesn't pop in
   // after the fetch and the layout doesn't shift.
@@ -312,6 +321,7 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
             <span>{t("header.compacting")}</span>
           </span>
         )}
+        {headerActivity && <ActivityBadge activity={headerActivity} />}
         <div className="header-right">
           <CliCommandButton
             sessionId={view.diagram.session_id}
