@@ -524,7 +524,7 @@ function SessionItem({
                 <span className="sidebar-map-title">
                   <DiagramIcon
                     className="sidebar-diagram-icon"
-                    size={15}
+                    size={13}
                     strokeWidth={1.75}
                   />
                   {d.title}

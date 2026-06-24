@@ -5394,7 +5394,9 @@ ul.maps li.current .sidebar-map-link {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
+  /* Left inset matches the board link (6px) so map / diagram icons line up
+     vertically with the board / general-board icons in the same column. */
+  padding: 4px 6px;
   border-radius: 6px;
   text-decoration: none;
   color: var(--text);
