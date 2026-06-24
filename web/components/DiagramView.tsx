@@ -232,22 +232,38 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
     pzRef.current?.moveTo(0, 0);
   };
 
-  if (notFound) {
+  // Loading / not-found render the SAME shell (header bar + sidebar) as the
+  // loaded page — only the main pane changes — so the header doesn't pop in
+  // after the fetch and the layout doesn't shift.
+  if (notFound || !view) {
     return (
       <div className="app">
+        <header className="header">
+          <span className="breadcrumb">{t("header.back_to_session")}</span>
+          <h1>
+            <DiagramIcon
+              className="diagram-title-icon"
+              size={18}
+              strokeWidth={1.9}
+            />
+            {t("map.loading")}
+          </h1>
+          <div className="header-right">
+            <span className="ws-status">
+              <span className="ws-dot" />
+              {t("header.offline")}
+            </span>
+          </div>
+        </header>
         <div className="app-body">
           <Sidebar currentBoardId={null} currentMapId={null} />
-          <div className="map-missing">{t("diagram.not_found")}</div>
-        </div>
-      </div>
-    );
-  }
-  if (!view) {
-    return (
-      <div className="app">
-        <div className="app-body">
-          <Sidebar currentBoardId={null} currentMapId={null} />
-          <div className="map-missing">{t("map.loading")}</div>
+          <div className="diagram-main">
+            <div className="diagram-canvas-wrap">
+              <div className="map-missing">
+                {notFound ? t("diagram.not_found") : t("map.loading")}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );

@@ -779,22 +779,35 @@ export function MapView({ mapId }: { mapId: string }) {
     ],
   );
 
-  if (notFound) {
+  // Loading / not-found render the SAME shell (header bar + sidebar) as the
+  // loaded page so the header doesn't pop in after the fetch and the layout
+  // doesn't shift — only the main pane changes.
+  if (notFound || !view || !ctx) {
     return (
       <div className="app">
+        <header className="header">
+          <span className="breadcrumb">{t("header.back_to_session")}</span>
+          <h1>
+            <ChartNetwork
+              className="map-title-icon"
+              size={18}
+              strokeWidth={1.9}
+              aria-label={t("map.badge_title")}
+            />
+            {t("map.loading")}
+          </h1>
+          <div className="header-right">
+            <span className="ws-status">
+              <span className="ws-dot" />
+              {t("header.offline")}
+            </span>
+          </div>
+        </header>
         <div className="app-body">
           <Sidebar currentBoardId={null} currentMapId={mapId} />
-          <div className="map-missing">{t("map.not_found")}</div>
-        </div>
-      </div>
-    );
-  }
-  if (!view || !ctx) {
-    return (
-      <div className="app">
-        <div className="app-body">
-          <Sidebar currentBoardId={null} currentMapId={mapId} />
-          <div className="map-missing">{t("map.loading")}</div>
+          <div className="map-missing">
+            {notFound ? t("map.not_found") : t("map.loading")}
+          </div>
         </div>
       </div>
     );
