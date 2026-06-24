@@ -910,9 +910,11 @@ body {
 
 /* Board (option-decision) icon = box-tree, distinct from the map's node-graph
    icon so board vs map reads at a glance in the sidebar. */
+/* Per-surface identity colours so board / map / diagram are distinct at a
+   glance: board = blue (accent), map = red, diagram = green. */
 .sidebar-board-icon {
   flex: 0 0 auto;
-  color: var(--muted);
+  color: var(--accent);
 }
 
 .sidebar-board-status {
@@ -5305,7 +5307,13 @@ button.secondary {
 /* The map's identity in the header is now the node-graph icon (no pill). */
 .map-title-icon {
   flex: 0 0 auto;
-  color: var(--accent);
+  color: #ef4444;
+  margin-right: 7px;
+  vertical-align: -3px;
+}
+.diagram-title-icon {
+  flex: 0 0 auto;
+  color: #22c55e;
   margin-right: 7px;
   vertical-align: -3px;
 }
@@ -5356,7 +5364,8 @@ ul.maps li.current .sidebar-map-link {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.sidebar-map-icon { flex: 0 0 auto; color: var(--accent); }
+.sidebar-map-icon { flex: 0 0 auto; color: #ef4444; }
+.sidebar-diagram-icon { flex: 0 0 auto; color: #22c55e; }
 .sidebar-map-count {
   flex: 0 0 auto;
   font-size: 11px;

@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import mermaid from "mermaid";
 import panzoom from "panzoom";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Maximize2, Shrink, Workflow } from "lucide-react";
+import { AlertTriangle, Maximize2, Shrink } from "lucide-react";
+import { DiagramIcon } from "./DiagramIcon.tsx";
 import type { ThreadItem } from "../../shared/types.ts";
 import { Sidebar } from "./Sidebar.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
@@ -251,11 +252,10 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
           {t("header.back_to_session")}
         </a>
         <h1>
-          <Workflow
-            className="map-title-icon"
+          <DiagramIcon
+            className="diagram-title-icon"
             size={18}
             strokeWidth={1.9}
-            aria-label={t("diagram.badge_title")}
           />
           {view.diagram.title || t("diagram.untitled")}
         </h1>

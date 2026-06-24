@@ -16,10 +16,10 @@ import {
   Settings,
   Shrink,
   ChartNetwork,
-  Workflow,
   Network,
 } from "lucide-react";
 import { HelpBubbleIcon } from "./HelpBubbleIcon.tsx";
+import { DiagramIcon } from "./DiagramIcon.tsx";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { Activity, SessionListItem } from "../../shared/types.ts";
@@ -522,8 +522,8 @@ function SessionItem({
             >
               <a href={"/diagram/" + d.id} className="sidebar-map-link">
                 <span className="sidebar-map-title">
-                  <Workflow
-                    className="sidebar-map-icon"
+                  <DiagramIcon
+                    className="sidebar-diagram-icon"
                     size={13}
                     strokeWidth={1.75}
                   />
