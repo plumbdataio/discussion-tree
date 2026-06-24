@@ -31,13 +31,14 @@ export function DiagramIcon({
       {/* The skewer: a top stub, the connector between the diamonds, a bottom
           stub — so the line reads as a single rod through both without crossing
           (and muddying) the diamond interiors. */}
-      <line x1="12" y1="2.5" x2="12" y2="4" />
+      <line x1="12" y1="1.5" x2="12" y2="3" />
       <line x1="12" y1="11" x2="12" y2="13" />
-      <line x1="12" y1="20" x2="12" y2="21.5" />
-      {/* Upper diamond. */}
-      <path d="M12 4 L15.5 7.5 L12 11 L8.5 7.5 Z" />
+      <line x1="12" y1="21" x2="12" y2="22.5" />
+      {/* Upper diamond — wide (5→19) and short so it reads as a landscape
+          flowchart node and fills the icon box like the board/map glyphs. */}
+      <path d="M12 3 L19 7 L12 11 L5 7 Z" />
       {/* Lower diamond. */}
-      <path d="M12 13 L15.5 16.5 L12 20 L8.5 16.5 Z" />
+      <path d="M12 13 L19 17 L12 21 L5 17 Z" />
     </svg>
   );
 }
