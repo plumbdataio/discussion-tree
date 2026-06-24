@@ -3,7 +3,14 @@ import { createPortal } from "react-dom";
 import mermaid from "mermaid";
 import panzoom from "panzoom";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Maximize2, Shrink, X } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  Maximize2,
+  Shrink,
+  X,
+} from "lucide-react";
 import { DiagramIcon } from "./DiagramIcon.tsx";
 import { MDView } from "./MDView.tsx";
 import type { ThreadItem } from "../../shared/types.ts";
@@ -349,6 +356,26 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
 function DiagramContextBar({ context }: { context: string }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
+  // Collapsed = fold the whole bar to a thin strip so the canvas gets the full
+  // height. Persisted globally (the user folds it to reclaim screen space and
+  // wants it to stay that way across diagrams / reloads).
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("pd-diagram-context-collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "pd-diagram-context-collapsed",
+        collapsed ? "1" : "0",
+      );
+    } catch {
+      /* private mode — non-fatal */
+    }
+  }, [collapsed]);
   useEffect(() => {
     if (!expanded) return;
     const onKey = (e: KeyboardEvent) => {
@@ -358,19 +385,49 @@ function DiagramContextBar({ context }: { context: string }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [expanded]);
   return (
-    <div className="diagram-context">
-      <button
-        type="button"
-        className="diagram-context-expand"
-        title={t("diagram.context_expand")}
-        aria-label={t("diagram.context_expand")}
-        onClick={() => setExpanded(true)}
-      >
-        <Maximize2 size={14} strokeWidth={1.75} />
-      </button>
-      <div className="diagram-context-body">
-        <MDView text={context} />
+    <div className={`diagram-context${collapsed ? " collapsed" : ""}`}>
+      <div className="diagram-context-controls">
+        <button
+          type="button"
+          className="diagram-context-btn"
+          title={collapsed ? t("diagram.context_show") : t("diagram.context_hide")}
+          aria-label={
+            collapsed ? t("diagram.context_show") : t("diagram.context_hide")
+          }
+          onClick={() => setCollapsed((c) => !c)}
+        >
+          {collapsed ? (
+            <ChevronDown size={15} strokeWidth={1.9} />
+          ) : (
+            <ChevronUp size={15} strokeWidth={1.9} />
+          )}
+        </button>
+        {!collapsed && (
+          <button
+            type="button"
+            className="diagram-context-btn"
+            title={t("diagram.context_expand")}
+            aria-label={t("diagram.context_expand")}
+            onClick={() => setExpanded(true)}
+          >
+            <Maximize2 size={14} strokeWidth={1.75} />
+          </button>
+        )}
       </div>
+      {collapsed ? (
+        <button
+          type="button"
+          className="diagram-context-collapsed-label"
+          onClick={() => setCollapsed(false)}
+          title={t("diagram.context_show")}
+        >
+          {t("diagram.context_label")}
+        </button>
+      ) : (
+        <div className="diagram-context-body">
+          <MDView text={context} />
+        </div>
+      )}
       {expanded &&
         createPortal(
           <div className="modal-backdrop" onClick={() => setExpanded(false)}>

@@ -124,7 +124,10 @@
     "send_failed": "送信に失敗しました",
     "image_failed": "画像のアップロードに失敗しました",
     "expand_node": "チャットを拡大",
-    "context_expand": "説明を拡大"
+    "context_expand": "説明を拡大",
+    "context_hide": "説明を畳む",
+    "context_show": "説明を表示",
+    "context_label": "説明"
   },
   "board_nav": {
     "first": "先頭ノード",

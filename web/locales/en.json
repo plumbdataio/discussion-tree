@@ -124,7 +124,10 @@
     "send_failed": "Failed to send",
     "image_failed": "Image upload failed",
     "expand_node": "Expand chat",
-    "context_expand": "Expand description"
+    "context_expand": "Expand description",
+    "context_hide": "Collapse description",
+    "context_show": "Show description",
+    "context_label": "Description"
   },
   "board_nav": {
     "first": "First node",
