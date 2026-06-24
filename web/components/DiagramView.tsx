@@ -162,13 +162,25 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
       });
   }, [source]);
 
-  // Wheel-zoom + drag-pan the rendered SVG. Re-attach whenever the SVG is
-  // replaced (a fresh render). Double-click (handler on the canvas) resets.
+  // Inject the rendered SVG into the canvas IMPERATIVELY (not via
+  // dangerouslySetInnerHTML) and attach wheel-zoom + drag-pan. This subtree is
+  // owned by mermaid + panzoom, NOT React: if React managed it, an unrelated
+  // re-render (a chat/thread update that doesn't touch `source`) would recreate
+  // the <svg> node and silently detach panzoom — leaving zoom/pan dead until
+  // the next source change. Keyed on `svg`, so it runs once per render and the
+  // node stays put across every other re-render. Double-click resets (handler
+  // on the canvas div).
   useEffect(() => {
     pzRef.current?.dispose();
     pzRef.current = null;
-    if (!svg) return;
-    const el = canvasRef.current?.querySelector("svg") as SVGElement | null;
+    const host = canvasRef.current;
+    if (!host) return;
+    if (!svg) {
+      host.innerHTML = "";
+      return;
+    }
+    host.innerHTML = svg;
+    const el = host.querySelector("svg") as SVGElement | null;
     if (!el) return;
     el.style.maxWidth = "none";
     try {
@@ -287,8 +299,9 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
                 className="diagram-canvas"
                 title={t("diagram.zoom_hint")}
                 onDoubleClick={resetView}
-                // mermaid sanitizes with securityLevel:strict; the SVG is its output.
-                dangerouslySetInnerHTML={{ __html: svg }}
+                // The SVG is injected imperatively in the [svg] effect (mermaid
+                // sanitizes with securityLevel:strict) so React never recreates
+                // it on an unrelated re-render and detaches panzoom.
               />
             )}
           </div>
