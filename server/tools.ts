@@ -875,6 +875,11 @@ export const TOOLS = [
           type: "string" as const,
           description: "Raw Mermaid source — ONE diagram (e.g. starts with `flowchart TD`).",
         },
+        context: {
+          type: "string" as const,
+          description:
+            "Optional markdown description / background shown at the top of the diagram page (what this diagram is, why it exists). OMIT to leave any existing description unchanged; pass \"\" to clear it.",
+        },
       },
       required: ["source"],
     },
@@ -1768,7 +1773,12 @@ export async function dispatchToolCall(
 
       case "upsert_diagram": {
         const sessionId = ensureSession();
-        const a = args as { id?: string; title?: string; source: string };
+        const a = args as {
+          id?: string;
+          title?: string;
+          source: string;
+          context?: string;
+        };
         const res = await brokerFetch<{
           ok: boolean;
           id?: string;
@@ -1778,6 +1788,8 @@ export async function dispatchToolCall(
           id: a.id,
           title: a.title,
           source: a.source,
+          // Omitted (undefined) → broker preserves any existing description.
+          context: a.context,
         });
         if (!res.ok)
           return textResult(res.error ?? "upsert_diagram failed", true);

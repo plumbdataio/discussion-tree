@@ -123,7 +123,8 @@
     "uploading": "Uploading…",
     "send_failed": "Failed to send",
     "image_failed": "Image upload failed",
-    "expand_node": "Expand chat"
+    "expand_node": "Expand chat",
+    "context_expand": "Expand description"
   },
   "board_nav": {
     "first": "First node",

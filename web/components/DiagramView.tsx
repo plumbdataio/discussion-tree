@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import mermaid from "mermaid";
 import panzoom from "panzoom";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Maximize2, Shrink } from "lucide-react";
+import { AlertTriangle, Maximize2, Shrink, X } from "lucide-react";
 import { DiagramIcon } from "./DiagramIcon.tsx";
+import { MDView } from "./MDView.tsx";
 import type { ThreadItem } from "../../shared/types.ts";
 import { Sidebar } from "./Sidebar.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
@@ -32,6 +34,7 @@ interface DiagramViewData {
     session_id: string;
     title: string;
     source: string;
+    context: string;
     created_at: string;
     updated_at: string;
   };
@@ -304,23 +307,28 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
       <div className="app-body">
         <Sidebar currentBoardId={null} currentMapId={null} />
         <div className="diagram-main">
-          <div className="diagram-canvas-wrap">
-            {error ? (
-              <div className="diagram-error">
-                <strong>{t("diagram.parse_error")}</strong>
-                <pre>{error}</pre>
-              </div>
-            ) : (
-              <div
-                ref={canvasRef}
-                className="diagram-canvas"
-                title={t("diagram.zoom_hint")}
-                onDoubleClick={resetView}
-                // The SVG is injected imperatively in the [svg] effect (mermaid
-                // sanitizes with securityLevel:strict) so React never recreates
-                // it on an unrelated re-render and detaches panzoom.
-              />
+          <div className="diagram-left">
+            {view.diagram.context.trim() && (
+              <DiagramContextBar context={view.diagram.context} />
             )}
+            <div className="diagram-canvas-wrap">
+              {error ? (
+                <div className="diagram-error">
+                  <strong>{t("diagram.parse_error")}</strong>
+                  <pre>{error}</pre>
+                </div>
+              ) : (
+                <div
+                  ref={canvasRef}
+                  className="diagram-canvas"
+                  title={t("diagram.zoom_hint")}
+                  onDoubleClick={resetView}
+                  // The SVG is injected imperatively in the [svg] effect (mermaid
+                  // sanitizes with securityLevel:strict) so React never recreates
+                  // it on an unrelated re-render and detaches panzoom.
+                />
+              )}
+            </div>
           </div>
           <DiagramChat
             diagramId={diagramId}
@@ -330,6 +338,59 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
           />
         </div>
       </div>
+    </div>
+  );
+}
+
+// A compact description / background bar at the top of the diagram. CC writes
+// it via upsert_diagram(context); there's no user edit path. The diagonal-arrows
+// button opens the full markdown in a modal, mirroring the expand affordance on
+// board / map nodes.
+function DiagramContextBar({ context }: { context: string }) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpanded(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [expanded]);
+  return (
+    <div className="diagram-context">
+      <button
+        type="button"
+        className="diagram-context-expand"
+        title={t("diagram.context_expand")}
+        aria-label={t("diagram.context_expand")}
+        onClick={() => setExpanded(true)}
+      >
+        <Maximize2 size={14} strokeWidth={1.75} />
+      </button>
+      <div className="diagram-context-body">
+        <MDView text={context} />
+      </div>
+      {expanded &&
+        createPortal(
+          <div className="modal-backdrop" onClick={() => setExpanded(false)}>
+            <div
+              className="modal-content diagram-context-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                className="modal-close"
+                onClick={() => setExpanded(false)}
+                aria-label={t("modal.close")}
+                title={t("modal.close")}
+              >
+                <X size={18} strokeWidth={1.75} />
+              </button>
+              <MDView text={context} />
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

@@ -23,10 +23,18 @@ db.run(`
     session_id TEXT NOT NULL,
     title TEXT NOT NULL,
     source TEXT NOT NULL,
+    context TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )
 `);
+// Migration for DBs created before the context column existed (idempotent —
+// throws "duplicate column" once it's present, which we swallow).
+try {
+  db.run("ALTER TABLE diagrams ADD COLUMN context TEXT NOT NULL DEFAULT ''");
+} catch {
+  /* column already exists */
+}
 
 // Lightweight mermaid sanity check at upsert time. A full mermaid.parse needs a
 // DOM (jsdom) which is heavy in Bun, so we only reject the obvious failures:
@@ -131,6 +139,11 @@ export function handleUpsertDiagram(body: any) {
   const err = validateSource(source);
   if (err) return { ok: false, error: err };
   const now = new Date().toISOString();
+  // context is the diagram's description/background (markdown), shown at the top
+  // of the page. It's OPTIONAL and preserved-on-absent: a source-only upsert
+  // (no context key) keeps any existing description instead of wiping it.
+  const hasContext = body?.context !== undefined;
+  const context = hasContext ? String(body.context) : "";
   let id = body?.id ? String(body.id) : "";
   if (id) {
     const existing = db.prepare("SELECT id FROM diagrams WHERE id = ?").get(id);
@@ -139,6 +152,9 @@ export function handleUpsertDiagram(body: any) {
         "UPDATE diagrams SET title = ?, source = ?, updated_at = ? WHERE id = ?",
         [title, source, now, id],
       );
+      if (hasContext) {
+        db.run("UPDATE diagrams SET context = ? WHERE id = ?", [context, id]);
+      }
       broadcast(id, { type: "diagram-update" });
       broadcastToAll({ type: "sidebar-refresh" });
       return { ok: true, id };
@@ -150,8 +166,8 @@ export function handleUpsertDiagram(body: any) {
   }
   id = id || generateId("dg");
   db.run(
-    "INSERT INTO diagrams (id, session_id, title, source, created_at, updated_at) VALUES (?,?,?,?,?,?)",
-    [id, sessionId, title, source, now, now],
+    "INSERT INTO diagrams (id, session_id, title, source, context, created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
+    [id, sessionId, title, source, context, now, now],
   );
   broadcastToAll({ type: "sidebar-refresh" });
   return { ok: true, id };

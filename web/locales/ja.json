@@ -123,7 +123,8 @@
     "uploading": "アップロード中…",
     "send_failed": "送信に失敗しました",
     "image_failed": "画像のアップロードに失敗しました",
-    "expand_node": "チャットを拡大"
+    "expand_node": "チャットを拡大",
+    "context_expand": "説明を拡大"
   },
   "board_nav": {
     "first": "先頭ノード",
