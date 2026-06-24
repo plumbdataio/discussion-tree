@@ -166,6 +166,14 @@ export function handleAttachCCSession(body: any) {
       `UPDATE maps SET session_id = ? WHERE session_id IN (${placeholders})`,
       [sessionId, ...deadIds],
     );
+    // Diagrams follow the same reclaim path. Without this, a CC restart leaves
+    // every diagram pointing at the dead session, so getDiagramView reports the
+    // owner as not-alive and the page shows "unattached" even though the board
+    // chat reattached fine.
+    db.run(
+      `UPDATE diagrams SET session_id = ? WHERE session_id IN (${placeholders})`,
+      [sessionId, ...deadIds],
+    );
     reclaimed.boards = b.changes;
     reclaimed.messages = m.changes;
 
@@ -206,6 +214,10 @@ export function handleAttachCCSession(body: any) {
       );
       db.run(
         `UPDATE maps SET session_id = ? WHERE session_id IN (${placeholders})`,
+        [sessionId, ...orphanIds],
+      );
+      db.run(
+        `UPDATE diagrams SET session_id = ? WHERE session_id IN (${placeholders})`,
         [sessionId, ...orphanIds],
       );
       reclaimed.orphan_boards = b.changes;

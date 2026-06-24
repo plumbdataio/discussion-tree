@@ -329,3 +329,52 @@ describe("diagrams — rename + archive", () => {
     expect((me.diagrams ?? []).some((d: any) => d.id === id)).toBe(false);
   });
 });
+
+describe("diagrams — lifecycle (reclaim across a CC restart)", () => {
+  test("a diagram is reclaimed by the new session, so the page stays attached", async () => {
+    const cwd = "/tmp/pd-diagram-life";
+    const ccId = `cc-diaglife-${Math.random().toString(36).slice(2, 8)}`;
+    const a = await registerSession(broker.url, cwd);
+    await attachCC(broker.url, a, ccId);
+    const id = (
+      await post<{ ok: boolean; id: string }>(`${broker.url}/upsert-diagram`, {
+        session_id: a,
+        title: "lifediagram",
+        source: FLOW,
+      })
+    ).json.id;
+    // Before the restart the owner (session a) is alive.
+    let view = await get<any>(`${broker.url}/api/diagram/${id}`);
+    expect(view.json.owner_alive).toBe(true);
+
+    // The CC dies...
+    await post(`${broker.url}/unregister`, { session_id: a });
+    // ...and restarts: a fresh broker session, same cc_session_id.
+    const b = await registerSession(broker.url, cwd);
+    await attachCC(broker.url, b, ccId);
+
+    // The diagram now belongs to the new (live) session — the page is attached
+    // again, not stuck on "unattached".
+    view = await get<any>(`${broker.url}/api/diagram/${id}`);
+    expect(view.json.owner_alive).toBe(true);
+    expect(view.json.diagram.session_id).toBe(b);
+    const lb = await post<{ diagrams: { id: string }[] }>(
+      `${broker.url}/list-diagrams`,
+      { session_id: b },
+    );
+    expect(lb.json.diagrams.some((d) => d.id === id)).toBe(true);
+    const la = await post<{ diagrams: { id: string }[] }>(
+      `${broker.url}/list-diagrams`,
+      { session_id: a },
+    );
+    expect(la.json.diagrams.some((d) => d.id === id)).toBe(false);
+    // diagram-chat no longer hits no_recipient (owner is the live new session).
+    const chat = post<{ ok: boolean; reason?: string }>(
+      `${broker.url}/diagram-chat`,
+      { diagram_id: id, text: "still reachable?" },
+    );
+    await new Promise((r) => setTimeout(r, 120));
+    await post(`${broker.url}/poll-messages`, { session_id: b });
+    expect((await chat).json.ok).toBe(true);
+  });
+});
