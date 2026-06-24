@@ -35,6 +35,11 @@ try {
 } catch {
   /* column already exists */
 }
+try {
+  db.run("ALTER TABLE diagrams ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
+} catch {
+  /* column already exists */
+}
 
 // Lightweight mermaid sanity check at upsert time. A full mermaid.parse needs a
 // DOM (jsdom) which is heavy in Bun, so we only reject the obvious failures:
@@ -180,17 +185,50 @@ export function handleGetDiagram(body: any) {
 }
 
 export function handleListDiagrams(body: any) {
+  // Active (non-archived) diagrams only, mirroring list_maps.
   const sessionId = body?.session_id ? String(body.session_id) : null;
   const rows = sessionId
     ? db
         .prepare(
-          "SELECT id, title, updated_at FROM diagrams WHERE session_id = ? ORDER BY updated_at DESC",
+          "SELECT id, title, updated_at FROM diagrams WHERE session_id = ? AND archived = 0 ORDER BY updated_at DESC",
         )
         .all(sessionId)
     : db
-        .prepare("SELECT id, title, updated_at FROM diagrams ORDER BY updated_at DESC")
+        .prepare(
+          "SELECT id, title, updated_at FROM diagrams WHERE archived = 0 ORDER BY updated_at DESC",
+        )
         .all();
   return { ok: true, diagrams: rows };
+}
+
+// Rename a diagram's title (shown in the sidebar + page header) WITHOUT
+// resending its whole source — the peripheral-op analogue of rename_map.
+export function handleRenameDiagram(body: any) {
+  const id = String(body?.id ?? "");
+  const title = String(body?.title ?? "").trim();
+  if (!db.prepare("SELECT id FROM diagrams WHERE id = ?").get(id))
+    return { ok: false, error: "diagram not found" };
+  if (!title) return { ok: false, error: "title required" };
+  db.run("UPDATE diagrams SET title = ? WHERE id = ?", [title, id]);
+  broadcast(id, { type: "diagram-update" });
+  broadcastToAll({ type: "sidebar-refresh" });
+  return { ok: true };
+}
+
+// Archive (hide from the active sidebar list) / unarchive a diagram. Soft —
+// the row + page stay; only list_diagrams / the sidebar filter it out. Mirrors
+// handleArchiveMap: archived defaults to true; pass archived:false to restore.
+export function handleArchiveDiagram(body: any) {
+  const id = String(body?.id ?? "");
+  if (!db.prepare("SELECT id FROM diagrams WHERE id = ?").get(id))
+    return { ok: false, error: "diagram not found" };
+  db.run("UPDATE diagrams SET archived = ? WHERE id = ?", [
+    body?.archived === false ? 0 : 1,
+    id,
+  ]);
+  broadcast(id, { type: "diagram-update" });
+  broadcastToAll({ type: "sidebar-refresh" });
+  return { ok: true };
 }
 
 export function handleDeleteDiagram(body: any) {
@@ -287,5 +325,7 @@ export const routes = {
   "/upsert-diagram": handleUpsertDiagram,
   "/get-diagram": handleGetDiagram,
   "/list-diagrams": handleListDiagrams,
+  "/rename-diagram": handleRenameDiagram,
+  "/archive-diagram": handleArchiveDiagram,
   "/delete-diagram": handleDeleteDiagram,
 };

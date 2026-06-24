@@ -900,8 +900,37 @@ export const TOOLS = [
     inputSchema: { type: "object" as const, properties: {} },
   },
   {
+    name: "rename_diagram",
+    description:
+      "Rename a diagram's title (shown in the sidebar + page header) without resending its source.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "string" as const },
+        title: { type: "string" as const, description: "New title." },
+      },
+      required: ["id", "title"],
+    },
+  },
+  {
+    name: "archive_diagram",
+    description:
+      "Archive a diagram (hide it from the active sidebar list) or unarchive it. Soft — the diagram + its page stay; only the sidebar/list hide it. Pass archived:false to restore.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "string" as const },
+        archived: {
+          type: "boolean" as const,
+          description: "true (default) to archive, false to unarchive.",
+        },
+      },
+      required: ["id"],
+    },
+  },
+  {
     name: "delete_diagram",
-    description: "Delete a Mermaid diagram by id.",
+    description: "Delete a Mermaid diagram by id (permanent — use archive_diagram to just hide it).",
     inputSchema: {
       type: "object" as const,
       properties: { id: { type: "string" as const } },
@@ -1821,6 +1850,30 @@ export async function dispatchToolCall(
           .map((d) => `- ${d.id}  ${d.title}`)
           .join("\n");
         return textResult(list || "No diagrams yet.");
+      }
+      case "rename_diagram": {
+        const a = args as { id: string; title: string };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/rename-diagram",
+          { id: a.id, title: a.title },
+        );
+        if (!res.ok)
+          return textResult(res.error ?? "rename_diagram failed", true);
+        return textResult(`Diagram ${a.id} renamed to "${a.title}".`);
+      }
+      case "archive_diagram": {
+        const a = args as { id: string; archived?: boolean };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/archive-diagram",
+          { id: a.id, archived: a.archived },
+        );
+        if (!res.ok)
+          return textResult(res.error ?? "archive_diagram failed", true);
+        return textResult(
+          a.archived === false
+            ? `Diagram ${a.id} unarchived.`
+            : `Diagram ${a.id} archived (hidden from the sidebar).`,
+        );
       }
       case "delete_diagram": {
         const a = args as { id: string };

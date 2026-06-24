@@ -580,10 +580,11 @@ export function handleListSessions() {
         unread_count: unread + checklistUnread,
       };
     });
-    // Mermaid diagrams owned by this session (id + title only).
+    // Mermaid diagrams owned by this session (id + title only). Archived ones
+    // are hidden from the sidebar, mirroring archived maps/boards.
     const diagrams = db
       .prepare(
-        "SELECT id, title FROM diagrams WHERE session_id = ? ORDER BY updated_at DESC",
+        "SELECT id, title FROM diagrams WHERE session_id = ? AND archived = 0 ORDER BY updated_at DESC",
       )
       .all(s.id) as { id: string; title: string }[];
     return {

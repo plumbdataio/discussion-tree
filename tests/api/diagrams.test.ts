@@ -235,3 +235,97 @@ describe("diagrams — sidebar listing", () => {
     expect(mine.json.diagrams.some((d) => d.id === oid)).toBe(false);
   });
 });
+
+describe("diagrams — context (description)", () => {
+  test("upsert stores context; a source-only upsert preserves it; \"\" clears", async () => {
+    const id = await createDiagram("ctx", FLOW);
+    // Set a description.
+    await post(`${broker.url}/upsert-diagram`, {
+      session_id: sessionId,
+      id,
+      source: FLOW,
+      context: "the background",
+    });
+    let v = await get<any>(`${broker.url}/api/diagram/${id}`);
+    expect(v.json.diagram.context).toBe("the background");
+    // Source-only edit (no context key) keeps the existing description.
+    await post(`${broker.url}/upsert-diagram`, {
+      session_id: sessionId,
+      id,
+      source: "graph LR\n  X --> Y",
+    });
+    v = await get<any>(`${broker.url}/api/diagram/${id}`);
+    expect(v.json.diagram.context).toBe("the background");
+    expect(v.json.diagram.source).toBe("graph LR\n  X --> Y");
+    // Explicit "" clears it.
+    await post(`${broker.url}/upsert-diagram`, {
+      session_id: sessionId,
+      id,
+      source: FLOW,
+      context: "",
+    });
+    v = await get<any>(`${broker.url}/api/diagram/${id}`);
+    expect(v.json.diagram.context).toBe("");
+  });
+
+  test("a freshly created diagram has an empty context", async () => {
+    const id = await createDiagram("no ctx");
+    const v = await get<any>(`${broker.url}/api/diagram/${id}`);
+    expect(v.json.diagram.context).toBe("");
+  });
+});
+
+describe("diagrams — rename + archive", () => {
+  test("/rename-diagram changes the title; empty / missing rejected", async () => {
+    const id = await createDiagram("Before");
+    const r = await post<{ ok: boolean }>(`${broker.url}/rename-diagram`, {
+      id,
+      title: "After",
+    });
+    expect(r.json.ok).toBe(true);
+    const v = await get<any>(`${broker.url}/api/diagram/${id}`);
+    expect(v.json.diagram.title).toBe("After");
+    const empty = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/rename-diagram`,
+      { id, title: "  " },
+    );
+    expect(empty.json.ok).toBe(false);
+    const missing = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/rename-diagram`,
+      { id: "dg_nope", title: "x" },
+    );
+    expect(missing.json.ok).toBe(false);
+    expect(missing.json.error).toMatch(/not found/i);
+  });
+
+  test("/archive-diagram hides it from the list; archived:false restores it", async () => {
+    const id = await createDiagram("Archivable");
+    const inList = async () => {
+      const r = await post<{ diagrams: { id: string }[] }>(
+        `${broker.url}/list-diagrams`,
+        { session_id: sessionId },
+      );
+      return r.json.diagrams.some((d) => d.id === id);
+    };
+    expect(await inList()).toBe(true);
+    expect(
+      (await post<{ ok: boolean }>(`${broker.url}/archive-diagram`, { id })).json
+        .ok,
+    ).toBe(true);
+    expect(await inList()).toBe(false);
+    // The page still loads while archived (soft hide).
+    const v = await get<any>(`${broker.url}/api/diagram/${id}`);
+    expect(v.status).not.toBe(404);
+    // Unarchive restores it.
+    await post(`${broker.url}/archive-diagram`, { id, archived: false });
+    expect(await inList()).toBe(true);
+  });
+
+  test("an archived diagram drops out of /api/sessions", async () => {
+    const id = await createDiagram("Sidebar archivable");
+    await post(`${broker.url}/archive-diagram`, { id });
+    const sessions = await get<any>(`${broker.url}/api/sessions`);
+    const me = sessions.json.sessions.find((s: any) => s.id === sessionId);
+    expect((me.diagrams ?? []).some((d: any) => d.id === id)).toBe(false);
+  });
+});
