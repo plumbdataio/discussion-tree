@@ -357,7 +357,21 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     return <div className="error">{error}</div>;
   }
   if (!data) {
-    return <div className="empty">{t("sidebar.loading")}</div>;
+    // Render the same shell (header bar + sidebar) as the loaded board — only
+    // the main pane shows "loading" — so a navigation doesn't blank the whole
+    // window (header + sidebar would otherwise pop in after the fetch).
+    return (
+      <div className="app">
+        <header className="header">
+          <span className="breadcrumb">{t("header.back_to_session")}</span>
+          <h1>{t("sidebar.loading")}</h1>
+        </header>
+        <div className="app-body">
+          <Sidebar currentBoardId={boardId} />
+          <div className="map-missing">{t("sidebar.loading")}</div>
+        </div>
+      </div>
+    );
   }
 
   const childrenByParent = buildTree(data.nodes);
