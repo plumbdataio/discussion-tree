@@ -147,19 +147,36 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
       startOnLoad: false,
       securityLevel: "strict",
       theme: dark ? "dark" : "default",
+      // CJK fix: mermaid caps a flowchart label's width at wrappingWidth (200
+      // default) expecting it to wrap, but the label div is display:table
+      // (shrink-to-fit) and CJK has no spaces to break at — so the text renders
+      // WIDER than the box and clips. Effectively disable the wrap cap so the
+      // box is sized to the real text width; CC controls line breaks with <br/>.
+      flowchart: { wrappingWidth: 1e6 },
     });
-    mermaid
-      .render(`dg-render-${seq}`, source)
-      .then(({ svg }) => {
-        if (seq !== renderSeq.current) return;
-        setSvg(svg);
+    let cancelled = false;
+    // Wait for webfonts before rendering so CJK glyph metrics are final at
+    // measure time (a render before the font loads measures with a fallback and
+    // mis-sizes the boxes). The sequence guard drops a stale render if `source`
+    // changed mid-flight; `cancelled` drops it if the effect was torn down.
+    document.fonts.ready
+      .then(() => {
+        if (cancelled || seq !== renderSeq.current) return undefined;
+        return mermaid.render(`dg-render-${seq}`, source);
+      })
+      .then((res) => {
+        if (!res || cancelled || seq !== renderSeq.current) return;
+        setSvg(res.svg);
         setError(null);
       })
       .catch((e) => {
-        if (seq !== renderSeq.current) return;
+        if (cancelled || seq !== renderSeq.current) return;
         setError(String(e?.message ?? e));
         setSvg("");
       });
+    return () => {
+      cancelled = true;
+    };
   }, [source]);
 
   // Inject the rendered SVG into the canvas IMPERATIVELY (not via
