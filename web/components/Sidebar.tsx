@@ -24,7 +24,6 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { Activity, SessionListItem } from "../../shared/types.ts";
 import { BOARD_STATUSES, normalizeBoardStatus } from "../utils/constants.ts";
-import { getDiagramIdFromUrl } from "../utils/url.ts";
 import { isBoardVisible } from "../utils/boardFilter.ts";
 import { contextWarnBand } from "../utils/contextBand.ts";
 import {
@@ -81,6 +80,7 @@ type SessionItemProps = {
   s: SessionListItem;
   currentBoardId: string | null;
   currentMapId: string | null;
+  currentDiagramId: string | null;
   filter: BoardStatusFilter;
   inactive: boolean;
   collapsed: boolean;
@@ -101,6 +101,7 @@ function SessionItem({
   s,
   currentBoardId,
   currentMapId,
+  currentDiagramId,
   filter,
   inactive,
   collapsed,
@@ -518,7 +519,7 @@ function SessionItem({
           {(s as any).diagrams.map((d: { id: string; title: string }) => (
             <li
               key={d.id}
-              className={d.id === getDiagramIdFromUrl() ? "current" : ""}
+              className={d.id === currentDiagramId ? "current" : ""}
             >
               <a href={"/diagram/" + d.id} className="sidebar-map-link">
                 <span className="sidebar-map-title">
@@ -541,9 +542,11 @@ function SessionItem({
 export function Sidebar({
   currentBoardId,
   currentMapId = null,
+  currentDiagramId = null,
 }: {
   currentBoardId: string | null;
   currentMapId?: string | null;
+  currentDiagramId?: string | null;
 }) {
   const { t } = useTranslation();
   const [settings, updateSettings] = useSettings();
@@ -598,10 +601,11 @@ export function Sidebar({
   }, []);
 
   // Close the mobile drawer on navigation so the user lands on the new view
-  // without the panel still covering it.
+  // without the panel still covering it. Keyed on all three surface ids so a
+  // map→diagram (or any cross-surface) hop closes it too, not just board nav.
   useEffect(() => {
     setDrawerOpen(false);
-  }, [currentBoardId]);
+  }, [currentBoardId, currentMapId, currentDiagramId]);
 
   // While the drawer is open on mobile, freeze the page underneath so a touch
   // scroll inside the sidebar doesn't bleed through and move the board.
@@ -941,6 +945,7 @@ export function Sidebar({
             s={s}
             currentBoardId={currentBoardId}
             currentMapId={currentMapId}
+            currentDiagramId={currentDiagramId}
             filter={filter}
             inactive={false}
             collapsed={!!settings.collapsedSessions[s.id]}
@@ -981,6 +986,7 @@ export function Sidebar({
                   s={s}
                   currentBoardId={currentBoardId}
                   currentMapId={currentMapId}
+                  currentDiagramId={currentDiagramId}
                   filter={filter}
                   inactive
                   collapsed={!!settings.collapsedSessions[s.id]}

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { SessionListItem } from "../../shared/types.ts";
+import { AppLayout } from "./AppShell.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
-import { Sidebar } from "./Sidebar.tsx";
 
 export function RootDashboard() {
   const { t } = useTranslation();
@@ -16,47 +16,49 @@ export function RootDashboard() {
       .catch((e) => setError(String(e)));
   }, []);
 
-  if (error) return <div className="error">{error}</div>;
-  if (!sessions) return <div className="empty">{t("sidebar.loading")}</div>;
+  const header = (
+    <header className="header">
+      <h1>discussion-tree</h1>
+    </header>
+  );
+
+  if (error)
+    return <AppLayout header={header}><div className="error">{error}</div></AppLayout>;
+  if (!sessions)
+    return (
+      <AppLayout header={header}>
+        <div className="empty">{t("sidebar.loading")}</div>
+      </AppLayout>
+    );
 
   return (
-    <div className="app">
-      <header className="header">
-        <h1>discussion-tree</h1>
-      </header>
-      <div className="app-body">
-        <Sidebar currentBoardId={null} />
-        <div className="dashboard">
-          <h2 className="dashboard-title">{t("sidebar.sessions")}</h2>
-          {sessions.length === 0 && (
-            <div className="empty">{t("sidebar.no_active_sessions")}</div>
-          )}
-          <div className="board-cards">
-            {sessions.map((s) => (
-              <a
-                key={s.id}
-                href={"/session/" + s.id}
-                className="board-card"
-              >
-                <h3 className="card-title">
-                  {s.name ?? <em className="unnamed">{s.id}</em>}
-                </h3>
-                <div className="session-card-cwd" title={s.cwd}>
-                  {s.cwd}
-                </div>
-                <div className="card-stats">
-                  <span className="stat">
-                    {t("root_dashboard.boards_count_stat", {
-                      count: s.boards.length,
-                    })}
-                  </span>
-                  <ContextMeter usage={s.context_usage} />
-                </div>
-              </a>
-            ))}
-          </div>
+    <AppLayout header={header}>
+      <div className="dashboard">
+        <h2 className="dashboard-title">{t("sidebar.sessions")}</h2>
+        {sessions.length === 0 && (
+          <div className="empty">{t("sidebar.no_active_sessions")}</div>
+        )}
+        <div className="board-cards">
+          {sessions.map((s) => (
+            <a key={s.id} href={"/session/" + s.id} className="board-card">
+              <h3 className="card-title">
+                {s.name ?? <em className="unnamed">{s.id}</em>}
+              </h3>
+              <div className="session-card-cwd" title={s.cwd}>
+                {s.cwd}
+              </div>
+              <div className="card-stats">
+                <span className="stat">
+                  {t("root_dashboard.boards_count_stat", {
+                    count: s.boards.length,
+                  })}
+                </span>
+                <ContextMeter usage={s.context_usage} />
+              </div>
+            </a>
+          ))}
         </div>
       </div>
-    </div>
+    </AppLayout>
   );
 }

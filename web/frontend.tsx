@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import i18n, { resolveLanguage } from "./i18n.ts";
 import { AnchorButton } from "./components/AnchorButton.tsx";
+import { AppShell } from "./components/AppShell.tsx";
 import { BoardApp } from "./components/BoardApp.tsx";
 import { GearButton } from "./components/GearButton.tsx";
 import { GlobalBanner } from "./components/GlobalBanner.tsx";
@@ -73,14 +74,13 @@ function App() {
     return () => mql.removeEventListener("change", apply);
   }, [settings.theme]);
 
-  // BoardApp takes boardId as a prop and depends on it in every data
-  // effect, so it re-fetches on navigation WITHOUT a `key` — no re-mount,
-  // no white flash of the sidebar/header it contains. SessionDashboard
-  // still uses a key (it reads sessionId as a prop but its internal
-  // effects haven't been migrated off the re-mount pattern yet).
+  // Every page takes its id as a prop and re-fetches on a prop change, so none
+  // need a `key` (which would force a remount). The persistent shell + sidebar
+  // live in <AppShell>; each page only fills the header + main via <AppLayout>,
+  // so navigation never remounts the sidebar — no flash, no scroll reset.
   let page: React.ReactNode;
   if (sessionId) {
-    page = <SessionDashboard key={`s:${sessionId}`} sessionId={sessionId} />;
+    page = <SessionDashboard sessionId={sessionId} />;
   } else if (mapId) {
     page = <MapView mapId={mapId} />;
   } else if (diagramId) {
@@ -95,7 +95,13 @@ function App() {
   return (
     <>
       <GlobalBanner />
-      {page}
+      <AppShell
+        currentBoardId={boardId}
+        currentMapId={mapId}
+        currentDiagramId={diagramId}
+      >
+        {page}
+      </AppShell>
       <AnchorButton />
       <GearButton />
       <ToastContainer />

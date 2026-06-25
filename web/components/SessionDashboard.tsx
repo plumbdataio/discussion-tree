@@ -7,9 +7,9 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { SessionListItem } from "../../shared/types.ts";
+import { AppLayout } from "./AppShell.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
 import { EditableSessionName } from "./EditableSessionName.tsx";
-import { Sidebar } from "./Sidebar.tsx";
 import { normalizeBoardStatus } from "../utils/constants.ts";
 import { useDocumentTitle } from "../utils/useDocumentTitle.ts";
 
@@ -20,16 +20,40 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showArchived, setShowArchived] = useState(false);
 
+  // The component now persists across /session/A → /session/B navigation (no
+  // `key` remount under the SPA shell), so clear the view when the session id
+  // changes — otherwise a prior not-found `error` would stick (the success path
+  // can't render past `if (error) return`) and session A's data would flash
+  // under session B's URL until the refetch resolves. (Keyed on sessionId only,
+  // so an in-place refreshKey bump from archive/unarchive doesn't blank the
+  // page.)
   useEffect(() => {
+    setData(null);
+    setError(null);
+  }, [sessionId]);
+
+  useEffect(() => {
+    let cancelled = false;
     fetch("/api/sessions")
       .then((r) => r.json())
       .then((d: { sessions: SessionListItem[] }) => {
+        if (cancelled) return;
         const found = d.sessions.find((s) => s.id === sessionId);
-        if (found) setData(found);
-        else
-          setError(t("session_dashboard.session_not_found", { id: sessionId }));
+        if (found) {
+          setData(found);
+          setError(null);
+        } else {
+          setError(
+            t("session_dashboard.session_not_found", { id: sessionId }),
+          );
+        }
       })
-      .catch((e) => setError(String(e)));
+      .catch((e) => {
+        if (!cancelled) setError(String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [sessionId, refreshKey, t]);
 
   // Browser-tab + auto-tracker friendly title (shared hook). The root
@@ -67,8 +91,35 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
     setRefreshKey((k) => k + 1);
   };
 
-  if (error) return <div className="error">{error}</div>;
-  if (!data) return <div className="empty">{t("sidebar.loading")}</div>;
+  if (error)
+    return (
+      <AppLayout
+        header={
+          <header className="header">
+            <a className="breadcrumb" href="/">
+              {t("session_dashboard.back_to_top")}
+            </a>
+          </header>
+        }
+      >
+        <div className="error">{error}</div>
+      </AppLayout>
+    );
+  if (!data)
+    return (
+      <AppLayout
+        header={
+          <header className="header">
+            <a className="breadcrumb" href="/">
+              {t("session_dashboard.back_to_top")}
+            </a>
+            <h1>{t("sidebar.loading")}</h1>
+          </header>
+        }
+      >
+        <div className="empty">{t("sidebar.loading")}</div>
+      </AppLayout>
+    );
 
   const boardStatusLabel = (status: string | undefined) => {
     const s = normalizeBoardStatus(status);
@@ -76,27 +127,28 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
   };
 
   return (
-    <div className="app">
-      <header className="header">
-        <a className="breadcrumb" href="/">
-          {t("session_dashboard.back_to_top")}
-        </a>
-        <h1 className="session-name-h1">
-          <EditableSessionName
-            sessionId={data.id}
-            name={data.name ?? null}
-            onSaved={(newName) => {
-              setData({ ...data, name: newName === "" ? null : newName });
-              // Nudge the sidebar in this tab; other tabs catch up on poll.
-              window.dispatchEvent(new Event("pd-sidebar-refresh"));
-            }}
-          />
-        </h1>
-        <ContextMeter usage={data.context_usage} prefix="Context: " />
-      </header>
-      <div className="app-body">
-        <Sidebar currentBoardId={null} />
-        <div className="dashboard">
+    <AppLayout
+      header={
+        <header className="header">
+          <a className="breadcrumb" href="/">
+            {t("session_dashboard.back_to_top")}
+          </a>
+          <h1 className="session-name-h1">
+            <EditableSessionName
+              sessionId={data.id}
+              name={data.name ?? null}
+              onSaved={(newName) => {
+                setData({ ...data, name: newName === "" ? null : newName });
+                // Nudge the sidebar in this tab; other tabs catch up on poll.
+                window.dispatchEvent(new Event("pd-sidebar-refresh"));
+              }}
+            />
+          </h1>
+          <ContextMeter usage={data.context_usage} prefix="Context: " />
+        </header>
+      }
+    >
+      <div className="dashboard">
           <h2 className="dashboard-title">{t("session_dashboard.boards_title")}</h2>
           {data.boards.length === 0 && (
             <div className="empty">{t("session_dashboard.no_boards_help")}</div>
@@ -219,8 +271,7 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
               )}
             </div>
           )}
-        </div>
       </div>
-    </div>
+    </AppLayout>
   );
 }

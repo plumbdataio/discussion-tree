@@ -14,7 +14,7 @@ import {
 import { DiagramIcon } from "./DiagramIcon.tsx";
 import { MDView } from "./MDView.tsx";
 import type { Activity, ThreadItem } from "../../shared/types.ts";
-import { Sidebar } from "./Sidebar.tsx";
+import { AppLayout } from "./AppShell.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
 import { ActivityBadge } from "./ActivityBadge.tsx";
 import { CliCommandButton } from "./CliCommandButton.tsx";
@@ -246,43 +246,44 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
   // after the fetch and the layout doesn't shift.
   if (notFound || !view) {
     return (
-      <div className="app">
-        <header className="header">
-          <span className="breadcrumb">{t("header.back_to_session")}</span>
-          <h1>
-            <DiagramIcon
-              className="diagram-title-icon"
-              size={18}
-              strokeWidth={1.9}
-            />
-            {t("map.loading")}
-          </h1>
-          <div className="header-right">
-            <span className="ws-status">
-              <span className="ws-dot" />
-              {t("header.offline")}
-            </span>
-          </div>
-        </header>
-        <div className="app-body">
-          <Sidebar currentBoardId={null} currentMapId={null} />
-          <div className="diagram-main">
-            <div className="diagram-canvas-wrap">
-              <div className="map-missing">
-                {notFound ? t("diagram.not_found") : t("map.loading")}
-              </div>
+      <AppLayout
+        header={
+          <header className="header">
+            <span className="breadcrumb">{t("header.back_to_session")}</span>
+            <h1>
+              <DiagramIcon
+                className="diagram-title-icon"
+                size={18}
+                strokeWidth={1.9}
+              />
+              {t("map.loading")}
+            </h1>
+            <div className="header-right">
+              <span className="ws-status">
+                <span className="ws-dot" />
+                {t("header.offline")}
+              </span>
+            </div>
+          </header>
+        }
+      >
+        <div className="diagram-main">
+          <div className="diagram-canvas-wrap">
+            <div className="map-missing">
+              {notFound ? t("diagram.not_found") : t("map.loading")}
             </div>
           </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   const ownerAlive = view.owner_alive !== false;
 
   return (
-    <div className="app">
-      <header className="header">
+    <AppLayout
+      header={
+        <header className="header">
         <a className="breadcrumb" href={`/session/${view.diagram.session_id}`}>
           {t("header.back_to_session")}
         </a>
@@ -336,9 +337,9 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
             {wsConnected ? t("header.live") : t("header.offline")}
           </span>
         </div>
-      </header>
-      <div className="app-body">
-        <Sidebar currentBoardId={null} currentMapId={null} />
+        </header>
+      }
+    >
         <div className="diagram-main">
           <div className="diagram-left">
             {view.diagram.context.trim() && (
@@ -370,8 +371,7 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
             thread={view.thread}
           />
         </div>
-      </div>
-    </div>
+    </AppLayout>
   );
 }
 

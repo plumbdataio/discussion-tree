@@ -141,6 +141,14 @@ body {
   min-height: 0;
 }
 
+/* Portal host wrappers owned by <AppShell>. display:contents removes their own
+   box so the page's portaled <header> / main pane lay out as direct flex
+   children of .app / .app-body — identical to the old per-page markup. */
+.app-header-slot,
+.app-main-slot {
+  display: contents;
+}
+
 .board-container {
   flex: 1;
   padding: 24px;

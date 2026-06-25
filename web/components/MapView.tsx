@@ -51,7 +51,7 @@ import { MapFrameNode } from "./MapFrameNode.tsx";
 import { MapNodeModal } from "./MapNodeModal.tsx";
 import { CliCommandButton } from "./CliCommandButton.tsx";
 import { MapTimelineModal } from "./MapTimelineModal.tsx";
-import { Sidebar } from "./Sidebar.tsx";
+import { AppLayout } from "./AppShell.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
 import { ActivityBadge } from "./ActivityBadge.tsx";
 import { ThreadMessage } from "./ThreadMessage.tsx";
@@ -793,32 +793,32 @@ export function MapView({ mapId }: { mapId: string }) {
   // doesn't shift — only the main pane changes.
   if (notFound || !view || !ctx) {
     return (
-      <div className="app">
-        <header className="header">
-          <span className="breadcrumb">{t("header.back_to_session")}</span>
-          <h1>
-            <ChartNetwork
-              className="map-title-icon"
-              size={18}
-              strokeWidth={1.9}
-              aria-label={t("map.badge_title")}
-            />
-            {t("map.loading")}
-          </h1>
-          <div className="header-right">
-            <span className="ws-status">
-              <span className="ws-dot" />
-              {t("header.offline")}
-            </span>
-          </div>
-        </header>
-        <div className="app-body">
-          <Sidebar currentBoardId={null} currentMapId={mapId} />
-          <div className="map-missing">
-            {notFound ? t("map.not_found") : t("map.loading")}
-          </div>
+      <AppLayout
+        header={
+          <header className="header">
+            <span className="breadcrumb">{t("header.back_to_session")}</span>
+            <h1>
+              <ChartNetwork
+                className="map-title-icon"
+                size={18}
+                strokeWidth={1.9}
+                aria-label={t("map.badge_title")}
+              />
+              {t("map.loading")}
+            </h1>
+            <div className="header-right">
+              <span className="ws-status">
+                <span className="ws-dot" />
+                {t("header.offline")}
+              </span>
+            </div>
+          </header>
+        }
+      >
+        <div className="map-missing">
+          {notFound ? t("map.not_found") : t("map.loading")}
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
@@ -826,7 +826,8 @@ export function MapView({ mapId }: { mapId: string }) {
 
   return (
     <MapContext.Provider value={ctx}>
-      <div className="app">
+      <AppLayout
+        header={
         <header className="header">
           <a className="breadcrumb" href={`/session/${view.map.session_id}`}>
             {t("header.back_to_session")}
@@ -898,8 +899,8 @@ export function MapView({ mapId }: { mapId: string }) {
             </span>
           </div>
         </header>
-        <div className="app-body">
-          <Sidebar currentBoardId={null} currentMapId={mapId} />
+        }
+      >
           <div className="map-main">
             <div className="map-canvas" ref={canvasRef}>
               <ReactFlow
@@ -964,7 +965,6 @@ export function MapView({ mapId }: { mapId: string }) {
               thread={generalThread}
             />
           </div>
-        </div>
         {timelineOpen && (
           <MapTimelineModal
             nodes={view.nodes}
@@ -1008,7 +1008,7 @@ export function MapView({ mapId }: { mapId: string }) {
               />
             );
           })()}
-      </div>
+      </AppLayout>
     </MapContext.Provider>
   );
 }

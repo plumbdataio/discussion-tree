@@ -3,6 +3,7 @@ import { AlertTriangle, Cog, Shrink, Wand2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Activity, BoardView } from "../../shared/types.ts";
 import { ActivityBadge } from "./ActivityBadge.tsx";
+import { AppLayout } from "./AppShell.tsx";
 import { BoardStructureRequestModal } from "./BoardStructureRequestModal.tsx";
 import { CliCommandButton } from "./CliCommandButton.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
@@ -26,7 +27,6 @@ import {
   useNodeStatusFilter,
   useNodeUnreadOverride,
 } from "../utils/nodeStatusFilter.ts";
-import { Sidebar } from "./Sidebar.tsx";
 import { postSubmitAnswer } from "../utils/api.ts";
 import { readBoardCache, writeBoardCache } from "../utils/boardCache.ts";
 import { translateError } from "../utils/errors.ts";
@@ -354,23 +354,33 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   );
 
   if (error) {
-    return <div className="error">{error}</div>;
+    return (
+      <AppLayout
+        header={
+          <header className="header">
+            <span className="breadcrumb">{t("header.back_to_session")}</span>
+          </header>
+        }
+      >
+        <div className="error">{error}</div>
+      </AppLayout>
+    );
   }
   if (!data) {
-    // Render the same shell (header bar + sidebar) as the loaded board — only
-    // the main pane shows "loading" — so a navigation doesn't blank the whole
-    // window (header + sidebar would otherwise pop in after the fetch).
+    // Render the same header shell as the loaded board — only the main pane
+    // shows "loading" — so a navigation doesn't blank it. (The sidebar itself
+    // is persistent in AppShell and never reloads on navigation.)
     return (
-      <div className="app">
-        <header className="header">
-          <span className="breadcrumb">{t("header.back_to_session")}</span>
-          <h1>{t("sidebar.loading")}</h1>
-        </header>
-        <div className="app-body">
-          <Sidebar currentBoardId={boardId} />
-          <div className="map-missing">{t("sidebar.loading")}</div>
-        </div>
-      </div>
+      <AppLayout
+        header={
+          <header className="header">
+            <span className="breadcrumb">{t("header.back_to_session")}</span>
+            <h1>{t("sidebar.loading")}</h1>
+          </header>
+        }
+      >
+        <div className="map-missing">{t("sidebar.loading")}</div>
+      </AppLayout>
     );
   }
 
@@ -446,15 +456,16 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     isRelevant && activeActivity!.node_id ? activeActivity : null;
 
   return (
-    <div className="app">
-      <header
-        ref={headerRef}
-        className={
-          "header" +
-          (headerCanLeft ? " can-scroll-left" : "") +
-          (headerCanRight ? " can-scroll-right" : "")
-        }
-      >
+    <AppLayout
+      header={
+        <header
+          ref={headerRef}
+          className={
+            "header" +
+            (headerCanLeft ? " can-scroll-left" : "") +
+            (headerCanRight ? " can-scroll-right" : "")
+          }
+        >
         <a
           className="breadcrumb"
           href={"/session/" + data.board.session_id}
@@ -596,9 +607,9 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
             {wsConnected ? t("header.live") : t("header.offline")}
           </span>
         </div>
-      </header>
-      <div className="app-body">
-        <Sidebar currentBoardId={boardId} />
+        </header>
+      }
+    >
         <div className="board-container">
           {data.board.is_default ? (
             // key={data.board.id} forces a fresh mount whenever the
@@ -636,7 +647,6 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
             </>
           )}
         </div>
-      </div>
       {structureRequestOpen && boardId && (
         <BoardStructureRequestModal
           boardId={boardId}
@@ -644,6 +654,6 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           onClose={() => setStructureRequestOpen(false)}
         />
       )}
-    </div>
+    </AppLayout>
   );
 }
