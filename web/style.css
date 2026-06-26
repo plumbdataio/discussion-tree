@@ -3066,6 +3066,25 @@ body.concern-resizing * {
 .diagram-canvas svg {
   transform-origin: 0 0;
 }
+/* Custom zoom/pan hint (replaces the native title tooltip so the appear-delay
+   is controllable). Floats at the top-center of the canvas; pointer-events:none
+   so it never intercepts a pan/zoom that lands under it. */
+.diagram-zoom-hint {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: 5px 12px;
+  border-radius: 7px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
 /* Left column = optional description bar stacked above the pan/zoom canvas. */
 .diagram-left {
   flex: 1;

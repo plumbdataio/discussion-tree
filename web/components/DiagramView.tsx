@@ -78,6 +78,30 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
     zoomAbs: (x: number, y: number, z: number) => void;
   } | null>(null);
 
+  // Zoom/pan hint — a custom tooltip with a deliberately long hover delay. The
+  // native `title` showed after ~1s (browser-controlled, not adjustable) which
+  // felt too eager. Native-like behaviour: it appears only after the pointer
+  // rests ~2.5s and hides the moment it moves or leaves, so it never shows
+  // mid-pan.
+  const [hintShown, setHintShown] = useState(false);
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const armHint = () => {
+    if (hintTimer.current) clearTimeout(hintTimer.current);
+    setHintShown(false); // hide while moving; re-show after the pointer rests
+    hintTimer.current = setTimeout(() => setHintShown(true), 2500);
+  };
+  const clearHint = () => {
+    if (hintTimer.current) clearTimeout(hintTimer.current);
+    hintTimer.current = null;
+    setHintShown(false);
+  };
+  useEffect(
+    () => () => {
+      if (hintTimer.current) clearTimeout(hintTimer.current);
+    },
+    [],
+  );
+
   const source = view?.diagram?.source ?? null;
 
   const fetchDiagram = () => {
@@ -230,11 +254,22 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
         minZoom: 0.2,
         bounds: true,
         boundsPadding: 0.1,
+        // Disable panzoom's own double-click zoom so the dblclick reset listener
+        // below wins (the hint promises "double-click to reset"; without this,
+        // panzoom's default zoom-in hijacked it).
+        zoomDoubleClickSpeed: 1,
       }) as unknown as typeof pzRef.current;
     } catch {
       /* zoom/pan is an enhancement — never let it break the render */
     }
+    // Reset on double-click. Listen on the SVG itself (where panzoom lives), not
+    // the parent div: panzoom consumes the dblclick so a React onDoubleClick on
+    // the parent never sees it. A same-element listener still fires (panzoom does
+    // not stopImmediatePropagation), and zoomDoubleClickSpeed:1 above means
+    // panzoom no longer zooms on it — so this is the only dblclick action left.
+    el.addEventListener("dblclick", resetView);
     return () => {
+      el.removeEventListener("dblclick", resetView);
       pzRef.current?.dispose();
       pzRef.current = null;
     };
@@ -366,12 +401,16 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
                 <div
                   ref={canvasRef}
                   className="diagram-canvas"
-                  title={t("diagram.zoom_hint")}
-                  onDoubleClick={resetView}
+                  onMouseEnter={armHint}
+                  onMouseMove={armHint}
+                  onMouseLeave={clearHint}
                   // The SVG is injected imperatively in the [svg] effect (mermaid
                   // sanitizes with securityLevel:strict) so React never recreates
                   // it on an unrelated re-render and detaches panzoom.
                 />
+              )}
+              {!error && hintShown && (
+                <div className="diagram-zoom-hint">{t("diagram.zoom_hint")}</div>
               )}
             </div>
           </div>
