@@ -160,12 +160,23 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
       startOnLoad: false,
       securityLevel: "strict",
       theme: dark ? "dark" : "default",
-      // CJK fix: mermaid caps a flowchart label's width at wrappingWidth (200
-      // default) expecting it to wrap, but the label div is display:table
-      // (shrink-to-fit) and CJK has no spaces to break at — so the text renders
-      // WIDER than the box and clips. Effectively disable the wrap cap so the
-      // box is sized to the real text width; CC controls line breaks with <br/>.
-      flowchart: { wrappingWidth: 1e6 },
+      // CJK wrapping. mermaid sizes a flowchart node from its measured label and
+      // caps the label at wrappingWidth, BUT the label markup is a table-cell
+      // div with inline `white-space: nowrap`, so by default it never wraps — and
+      // CJK has no spaces, so mermaid's space-based SVG wrap never kicks in
+      // either (the old workaround set wrappingWidth huge → every node became one
+      // long line). Fix: a readable wrap width PLUS a themeCSS override forcing
+      // `white-space: normal` on the label. themeCSS is injected into the SVG
+      // that mermaid measures against, so the node box is sized to the WRAPPED
+      // text (a post-render stylesheet would wrap the text but leave the box at
+      // its nowrap width). `overflow-wrap: anywhere` breaks an over-long
+      // unbreakable run (e.g. a URL); CJK already breaks per character.
+      // (htmlLabels stays the mermaid default of HTML <foreignObject> labels —
+      // set explicitly to document that the themeCSS above depends on it; it
+      // renders under securityLevel:strict here, confirmed in the DOM.)
+      flowchart: { wrappingWidth: 220, htmlLabels: true },
+      themeCSS:
+        ".nodeLabel, .nodeLabel p { white-space: normal !important; overflow-wrap: anywhere; }",
     });
     let cancelled = false;
     // Wait for webfonts before rendering so CJK glyph metrics are final at

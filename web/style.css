@@ -3088,6 +3088,17 @@ body.concern-resizing * {
 .diagram-context.collapsed {
   padding: 3px 62px 3px 16px;
 }
+/* When the sidebar is collapsed (desktop only), the floating reopen tab is
+   pinned at the top-left (.sidebar-reopen: position:fixed; top:72px; left:10px)
+   exactly where the context bar's text starts once the sidebar is gone — so it
+   covered the description. Clear room on the left for it, in both the expanded
+   and the collapsed (thin-strip) states. */
+@media (min-width: 769px) {
+  .sidebar.collapsed ~ .app-main-slot .diagram-context,
+  .sidebar.collapsed ~ .app-main-slot .diagram-context.collapsed {
+    padding-left: 60px;
+  }
+}
 /* The description body is capped at ~4 lines and scrolls, so a long description
    can't eat the canvas height. */
 .diagram-context-body {
