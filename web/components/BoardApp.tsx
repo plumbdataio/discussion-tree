@@ -219,11 +219,14 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     const targetNodeId = (oldestUnread ?? latest)?.nodeId;
     if (!targetNodeId) return;
 
-    // Align the target column to the left edge, no vertical move, no animation.
+    // Center the target column horizontally, no vertical move, no animation.
+    // (Center, not left edge: the eye lands at the viewport centre on a jump, so
+    // a left-edge target forces a gaze shift, and centring also keeps the
+    // neighbouring columns visible so the node's relation to them reads.)
     // A heavy board keeps reflowing after first paint (late markdown / image
-    // loads in earlier columns push the target rightward), so re-assert each
-    // frame until the position stops moving or ~800ms passes — and bail the
-    // instant the user scrolls so we never fight them for the viewport.
+    // loads in earlier columns shift the target), so re-assert each frame until
+    // the position stops moving or ~800ms passes — and bail the instant the user
+    // scrolls so we never fight them for the viewport.
     const sel = `.item-card[data-node-id="${CSS.escape(targetNodeId)}"]`;
     let aborted = false;
     const stop = () => {
@@ -248,7 +251,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
       if (!card || !document.querySelector(".board-container")) return cleanup();
       card.scrollIntoView({
         behavior: "instant",
-        inline: "start",
+        inline: "center",
         block: "nearest",
       });
       const left = card.getBoundingClientRect().left;
