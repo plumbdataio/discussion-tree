@@ -171,6 +171,112 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     return subscribePendingJump(tryConsume);
   }, [boardId, data]);
 
+  // Initial board position: when a CONCERN board first opens, bring the most
+  // relevant node into horizontal view — the node holding the OLDEST unread CC
+  // message if anything is unread (the first thing to read), otherwise the node
+  // holding the LATEST message. Fires ONCE per board open (a ref guards against
+  // WS data updates re-yanking the view) and never for the default board or the
+  // structure-change log node. It positions the COLUMN only — deliberately not
+  // the thread inside the card, since a hidden mid-thread scroll reads as "why
+  // isn't this at the bottom?".
+  const initialPositionedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!boardId || !data) return;
+    if (data.board.id !== boardId) return; // wait for THIS board's data
+    if (initialPositionedRef.current === boardId) return; // once per open
+    initialPositionedRef.current = boardId;
+    if (data.board.is_default) return; // default board keeps its own behavior
+
+    // The structure-change log node(s) are not a discussion topic — exclude.
+    const logNodeIds = new Set(
+      data.nodes.filter((n) => n.is_log === 1).map((n) => n.id),
+    );
+    // Only consider nodes whose card is actually rendered — that respects the
+    // status filter (filtered-out nodes have no card), so we never target a node
+    // the user can't see and then silently no-op. (Effects run after commit, so
+    // the cards for THIS data are already in the DOM here.)
+    const renderedNodeIds = new Set(
+      Array.from(
+        document.querySelectorAll(".board-container .item-card[data-node-id]"),
+      ).map((el) => el.getAttribute("data-node-id")),
+    );
+    // created_at is an ISO string, so lexicographic compare = chronological.
+    let oldestUnread: { nodeId: string; at: string } | null = null;
+    let latest: { nodeId: string; at: string } | null = null;
+    for (const [nodeId, items] of Object.entries(data.threads)) {
+      if (logNodeIds.has(nodeId) || !renderedNodeIds.has(nodeId)) continue;
+      for (const it of items) {
+        if (!latest || it.created_at > latest.at) {
+          latest = { nodeId, at: it.created_at };
+        }
+        if (it.source === "cc" && !it.read_at) {
+          if (!oldestUnread || it.created_at < oldestUnread.at) {
+            oldestUnread = { nodeId, at: it.created_at };
+          }
+        }
+      }
+    }
+    const targetNodeId = (oldestUnread ?? latest)?.nodeId;
+    if (!targetNodeId) return;
+
+    // Align the target column to the left edge, no vertical move, no animation.
+    // A heavy board keeps reflowing after first paint (late markdown / image
+    // loads in earlier columns push the target rightward), so re-assert each
+    // frame until the position stops moving or ~800ms passes — and bail the
+    // instant the user scrolls so we never fight them for the viewport.
+    const sel = `.item-card[data-node-id="${CSS.escape(targetNodeId)}"]`;
+    let aborted = false;
+    const stop = () => {
+      aborted = true;
+    };
+    const scroller = document.querySelector(".board-container");
+    scroller?.addEventListener("wheel", stop, { passive: true });
+    scroller?.addEventListener("touchstart", stop, { passive: true });
+    window.addEventListener("keydown", stop);
+    const cleanup = () => {
+      scroller?.removeEventListener("wheel", stop);
+      scroller?.removeEventListener("touchstart", stop);
+      window.removeEventListener("keydown", stop);
+    };
+    const startedAt = performance.now();
+    let lastLeft = NaN;
+    let stableFrames = 0;
+    let rafId = 0;
+    const settle = () => {
+      if (aborted) return cleanup();
+      const card = document.querySelector(sel) as HTMLElement | null;
+      if (!card || !document.querySelector(".board-container")) return cleanup();
+      card.scrollIntoView({
+        behavior: "instant",
+        inline: "start",
+        block: "nearest",
+      });
+      const left = card.getBoundingClientRect().left;
+      stableFrames = Math.abs(left - lastLeft) < 1 ? stableFrames + 1 : 0;
+      lastLeft = left;
+      if (stableFrames < 2 && performance.now() - startedAt < 800) {
+        rafId = requestAnimationFrame(settle);
+      } else {
+        cleanup();
+      }
+    };
+    rafId = requestAnimationFrame(() => {
+      rafId = requestAnimationFrame(settle);
+    });
+    // Deterministic teardown: React runs this on unmount, board switch, AND a
+    // same-board data refresh (the `data` dep). The first two are the point —
+    // kill the rAF chain + drop listeners so a stale board's loop can't run
+    // against the next board and the window keydown listener can't leak. A
+    // same-board refresh mid-settle also stops the loop early; that's fine — the
+    // target is already placed and the next invocation short-circuits at the ref
+    // guard (no re-position, no duplicate loop).
+    return () => {
+      aborted = true;
+      cancelAnimationFrame(rafId);
+      cleanup();
+    };
+  }, [boardId, data]);
+
   // Browser-tab breadcrumb title so external trackers (Clockify auto-tracker,
   // tab strip, history) get something more useful than the bare app name.
   // Shared hook — same format on every page.
