@@ -6,9 +6,15 @@
 import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import type { PollMessagesResponse } from "../shared/types.ts";
 import { brokerFetch } from "./broker-client.ts";
-import { BROKER_URL } from "./config.ts";
+import { BROKER_FETCH_TIMEOUT_MS, BROKER_URL } from "./config.ts";
 import { log } from "./log.ts";
 import { getSessionId } from "./state.ts";
+
+// Overlap guard: the poll fires every POLL_INTERVAL_MS (1s), but a single drain
+// can take up to BROKER_FETCH_TIMEOUT_MS when the broker is wedged. Skipping a
+// tick while the previous run is still in flight keeps stuck calls from piling
+// up into a connection storm.
+let pollInFlight = false;
 
 // Fetch the list of OTHER, currently-active option-decision boards owned by
 // this session — used to nudge the LLM not to put new decision points into
@@ -17,7 +23,9 @@ import { getSessionId } from "./state.ts";
 // broker is momentarily unreachable we just return an empty list.
 async function fetchActiveBoardSummary(sessionId: string): Promise<string> {
   try {
-    const res = await fetch(`${BROKER_URL}/api/sessions`);
+    const res = await fetch(`${BROKER_URL}/api/sessions`, {
+      signal: AbortSignal.timeout(BROKER_FETCH_TIMEOUT_MS),
+    });
     if (!res.ok) return "";
     const data = (await res.json()) as {
       sessions: {
@@ -84,6 +92,8 @@ async function fetchMapShape(mapId: string): Promise<string> {
 export async function pollAndPushMessages(mcp: Server): Promise<void> {
   const sessionId = getSessionId();
   if (!sessionId) return;
+  if (pollInFlight) return;
+  pollInFlight = true;
   try {
     const result = await brokerFetch<PollMessagesResponse>(
       "/poll-messages",
@@ -214,5 +224,7 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
     }
   } catch (e) {
     log(`Poll error: ${e instanceof Error ? e.message : String(e)}`);
+  } finally {
+    pollInFlight = false;
   }
 }

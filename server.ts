@@ -20,6 +20,7 @@ import type { RegisterResponse } from "./shared/types.ts";
 import { selfHealAttachOnce, tryAutoAttach } from "./server/auto-attach.ts";
 import { brokerFetch, ensureBroker } from "./server/broker-client.ts";
 import {
+  BROKER_RESPAWN_AFTER_FAILS,
   HEARTBEAT_INTERVAL_MS,
   POLL_INTERVAL_MS,
 } from "./server/config.ts";
@@ -156,6 +157,10 @@ async function main() {
   };
 
   pollTimer = setInterval(() => pollAndPushMessages(mcp), POLL_INTERVAL_MS);
+  // Consecutive heartbeat failures. Reset on any success; once it crosses
+  // BROKER_RESPAWN_AFTER_FAILS the heartbeat tries to relaunch a broker that
+  // has actually stayed down (see below).
+  let heartbeatFails = 0;
   // Heartbeat doubles as a self-healing tick: the broker echoes back the
   // current cc_session_id binding on every /heartbeat, so we get a cheap
   // signal for free. If it's null (auto-attach never succeeded OR was
@@ -181,6 +186,7 @@ async function main() {
         "/heartbeat",
         { session_id: sid },
       );
+      heartbeatFails = 0;
       const reattached = await selfHealAttachOnce(hb.cc_session_id);
       if (reattached) {
         await notifyAttachRecovered(reattached);
@@ -200,13 +206,61 @@ async function main() {
         await notifyAttachFailure();
       }
     } catch {
-      /* non-critical — broker may be momentarily unreachable */
+      // Broker unreachable this tick (momentary blip is normal). After several
+      // CONSECUTIVE misses the broker has actually stayed down, so try to bring
+      // it back ourselves. ensureBroker() no-ops if it is already alive and the
+      // port bind is exclusive, so multiple sessions racing here can't
+      // double-spawn — the losers just see it healthy. The ~45s window is far
+      // longer than a normal restart's sub-second gap, so this never fights a
+      // deploy; it only recovers a broker nobody else brought back.
+      heartbeatFails++;
+      if (heartbeatFails >= BROKER_RESPAWN_AFTER_FAILS) {
+        heartbeatFails = 0;
+        log(
+          `Broker unreachable for ${BROKER_RESPAWN_AFTER_FAILS} heartbeats; attempting respawn`,
+        );
+        try {
+          await ensureBroker();
+        } catch (e) {
+          log(
+            `Broker respawn failed: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
+        }
+      }
     }
   }, HEARTBEAT_INTERVAL_MS);
 
   process.on("SIGINT", cleanup);
   process.on("SIGTERM", cleanup);
 }
+
+// Last-resort net for the long-lived MCP server. A broker blip surfaces as a
+// REJECTED promise; that is recoverable, so log and keep running rather than
+// let an unhandled rejection abort the process (which would force a /mcp
+// reconnect for that session). An uncaughtException, by contrast, is a sync
+// throw that escaped every handler: the process state is unknown, and a
+// wedged-but-alive server would keep heartbeating so the broker never marks the
+// session dead. Log it and exit cleanly so it can't linger as a zombie — no
+// worse than the default crash, just with a breadcrumb. (Genuine fatal STARTUP
+// errors still exit via main().catch below; those are handled rejections and
+// never reach unhandledRejection.)
+process.on("unhandledRejection", (reason) => {
+  log(
+    `Unhandled rejection (kept alive): ${
+      reason instanceof Error ? reason.message : String(reason)
+    }`,
+  );
+});
+process.on("uncaughtException", (err) => {
+  log(
+    `Uncaught exception (exiting): ${
+      err instanceof Error ? err.message : String(err)
+    }`,
+  );
+  process.exit(1);
+});
 
 main().catch((e) => {
   log(`Fatal: ${e instanceof Error ? e.message : String(e)}`);

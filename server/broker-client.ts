@@ -2,17 +2,25 @@
 // a singleton per machine, so the FIRST MCP server to start is the one that
 // actually launches it. All later starters just connect.
 
-import { BROKER_SCRIPT, BROKER_URL } from "./config.ts";
+import {
+  BROKER_FETCH_TIMEOUT_MS,
+  BROKER_SCRIPT,
+  BROKER_URL,
+} from "./config.ts";
 import { log } from "./log.ts";
 
 export async function brokerFetch<T>(
   path: string,
   body: unknown,
 ): Promise<T> {
+  // Bounded so a wedged broker (mid-restart / thrashing) can't hang a poll or
+  // tool call forever — a timeout throws, and every caller already handles a
+  // broker throw (retry next tick / surface as an MCP error).
   const res = await fetch(`${BROKER_URL}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(BROKER_FETCH_TIMEOUT_MS),
   });
   if (!res.ok) {
     const err = await res.text();

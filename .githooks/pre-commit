@@ -4,5 +4,9 @@
 # which package.json's "prepare" script sets on install. See
 # scripts/check-no-japanese.ts for the rules and escape hatches.
 bun run scripts/check-no-japanese.ts || exit 1
+# Build smoke-check: reject a commit whose entry points don't parse / resolve.
+# Bun doesn't type-check at runtime, so a syntax error only surfaces when a
+# module fails to load — see scripts/check-build.sh for the full rationale.
+sh "$(dirname "$0")/../scripts/check-build.sh" || exit 1
 # Then run any pre-commit from the hooks dir we superseded (global / other).
 exec "$(dirname "$0")/_delegate.sh" pre-commit "$@"
