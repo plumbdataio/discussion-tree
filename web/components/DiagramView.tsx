@@ -249,36 +249,24 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
     if (!el) return;
     el.style.maxWidth = "none";
     try {
+      // Double-click keeps panzoom's default (a light zoom-in). We deliberately
+      // do NOT reset the view on double-click: an accidental double-click wiping
+      // the user's carefully-framed zoom/pan is far more annoying than a small
+      // zoom (which is trivial to undo), so reset is intentionally absent.
       pzRef.current = panzoom(el, {
         maxZoom: 8,
         minZoom: 0.2,
         bounds: true,
         boundsPadding: 0.1,
-        // Disable panzoom's own double-click zoom so the dblclick reset listener
-        // below wins (the hint promises "double-click to reset"; without this,
-        // panzoom's default zoom-in hijacked it).
-        zoomDoubleClickSpeed: 1,
       }) as unknown as typeof pzRef.current;
     } catch {
       /* zoom/pan is an enhancement — never let it break the render */
     }
-    // Reset on double-click. Listen on the SVG itself (where panzoom lives), not
-    // the parent div: panzoom consumes the dblclick so a React onDoubleClick on
-    // the parent never sees it. A same-element listener still fires (panzoom does
-    // not stopImmediatePropagation), and zoomDoubleClickSpeed:1 above means
-    // panzoom no longer zooms on it — so this is the only dblclick action left.
-    el.addEventListener("dblclick", resetView);
     return () => {
-      el.removeEventListener("dblclick", resetView);
       pzRef.current?.dispose();
       pzRef.current = null;
     };
   }, [svg]);
-
-  const resetView = () => {
-    pzRef.current?.zoomAbs(0, 0, 1);
-    pzRef.current?.moveTo(0, 0);
-  };
 
   // The owning session's live working/blocked chip (same source as the sidebar
   // + board header). Called unconditionally so the hook order is stable.

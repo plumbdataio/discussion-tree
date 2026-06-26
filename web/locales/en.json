@@ -114,7 +114,7 @@
     "untitled": "Untitled diagram",
     "not_found": "Diagram not found.",
     "parse_error": "Mermaid parse error",
-    "zoom_hint": "Scroll to zoom · drag to pan · double-click to reset",
+    "zoom_hint": "Scroll to zoom · drag to pan",
     "chat_title": "Chat (whole diagram)",
     "chat_note": "Messages here reach Claude, who maintains this diagram. Claude responds either with a reply in this chat or by updating the diagram (it re-renders live).",
     "chat_placeholder": "Message about the diagram… (Enter for newline / ⌘Enter to send)",
