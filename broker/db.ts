@@ -120,6 +120,29 @@ export const selectCliHistory = db.prepare(
   `SELECT args, last_used_at FROM cli_command_history
    WHERE command = ? ORDER BY last_used_at DESC LIMIT 50`,
 );
+
+// Last reported context-window free % per broker session_id. Persisted (not
+// just in memory) so a broker restart — which happens often during deploys —
+// doesn't blank every session's meter until each one re-reports on its next
+// tool call. set_at is kept so a stale value can be dimmed by the UI.
+db.run(`
+  CREATE TABLE IF NOT EXISTS context_usage (
+    session_id TEXT PRIMARY KEY,
+    remaining_pct REAL NOT NULL,
+    set_at TEXT NOT NULL
+  )
+`);
+export const upsertContextUsage = db.prepare(
+  `INSERT INTO context_usage (session_id, remaining_pct, set_at) VALUES (?, ?, ?)
+   ON CONFLICT(session_id) DO UPDATE SET
+     remaining_pct = excluded.remaining_pct, set_at = excluded.set_at`,
+);
+export const selectAllContextUsage = db.prepare(
+  `SELECT session_id, remaining_pct, set_at FROM context_usage`,
+);
+export const deleteContextUsage = db.prepare(
+  `DELETE FROM context_usage WHERE session_id = ?`,
+);
 // Counter of user UI submissions that haven't been matched by a CC
 // post_to_node yet. Incremented when a user_input_relay is delivered to CC,
 // decremented when CC posts back into any node on a board owned by this

@@ -1,4 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   startBroker,
   post,
@@ -86,5 +89,47 @@ describe("/report-context-usage + /api/sessions surfacing", () => {
     const list = await get<{ sessions: any[] }>(`${broker.url}/api/sessions`);
     const me = list.json.sessions.find((s) => s.id === sid)!;
     expect(me.context_usage).toBeNull();
+  });
+
+  test("a reported usage survives a broker restart (DB-persisted)", async () => {
+    // Shared home/db so a second broker re-reads what the first wrote. The
+    // harness's own kill() removes only its auto-created dir, not this one.
+    const home = mkdtempSync(join(tmpdir(), "pd-ctx-persist-"));
+    const env = {
+      DISCUSSION_TREE_HOME: home,
+      DISCUSSION_TREE_DB: join(home, "db.sqlite"),
+    };
+
+    const a = await startBroker(env);
+    // Register with a LIVE pid (this test process) so the session stays alive
+    // across the restart — mirroring the real case where the CC is still
+    // running. (A fake pid would be swept to alive=0 and drop off the active
+    // list, where context_usage is surfaced.)
+    const reg = await post<{ session_id: string }>(`${a.url}/register`, {
+      pid: process.pid,
+      cwd: "/tmp/pd-ctx-persist",
+    });
+    const sid = reg.json.session_id;
+    const ccId = await attachCC(a.url, sid);
+    await post(`${a.url}/report-context-usage`, {
+      cc_session_id: ccId,
+      remaining_pct: 37,
+    });
+    await a.kill();
+
+    // Restart against the same DB; the value should be re-warmed on startup.
+    const b = await startBroker(env);
+    await post(`${b.url}/heartbeat`, { session_id: sid }); // keep it surfaced
+    const list = await get<{ sessions: any[]; inactive_sessions?: any[] }>(
+      `${b.url}/api/sessions`,
+    );
+    const all = [
+      ...list.json.sessions,
+      ...(list.json.inactive_sessions ?? []),
+    ];
+    const me = all.find((s) => s.id === sid);
+    expect(me?.context_usage?.remaining_pct).toBe(37);
+    await b.kill();
+    rmSync(home, { recursive: true, force: true });
   });
 });

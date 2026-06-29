@@ -9,7 +9,12 @@
 // statusline side, so a broker restart simply re-warms within one tool
 // call per session.
 
-import { db } from "./db.ts";
+import {
+  db,
+  deleteContextUsage,
+  selectAllContextUsage,
+  upsertContextUsage,
+} from "./db.ts";
 
 export type ContextUsage = {
   // Free %, 0..100. Matches the file written by statusline-command.sh
@@ -24,6 +29,20 @@ export type ContextUsage = {
 // frontend can join against handleListSessions's per-session row
 // without an extra lookup.
 const usages = new Map<string, ContextUsage>();
+
+// Re-warm from the DB on startup so a broker restart (frequent during deploys)
+// doesn't blank every session's meter until each one re-reports on its next
+// tool call. The original set_at rides along, so the UI can dim a stale value.
+for (const row of selectAllContextUsage.all() as {
+  session_id: string;
+  remaining_pct: number;
+  set_at: string;
+}[]) {
+  usages.set(row.session_id, {
+    remaining_pct: row.remaining_pct,
+    set_at: row.set_at,
+  });
+}
 
 function lookupAliveSessionByCcId(ccSessionId: string): string | null {
   const row = db
@@ -43,10 +62,9 @@ export function handleReportContextUsage(body: {
   if (!sessionId) return { ok: false };
   const pct = typeof body.remaining_pct === "number" ? body.remaining_pct : NaN;
   if (!Number.isFinite(pct) || pct < 0 || pct > 100) return { ok: false };
-  usages.set(sessionId, {
-    remaining_pct: pct,
-    set_at: new Date().toISOString(),
-  });
+  const setAt = new Date().toISOString();
+  usages.set(sessionId, { remaining_pct: pct, set_at: setAt });
+  upsertContextUsage.run(sessionId, pct, setAt);
   return { ok: true, session_id: sessionId };
 }
 
@@ -58,6 +76,7 @@ export function getContextUsage(sessionId: string): ContextUsage | null {
 // Avoids stale "78% free" stuck on a session whose CC died.
 export function dropContextUsage(sessionId: string) {
   usages.delete(sessionId);
+  deleteContextUsage.run(sessionId);
 }
 
 export const routes = {
