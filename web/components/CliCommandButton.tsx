@@ -9,7 +9,7 @@
 // CC isn't in tmux (canCliSend=false), or it's mid-turn / waiting on input
 // (busy=true), where the command would be eaten as a chat message.
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { SquareTerminal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -71,13 +71,17 @@ function CliCommandModal({
 }) {
   const { t } = useTranslation();
   const [command, setCommand] = useState<string>(CLI_COMMANDS[0]);
-  // Empty by default — the user picks from their own past prompts (history)
-  // rather than a baked-in personal default.
+  // Starts empty, then auto-fills with the most recently used prompt on the
+  // first history load (see below); the user can still pick another from the
+  // list or clear it.
   const [args, setArgs] = useState<string>("");
   const [sending, setSending] = useState(false);
   const [history, setHistory] = useState<
     { args: string; last_used_at: string }[]
   >([]);
+  // Auto-fill the latest prompt only once, and never over the top of something
+  // the user has already typed.
+  const didAutofill = useRef(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -87,11 +91,19 @@ function CliCommandModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // Load the de-duplicated arg history for the selected command.
+  // Load the de-duplicated arg history for the selected command (newest first).
   useEffect(() => {
     let cancelled = false;
     getCliHistory(command).then((h) => {
-      if (!cancelled) setHistory(h);
+      if (cancelled) return;
+      setHistory(h);
+      // Pre-fill with the most recently used prompt (h[0]; the broker orders by
+      // last_used_at DESC) so the common "re-run my last compact prompt" path
+      // needs no typing. Once only, and only while the textarea is untouched.
+      if (!didAutofill.current && h.length > 0) {
+        didAutofill.current = true;
+        setArgs((cur) => (cur === "" ? h[0].args : cur));
+      }
     });
     return () => {
       cancelled = true;
