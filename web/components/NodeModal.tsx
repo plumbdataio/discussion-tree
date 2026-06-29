@@ -11,6 +11,7 @@ import { extractImageFiles, uploadImage } from "../utils/api.ts";
 import { useDraft } from "../utils/drafts.ts";
 import { formatThreadTimestamp } from "../utils/format.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
+import { usePreviewModalLock } from "../utils/previewModalLock.ts";
 
 export function NodeModal({
   node,
@@ -31,6 +32,9 @@ export function NodeModal({
   scrollToItemId?: number | null;
 }) {
   const { t } = useTranslation();
+  // While this preview is open, pause the board cards' auto-read behind it
+  // (a node occluded by the preview isn't something the user is reading).
+  usePreviewModalLock();
   const boardId = getBoardIdFromUrl() ?? "misc";
   // Persisted-on-localStorage draft (shared key with the underlying ItemCard
   // for the same node — they back the same conversation, so the draft

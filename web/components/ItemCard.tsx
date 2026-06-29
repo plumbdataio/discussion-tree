@@ -11,6 +11,7 @@ import { extractImageFiles, uploadImage } from "../utils/api.ts";
 import { useDraft } from "../utils/drafts.ts";
 import { getBoardIdFromUrl } from "../utils/url.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
+import { useAnyPreviewModalOpen } from "../utils/previewModalLock.ts";
 import { useSettings } from "../utils/settings.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 
@@ -60,7 +61,10 @@ export function ItemCard({
   const [settings] = useSettings();
   const showManualReadButton = !settings.autoReadEnabled && hasUnread;
 
-  useMarkReadOnVisible(cardRef, myThread);
+  // Pause auto-read while a preview modal occludes the board — a node hidden
+  // behind a preview shouldn't be silently marked read.
+  const previewOpen = useAnyPreviewModalOpen();
+  useMarkReadOnVisible(cardRef, myThread, !previewOpen);
 
   const markNodeRead = () => {
     const ids = myThread

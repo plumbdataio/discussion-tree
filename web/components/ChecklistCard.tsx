@@ -25,6 +25,7 @@ import type {
 } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
 import { jumpToAnchor } from "../utils/anchorJump.ts";
+import { usePreviewModalLock } from "../utils/previewModalLock.ts";
 
 // Read-only renderer for a decision-checklist node (is_checklist=1). The
 // node's checklist_items are mutated only through CC tools — this surface
@@ -281,6 +282,9 @@ function ChecklistBody({ node, sort }: { node: Node; sort: Sort }) {
   // modal — not an inline/popover — because the source list can grow and a
   // small popover would feel cramped.
   const [openId, setOpenId] = useState<number | null>(null);
+  // Hold the preview lock while the sources modal occludes the board, so the
+  // cards behind it don't auto-mark-read.
+  usePreviewModalLock(openId !== null);
   useEffect(() => {
     if (openId == null) return;
     const onKey = (e: KeyboardEvent) => {
@@ -400,6 +404,8 @@ export function ChecklistCard({
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
+  // Hold the preview lock while the expanded checklist occludes the board.
+  usePreviewModalLock(expanded);
   const [sort, updateSort] = useChecklistSort();
   useEffect(() => {
     if (!expanded) return;

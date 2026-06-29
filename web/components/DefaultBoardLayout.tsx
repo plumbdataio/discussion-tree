@@ -8,6 +8,7 @@ import { ThreadMessage } from "./ThreadMessage.tsx";
 import { extractImageFiles, uploadImage } from "../utils/api.ts";
 import { useDraft } from "../utils/drafts.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
+import { useAnyPreviewModalOpen } from "../utils/previewModalLock.ts";
 import { useSettings } from "../utils/settings.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 
@@ -51,7 +52,10 @@ export function DefaultBoardLayout({
   const rootRef = useRef<HTMLDivElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
 
-  useMarkReadOnVisible(rootRef, myThread);
+  // Pause auto-read while a preview modal (e.g. an expanded message) occludes
+  // the thread behind it.
+  const previewOpen = useAnyPreviewModalOpen();
+  useMarkReadOnVisible(rootRef, myThread, !previewOpen);
 
   const [settings] = useSettings();
   const hasUnread = myThread.some((t) => t.source === "cc" && !t.read_at);

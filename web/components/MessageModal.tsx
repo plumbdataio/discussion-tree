@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MDView } from "./MDView.tsx";
+import { usePreviewModalLock } from "../utils/previewModalLock.ts";
 
 export function MessageModal({
   text,
@@ -14,6 +15,8 @@ export function MessageModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  // Pause the board thread's auto-read behind this preview.
+  usePreviewModalLock();
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
