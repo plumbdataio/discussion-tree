@@ -33,6 +33,7 @@ import { ChecklistCard } from "./ChecklistCard.tsx";
 import { MapNodeModal } from "./MapNodeModal.tsx";
 import { useDraft } from "../utils/drafts.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
+import { useAnyPreviewModalOpen } from "../utils/previewModalLock.ts";
 import { useVisibleDwell } from "../utils/useVisibleDwell.ts";
 import { MAP_READ_ZOOM } from "../utils/readTiming.ts";
 import {
@@ -256,11 +257,14 @@ function MapNodeImpl(props: NodeProps) {
   // actually legible. Subscribe to a BOOLEAN derived from the zoom so the node
   // re-renders only when it crosses the threshold, not on every pan/zoom tick.
   const zoomGateOpen = useStore((s) => s.transform[2] >= MAP_READ_ZOOM);
+  // Also pause while a node preview modal occludes the canvas — a node hidden
+  // behind the preview shouldn't be silently marked read.
+  const previewOpen = useAnyPreviewModalOpen();
   // Same visible-dwell auto-read as a board node card, now gated on zoom: while
   // the card is on screen for VISIBLE_DURATION_MS AND zoom ≥ threshold, mark its
   // unread CC messages read (map messages are thread_items, so
   // /mark-thread-items-read clears them + the sidebar unread dot).
-  useMarkReadOnVisible(cardRef, data.messages, zoomGateOpen);
+  useMarkReadOnVisible(cardRef, data.messages, zoomGateOpen && !previewOpen);
 
   // Checklist nodes have no thread, so the same visible-dwell rule (zoom-gated)
   // marks the node-level checklist read instead — identical behaviour via the

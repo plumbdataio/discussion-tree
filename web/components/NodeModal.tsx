@@ -12,6 +12,7 @@ import { useDraft } from "../utils/drafts.ts";
 import { formatThreadTimestamp } from "../utils/format.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 import { usePreviewModalLock } from "../utils/previewModalLock.ts";
+import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 
 export function NodeModal({
   node,
@@ -67,6 +68,11 @@ export function NodeModal({
     // Skip the bottom-snap when opening targeted at a specific message.
     enabled: !scrollToItemId,
   });
+
+  // Mark THIS previewed node's unread CC messages read while the modal is open
+  // (it's the foreground thread the user is reading). Ungated by the preview
+  // lock above — that lock only pauses the board cards BEHIND the modal.
+  useMarkReadOnVisible(threadRef, threadItems);
 
   // When opened from a single message's expand button, scroll that message
   // into view (centered) and flash it so the user finds it in the full thread.

@@ -17,6 +17,7 @@ import { formatThreadTimestamp } from "../utils/format.ts";
 import { useDraft } from "../utils/drafts.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
+import { usePreviewModalLock } from "../utils/previewModalLock.ts";
 import {
   extractImageFiles,
   postMapChat,
@@ -76,6 +77,10 @@ export function MapNodeModal({
   // OPEN regardless of canvas zoom (the zoom gate only guards the tiny on-canvas
   // card; once the modal is up the text is plainly legible). Without this, a
   // node opened from a zoomed-out canvas would stay unread forever.
+  // Hold the lock so the map nodes behind this preview pause their auto-read.
+  // This modal's OWN read above stays ungated (it's the foreground thread the
+  // user is actually looking at), so the previewed node still gets marked read.
+  usePreviewModalLock();
   useMarkReadOnVisible(threadRef, messages, true);
 
   // Opened from a single message's expand button → scroll that message into
