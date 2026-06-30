@@ -204,6 +204,61 @@ export async function postCliSend(
   }
 }
 
+export type SpawnSettings = {
+  base_args: string[];
+  // Login shell to launch claude through; "" means the broker's $SHELL.
+  shell: string;
+  tmux_bin: string;
+  tmux_session: string;
+  enter_count: number;
+  enter_interval_ms: number;
+};
+export type SpawnConfigResponse = {
+  settings: SpawnSettings | null;
+  defaults: SpawnSettings;
+  known_cwds: string[];
+  resumable: {
+    name: string | null;
+    cc_session_id: string;
+    cwd: string | null;
+    alive: number;
+  }[];
+};
+
+// Bootstrap the spawn modal: stored launch config (null on first run) + app
+// defaults + the cwd / resumable-session pick-lists.
+export async function getSpawnConfig(): Promise<SpawnConfigResponse | null> {
+  try {
+    const r = await fetch("/spawn-config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    return (await r.json()) as SpawnConfigResponse;
+  } catch {
+    return null;
+  }
+}
+
+// Persist the launch config + spawn a tmux-backed CC session (new or resume).
+export async function spawnSession(body: {
+  mode: "new" | "resume";
+  config: SpawnSettings;
+  cwd?: string;
+  resume_cc_session_id?: string;
+}): Promise<{ ok: boolean; error?: string; window?: string; tmux_session?: string }> {
+  try {
+    const r = await fetch("/spawn-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return (await r.json()) as { ok: boolean; error?: string };
+  } catch {
+    return { ok: false, error: "network" };
+  }
+}
+
 // De-duplicated history of args previously sent with a CLI command (newest
 // first), so the command modal can offer past prompts to re-use.
 export async function getCliHistory(

@@ -44,6 +44,7 @@ import {
 } from "./broker/sessions.ts";
 import { routes as threadsRoutes } from "./broker/threads.ts";
 import { routes as uploadsRoutes } from "./broker/uploads.ts";
+import { routes as spawnRoutes } from "./broker/spawn.ts";
 import { subscribe, unsubscribe } from "./broker/ws.ts";
 
 // --- Periodic maintenance ---
@@ -79,7 +80,45 @@ const POST_ROUTES: Record<string, RouteHandler> = {
   ...mapRoutes,
   ...mapChecklistRoutes,
   ...diagramsRoutes,
+  ...spawnRoutes,
 };
+
+// Routes that drive tmux (spawn a session, or inject a command into a live CC
+// pane) — i.e. they can cause code execution on the host. They get a same-origin
+// check below. Plain data routes are intentionally not guarded (no auth on the
+// broker by design); these are the ones where a CSRF would be more than data
+// tampering.
+const ORIGIN_GUARDED_PATHS = new Set([
+  "/spawn-config",
+  "/spawn-session",
+  "/cli-send",
+]);
+
+// Same-origin guard for the tmux routes: those can exec on the host, so reject a
+// request whose browser Origin doesn't match where the broker is served from.
+// A cross-site CSRF carries the attacker's Origin (rejected); the dt UI's own
+// requests are same-origin (allowed). A missing Origin (non-browser client /
+// top-level navigation) is allowed. The allow-list is derived mechanically from
+// the request Host + the broker's own URL — no user configuration.
+function sameOriginOk(req: Request): boolean {
+  const origin = req.headers.get("origin");
+  if (!origin) return true;
+  let originHost: string;
+  try {
+    originHost = new URL(origin).host;
+  } catch {
+    return false;
+  }
+  const allowed = new Set<string>([`localhost:${PORT}`, `127.0.0.1:${PORT}`]);
+  const host = req.headers.get("host");
+  if (host) allowed.add(host);
+  try {
+    allowed.add(new URL(PUBLIC_URL).host);
+  } catch {
+    /* ignore */
+  }
+  return allowed.has(originHost);
+}
 
 // --- HTTP + WebSocket server ---
 
@@ -191,6 +230,12 @@ const server = Bun.serve({
       const handler = POST_ROUTES[path];
       if (!handler) {
         return Response.json({ error: "not found" }, { status: 404 });
+      }
+      if (ORIGIN_GUARDED_PATHS.has(path) && !sameOriginOk(req)) {
+        return Response.json(
+          { error: "forbidden (cross-origin)" },
+          { status: 403 },
+        );
       }
       try {
         return Response.json(await handler(body));

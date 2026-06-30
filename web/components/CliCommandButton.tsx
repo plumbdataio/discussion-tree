@@ -1,6 +1,6 @@
 // Header button that injects a TUI command (currently only /compact) into the
 // owning CC's tmux pane via the broker's /cli-send. Opt-in: hidden unless the
-// user enabled cliCommandSend in settings. channels can only carry user
+// user enabled tmux integration in settings. channels can only carry user
 // messages, so a slash command typed here is the only way to trigger e.g.
 // /compact from the WebUI.
 //
@@ -33,7 +33,7 @@ export function CliCommandButton({
   const [settings] = useSettings();
   const [open, setOpen] = useState(false);
 
-  if (!settings.cliCommandSend || !sessionId) return null;
+  if (!settings.tmuxIntegration || !sessionId) return null;
 
   return (
     <>

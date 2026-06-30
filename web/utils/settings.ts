@@ -46,11 +46,12 @@ export type Settings = {
   // on the map view's wide canvas). A floating reopen button stays visible.
   // The mobile drawer is unaffected — it has its own toggle.
   sidebarCollapsed: boolean;
-  // Opt-in: show the header "send a CLI command" button (currently /compact).
-  // It types the command into the owning CC's tmux pane via the broker — so it
-  // only works for sessions launched inside tmux. Off by default (OSS posture:
-  // the feature is invisible until the user explicitly enables it).
-  cliCommandSend: boolean;
+  // Opt-in master switch for tmux-backed operations. When on, discussion-tree
+  // works through tmux to (1) send TUI commands (e.g. /compact) from the header
+  // into a CC's tmux pane, and (2) spawn new CC sessions. Off by default (OSS
+  // posture: these stay invisible until the user explicitly enables them).
+  // (Legacy key name was `cliCommandSend`; migrated forward in readSettings.)
+  tmuxIntegration: boolean;
 };
 
 const DEFAULTS: Settings = {
@@ -70,7 +71,7 @@ const DEFAULTS: Settings = {
   shownSessions: null,
   collapsedSessions: {},
   sidebarCollapsed: false,
-  cliCommandSend: false,
+  tmuxIntegration: false,
 };
 
 const STORAGE_KEY = "pd-settings";
@@ -80,7 +81,13 @@ function readSettings(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULTS;
-    const parsed = JSON.parse(raw) as Partial<Settings>;
+    // Pull the legacy `cliCommandSend` key out of the parsed payload so it is
+    // NOT spread into the result (and so the next writeSettings drops it from
+    // localStorage instead of letting it linger forever); its value is still
+    // carried forward into the renamed `tmuxIntegration` below.
+    const { cliCommandSend, ...parsed } = JSON.parse(raw) as Partial<Settings> & {
+      cliCommandSend?: boolean;
+    };
     // Shallow-merge the top-level, but deep-merge `boardStatusFilter` so
     // future status additions still get a default value when the persisted
     // payload is older than the schema. `collapsedSessions` is similarly
@@ -99,6 +106,11 @@ function readSettings(): Settings {
       sessionOrder: parsed.sessionOrder ?? DEFAULTS.sessionOrder,
       // Preserve an explicit array; both missing and stored-null mean "show all".
       shownSessions: parsed.shownSessions ?? null,
+      // Carry the legacy `cliCommandSend` toggle forward into its renamed key so
+      // users who had it on don't silently lose it when this setting was renamed
+      // (the toggle now also gates tmux session spawning, not just /compact).
+      tmuxIntegration:
+        parsed.tmuxIntegration ?? cliCommandSend ?? DEFAULTS.tmuxIntegration,
     };
   } catch {
     return DEFAULTS;

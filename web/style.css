@@ -5509,6 +5509,11 @@ ul.maps li.current .sidebar-map-link {
   justify-content: space-between;
   gap: 8px;
 }
+.sidebar-title-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
 .sidebar-collapse-btn {
   flex: 0 0 auto;
   display: inline-flex;
@@ -5965,6 +5970,102 @@ ul.maps li.current .sidebar-map-link {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* --- Spawn modal (sidebar "+" : create / resume a tmux-backed CC) --- */
+.settings-input {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.settings-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.spawn-modal {
+  width: min(460px, 94vw);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 86vh;
+  overflow-y: auto;
+}
+.spawn-mode-tabs {
+  display: flex;
+  gap: 6px;
+}
+.spawn-mode-tabs button {
+  flex: 1;
+  padding: 7px 0;
+  font-size: 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.spawn-mode-tabs button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.spawn-config {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+.spawn-config-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 0;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.spawn-config-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+}
+.spawn-hint {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.spawn-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sidebar-spawn-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 6px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.sidebar-spawn-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .cli-explainer-modal {
   width: min(440px, 92vw);
   display: flex;

@@ -180,8 +180,8 @@
     "power_off": "Off",
     "power_while_mcp": "While MCP sessions are connected",
     "power_while_broker": "While the broker is running",
-    "cli_command_label": "Send commands",
-    "cli_command_help": "Shows a \"Send command\" button in the header. It types a TUI command (e.g. /compact) into the tmux pane running the target CC. Only works for sessions whose CC was launched inside tmux.",
+    "tmux_integration_label": "tmux integration",
+    "tmux_integration_help": "Let discussion-tree operate through tmux. When on: (1) send TUI commands (e.g. /compact) from the header to a CC running inside tmux, and (2) spawn new CC sessions from discussion-tree. Requires tmux on the machine.",
     "footer": "Settings are stored in this device's localStorage (per device).",
     "close": "Close (Esc)"
   },
@@ -206,6 +206,31 @@
     "err_command_not_allowed": "That command isn't allowed.",
     "err_generic": "Failed to send the command.",
     "history_title": "Recent prompts (click to fill)"
+  },
+  "spawn": {
+    "button_title": "Spawn a session",
+    "modal_title": "Spawn a Claude Code session",
+    "mode_new": "New",
+    "mode_resume": "Resume",
+    "cwd_label": "Working directory",
+    "cwd_hint": "Where to launch. Created if it doesn't exist. Your shell sets the rest of claude's environment.",
+    "resume_label": "Session to resume",
+    "resume_placeholder": "Pick a session…",
+    "resume_alive_warn": "That session looks alive — close it first; resuming a live session can corrupt its transcript.",
+    "options_title": "Launch options",
+    "base_args_label": "Launch flags (one per line)",
+    "base_args_hint": "Passed to claude on every spawn. Defaults to discussion-tree's own flags; add your own (e.g. extra MCPs) here.",
+    "shell_label": "Login shell",
+    "shell_hint": "Shell claude is launched through (so your rc applies). Blank uses the broker's $SHELL.",
+    "tmux_bin_label": "tmux binary",
+    "spawn": "Spawn",
+    "confirm_spawn": "Spawn now",
+    "spawning": "Spawning…",
+    "cancel": "Cancel",
+    "confirm_text": "This launches an autonomous Claude Code session (permission prompts skipped). Continue?",
+    "spawned_ok": "Session spawned — it will appear in the sidebar shortly.",
+    "spawn_failed": "Spawn failed: {{error}}",
+    "load_failed": "Couldn't load spawn config."
   },
   "modal": {
     "close": "Close (Esc)"

@@ -180,8 +180,8 @@
     "power_off": "抑止しない",
     "power_while_mcp": "MCP セッション接続中のみ",
     "power_while_broker": "broker 起動中は常時",
-    "cli_command_label": "コマンド送信",
-    "cli_command_help": "ヘッダーに「コマンド送信」ボタンを表示します。/compact 等の TUI コマンドを、対象 CC を起動している tmux ペインに送信します。tmux 内で起動した CC のセッションでのみ動作します。",
+    "tmux_integration_label": "tmux 連携",
+    "tmux_integration_help": "dt と tmux を連携させ、tmux 経由の操作を有効にします。オンにすると ① ヘッダーから TUI コマンド送信（/compact 等・tmux 内で起動した CC が対象）／② dt から新規 CC セッションを起動（spawn）。利用にはマシンに tmux が必要です。",
     "footer": "設定はこのデバイスの localStorage に保存されます (デバイスごとに別)。",
     "close": "閉じる (Esc)"
   },
@@ -206,6 +206,31 @@
     "err_command_not_allowed": "許可されていないコマンドです。",
     "err_generic": "コマンドの送信に失敗しました。",
     "history_title": "送信履歴 (クリックで引数欄に反映)"
+  },
+  "spawn": {
+    "button_title": "セッションを起動",
+    "modal_title": "Claude Code セッションを起動",
+    "mode_new": "新規",
+    "mode_resume": "再開",
+    "cwd_label": "作業ディレクトリ",
+    "cwd_hint": "起動する場所。無ければ作成します。claude のその他の環境はあなたのシェルが設定します。",
+    "resume_label": "再開するセッション",
+    "resume_placeholder": "セッションを選択…",
+    "resume_alive_warn": "そのセッションは稼働中のようです。先に終了してください（稼働中の再開は transcript 破損の恐れ）。",
+    "options_title": "起動オプション",
+    "base_args_label": "起動フラグ (1行に1つ)",
+    "base_args_hint": "毎回 claude に渡されます。既定は discussion-tree 自身のフラグ。個人の追加 (例: 別の MCP) はここに。",
+    "shell_label": "ログインシェル",
+    "shell_hint": "claude を起動する際に噛ませるシェル (rc が適用されます)。空欄なら broker の $SHELL。",
+    "tmux_bin_label": "tmux バイナリ",
+    "spawn": "起動",
+    "confirm_spawn": "起動する",
+    "spawning": "起動中…",
+    "cancel": "キャンセル",
+    "confirm_text": "権限確認をスキップした自律的な Claude Code セッションを起動します。よろしいですか？",
+    "spawned_ok": "セッションを起動しました。間もなくサイドバーに表示されます。",
+    "spawn_failed": "起動に失敗: {{error}}",
+    "load_failed": "spawn 設定の読み込みに失敗しました。"
   },
   "modal": {
     "close": "閉じる (Esc)"

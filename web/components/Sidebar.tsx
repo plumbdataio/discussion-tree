@@ -17,9 +17,11 @@ import {
   Shrink,
   ChartNetwork,
   Network,
+  Plus,
 } from "lucide-react";
 import { HelpBubbleIcon } from "./HelpBubbleIcon.tsx";
 import { DiagramIcon } from "./DiagramIcon.tsx";
+import { SpawnModal } from "./SpawnModal.tsx";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { Activity, SessionListItem } from "../../shared/types.ts";
@@ -550,6 +552,7 @@ export function Sidebar({
 }) {
   const { t } = useTranslation();
   const [settings, updateSettings] = useSettings();
+  const [spawnOpen, setSpawnOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionListItem[] | null>(
     cachedSessions,
   );
@@ -833,7 +836,21 @@ export function Sidebar({
           </button>
         </div>
         <div className="sidebar-title-row">
-          <h2 className="sidebar-title">{t("sidebar.sessions")}</h2>
+          <div className="sidebar-title-left">
+            <h2 className="sidebar-title">{t("sidebar.sessions")}</h2>
+            {settings.tmuxIntegration && (
+              <button
+                type="button"
+                className="sidebar-spawn-btn"
+                aria-label={t("spawn.button_title")}
+                title={t("spawn.button_title")}
+                onClick={() => setSpawnOpen(true)}
+              >
+                <Plus size={16} strokeWidth={2.25} />
+              </button>
+            )}
+          </div>
+          {spawnOpen && <SpawnModal onClose={() => setSpawnOpen(false)} />}
           <button
             type="button"
             className="sidebar-collapse-btn"

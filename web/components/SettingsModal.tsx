@@ -154,21 +154,21 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="settings-row">
-          <label className="settings-label" htmlFor="settings-cli-command">
-            {t("settings.cli_command_label")}
+          <label className="settings-label" htmlFor="settings-tmux-integration">
+            {t("settings.tmux_integration_label")}
           </label>
           <div className="settings-control">
             <Toggle
-              id="settings-cli-command"
-              checked={settings.cliCommandSend}
+              id="settings-tmux-integration"
+              checked={settings.tmuxIntegration}
               onChange={(v) => {
-                update({ cliCommandSend: v });
+                update({ tmuxIntegration: v });
                 // Explain the tmux requirement the moment it's switched on.
                 if (v) setShowCliExplainer(true);
               }}
             />
           </div>
-          <p className="settings-help">{t("settings.cli_command_help")}</p>
+          <p className="settings-help">{t("settings.tmux_integration_help")}</p>
         </div>
 
         <p className="settings-footer">{t("settings.footer")}</p>
