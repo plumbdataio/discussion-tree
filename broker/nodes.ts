@@ -5,7 +5,11 @@
 // don't change shape; the i18n-driven seed override means renames just shift
 // what the user sees in their language).
 
-import type { NodeInput } from "../shared/types.ts";
+import {
+  type NodeInput,
+  ALL_NODE_STATUSES,
+  isValidNodeStatus,
+} from "../shared/types.ts";
 import {
   db,
   insertNode,
@@ -170,9 +174,15 @@ export function handleUpdateNode(body: any) {
 }
 
 export function handleSetNodeStatus(body: any) {
-  // Status validation (the enum check) lives in the MCP tool's input schema in
-  // server.ts. The broker accepts any string here so tests can lock that
-  // behavior in across modularization.
+  // Reject a status the enum doesn't know. The MCP tool schema's enum is only
+  // advisory (a confused caller once got status="namzn" stored, rendering as a
+  // nonsense badge), so the broker validates for real.
+  if (typeof body.status !== "string" || !isValidNodeStatus(body.status)) {
+    return {
+      ok: false,
+      error: `invalid node status "${body.status}" (allowed: ${ALL_NODE_STATUSES.join(", ")})`,
+    };
+  }
   const cur = db
     .prepare("SELECT status, kind FROM nodes WHERE board_id = ? AND id = ?")
     .get(body.board_id, body.node_id) as

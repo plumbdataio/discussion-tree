@@ -6,7 +6,11 @@
 // elapses). Mark-read endpoints flip read_at on existing thread items and
 // fan out a sidebar-refresh so the unread dot updates everywhere.
 
-import type { Board } from "../shared/types.ts";
+import {
+  type Board,
+  ALL_NODE_STATUSES,
+  isValidNodeStatus,
+} from "../shared/types.ts";
 import {
   bumpStatusToDiscussing,
   db,
@@ -104,6 +108,17 @@ export function handlePostToNode(body: any) {
       "UPDATE sessions SET unanswered_nag_streak = 0, unanswered_nag_count = 0, unanswered_nag_sig = '' WHERE id = ?",
       [ownerRow.session_id],
     );
+  }
+
+  // Reject a garbage status BEFORE posting so it can't be stored (a confused
+  // caller once wrote status="namzn", which then rendered as a nonsense badge).
+  // The MCP schema's enum is advisory — it doesn't reliably block bad values —
+  // so the broker is the real guard.
+  if (body.status && !isValidNodeStatus(body.status)) {
+    return {
+      ok: false,
+      error: `invalid node status "${body.status}" (allowed: ${ALL_NODE_STATUSES.join(", ")})`,
+    };
   }
 
   // 1. CC message goes in first so it appears before any status_change in

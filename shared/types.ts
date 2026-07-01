@@ -47,6 +47,18 @@ export function isSettledNodeStatus(s: NodeStatus | string): boolean {
   return (SETTLED_NODE_STATUSES as readonly string[]).includes(s);
 }
 
+// The full valid enum. Writers validate against this so a garbage status from a
+// confused caller can't be stored verbatim (it would otherwise render as a
+// nonsense badge on the node card).
+export const ALL_NODE_STATUSES: readonly NodeStatus[] = [
+  ...IN_PROGRESS_NODE_STATUSES,
+  ...SETTLED_NODE_STATUSES,
+];
+
+export function isValidNodeStatus(s: string): s is NodeStatus {
+  return (ALL_NODE_STATUSES as readonly string[]).includes(s);
+}
+
 // CC-supplied input shapes (used by create_board / add_concern / add_item).
 
 export interface NodeInput {

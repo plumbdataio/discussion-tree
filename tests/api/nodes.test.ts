@@ -175,16 +175,22 @@ describe("nodes", () => {
     );
   });
 
-  // Note: /set-node-status currently does NOT validate the status value at the
-  // broker layer — that's enforced by the MCP tool's input schema in server.ts.
-  // We lock in this behavior here so future modularization preserves it.
-  test("/set-node-status accepts any string at the broker layer (validation lives in the MCP schema)", async () => {
-    const r = await post<{ ok: boolean }>(`${broker.url}/set-node-status`, {
+  // The broker validates the status enum itself (the MCP schema's enum is only
+  // advisory — a confused caller once got status="namzn" stored). A garbage
+  // value is rejected; a real one is accepted.
+  test("/set-node-status rejects a status the enum doesn't know", async () => {
+    const bad = await post<{ ok: boolean }>(`${broker.url}/set-node-status`, {
       board_id: boardId,
       node_id: "i1a",
       status: "any-arbitrary-value",
     });
-    expect(r.json.ok).toBe(true);
+    expect(bad.json.ok).toBe(false);
+    const good = await post<{ ok: boolean }>(`${broker.url}/set-node-status`, {
+      board_id: boardId,
+      node_id: "i1a",
+      status: "adopted",
+    });
+    expect(good.json.ok).toBe(true);
   });
 
   test("/delete-node soft-deletes (sets deleted_at, hidden from view)", async () => {
