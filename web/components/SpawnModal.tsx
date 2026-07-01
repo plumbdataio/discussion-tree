@@ -29,7 +29,6 @@ export function SpawnModal({ onClose }: { onClose: () => void }) {
   const [tmuxBin, setTmuxBin] = useState("");
   const [configOpen, setConfigOpen] = useState(false);
   // Carried through unchanged.
-  const [tmuxSession, setTmuxSession] = useState("dt-fleet");
   const [enterCount, setEnterCount] = useState(2);
   const [enterIntervalMs, setEnterIntervalMs] = useState(5000);
 
@@ -37,6 +36,8 @@ export function SpawnModal({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<"new" | "resume">("new");
   const [cwd, setCwd] = useState("");
   const [resumeCcId, setResumeCcId] = useState("");
+  // Optional tmux session name; blank lets the broker name it from the folder.
+  const [sessionName, setSessionName] = useState("");
 
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
@@ -63,7 +64,6 @@ export function SpawnModal({ onClose }: { onClose: () => void }) {
       setBaseArgsText((s.base_args ?? []).join("\n"));
       setShell(s.shell ?? "");
       setTmuxBin(s.tmux_bin ?? "");
-      setTmuxSession(s.tmux_session || "dt-fleet");
       setEnterCount(s.enter_count ?? 2);
       setEnterIntervalMs(s.enter_interval_ms ?? 5000);
       // First run (nothing saved) → reveal the options section.
@@ -81,7 +81,6 @@ export function SpawnModal({ onClose }: { onClose: () => void }) {
       .filter(Boolean),
     shell: shell.trim(),
     tmux_bin: tmuxBin.trim(),
-    tmux_session: tmuxSession.trim() || "dt-fleet",
     enter_count: enterCount,
     enter_interval_ms: enterIntervalMs,
   });
@@ -94,14 +93,21 @@ export function SpawnModal({ onClose }: { onClose: () => void }) {
     setSending(true);
     setError(null);
     const config = buildConfig();
+    const tmux_session_name = sessionName.trim();
     const body =
       mode === "new"
-        ? { mode, config, cwd: cwd.trim() }
-        : { mode, config, resume_cc_session_id: resumeCcId };
+        ? { mode, config, cwd: cwd.trim(), tmux_session_name }
+        : { mode, config, resume_cc_session_id: resumeCcId, tmux_session_name };
     const res = await spawnSession(body);
     setSending(false);
     if (res.ok) {
-      showToast(t("spawn.spawned_ok"), "ok");
+      // The broker may have suffixed a colliding name; show the one it used.
+      showToast(
+        res.tmux_session
+          ? t("spawn.spawned_ok_named", { name: res.tmux_session })
+          : t("spawn.spawned_ok"),
+        "ok",
+      );
       onClose();
     } else {
       setConfirming(false);
@@ -193,6 +199,19 @@ export function SpawnModal({ onClose }: { onClose: () => void }) {
             ) : null}
           </div>
         )}
+
+        <div className="cli-command-field">
+          <label className="settings-label">
+            {t("spawn.session_name_label")}
+          </label>
+          <input
+            className="settings-input"
+            value={sessionName}
+            onChange={(e) => setSessionName(e.target.value)}
+            placeholder={t("spawn.session_name_placeholder")}
+          />
+          <p className="spawn-hint">{t("spawn.session_name_hint")}</p>
+        </div>
 
         <div className="spawn-config">
           <button

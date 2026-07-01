@@ -209,7 +209,6 @@ export type SpawnSettings = {
   // Login shell to launch claude through; "" means the broker's $SHELL.
   shell: string;
   tmux_bin: string;
-  tmux_session: string;
   enter_count: number;
   enter_interval_ms: number;
 };
@@ -246,14 +245,28 @@ export async function spawnSession(body: {
   config: SpawnSettings;
   cwd?: string;
   resume_cc_session_id?: string;
-}): Promise<{ ok: boolean; error?: string; window?: string; tmux_session?: string }> {
+  // The tmux session name to create; blank lets the broker derive one from the
+  // folder / dt session name.
+  tmux_session_name?: string;
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  window?: string;
+  tmux_session?: string;
+  session_renamed?: boolean;
+}> {
   try {
     const r = await fetch("/spawn-session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    return (await r.json()) as { ok: boolean; error?: string };
+    return (await r.json()) as {
+      ok: boolean;
+      error?: string;
+      tmux_session?: string;
+      session_renamed?: boolean;
+    };
   } catch {
     return { ok: false, error: "network" };
   }

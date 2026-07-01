@@ -1,19 +1,21 @@
 // tmux-backed session spawner. Launches a fresh Claude Code session (or
-// resumes a dt-known one) inside a dedicated detached tmux session, so the user
+// resumes a dt-known one) inside its OWN detached tmux session, so the user
 // can create + drive CC sessions entirely from the discussion-tree UI without
-// touching a terminal.
+// touching a terminal. Each spawn gets an independent tmux session (named in the
+// modal, or auto-derived from the folder), rather than all spawns sharing one.
 //
 // claude is launched through the user's own login shell:
 //
-//   tmux new-window -c <cwd> -- <shell> -ic 'claude "$@"' <shell> <flags...>
+//   tmux new-session -d -s <name> -c <cwd> -- <shell> -ic 'claude "$@"' <shell> <flags...>
 //
 // Running through `<shell> -ic` sources the user's rc, so their normal claude
 // environment applies (PATH, and e.g. a cwd -> CLAUDE_CONFIG_DIR wrapper) — dt
 // stays generic and hardcodes nothing machine-specific. Flags are passed as
 // positional params via "$@", so there is no shell-injection surface from them.
 // The only persisted config is the flag list (authored once in the modal,
-// stored in SQLite); cwd is chosen per spawn and resume re-uses the session's
-// recorded cwd (so the shell re-derives the same config dir).
+// stored in SQLite); cwd and the tmux session name are chosen per spawn, and
+// resume re-uses the session's recorded cwd (so the shell re-derives the same
+// config dir).
 //
 // SECURITY: this can launch an arbitrary executable — the shell, the tmux
 // binary, and claude's flags all come from the persisted config that the modal
@@ -26,6 +28,7 @@ import * as fs from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { db } from "./db.ts";
+import { defaultSessionName, sanitizeSessionName } from "./spawn-names.ts";
 
 db.run(
   `CREATE TABLE IF NOT EXISTS spawn_config (
@@ -35,7 +38,6 @@ db.run(
   )`,
 );
 
-const DEFAULT_TMUX_SESSION = "dt-fleet";
 const DEFAULT_ENTER_COUNT = 2;
 const DEFAULT_ENTER_INTERVAL_MS = 5000;
 
@@ -49,7 +51,6 @@ const APP_DEFAULTS: SpawnConfig = {
   ],
   shell: "",
   tmux_bin: "tmux",
-  tmux_session: DEFAULT_TMUX_SESSION,
   enter_count: DEFAULT_ENTER_COUNT,
   enter_interval_ms: DEFAULT_ENTER_INTERVAL_MS,
 };
@@ -59,7 +60,6 @@ interface SpawnConfig {
   // Login shell to launch claude through. Empty = $SHELL (resolved at spawn).
   shell: string;
   tmux_bin: string;
-  tmux_session: string;
   enter_count: number;
   enter_interval_ms: number;
 }
@@ -88,10 +88,6 @@ function normalize(raw: any): SpawnConfig {
       typeof raw?.tmux_bin === "string" && raw.tmux_bin.trim()
         ? raw.tmux_bin.trim()
         : APP_DEFAULTS.tmux_bin,
-    tmux_session:
-      typeof raw?.tmux_session === "string" && raw.tmux_session.trim()
-        ? raw.tmux_session.trim()
-        : APP_DEFAULTS.tmux_session,
     enter_count:
       Number.isFinite(raw?.enter_count) && raw.enter_count >= 0
         ? Math.floor(raw.enter_count)
@@ -156,6 +152,31 @@ function tmux(
   };
 }
 
+// Names of tmux sessions the server currently knows (empty when tmux isn't
+// running / has no server yet, which is fine — every name is then free).
+function existingSessions(cfg: SpawnConfig): Set<string> {
+  const r = tmux(cfg, ["list-sessions", "-F", "#{session_name}"]);
+  if (!r.ok) return new Set();
+  return new Set(
+    r.stdout
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+}
+
+// Ensure each spawn lands in its OWN session: if the requested name is taken,
+// suffix it (name-2, name-3, …) rather than colliding into the existing one.
+function uniqueSessionName(cfg: SpawnConfig, base: string): string {
+  const taken = existingSessions(cfg);
+  if (!taken.has(base)) return base;
+  for (let i = 2; i < 100; i++) {
+    const candidate = `${base}-${i}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return `${base}-${Date.now()}`;
+}
+
 function knownCwds(): string[] {
   const rows = db
     .prepare(
@@ -203,6 +224,9 @@ export async function handleSpawnSession(body: any) {
 
   const mode = body?.mode === "resume" ? "resume" : "new";
   let cwd: string;
+  // A blank tmux-session-name field falls back to a default derived from this
+  // hint (the dt session name on resume) or the cwd basename.
+  let nameHint: string | null = null;
   const extraArgs: string[] = [];
 
   if (mode === "resume") {
@@ -210,9 +234,11 @@ export async function handleSpawnSession(body: any) {
     if (!ccId) return { ok: false, error: "resume_cc_session_id required" };
     const row = db
       .prepare(
-        "SELECT cwd, alive FROM sessions WHERE cc_session_id = ? ORDER BY last_seen DESC LIMIT 1",
+        "SELECT name, cwd, alive FROM sessions WHERE cc_session_id = ? ORDER BY last_seen DESC LIMIT 1",
       )
-      .get(ccId) as { cwd: string | null; alive: number } | undefined;
+      .get(ccId) as
+      | { name: string | null; cwd: string | null; alive: number }
+      | undefined;
     if (!row) return { ok: false, error: "no dt session with that cc_session_id" };
     if (row.alive === 1) {
       return {
@@ -222,6 +248,7 @@ export async function handleSpawnSession(body: any) {
     }
     if (!row.cwd) return { ok: false, error: "that session has no recorded cwd" };
     cwd = row.cwd;
+    nameHint = row.name;
     extraArgs.push("-r", ccId);
   } else {
     const rawCwd = String(body?.cwd ?? "").trim();
@@ -262,10 +289,25 @@ export async function handleSpawnSession(body: any) {
     ...cfg.base_args,
     ...extraArgs,
   ];
-  const have = tmux(cfg, ["has-session", "-t", cfg.tmux_session]);
-  const spawnArgs = have.ok
-    ? ["new-window", "-t", cfg.tmux_session, "-c", cwd, "-P", "-F", "#{window_id}", ...launch]
-    : ["new-session", "-d", "-s", cfg.tmux_session, "-c", cwd, "-P", "-F", "#{window_id}", ...launch];
+  // Resolve the tmux session name: the explicit field, else a default from the
+  // dt name / cwd. Suffix on collision so each spawn is its own session.
+  const requestedName = String(body?.tmux_session_name ?? "").trim();
+  const baseName = requestedName
+    ? sanitizeSessionName(requestedName)
+    : defaultSessionName(nameHint, cwd);
+  const sessionName = uniqueSessionName(cfg, baseName);
+  const spawnArgs = [
+    "new-session",
+    "-d",
+    "-s",
+    sessionName,
+    "-c",
+    cwd,
+    "-P",
+    "-F",
+    "#{window_id}",
+    ...launch,
+  ];
   const res = tmux(cfg, spawnArgs);
   if (!res.ok) {
     return { ok: false, error: `tmux failed: ${res.stderr || "unknown error"}` };
@@ -289,7 +331,16 @@ export async function handleSpawnSession(body: any) {
     }
   }
 
-  return { ok: true, mode, tmux_session: cfg.tmux_session, window: windowId, cwd };
+  return {
+    ok: true,
+    mode,
+    tmux_session: sessionName,
+    // True when the requested/derived name was taken and we suffixed it, so the
+    // UI can tell the user the session landed under a slightly different name.
+    session_renamed: sessionName !== baseName,
+    window: windowId,
+    cwd,
+  };
 }
 
 export const routes = {
