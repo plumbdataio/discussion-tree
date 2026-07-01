@@ -181,7 +181,7 @@
     "power_while_mcp": "While MCP sessions are connected",
     "power_while_broker": "While the broker is running",
     "tmux_integration_label": "tmux integration",
-    "tmux_integration_help": "Let discussion-tree operate through tmux. When on: (1) send TUI commands (e.g. /compact) from the header to a CC running inside tmux, and (2) spawn new CC sessions from discussion-tree. Requires tmux on the machine.",
+    "tmux_integration_help": "Let discussion-tree operate through tmux. When on: (1) send TUI commands (e.g. /compact) from the header to a CC running inside tmux, and (2) spawn new CC sessions from discussion-tree. Requires tmux on the machine. Saved on the server (per machine), so it survives a browser data-clear and is shared across your devices.",
     "cli_verbosity_label": "CLI verbosity",
     "cli_verbosity_default": "Default",
     "cli_verbosity_concise": "Concise",

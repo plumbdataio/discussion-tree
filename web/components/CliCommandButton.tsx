@@ -13,7 +13,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { SquareTerminal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useSettings } from "../utils/settings.ts";
+import { useTmuxIntegration } from "../utils/tmuxIntegration.ts";
 import { getCliHistory, postCliSend } from "../utils/api.ts";
 import { showToast } from "./Toast.tsx";
 
@@ -30,10 +30,10 @@ export function CliCommandButton({
   busy: boolean;
 }) {
   const { t } = useTranslation();
-  const [settings] = useSettings();
+  const [tmuxIntegration] = useTmuxIntegration();
   const [open, setOpen] = useState(false);
 
-  if (!settings.tmuxIntegration || !sessionId) return null;
+  if (!tmuxIntegration || !sessionId) return null;
 
   return (
     <>

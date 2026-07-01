@@ -38,6 +38,10 @@ import {
   initCliVerbosity,
   routes as cliVerbosityRoutes,
 } from "./broker/cli-verbosity.ts";
+import {
+  initTmuxIntegration,
+  routes as tmuxIntegrationRoutes,
+} from "./broker/tmux-integration.ts";
 import { initPower, routes as powerRoutes } from "./broker/power.ts";
 import { routes as readsRoutes } from "./broker/reads.ts";
 import { routes as contextUsageRoutes } from "./broker/context-usage.ts";
@@ -58,6 +62,7 @@ setInterval(cleanStaleSessions, STALE_SESSION_SWEEP_MS);
 startActivityWatchdog();
 initPower();
 initCliVerbosity();
+initTmuxIntegration();
 
 // --- POST route registry ---
 //
@@ -79,6 +84,7 @@ const POST_ROUTES: Record<string, RouteHandler> = {
   ...feedbackRoutes,
   ...powerRoutes,
   ...cliVerbosityRoutes,
+  ...tmuxIntegrationRoutes,
   ...readsRoutes,
   ...contextUsageRoutes,
   ...favoritesRoutes,

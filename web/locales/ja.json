@@ -181,7 +181,7 @@
     "power_while_mcp": "MCP セッション接続中のみ",
     "power_while_broker": "broker 起動中は常時",
     "tmux_integration_label": "tmux 連携",
-    "tmux_integration_help": "dt と tmux を連携させ、tmux 経由の操作を有効にします。オンにすると ① ヘッダーから TUI コマンド送信（/compact 等・tmux 内で起動した CC が対象）／② dt から新規 CC セッションを起動（spawn）。利用にはマシンに tmux が必要です。",
+    "tmux_integration_help": "dt と tmux を連携させ、tmux 経由の操作を有効にします。オンにすると ① ヘッダーから TUI コマンド送信（/compact 等・tmux 内で起動した CC が対象）／② dt から新規 CC セッションを起動（spawn）。利用にはマシンに tmux が必要です。設定はサーバ側（マシン単位）に保存されるので、ブラウザのデータ消去でも消えず、デバイス間で共有されます。",
     "cli_verbosity_label": "CLI の発言量",
     "cli_verbosity_default": "デフォルト",
     "cli_verbosity_concise": "簡潔",

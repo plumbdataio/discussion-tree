@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import type { SupportedLanguage } from "../i18n.ts";
 import type { CliVerbosity } from "../../shared/types.ts";
 import { type ThemeChoice, useSettings } from "../utils/settings.ts";
+import { useTmuxIntegration } from "../utils/tmuxIntegration.ts";
 import { Toggle } from "./Toggle.tsx";
 
 type PowerPref = "off" | "while-broker" | "while-mcp-active";
@@ -12,6 +13,8 @@ type PowerPref = "off" | "while-broker" | "while-mcp-active";
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const [settings, update] = useSettings();
+  // Server-side (per-machine) — see web/utils/tmuxIntegration.ts.
+  const [tmuxIntegration, setTmuxIntegration] = useTmuxIntegration();
   // Sleep-prevention is a per-broker (i.e. per-machine) setting, so it lives
   // server-side rather than in localStorage. Fetch on mount and POST on
   // change. `platform` is returned by the broker so we can grey out the
@@ -190,9 +193,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           <div className="settings-control">
             <Toggle
               id="settings-tmux-integration"
-              checked={settings.tmuxIntegration}
+              checked={tmuxIntegration}
               onChange={(v) => {
-                update({ tmuxIntegration: v });
+                setTmuxIntegration(v);
                 // Explain the tmux requirement the moment it's switched on.
                 if (v) setShowCliExplainer(true);
               }}

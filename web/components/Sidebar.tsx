@@ -32,6 +32,7 @@ import {
   type BoardStatusFilter,
   useSettings,
 } from "../utils/settings.ts";
+import { useTmuxIntegration } from "../utils/tmuxIntegration.ts";
 
 // Module-scope cache so Sidebar remounts during SPA navigation don't show a
 // "Loading…" flash — the previous fetch result is reused as initial state
@@ -552,6 +553,7 @@ export function Sidebar({
 }) {
   const { t } = useTranslation();
   const [settings, updateSettings] = useSettings();
+  const [tmuxIntegration] = useTmuxIntegration();
   const [spawnOpen, setSpawnOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionListItem[] | null>(
     cachedSessions,
@@ -838,7 +840,7 @@ export function Sidebar({
         <div className="sidebar-title-row">
           <h2 className="sidebar-title">{t("sidebar.sessions")}</h2>
           <div className="sidebar-title-actions">
-            {settings.tmuxIntegration && (
+            {tmuxIntegration && (
               <button
                 type="button"
                 className="sidebar-spawn-btn"
