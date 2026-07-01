@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { SupportedLanguage } from "../i18n.ts";
+import type { CliVerbosity } from "../../shared/types.ts";
 import { type ThemeChoice, useSettings } from "../utils/settings.ts";
 import { Toggle } from "./Toggle.tsx";
 
@@ -17,6 +18,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   // selector on platforms we don't (yet) implement a wake-lock for.
   const [powerPref, setPowerPref] = useState<PowerPref>("off");
   const [powerPlatform, setPowerPlatform] = useState<string>("");
+  // CLI verbosity is likewise a per-broker (per-machine) pref — it governs the
+  // channel footer the broker delivers to every CC, so it can't live in this
+  // browser's localStorage. Fetch on mount, POST on change.
+  const [cliVerbosity, setCliVerbosity] = useState<CliVerbosity>("default");
   // Shown once, when the user FIRST enables CLI command-send: it only works for
   // CC launched inside tmux, which isn't obvious. (9787)
   const [showCliExplainer, setShowCliExplainer] = useState(false);
@@ -41,6 +46,31 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pref: next }),
+    }).catch(() => {
+      /* ignore */
+    });
+  };
+
+  useEffect(() => {
+    fetch("/get-cli-verbosity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    })
+      .then((r) => r.json())
+      .then((d: { verbosity?: CliVerbosity }) => {
+        if (d.verbosity) setCliVerbosity(d.verbosity);
+      })
+      .catch(() => {
+        /* ignore — broker may be momentarily unreachable */
+      });
+  }, []);
+  const updateCliVerbosity = (next: CliVerbosity) => {
+    setCliVerbosity(next);
+    fetch("/set-cli-verbosity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ verbosity: next }),
     }).catch(() => {
       /* ignore */
     });
@@ -169,6 +199,33 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             />
           </div>
           <p className="settings-help">{t("settings.tmux_integration_help")}</p>
+        </div>
+
+        <div className="settings-row">
+          <label className="settings-label" htmlFor="settings-cli-verbosity">
+            {t("settings.cli_verbosity_label")}
+          </label>
+          <div className="settings-control">
+            <select
+              id="settings-cli-verbosity"
+              className="settings-select"
+              value={cliVerbosity}
+              onChange={(e) =>
+                updateCliVerbosity(e.target.value as CliVerbosity)
+              }
+            >
+              <option value="default">
+                {t("settings.cli_verbosity_default")}
+              </option>
+              <option value="concise">
+                {t("settings.cli_verbosity_concise")}
+              </option>
+              <option value="silent">
+                {t("settings.cli_verbosity_silent")}
+              </option>
+            </select>
+          </div>
+          <p className="settings-help">{t("settings.cli_verbosity_help")}</p>
         </div>
 
         <p className="settings-footer">{t("settings.footer")}</p>

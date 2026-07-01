@@ -25,6 +25,7 @@ import {
   updateNodeStatus,
 } from "./db.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
+import { getCliVerbosity } from "./cli-verbosity.ts";
 import { onBoardSettled, onNodeSettled } from "./checklist.ts";
 import { SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
 import { buildNodePath } from "./helpers.ts";
@@ -410,7 +411,9 @@ export function handlePollMessages(body: any) {
     }
     markDelivered.run(m.id);
   }
-  return { messages };
+  // Ride the current CLI-verbosity pref along with the drain so the poller can
+  // inject the matching footer reminder without a second round-trip.
+  return { messages, cli_verbosity: getCliVerbosity() };
 }
 
 // Option B re-delivery: the per-CC poller calls this when a channel push to CC

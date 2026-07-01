@@ -34,6 +34,10 @@ import {
 import { routes as mapChecklistRoutes } from "./broker/map-checklist.ts";
 import { getBoardView } from "./broker/helpers.ts";
 import { routes as nodesRoutes } from "./broker/nodes.ts";
+import {
+  initCliVerbosity,
+  routes as cliVerbosityRoutes,
+} from "./broker/cli-verbosity.ts";
 import { initPower, routes as powerRoutes } from "./broker/power.ts";
 import { routes as readsRoutes } from "./broker/reads.ts";
 import { routes as contextUsageRoutes } from "./broker/context-usage.ts";
@@ -53,6 +57,7 @@ cleanStaleSessions();
 setInterval(cleanStaleSessions, STALE_SESSION_SWEEP_MS);
 startActivityWatchdog();
 initPower();
+initCliVerbosity();
 
 // --- POST route registry ---
 //
@@ -73,6 +78,7 @@ const POST_ROUTES: Record<string, RouteHandler> = {
   ...uploadsRoutes,
   ...feedbackRoutes,
   ...powerRoutes,
+  ...cliVerbosityRoutes,
   ...readsRoutes,
   ...contextUsageRoutes,
   ...favoritesRoutes,

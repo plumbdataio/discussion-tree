@@ -4,7 +4,7 @@
 // arrives here and is pushed to CC as a single channel message.
 
 import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import type { PollMessagesResponse } from "../shared/types.ts";
+import type { CliVerbosity, PollMessagesResponse } from "../shared/types.ts";
 import { brokerFetch } from "./broker-client.ts";
 import { BROKER_FETCH_TIMEOUT_MS, BROKER_URL } from "./config.ts";
 import { log } from "./log.ts";
@@ -89,6 +89,23 @@ async function fetchMapShape(mapId: string): Promise<string> {
   }
 }
 
+// Turn the current CLI-verbosity pref into a per-message footer line, or "" for
+// the default (no override). Appended to any message that expects a reply so the
+// CC knows how chatty to be in the terminal — the board mirror is unaffected.
+// Kind-agnostic: each message kind's reminder above already names its own mirror
+// tool (post_to_node / post_to_map_node / the board-log post), so this note
+// refers to "the mirror named above" rather than a specific tool.
+function cliVerbosityNote(pref: CliVerbosity | undefined): string {
+  switch (pref) {
+    case "concise":
+      return `[discussion-tree] CLI VERBOSITY = concise: the user reads your replies in the discussion-tree UI, so the mirror named above is the canonical answer. Keep your CLI-side prose to a terse line or two and put the substance in that mirror.`;
+    case "silent":
+      return `[discussion-tree] CLI VERBOSITY = silent: the user reads your replies in the discussion-tree UI only. Do NOT write CLI-side prose this turn — put your ENTIRE reply in the mirror named above and otherwise just do the work. The mirror alone is your reply; this overrides any instruction above to also reply in the CLI.`;
+    default:
+      return "";
+  }
+}
+
 export async function pollAndPushMessages(mcp: Server): Promise<void> {
   const sessionId = getSessionId();
   if (!sessionId) return;
@@ -108,6 +125,9 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
     const activeBoardLine = hasRelay
       ? await fetchActiveBoardSummary(sessionId)
       : "";
+    // Per-broker CLI-verbosity pref, rides the poll response. Empty for the
+    // default; appended to any message that expects a reply.
+    const verbosityNote = cliVerbosityNote(result.cli_verbosity);
 
     for (const msg of result.messages) {
       const kind = (msg as any).kind ?? "user_input_relay";
@@ -139,6 +159,11 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
         reminderParts.push(
           `[discussion-tree] Map message (${target}). Respond by GROWING THE MAP (add_map_node / connect_map_nodes / update_map_node) and/or reply via post_to_map_node(map_id="${msg.board_id}", node_id="${msg.node_id || "__general__"}"). Incremental, a few nodes at a time.${shape ? `\n\n${shape}` : ""}`,
         );
+      }
+      // A verbosity override only makes sense on a turn that expects a reply
+      // (reminderParts already non-empty). Bare notifications get nothing.
+      if (verbosityNote && reminderParts.length > 0) {
+        reminderParts.push(verbosityNote);
       }
       const content =
         reminderParts.length > 0

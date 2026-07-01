@@ -419,11 +419,31 @@ export interface LogRequestRequest {
   board_id?: string;
 }
 
+// How chatty the CC's CLI-side reply should be. The board mirror (post_to_node)
+// is always the canonical record, so this only governs the terminal prose:
+//   default — normal (reply in the CLI AND mirror to the board)
+//   concise — keep the CLI reply terse; put the substance in the mirror
+//   silent  — no CLI prose at all; the board mirror alone is the reply
+// It's a per-broker (per-machine) setting, delivered on each poll so a change
+// takes effect on the very next message with no CC restart.
+export type CliVerbosity = "default" | "concise" | "silent";
+export const ALL_CLI_VERBOSITY: readonly CliVerbosity[] = [
+  "default",
+  "concise",
+  "silent",
+];
+export function isValidCliVerbosity(s: string): s is CliVerbosity {
+  return (ALL_CLI_VERBOSITY as readonly string[]).includes(s);
+}
+
 export interface PollMessagesRequest {
   session_id: string;
 }
 export interface PollMessagesResponse {
   messages: PendingMessage[];
+  // The current CLI-verbosity preference, so the poller can inject the matching
+  // per-message reminder into the channel footer without a separate fetch.
+  cli_verbosity?: CliVerbosity;
 }
 
 export interface Activity {
