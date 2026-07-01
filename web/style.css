@@ -480,7 +480,10 @@ body {
   letter-spacing: 0.06em;
   color: var(--muted);
   font-weight: 700;
-  margin: 0 0 12px;
+  /* No bottom margin: it would make the flex row's align-items:center treat the
+     title's box as taller than the action buttons and offset them vertically.
+     The gap below the header lives on .sidebar-title-row instead. */
+  margin: 0;
 }
 
 .sidebar-error {
@@ -5508,21 +5511,25 @@ ul.maps li.current .sidebar-map-link {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  margin-bottom: 12px;
 }
-.sidebar-title-left {
+/* Right-aligned action cluster in the sessions header: spawn "+" then the
+   collapse chevron, vertically centered with the title. */
+.sidebar-title-actions {
   display: flex;
   align-items: center;
-  min-width: 0;
+  gap: 4px;
+  flex: 0 0 auto;
 }
 .sidebar-collapse-btn {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   border: 1px solid var(--border-strong);
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--bg);
   color: var(--text);
   cursor: pointer;
@@ -5533,12 +5540,17 @@ ul.maps li.current .sidebar-map-link {
   border-color: var(--accent);
 }
 /* Lucide SVGs are flex items here; without an explicit non-shrink the icon
-   collapsed to width:0 and looked invisible. Pin the size. */
-.sidebar-collapse-btn svg,
+   collapsed to width:0 and looked invisible. Pin the size. The collapse chevron
+   is sized to match the spawn "+" button; the floating reopen stays larger. */
+.sidebar-collapse-btn svg {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+}
 .sidebar-reopen svg {
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
 }
 /* Floating reopen button — sits at the top-left where the sidebar used to be.
    Hidden by default; shown only on desktop when collapsed (see media query). */
@@ -5550,8 +5562,8 @@ ul.maps li.current .sidebar-map-link {
   top: 72px;
   left: 10px;
   z-index: 50;
-  width: 40px;
-  height: 40px;
+  width: 24px;
+  height: 24px;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--border-strong);
@@ -6053,7 +6065,6 @@ ul.maps li.current .sidebar-map-link {
   justify-content: center;
   width: 24px;
   height: 24px;
-  margin-left: 6px;
   padding: 0;
   background: none;
   border: 1px solid var(--border-strong);

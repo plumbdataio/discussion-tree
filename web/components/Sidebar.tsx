@@ -836,8 +836,8 @@ export function Sidebar({
           </button>
         </div>
         <div className="sidebar-title-row">
-          <div className="sidebar-title-left">
-            <h2 className="sidebar-title">{t("sidebar.sessions")}</h2>
+          <h2 className="sidebar-title">{t("sidebar.sessions")}</h2>
+          <div className="sidebar-title-actions">
             {settings.tmuxIntegration && (
               <button
                 type="button"
@@ -849,34 +849,34 @@ export function Sidebar({
                 <Plus size={16} strokeWidth={2.25} />
               </button>
             )}
+            {spawnOpen && <SpawnModal onClose={() => setSpawnOpen(false)} />}
+            <button
+              type="button"
+              className="sidebar-collapse-btn"
+              aria-label={
+                settings.sidebarCollapsed
+                  ? t("sidebar.expand_label")
+                  : t("sidebar.collapse_label")
+              }
+              title={
+                settings.sidebarCollapsed
+                  ? t("sidebar.expand_label")
+                  : t("sidebar.collapse_label")
+              }
+              onClick={() => {
+                updateSettings({
+                  sidebarCollapsed: !settings.sidebarCollapsed,
+                });
+                setDrawerOpen(false);
+              }}
+            >
+              {settings.sidebarCollapsed ? (
+                <ChevronsRight size={16} strokeWidth={2.25} />
+              ) : (
+                <ChevronsLeft size={16} strokeWidth={2.25} />
+              )}
+            </button>
           </div>
-          {spawnOpen && <SpawnModal onClose={() => setSpawnOpen(false)} />}
-          <button
-            type="button"
-            className="sidebar-collapse-btn"
-            aria-label={
-              settings.sidebarCollapsed
-                ? t("sidebar.expand_label")
-                : t("sidebar.collapse_label")
-            }
-            title={
-              settings.sidebarCollapsed
-                ? t("sidebar.expand_label")
-                : t("sidebar.collapse_label")
-            }
-            onClick={() => {
-              updateSettings({
-                sidebarCollapsed: !settings.sidebarCollapsed,
-              });
-              setDrawerOpen(false);
-            }}
-          >
-            {settings.sidebarCollapsed ? (
-              <ChevronsRight size={22} strokeWidth={2.25} />
-            ) : (
-              <ChevronsLeft size={22} strokeWidth={2.25} />
-            )}
-          </button>
         </div>
 
         <div className="sidebar-filter">
