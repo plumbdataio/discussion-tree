@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -242,7 +243,7 @@ export function NodeModal({
           <ScrollToBottomButton scrollRef={threadRef} />
         </div>
         <div className="node-modal-input">
-          <textarea
+          <ResizableTextarea
             className="answer-input"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}

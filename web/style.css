@@ -4137,6 +4137,47 @@ textarea.answer-input {
   background: #fff;
 }
 
+/* Chat composer with a custom TOP-RIGHT resize handle (see ResizableTextarea).
+   The wrapper only positions the handle; the textarea keeps its existing
+   per-surface styles (it's still matched as `.answer-input`). */
+.answer-input-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+/* Native corner off — the custom handle replaces it. Higher specificity than
+   the per-surface `.node-modal-input .answer-input { resize: vertical }` rules. */
+.answer-input-wrap textarea.answer-input {
+  resize: none;
+}
+.answer-resize-handle {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  color: var(--muted);
+  touch-action: none; /* let the pointer drag work on touch without scrolling */
+  z-index: 2;
+}
+/* A small top-right corner bracket, mirroring the native bottom-right grip. */
+.answer-resize-handle::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  border-radius: 1px;
+  opacity: 0.5;
+}
+.answer-resize-handle:hover::before {
+  opacity: 0.95;
+}
+
 textarea.answer-input:focus {
   outline: 2px solid var(--accent-soft);
   border-color: var(--accent);

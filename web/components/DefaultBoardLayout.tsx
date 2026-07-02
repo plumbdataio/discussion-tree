@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
+import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { useTranslation } from "react-i18next";
 import type { BoardView, Node, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
@@ -207,7 +208,7 @@ export function DefaultBoardLayout({
       <ScrollToBottomButton scrollRef={threadRef} reversed />
 
       <div className="default-board-input">
-        <textarea
+        <ResizableTextarea
           className="answer-input"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}

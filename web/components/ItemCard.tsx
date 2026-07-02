@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
+import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { Maximize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Activity, Node, ThreadItem } from "../../shared/types.ts";
@@ -238,7 +239,7 @@ export function ItemCard({
       <ScrollToBottomButton scrollRef={threadRef} reversed />
 
       <div className="input-row">
-        <textarea
+        <ResizableTextarea
           className="answer-input"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
