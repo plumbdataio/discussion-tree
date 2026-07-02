@@ -31,10 +31,18 @@ export function useVisibleDwell(
 
     const tick = () => {
       if (posted) return;
-      // Tab in the background: nothing the user can be "looking at", and on iOS
-      // Safari a ticking interval keeps the renderer active (tab-eviction
-      // pressure). Skip; resume after the tab becomes visible.
-      if (document.hidden) {
+      // Only auto-read on the ACTIVE surface. Two cases mean "the user isn't
+      // reading this":
+      //  - document.hidden: the tab is backgrounded (also avoids keeping the
+      //    renderer hot under iOS Safari tab-eviction pressure).
+      //  - !document.hasFocus(): the window is visible on screen but NOT focused
+      //    — e.g. a second browser window sitting open behind the active one.
+      //    document.hidden is FALSE there, so without the focus check that
+      //    background window would silently mark messages read (its dwell fires
+      //    on a new message while the user is working in a different window).
+      // Reset the dwell; it re-arms on the next tick once the surface regains
+      // focus, so the counter clears only when the user actually returns to it.
+      if (document.hidden || !document.hasFocus()) {
         visibleSince = null;
         return;
       }

@@ -106,6 +106,22 @@ describe("useMarkReadOnVisible gateOpen", () => {
     await m.unmount();
   }, 10000);
 
+  // Window visible but NOT focused (e.g. a second browser window sitting open
+  // behind the active one) → no auto-read, even with the gate open and the card
+  // fully on screen. A backgrounded window must not silently clear unread.
+  test("does NOT auto-read while the window is not focused, gate open", async () => {
+    const originalHasFocus = document.hasFocus.bind(document);
+    document.hasFocus = () => false;
+    try {
+      const m = await mount([unread(9)], true);
+      await wait(6000); // > VISIBLE_DURATION_MS
+      expect(readPosts).toEqual([]);
+      await m.unmount();
+    } finally {
+      document.hasFocus = originalHasFocus;
+    }
+  }, 10000);
+
   // No unread cc items → short-circuits regardless of gate.
   test("no read when there are no unread cc items, gate open", async () => {
     const read = { ...unread(), read_at: "2026-01-01T00:00:01Z" } as ThreadItem;
