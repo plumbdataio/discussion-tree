@@ -118,7 +118,13 @@ export const upsertCliHistory = db.prepare(
 );
 export const selectCliHistory = db.prepare(
   `SELECT args, last_used_at FROM cli_command_history
-   WHERE command = ? ORDER BY last_used_at DESC LIMIT 50`,
+   WHERE command = ? AND args != '' ORDER BY last_used_at DESC LIMIT 50`,
+);
+// Distinct commands the user has sent before (newest first), so the WebUI can
+// offer them in an editable command dropdown.
+export const selectCliCommands = db.prepare(
+  `SELECT command, MAX(last_used_at) AS last_used_at FROM cli_command_history
+   GROUP BY command ORDER BY last_used_at DESC LIMIT 50`,
 );
 
 // Last reported context-window free % per broker session_id. Persisted (not

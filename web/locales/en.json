@@ -194,7 +194,8 @@
     "button_title": "Send a command",
     "modal_title": "Send a command",
     "command_label": "Command",
-    "args_label": "Arguments (text after /compact)",
+    "interactive_warn": "Some commands open an interactive TUI mode after they're sent, which can't be driven from this UI. Only send commands that run non-interactively (e.g. /compact, or a skill invocation), knowing this.",
+    "args_label": "Arguments (text after the command)",
     "send": "Send",
     "sending": "Sending…",
     "cancel": "Cancel",
@@ -208,7 +209,7 @@
     "err_session_busy": "CC is busy, so the command wasn't sent.",
     "err_pane_gone": "The target tmux pane could not be found.",
     "err_pane_not_claude": "Aborted: Claude Code isn't running in the target pane.",
-    "err_command_not_allowed": "That command isn't allowed.",
+    "err_invalid_command": "That isn't a valid command (must be a single /command).",
     "err_generic": "Failed to send the command.",
     "history_title": "Recent prompts (click to fill)"
   },

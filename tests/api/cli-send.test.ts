@@ -38,15 +38,31 @@ async function attachWithTmux(
 }
 
 describe("/cli-send guards", () => {
-  test("rejects a command outside the allowlist", async () => {
+  test("rejects a malformed command (not a single /command)", async () => {
     const sid = await registerSession(broker.url);
     await attachWithTmux(sid, `cc-${sid}`, "%1", "/tmp/sock");
+    for (const bad of ["compact", "/bad cmd", "/", "rm -rf"]) {
+      const r = await post<{ ok: boolean; error?: string }>(
+        `${broker.url}/cli-send`,
+        { session_id: sid, command: bad, args: "" },
+      );
+      expect(r.json.ok).toBe(false);
+      expect(r.json.error).toBe("invalid_command");
+    }
+  });
+
+  test("a well-formed non-/compact command passes the format check (reaches pane logic)", async () => {
+    const sid = await registerSession(broker.url);
+    // A dead pane id in no tmux server, so a format-valid command gets past the
+    // allowlist and fails later at the pane probe — proving it's no longer
+    // rejected on the command itself.
+    await attachWithTmux(sid, `cc-${sid}`, "%99", "/tmp/dt-test-no-sock");
     const r = await post<{ ok: boolean; error?: string }>(
       `${broker.url}/cli-send`,
-      { session_id: sid, command: "/clear", args: "" },
+      { session_id: sid, command: "/compact-human", args: "" },
     );
     expect(r.json.ok).toBe(false);
-    expect(r.json.error).toBe("command_not_allowed");
+    expect(r.json.error).toBe("pane_gone");
   });
 
   test("rejects an unknown session", async () => {
@@ -160,21 +176,23 @@ describe("/cli-send across a CC restart", () => {
 });
 
 describe("/cli-history", () => {
-  test("rejects a non-allowlisted command", async () => {
+  test("rejects a malformed command", async () => {
     const r = await post<{ ok: boolean; error?: string }>(
       `${broker.url}/cli-history`,
-      { command: "/rm-rf" },
+      { command: "rm-rf" },
     );
     expect(r.json.ok).toBe(false);
-    expect(r.json.error).toBe("command_not_allowed");
+    expect(r.json.error).toBe("invalid_command");
   });
 
-  test("returns an (initially empty) history array for /compact", async () => {
+  test("returns history + commands arrays for a valid command", async () => {
     const r = await post<{
       ok: boolean;
       history?: { args: string; last_used_at: string }[];
+      commands?: string[];
     }>(`${broker.url}/cli-history`, { command: "/compact" });
     expect(r.json.ok).toBe(true);
     expect(Array.isArray(r.json.history)).toBe(true);
+    expect(Array.isArray(r.json.commands)).toBe(true);
   });
 });

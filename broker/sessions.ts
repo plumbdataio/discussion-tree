@@ -16,6 +16,7 @@ import {
   db,
   insertSession,
   insertThread,
+  selectCliCommands,
   selectCliHistory,
   selectSessionTmux,
   setSessionCcPid,
@@ -651,10 +652,18 @@ export function cleanStaleSessions() {
 // sent through them is consumed as plain text. To trigger a real TUI command
 // from the WebUI we type it into the CC pane via tmux. The pane/socket were
 // captured at attach time (see handleAttachCCSession). This is gated behind a
-// per-browser opt-in setting on the client; the broker independently enforces
-// an allowlist + the "session is busy" guard so it can never send something
-// unexpected.
-const CLI_ALLOWED_COMMANDS = new Set(["/compact"]);
+// per-browser opt-in setting on the client and the "session is busy" guard.
+//
+// The command must be a single slash-token (args ride the separate field). This
+// replaced a fixed /compact-only allowlist: the command is pasted into the
+// user's OWN CC pane (argv, no shell — see runTmux) and /cli-send is same-origin
+// guarded, so accepting any well-formed command grants nothing the user can't
+// already type at their own terminal. The WebUI warns that some commands open an
+// interactive TUI mode dt can't drive.
+const CLI_COMMAND_RE = /^\/[A-Za-z0-9][A-Za-z0-9:_-]*$/;
+function isValidCliCommand(command: string): boolean {
+  return CLI_COMMAND_RE.test(command);
+}
 
 // Run a tmux subprocess (argv — no shell, so the buffer text can't inject).
 // Optionally pipe `input` to stdin (used by load-buffer to carry arbitrary,
@@ -760,8 +769,8 @@ export async function handleCliSend(body: any) {
   const sessionId = String(body?.session_id ?? "");
   const command = String(body?.command ?? "");
   const args = typeof body?.args === "string" ? body.args : "";
-  if (!CLI_ALLOWED_COMMANDS.has(command)) {
-    return { ok: false, error: "command_not_allowed" };
+  if (!isValidCliCommand(command)) {
+    return { ok: false, error: "invalid_command" };
   }
   const sess = selectSessionTmux.get(sessionId) as
     | { tmux_pane: string | null; tmux_socket: string | null }
@@ -807,12 +816,12 @@ export async function handleCliSend(body: any) {
       source: "system",
     });
   }
-  // Remember the args so the user can re-pick them later. Dedup by exact text
-  // (upsert just bumps last_used_at). The default arg is empty, so only
-  // deliberately-typed prompts get saved — no baked-in personal default.
-  if (args.trim()) {
-    upsertCliHistory.run(command, args, new Date().toISOString());
-  }
+  // Record the send so the modal can offer it later. Always record the command
+  // (even with empty args) so a no-args command like a personal /skill still
+  // shows up in the command datalist; selectCliHistory filters out the empty-arg
+  // row so the ARGS history list still only shows deliberately-typed prompts.
+  // Dedup by (command, args); a re-send just bumps last_used_at.
+  upsertCliHistory.run(command, args.trim() ? args : "", new Date().toISOString());
   return { ok: true };
 }
 
@@ -820,14 +829,19 @@ export async function handleCliSend(body: any) {
 // first), so the WebUI command modal can offer past prompts to re-use.
 export function handleCliHistory(body: any) {
   const command = String(body?.command ?? "");
-  if (!CLI_ALLOWED_COMMANDS.has(command)) {
-    return { ok: false, error: "command_not_allowed" };
+  if (!isValidCliCommand(command)) {
+    return { ok: false, error: "invalid_command" };
   }
   const history = selectCliHistory.all(command) as {
     args: string;
     last_used_at: string;
   }[];
-  return { ok: true, history };
+  // The distinct commands sent before (any command), for the editable command
+  // dropdown. Independent of the selected command, but cheap to ride along.
+  const commands = (selectCliCommands.all() as { command: string }[]).map(
+    (r) => r.command,
+  );
+  return { ok: true, history, commands };
 }
 
 // Route table — path-to-handler map merged by broker.ts. Each module owns

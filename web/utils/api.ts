@@ -274,9 +274,10 @@ export async function spawnSession(body: {
 
 // De-duplicated history of args previously sent with a CLI command (newest
 // first), so the command modal can offer past prompts to re-use.
-export async function getCliHistory(
-  command: string,
-): Promise<{ args: string; last_used_at: string }[]> {
+export async function getCliHistory(command: string): Promise<{
+  history: { args: string; last_used_at: string }[];
+  commands: string[];
+}> {
   try {
     const r = await fetch("/cli-history", {
       method: "POST",
@@ -286,10 +287,13 @@ export async function getCliHistory(
     const j = (await r.json()) as {
       ok: boolean;
       history?: { args: string; last_used_at: string }[];
+      commands?: string[];
     };
-    return j.ok ? j.history ?? [] : [];
+    return j.ok
+      ? { history: j.history ?? [], commands: j.commands ?? [] }
+      : { history: [], commands: [] };
   } catch {
-    return [];
+    return { history: [], commands: [] };
   }
 }
 

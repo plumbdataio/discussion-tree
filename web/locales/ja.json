@@ -194,7 +194,8 @@
     "button_title": "コマンドを送信",
     "modal_title": "コマンドを送信",
     "command_label": "コマンド",
-    "args_label": "引数 (/compact の後ろに続けるテキスト)",
+    "interactive_warn": "一部のコマンドは送信後にインタラクティブな TUI モードに入り、この UI からは操作できません。非インタラクティブに完結するコマンド (例: /compact やスキル起動) のみ、承知の上で送信してください。",
+    "args_label": "引数 (コマンドの後ろに続けるテキスト)",
     "send": "送信",
     "sending": "送信中…",
     "cancel": "キャンセル",
@@ -208,7 +209,7 @@
     "err_session_busy": "CC が処理中のため送信できませんでした。",
     "err_pane_gone": "対象の tmux ペインが見つかりませんでした。",
     "err_pane_not_claude": "対象ペインで Claude Code が動いていないため送信を中止しました。",
-    "err_command_not_allowed": "許可されていないコマンドです。",
+    "err_invalid_command": "有効なコマンドではありません (単一の /コマンド 形式にしてください)。",
     "err_generic": "コマンドの送信に失敗しました。",
     "history_title": "送信履歴 (クリックで引数欄に反映)"
   },

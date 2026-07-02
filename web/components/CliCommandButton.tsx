@@ -17,8 +17,10 @@ import { useTmuxIntegration } from "../utils/tmuxIntegration.ts";
 import { getCliHistory, postCliSend } from "../utils/api.ts";
 import { showToast } from "./Toast.tsx";
 
-// The commands the user can pick. Mirrors the broker allowlist; today just one.
-const CLI_COMMANDS = ["/compact"] as const;
+// Seed command, always offered in the editable dropdown even before any history
+// exists. The field is free-text: the broker accepts any single slash-token
+// (see /cli-send), so the user can send e.g. a personal /skill invocation.
+const DEFAULT_COMMAND = "/compact";
 
 export function CliCommandButton({
   sessionId,
@@ -70,7 +72,7 @@ function CliCommandModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const [command, setCommand] = useState<string>(CLI_COMMANDS[0]);
+  const [command, setCommand] = useState<string>(DEFAULT_COMMAND);
   // Starts empty, then auto-fills with the most recently used prompt on the
   // first history load (see below); the user can still pick another from the
   // list or clear it.
@@ -79,6 +81,9 @@ function CliCommandModal({
   const [history, setHistory] = useState<
     { args: string; last_used_at: string }[]
   >([]);
+  // Distinct commands sent before, for the editable command dropdown. Always
+  // includes the default even with no history.
+  const [commands, setCommands] = useState<string[]>([DEFAULT_COMMAND]);
   // Auto-fill the latest prompt only once, and never over the top of something
   // the user has already typed.
   const didAutofill = useRef(false);
@@ -94,9 +99,11 @@ function CliCommandModal({
   // Load the de-duplicated arg history for the selected command (newest first).
   useEffect(() => {
     let cancelled = false;
-    getCliHistory(command).then((h) => {
+    getCliHistory(command).then(({ history: h, commands: cmds }) => {
       if (cancelled) return;
       setHistory(h);
+      // Merge the fetched commands with the default so it's always offered.
+      setCommands(Array.from(new Set([DEFAULT_COMMAND, ...cmds])));
       // Pre-fill with the most recently used prompt (h[0]; the broker orders by
       // last_used_at DESC) so the common "re-run my last compact prompt" path
       // needs no typing. Once only, and only while the textarea is untouched.
@@ -145,21 +152,23 @@ function CliCommandModal({
         <h2 className="settings-title">{t("cli.modal_title")}</h2>
 
         <div className="cli-command-field">
-          <label className="settings-label" htmlFor="cli-command-select">
+          <label className="settings-label" htmlFor="cli-command-input">
             {t("cli.command_label")}
           </label>
-          <select
-            id="cli-command-select"
-            className="settings-select"
+          <input
+            id="cli-command-input"
+            className="settings-input"
+            list="cli-command-list"
             value={command}
-            onChange={(e) => setCommand(e.target.value)}
-          >
-            {CLI_COMMANDS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
+            onChange={(e) => setCommand(e.target.value.trim())}
+            placeholder={DEFAULT_COMMAND}
+          />
+          <datalist id="cli-command-list">
+            {commands.map((c) => (
+              <option key={c} value={c} />
             ))}
-          </select>
+          </datalist>
+          <p className="cli-command-note">{t("cli.interactive_warn")}</p>
         </div>
 
         <div className="cli-command-field">
