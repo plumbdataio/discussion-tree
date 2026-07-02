@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Cog, Shrink, Wand2 } from "lucide-react";
+import { AlertTriangle, Cog, ScrollText, Shrink, Wand2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Activity, BoardView } from "../../shared/types.ts";
 import { ActivityBadge } from "./ActivityBadge.tsx";
@@ -16,9 +16,12 @@ import {
 } from "../utils/favorites.ts";
 import {
   consumePendingJump,
+  jumpToAnchor,
   subscribePendingJump,
 } from "../utils/anchorJump.ts";
 import { NodeStatusFilterButton } from "./NodeStatusFilterButton.tsx";
+import { TimelineModal } from "./TimelineModal.tsx";
+import { buildTimelineEntries } from "../utils/timeline.ts";
 import { BoardSettingsPanel } from "./BoardSettingsPanel.tsx";
 import { BoardNavButtons } from "./BoardNavButtons.tsx";
 import {
@@ -49,6 +52,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     Record<string, Activity | null>
   >({});
   const [structureRequestOpen, setStructureRequestOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
   // Tracks whether the (mobile) horizontally-scrolling header has content
   // hidden to either side. Drives the faint left/right arrow affordances
   // injected via CSS `::before` / `::after`. Re-evaluated on scroll, on
@@ -666,6 +670,15 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
               activeActivity?.state === "blocked"
             }
           />
+          <button
+            type="button"
+            className="board-timeline-btn"
+            title={t("timeline.button")}
+            aria-label={t("timeline.button")}
+            onClick={() => setTimelineOpen(true)}
+          >
+            <ScrollText size={14} strokeWidth={1.9} />
+          </button>
           {(data.owner_bg_task_count ?? 0) > 0 && (
             <button
               type="button"
@@ -761,6 +774,23 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           boardId={boardId}
           boardView={data}
           onClose={() => setStructureRequestOpen(false)}
+        />
+      )}
+      {timelineOpen && (
+        <TimelineModal
+          entries={buildTimelineEntries(data.threads, (nodeId) => {
+            const n = data.nodes.find((x) => x.id === nodeId);
+            return n
+              ? { title: n.title || t("timeline.untitled"), kind: n.kind }
+              : null;
+          })}
+          onJump={(_nodeId, itemId) => {
+            // The board scrolls to a message by id (same channel the anchor
+            // list uses); the node id isn't needed here.
+            setTimelineOpen(false);
+            jumpToAnchor(data.board.id, itemId);
+          }}
+          onClose={() => setTimelineOpen(false)}
         />
       )}
     </AppLayout>

@@ -5232,7 +5232,8 @@ button.secondary {
 
 /* ---- Whole-map chronological comment preview (MapTimelineModal) ---- */
 /* Header button that opens it. */
-.map-timeline-btn {
+.map-timeline-btn,
+.board-timeline-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5243,7 +5244,8 @@ button.secondary {
   color: var(--muted);
   cursor: pointer;
 }
-.map-timeline-btn:hover {
+.map-timeline-btn:hover,
+.board-timeline-btn:hover {
   color: var(--text);
   border-color: var(--border-strong);
 }

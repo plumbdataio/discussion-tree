@@ -1,23 +1,22 @@
 import { describe, test, expect } from "bun:test";
-import { buildTimelineEntries } from "../../web/components/MapTimelineModal.tsx";
+import { buildTimelineEntries } from "../../web/utils/timeline.ts";
+import type { TimelineNodeResolver } from "../../web/utils/timeline.ts";
 import { MAP_GENERAL_NODE } from "../../shared/types.ts";
-import type { MapNode, MapNodeKind, ThreadItem } from "../../shared/types.ts";
+import type { ThreadItem } from "../../shared/types.ts";
 
-// buildTimelineEntries flattens every node thread + the general chat into one
-// chronological stream for the map's all-comments timeline preview.
+// buildTimelineEntries flattens every node thread into one chronological stream
+// for the shared all-comments timeline preview (map + board). The surface owns
+// the node lookup via a resolver; these tests exercise the flatten/sort/filter.
 
-const labels = { general: "General", untitled: "(untitled)" };
-
-function node(id: string, kind: MapNodeKind, title: string): MapNode {
-  return {
-    map_id: "m",
-    id,
-    title,
-    context: "",
-    kind,
-    x: 0,
-    y: 0,
-    created_at: "2026-01-01T00:00:00.000Z",
+// A map-flavoured resolver: general chat + a small node table.
+function makeResolve(
+  nodes: Record<string, { kind: string; title: string }>,
+): TimelineNodeResolver {
+  return (nodeId) => {
+    if (nodeId === MAP_GENERAL_NODE)
+      return { title: "General", isGeneral: true };
+    const n = nodes[nodeId];
+    return n ? { title: n.title || "(untitled)", kind: n.kind } : null;
   };
 }
 
@@ -32,7 +31,10 @@ function item(
 
 describe("buildTimelineEntries", () => {
   test("merges node threads + general chat in chronological order", () => {
-    const nodes = [node("na", "question", "Q"), node("nb", "idea", "I")];
+    const resolve = makeResolve({
+      na: { kind: "question", title: "Q" },
+      nb: { kind: "idea", title: "I" },
+    });
     const threads: Record<string, ThreadItem[]> = {
       na: [
         item(1, "na", "cc", "2026-06-11T09:05:00.000Z"),
@@ -43,7 +45,7 @@ describe("buildTimelineEntries", () => {
         item(3, MAP_GENERAL_NODE, "user", "2026-06-11T09:00:00.000Z"),
       ],
     };
-    const out = buildTimelineEntries(nodes, threads, labels);
+    const out = buildTimelineEntries(threads, resolve);
     // 09:00 (3, general) -> 09:05 (1) -> 09:10 (2) -> 09:20 (4)
     expect(out.map((e) => e.item.id)).toEqual([3, 1, 2, 4]);
     expect(out[0].isGeneral).toBe(true);
@@ -54,7 +56,7 @@ describe("buildTimelineEntries", () => {
   });
 
   test("excludes system rows (status changes etc.)", () => {
-    const nodes = [node("na", "note", "N")];
+    const resolve = makeResolve({ na: { kind: "note", title: "N" } });
     const threads: Record<string, ThreadItem[]> = {
       na: [
         item(1, "na", "cc", "2026-06-11T09:00:00.000Z"),
@@ -62,38 +64,38 @@ describe("buildTimelineEntries", () => {
       ],
     };
     expect(
-      buildTimelineEntries(nodes, threads, labels).map((e) => e.item.id),
+      buildTimelineEntries(threads, resolve).map((e) => e.item.id),
     ).toEqual([1]);
   });
 
-  test("skips a thread whose (non-general) node was deleted", () => {
-    const nodes = [node("na", "note", "N")];
+  test("skips a thread the resolver rejects (deleted node)", () => {
+    const resolve = makeResolve({ na: { kind: "note", title: "N" } });
     const threads: Record<string, ThreadItem[]> = {
       na: [item(1, "na", "cc", "2026-06-11T09:00:00.000Z")],
       gone: [item(2, "gone", "cc", "2026-06-11T09:01:00.000Z")],
     };
     expect(
-      buildTimelineEntries(nodes, threads, labels).map((e) => e.item.id),
+      buildTimelineEntries(threads, resolve).map((e) => e.item.id),
     ).toEqual([1]);
   });
 
   test("ties on created_at are broken by item id", () => {
-    const nodes = [node("na", "note", "N")];
+    const resolve = makeResolve({ na: { kind: "note", title: "N" } });
     const ts = "2026-06-11T09:00:00.000Z";
     const threads: Record<string, ThreadItem[]> = {
       na: [item(5, "na", "cc", ts), item(2, "na", "cc", ts)],
     };
     expect(
-      buildTimelineEntries(nodes, threads, labels).map((e) => e.item.id),
+      buildTimelineEntries(threads, resolve).map((e) => e.item.id),
     ).toEqual([2, 5]);
   });
 
-  test("falls back to the untitled label for an empty node title", () => {
-    const nodes = [node("na", "idea", "")];
+  test("uses the resolver's title (incl. its untitled fallback)", () => {
+    const resolve = makeResolve({ na: { kind: "idea", title: "" } });
     const threads: Record<string, ThreadItem[]> = {
       na: [item(1, "na", "cc", "2026-06-11T09:00:00.000Z")],
     };
-    expect(buildTimelineEntries(nodes, threads, labels)[0].nodeTitle).toBe(
+    expect(buildTimelineEntries(threads, resolve)[0].nodeTitle).toBe(
       "(untitled)",
     );
   });

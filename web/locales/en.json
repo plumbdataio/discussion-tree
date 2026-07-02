@@ -341,6 +341,14 @@
     "to_bottom": "Scroll to bottom",
     "to_bottom_short": "To bottom"
   },
+  "timeline": {
+    "button": "All comments (timeline)",
+    "title": "All comments — chronological",
+    "count": "{{count}} comments",
+    "empty": "No comments yet",
+    "jump": "Jump to this comment's node",
+    "untitled": "(untitled)"
+  },
   "map": {
     "badge": "Map",
     "badge_title": "Divergent-discussion map (the divergence phase before a board)",
@@ -365,11 +373,6 @@
     "deleted_edge": "Deleted link",
     "undo_delete": "Undo",
     "restored": "Restored",
-    "timeline_button": "All comments (timeline)",
-    "timeline_title": "All comments — chronological",
-    "timeline_count": "{{count}} comments",
-    "timeline_empty": "No comments yet",
-    "timeline_jump": "Jump to this comment's node",
     "frame_add": "Add grouping frame",
     "frame_untitled": "(untitled frame)",
     "frame_color_default": "Default colour",

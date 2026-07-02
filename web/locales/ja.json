@@ -341,6 +341,14 @@
     "to_bottom": "一番下までスクロール",
     "to_bottom_short": "一番下まで"
   },
+  "timeline": {
+    "button": "全コメントを時系列で表示",
+    "title": "全コメント (時系列)",
+    "count": "{{count}} 件",
+    "empty": "まだコメントがありません",
+    "jump": "このコメントのノードへ移動",
+    "untitled": "(無題)"
+  },
   "map": {
     "badge": "マップ",
     "badge_title": "発散議論マップ(ボードの前段の発散フェーズ)",
@@ -365,11 +373,6 @@
     "deleted_edge": "リンクを削除しました",
     "undo_delete": "元に戻す",
     "restored": "元に戻しました",
-    "timeline_button": "全コメントを時系列で表示",
-    "timeline_title": "全コメント (時系列)",
-    "timeline_count": "{{count}} 件",
-    "timeline_empty": "まだコメントがありません",
-    "timeline_jump": "このコメントのノードへ移動",
     "frame_add": "グルーピング枠を追加",
     "frame_untitled": "(無題の枠)",
     "frame_color_default": "デフォルト色",

@@ -1,69 +1,22 @@
-// Map-wide chronological preview: a single time-ordered stream of EVERY
-// message across all node threads + the general chat. A map's conversation is
-// scattered across cards (and the user silently rearranges them), so "wait,
-// which node did we discuss X in?" is hard to answer by eye. This modal
-// serialises the whole map into one timeline; clicking an entry jumps to the
-// node it belongs to (via the same MapNodeModal scroll-to-item the cards use).
+// Shared chronological all-comments preview, used by BOTH the map and the board.
+// It renders a pre-built, time-ordered stream (see buildTimelineEntries) and
+// clicking an entry calls onJump(nodeId, itemId) — the caller scrolls to the
+// node/message on its own surface (map: center the card; board: jumpToAnchor).
 
 import React, { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { MapNode, MapNodeKind, ThreadItem } from "../../shared/types.ts";
-import { MAP_GENERAL_NODE } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
 import { formatThreadTimestamp } from "../utils/format.ts";
+import type { TimelineEntry } from "../utils/timeline.ts";
 
-export type TimelineEntry = {
-  item: ThreadItem;
-  nodeId: string;
-  nodeTitle: string;
-  kind?: MapNodeKind;
-  isGeneral: boolean;
-};
-
-// Flatten every node thread + the general chat into one chronological stream.
-// Pure (labels passed in, not t()) so it can be unit-tested. Drops system rows
-// (status changes etc. — bookkeeping, not comments) and threads whose node was
-// deleted. Oldest first, ties broken by item id for a stable order.
-export function buildTimelineEntries(
-  nodes: MapNode[],
-  threads: Record<string, ThreadItem[]>,
-  labels: { general: string; untitled: string },
-): TimelineEntry[] {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const all: TimelineEntry[] = [];
-  for (const [nodeId, items] of Object.entries(threads)) {
-    const isGeneral = nodeId === MAP_GENERAL_NODE;
-    const node = byId.get(nodeId);
-    if (!isGeneral && !node) continue;
-    for (const it of items) {
-      if (it.source === "system") continue;
-      all.push({
-        item: it,
-        nodeId,
-        nodeTitle: isGeneral ? labels.general : node!.title || labels.untitled,
-        kind: isGeneral ? undefined : node!.kind,
-        isGeneral,
-      });
-    }
-  }
-  all.sort((a, b) => {
-    if (a.item.created_at < b.item.created_at) return -1;
-    if (a.item.created_at > b.item.created_at) return 1;
-    return a.item.id - b.item.id;
-  });
-  return all;
-}
-
-export function MapTimelineModal({
-  nodes,
-  threads,
+export function TimelineModal({
+  entries,
   onJump,
   onClose,
 }: {
-  nodes: MapNode[];
-  threads: Record<string, ThreadItem[]>;
+  entries: TimelineEntry[];
   onJump: (nodeId: string, itemId: number) => void;
   onClose: () => void;
 }) {
@@ -77,21 +30,14 @@ export function MapTimelineModal({
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  const entries = useMemo(
-    () =>
-      buildTimelineEntries(nodes, threads, {
-        general: t("map.general_chat"),
-        untitled: t("map.untitled"),
-      }),
-    [nodes, threads, t],
-  );
+  const count = useMemo(() => entries.length, [entries]);
 
   // Open at the newest message (bottom), like every other thread preview.
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [entries.length]);
+  }, [count]);
 
   return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
@@ -108,14 +54,14 @@ export function MapTimelineModal({
           <X size={18} strokeWidth={1.75} />
         </button>
         <div className="node-modal-header">
-          <h2 className="node-modal-title">{t("map.timeline_title")}</h2>
+          <h2 className="node-modal-title">{t("timeline.title")}</h2>
           <span className="timeline-count">
-            {t("map.timeline_count", { count: entries.length })}
+            {t("timeline.count", { count })}
           </span>
         </div>
         <div className="node-modal-scroll timeline-scroll" ref={scrollRef}>
           {entries.length === 0 ? (
-            <p className="timeline-empty">{t("map.timeline_empty")}</p>
+            <p className="timeline-empty">{t("timeline.empty")}</p>
           ) : (
             entries.map((e) => (
               <div
@@ -123,7 +69,7 @@ export function MapTimelineModal({
                 className={`timeline-entry from-${e.item.source}`}
                 role="button"
                 tabIndex={0}
-                title={t("map.timeline_jump")}
+                title={t("timeline.jump")}
                 onClick={(ev) => {
                   // A markdown link / button in the body owns its own click —
                   // don't also jump (which would navigate AND close the modal).
@@ -156,10 +102,7 @@ export function MapTimelineModal({
                       ? t("item_card.you")
                       : t("item_card.claude")}
                   </span>
-                  <span
-                    className="timeline-time"
-                    title={e.item.created_at}
-                  >
+                  <span className="timeline-time" title={e.item.created_at}>
                     {formatThreadTimestamp(e.item.created_at)}
                   </span>
                 </div>

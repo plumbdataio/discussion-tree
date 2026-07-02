@@ -50,7 +50,8 @@ import { MapNode, MapContext, type MapCtx } from "./MapNode.tsx";
 import { MapFrameNode } from "./MapFrameNode.tsx";
 import { MapNodeModal } from "./MapNodeModal.tsx";
 import { CliCommandButton } from "./CliCommandButton.tsx";
-import { MapTimelineModal } from "./MapTimelineModal.tsx";
+import { TimelineModal } from "./TimelineModal.tsx";
+import { buildTimelineEntries } from "../utils/timeline.ts";
 import { AppLayout } from "./AppShell.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
 import { ActivityBadge } from "./ActivityBadge.tsx";
@@ -887,8 +888,8 @@ export function MapView({ mapId }: { mapId: string }) {
             <button
               type="button"
               className="map-timeline-btn"
-              title={t("map.timeline_button")}
-              aria-label={t("map.timeline_button")}
+              title={t("timeline.button")}
+              aria-label={t("timeline.button")}
               onClick={() => setTimelineOpen(true)}
             >
               <ScrollText size={16} strokeWidth={1.9} />
@@ -966,9 +967,15 @@ export function MapView({ mapId }: { mapId: string }) {
             />
           </div>
         {timelineOpen && (
-          <MapTimelineModal
-            nodes={view.nodes}
-            threads={view.threads}
+          <TimelineModal
+            entries={buildTimelineEntries(view.threads, (nodeId) => {
+              if (nodeId === MAP_GENERAL_NODE)
+                return { title: t("map.general_chat"), isGeneral: true };
+              const n = view.nodes.find((x) => x.id === nodeId);
+              return n
+                ? { title: n.title || t("map.untitled"), kind: n.kind }
+                : null;
+            })}
             onJump={(nodeId, itemId) => {
               setTimelineOpen(false);
               setJump({ nodeId, itemId });
