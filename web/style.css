@@ -336,7 +336,7 @@ body {
      direct messages to Claude Code.") is informational and adds zero
      value once the user has used the board even once. Hide it entirely
      so the conversation thread starts at the top of the visible area. */
-  .default-board-context.md-body {
+  .default-board-context {
     display: none;
   }
 
@@ -1249,6 +1249,25 @@ a.session-name:hover {
   padding: 8px 14px;
   margin-bottom: 10px;
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* The welcome sentence sits at the left; it may wrap on a narrow board so let
+   it shrink rather than shove the count off the row. */
+.default-board-welcome {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Running message count, pinned to the right end of the banner. */
+.default-board-count {
+  flex: 0 0 auto;
+  margin-left: auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
 }
 
 .default-board-thread {

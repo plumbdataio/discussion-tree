@@ -143,11 +143,46 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     loadFavoritesForSession(sid, true);
   }, [data?.board?.session_id]);
 
-  // Consume any pending anchor jump targeting this board: scroll the
-  // matching thread item into view and pulse-highlight it for a couple
-  // of seconds. Runs whenever the board's data changes (= initial
-  // load, hot board switch) and whenever the jump channel notifies
-  // (= same-board click in the modal).
+  // Timers for the jump node-flash (see the pulse in the consume effect
+  // below). Held in a ref so a board switch / unmount clears them without
+  // leaking a setState into a torn-down tree — same discipline as the WS
+  // incoming-message flash above.
+  const jumpFlashTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  useEffect(() => {
+    const timers = jumpFlashTimers.current;
+    return () => {
+      for (const h of timers) clearTimeout(h);
+      timers.clear();
+    };
+  }, []);
+
+  // Port of the map's timeline focus-flash: after a jump lands on a message,
+  // pulse the FRAME of the node that holds it so the user can see which card
+  // it lives in. Reuses the board's existing `.item-card.flashing` pulse (the
+  // same glow a new CC message triggers). Used for BOTH the timeline modal and
+  // the anchor (bookmark) list, since both funnel through the consume effect.
+  const flashNode = useCallback((nodeId: string) => {
+    setFlashingNodes((prev) => {
+      const next = new Set(prev);
+      next.add(nodeId);
+      return next;
+    });
+    const handle = setTimeout(() => {
+      jumpFlashTimers.current.delete(handle);
+      setFlashingNodes((prev) => {
+        const next = new Set(prev);
+        next.delete(nodeId);
+        return next;
+      });
+    }, 1600);
+    jumpFlashTimers.current.add(handle);
+  }, []);
+
+  // Consume any pending anchor jump targeting this board: scroll the matching
+  // thread item into view, pulse-highlight the message, and flash the frame of
+  // the node it belongs to. Runs whenever the board's data changes (= initial
+  // load, hot board switch) and whenever the jump channel notifies (= same-board
+  // click in the timeline / bookmark modal).
   useEffect(() => {
     if (!boardId || !data) return;
     const tryConsume = () => {
@@ -168,46 +203,17 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           setTimeout(() => {
             el.classList.remove("highlight-jump");
           }, 2000);
+          // Flash the enclosing node card too (concern boards only — the
+          // default board's single thread has no per-node card to frame).
+          const card = el.closest("[data-node-id]") as HTMLElement | null;
+          const nodeId = card?.getAttribute("data-node-id");
+          if (nodeId) flashNode(nodeId);
         });
       });
     };
     tryConsume();
     return subscribePendingJump(tryConsume);
-  }, [boardId, data]);
-
-  // Timers for the timeline-jump node flash (see the TimelineModal onJump
-  // below). Held in a ref so a board switch / unmount clears them without
-  // leaking a setState into a torn-down tree — same discipline as the WS
-  // incoming-message flash above.
-  const jumpFlashTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
-  useEffect(() => {
-    const timers = jumpFlashTimers.current;
-    return () => {
-      for (const h of timers) clearTimeout(h);
-      timers.clear();
-    };
-  }, []);
-
-  // Port of the map's timeline focus-flash: once the timeline has sent the
-  // user to a message, pulse the FRAME of the node that holds it so they can
-  // see which card it lives in. Reuses the board's existing
-  // `.item-card.flashing` pulse (the same glow a new CC message triggers).
-  const flashNode = useCallback((nodeId: string) => {
-    setFlashingNodes((prev) => {
-      const next = new Set(prev);
-      next.add(nodeId);
-      return next;
-    });
-    const handle = setTimeout(() => {
-      jumpFlashTimers.current.delete(handle);
-      setFlashingNodes((prev) => {
-        const next = new Set(prev);
-        next.delete(nodeId);
-        return next;
-      });
-    }, 1600);
-    jumpFlashTimers.current.add(handle);
-  }, []);
+  }, [boardId, data, flashNode]);
 
   // Initial board position: when a CONCERN board first opens, bring the most
   // relevant node into horizontal view — the node holding the OLDEST unread CC
@@ -704,15 +710,20 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
               activeActivity?.state === "blocked"
             }
           />
-          <button
-            type="button"
-            className="board-timeline-btn"
-            title={t("timeline.button")}
-            aria-label={t("timeline.button")}
-            onClick={() => setTimelineOpen(true)}
-          >
-            <ScrollText size={14} strokeWidth={1.9} />
-          </button>
+          {/* The default board is one flat thread, so a chronological
+              "all comments" view is identical to the normal view — only
+              concern boards (messages scattered across nodes) benefit. */}
+          {!data.board.is_default && (
+            <button
+              type="button"
+              className="board-timeline-btn"
+              title={t("timeline.button")}
+              aria-label={t("timeline.button")}
+              onClick={() => setTimelineOpen(true)}
+            >
+              <ScrollText size={14} strokeWidth={1.9} />
+            </button>
+          )}
           {(data.owner_bg_task_count ?? 0) > 0 && (
             <button
               type="button"
@@ -818,13 +829,12 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
               ? { title: n.title || t("timeline.untitled"), kind: n.kind }
               : null;
           })}
-          onJump={(nodeId, itemId) => {
+          onJump={(_nodeId, itemId) => {
             // The board scrolls to a message by id (same channel the anchor
-            // list uses); then flash the frame of the node holding it, so the
-            // user sees which card the message lives in (ported from the map).
+            // list uses); the consume effect handles the scroll + the node
+            // frame flash, so the node id isn't needed here.
             setTimelineOpen(false);
             jumpToAnchor(data.board.id, itemId);
-            flashNode(nodeId);
           }}
           onClose={() => setTimelineOpen(false)}
         />

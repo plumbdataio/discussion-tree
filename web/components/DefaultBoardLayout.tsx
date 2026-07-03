@@ -43,6 +43,9 @@ export function DefaultBoardLayout({
 
   const myThread: ThreadItem[] = data.threads[node.id] ?? [];
   const flashing = flashingNodes.has(node.id);
+  // Real messages only — drop system rows (status changes etc.), matching how
+  // the timeline modal counts on concern boards.
+  const messageCount = myThread.filter((it) => it.source !== "system").length;
 
   // Persisted-on-localStorage draft (cleared on successful send).
   const [draft, setDraft] = useDraft(data.board.id, node.id);
@@ -169,9 +172,17 @@ export function DefaultBoardLayout({
     >
       {/* The default board's seeded item context is stored in English in the DB
           (so SQL inspection reads naturally), but the display side overrides
-          via i18n so the user sees their preferred language. */}
-      <div className="default-board-context md-body">
-        <MDView text={t("default_board.welcome_message")} />
+          via i18n so the user sees their preferred language. The right end shows
+          the total message count — this board has no timeline modal (it's one
+          flat thread), but the running count is still handy to glance at. */}
+      <div className="default-board-context">
+        <MDView
+          className="default-board-welcome"
+          text={t("default_board.welcome_message")}
+        />
+        <span className="default-board-count">
+          {t("default_board.message_count", { count: messageCount })}
+        </span>
       </div>
       {/* column-reverse: the first DOM child renders at the visual
           bottom. So tentativeText (= the optimistic in-flight message)

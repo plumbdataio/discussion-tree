@@ -311,7 +311,8 @@
     "title": "会話",
     "concern_title": "会話",
     "item_title": "会話",
-    "welcome_message": "ここでの投稿は CC への直接メッセージとして届きます。"
+    "welcome_message": "ここでの投稿は CC への直接メッセージとして届きます。",
+    "message_count": "{{count}} 件"
   },
   "checklist": {
     "source_kind_board": "ボード",

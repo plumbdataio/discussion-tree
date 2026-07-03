@@ -311,7 +311,8 @@
     "title": "Conversation",
     "concern_title": "Conversation",
     "item_title": "Conversation",
-    "welcome_message": "Posts here are delivered as direct messages to Claude Code."
+    "welcome_message": "Posts here are delivered as direct messages to Claude Code.",
+    "message_count": "{{count}} messages"
   },
   "checklist": {
     "source_kind_board": "Board",
