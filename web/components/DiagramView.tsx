@@ -203,8 +203,12 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
       // a long CJK edge label renders as one line and gets clipped by its band.
       // Force wrap + a max-width so the label wraps and mermaid measures/sizes the
       // band (and htmlLabels foreignObject) against the wrapped text, like nodes.
+      // word-break:auto-phrase = the browser's Japanese phrase-based line breaking
+      // (bunsetsu boundaries), so CJK wraps at natural points instead of mid-word
+      // like overflow-wrap:anywhere does. overflow-wrap stays as the fallback for
+      // an unbreakable run (e.g. a long URL).
       themeCSS:
-        ".nodeLabel, .nodeLabel p, .edgeLabel, .edgeLabel p { white-space: normal !important; overflow-wrap: anywhere; } .edgeLabel { max-width: 220px; }",
+        ".nodeLabel, .nodeLabel p, .edgeLabel, .edgeLabel p { white-space: normal !important; word-break: auto-phrase; overflow-wrap: anywhere; } .edgeLabel { max-width: 220px; }",
     });
     let cancelled = false;
     // Wait for webfonts before rendering so CJK glyph metrics are final at
