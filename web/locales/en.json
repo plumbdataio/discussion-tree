@@ -183,10 +183,10 @@
     "tmux_integration_label": "tmux integration",
     "tmux_integration_help": "Let discussion-tree operate through tmux. When on: (1) send TUI commands (e.g. /compact) from the header to a CC running inside tmux, and (2) spawn new CC sessions from discussion-tree. Requires tmux on the machine. Saved on the server (per machine), so it survives a browser data-clear and is shared across your devices.",
     "cli_verbosity_label": "CLI verbosity",
-    "cli_verbosity_default": "Default",
+    "cli_verbosity_default": "Normal (as before)",
     "cli_verbosity_concise": "Concise",
-    "cli_verbosity_silent": "Silent (board mirror only)",
-    "cli_verbosity_help": "How much the CC says in its terminal when it answers. The board reply (mirror) is always the canonical record, so you can quiet the CLI down. Applies to every CC on this machine and takes effect on the next message. Concise keeps the terminal reply terse; Silent skips the terminal prose entirely.",
+    "cli_verbosity_silent": "None",
+    "cli_verbosity_help": "How much the CC speaks in its terminal (CLI). Replies are always posted to the board too, so you can keep the CLI quiet (applies to every CC on this machine, effective from the next message). Normal (as before) = same behaviour as before this setting existed; Concise = brief CLI prose with the substance in the board reply; None = no CLI prose, the reply goes to the board only (how strictly this holds is up to the CC).",
     "footer": "Settings are stored in this device's localStorage (per device).",
     "close": "Close (Esc)"
   },

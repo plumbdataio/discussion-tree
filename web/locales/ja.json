@@ -183,10 +183,10 @@
     "tmux_integration_label": "tmux 連携",
     "tmux_integration_help": "dt と tmux を連携させ、tmux 経由の操作を有効にします。オンにすると ① ヘッダーから TUI コマンド送信（/compact 等・tmux 内で起動した CC が対象）／② dt から新規 CC セッションを起動（spawn）。利用にはマシンに tmux が必要です。設定はサーバ側（マシン単位）に保存されるので、ブラウザのデータ消去でも消えず、デバイス間で共有されます。",
     "cli_verbosity_label": "CLI の発言量",
-    "cli_verbosity_default": "デフォルト",
+    "cli_verbosity_default": "通常（従来どおり）",
     "cli_verbosity_concise": "簡潔",
-    "cli_verbosity_silent": "無し（ボードのミラーのみ）",
-    "cli_verbosity_help": "CC が返信する際にターミナル（CLI）でどれだけ発言するかを制御します。ボードへの返信（ミラー）が常に正式な記録なので、CLI 側は静かにできます。このマシンの全 CC に適用され、次のメッセージから有効になります。「簡潔」は CLI の返信を短く、「無し」は CLI 側の発言を完全に省略します。",
+    "cli_verbosity_silent": "なし",
+    "cli_verbosity_help": "CC がターミナル（CLI）でどれだけ発言するかを設定します。返信は常にボードにも投稿されるので、CLI 側は静かにできます（このマシンの全 CC に適用・次のメッセージから有効）。「通常（従来どおり）」＝この設定を入れる前と同じ挙動、「簡潔」＝CLI は短くして内容はボードの返信へ、「なし」＝CLI では発言せずボードのみ（実際にどこまで守れるかは CC 次第）。",
     "footer": "設定はこのデバイスの localStorage に保存されます (デバイスごとに別)。",
     "close": "閉じる (Esc)"
   },
