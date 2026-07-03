@@ -175,6 +175,40 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     return subscribePendingJump(tryConsume);
   }, [boardId, data]);
 
+  // Timers for the timeline-jump node flash (see the TimelineModal onJump
+  // below). Held in a ref so a board switch / unmount clears them without
+  // leaking a setState into a torn-down tree — same discipline as the WS
+  // incoming-message flash above.
+  const jumpFlashTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  useEffect(() => {
+    const timers = jumpFlashTimers.current;
+    return () => {
+      for (const h of timers) clearTimeout(h);
+      timers.clear();
+    };
+  }, []);
+
+  // Port of the map's timeline focus-flash: once the timeline has sent the
+  // user to a message, pulse the FRAME of the node that holds it so they can
+  // see which card it lives in. Reuses the board's existing
+  // `.item-card.flashing` pulse (the same glow a new CC message triggers).
+  const flashNode = useCallback((nodeId: string) => {
+    setFlashingNodes((prev) => {
+      const next = new Set(prev);
+      next.add(nodeId);
+      return next;
+    });
+    const handle = setTimeout(() => {
+      jumpFlashTimers.current.delete(handle);
+      setFlashingNodes((prev) => {
+        const next = new Set(prev);
+        next.delete(nodeId);
+        return next;
+      });
+    }, 1600);
+    jumpFlashTimers.current.add(handle);
+  }, []);
+
   // Initial board position: when a CONCERN board first opens, bring the most
   // relevant node into horizontal view — the node holding the OLDEST unread CC
   // message if anything is unread (the first thing to read), otherwise the node
@@ -784,11 +818,13 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
               ? { title: n.title || t("timeline.untitled"), kind: n.kind }
               : null;
           })}
-          onJump={(_nodeId, itemId) => {
+          onJump={(nodeId, itemId) => {
             // The board scrolls to a message by id (same channel the anchor
-            // list uses); the node id isn't needed here.
+            // list uses); then flash the frame of the node holding it, so the
+            // user sees which card the message lives in (ported from the map).
             setTimelineOpen(false);
             jumpToAnchor(data.board.id, itemId);
+            flashNode(nodeId);
           }}
           onClose={() => setTimelineOpen(false)}
         />
