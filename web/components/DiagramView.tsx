@@ -199,8 +199,12 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
       // set explicitly to document that the themeCSS above depends on it; it
       // renders under securityLevel:strict here, confirmed in the DOM.)
       flowchart: { wrappingWidth: 220, htmlLabels: true },
+      // Same wrap fix for EDGE labels: mermaid has no wrappingWidth for edges, so
+      // a long CJK edge label renders as one line and gets clipped by its band.
+      // Force wrap + a max-width so the label wraps and mermaid measures/sizes the
+      // band (and htmlLabels foreignObject) against the wrapped text, like nodes.
       themeCSS:
-        ".nodeLabel, .nodeLabel p { white-space: normal !important; overflow-wrap: anywhere; }",
+        ".nodeLabel, .nodeLabel p, .edgeLabel, .edgeLabel p { white-space: normal !important; overflow-wrap: anywhere; } .edgeLabel { max-width: 220px; }",
     });
     let cancelled = false;
     // Wait for webfonts before rendering so CJK glyph metrics are final at
