@@ -13,6 +13,7 @@ import {
 } from "./activity.ts";
 import { getContextUsage } from "./context-usage.ts";
 import { SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
+import { validateMermaidSyntax } from "./mermaid-validate.ts";
 
 // Synthetic node id for the diagram's right-side chat thread.
 const DIAGRAM_CHAT_NODE = "__chat__";
@@ -41,10 +42,11 @@ try {
   /* column already exists */
 }
 
-// Lightweight mermaid sanity check at upsert time. A full mermaid.parse needs a
-// DOM (jsdom) which is heavy in Bun, so we only reject the obvious failures:
+// Lightweight structural check at upsert time: reject the obvious failures —
 // empty source, or a first content line that isn't a recognized diagram-type
-// header. Residual parse errors surface client-side at render.
+// header. A real mermaid.parse backstop runs after this (validateMermaidSyntax,
+// broker/mermaid-validate.ts) to catch source that clears the header but is
+// syntactically broken; anything past both still surfaces client-side at render.
 const DIAGRAM_HEADERS = [
   "graph",
   "flowchart",
@@ -138,11 +140,15 @@ export function getDiagramView(id: string) {
 }
 
 // Create (no id / unknown id) or replace (existing id) a diagram's whole source.
-export function handleUpsertDiagram(body: any) {
+export async function handleUpsertDiagram(body: any) {
   const title = String(body?.title ?? "").trim() || "Untitled diagram";
   const source = String(body?.source ?? "");
   const err = validateSource(source);
   if (err) return { ok: false, error: err };
+  // Backstop the lightweight header check with a real mermaid.parse so a
+  // syntactically broken source is rejected up front, not just at render.
+  const syntaxErr = await validateMermaidSyntax(source);
+  if (syntaxErr) return { ok: false, error: syntaxErr };
   const now = new Date().toISOString();
   // context is the diagram's description/background (markdown), shown at the top
   // of the page. It's OPTIONAL and preserved-on-absent: a source-only upsert
