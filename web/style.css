@@ -4156,21 +4156,6 @@ textarea.answer-input {
   background: #fff;
 }
 
-/* Text (I-beam) mouse cursor only where you actually type. Everywhere else —
-   message text, panels, read-only content — the browser otherwise renders the
-   I-beam over selectable text, which wrongly implies the message is editable.
-   Force the default arrow app-wide; inputs/textareas opt back into the text
-   cursor. Interactive elements keep their own cursor (buttons/links set their
-   own `pointer`, which out-specifies this inherited default). */
-body {
-  cursor: default;
-}
-input,
-textarea,
-[contenteditable="true"] {
-  cursor: text;
-}
-
 /* Chat composer with a custom TOP-RIGHT resize handle (see ResizableTextarea).
    The wrapper only positions the handle; the textarea keeps its existing
    per-surface styles (it's still matched as `.answer-input`). */
