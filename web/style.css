@@ -4154,6 +4154,11 @@ textarea.answer-input {
   font-family: inherit;
   font-size: 13px;
   background: #fff;
+  /* No blinking text caret in the message composers, anywhere in the UI (the
+     user reads replies in the UI and finds the idle caret distracting). Typing
+     still works — only the caret is invisible. Covers every composer instance
+     since they all share `.answer-input`. */
+  caret-color: transparent;
 }
 
 /* Chat composer with a custom TOP-RIGHT resize handle (see ResizableTextarea).
