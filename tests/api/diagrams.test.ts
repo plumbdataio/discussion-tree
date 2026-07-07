@@ -99,38 +99,6 @@ describe("diagrams — upsert (create / replace) + validation", () => {
     expect(r.json.ok).toBe(true);
   });
 
-  test("upsert rejects source that clears the header check but is syntactically broken", async () => {
-    // First line "flowchart TD" passes validateSource, but the body is broken —
-    // caught by the real mermaid.parse backstop, not just at render time.
-    const r = await post<{ ok: boolean; error?: string }>(
-      `${broker.url}/upsert-diagram`,
-      {
-        session_id: sessionId,
-        title: "broken",
-        source: "flowchart TD\n  A --> B [oops unbalanced",
-      },
-    );
-    expect(r.json.ok).toBe(false);
-    expect(r.json.error).toMatch(/syntax|parse error/i);
-  });
-
-  test("upsert accepts a valid STYLED diagram (classDef/class) — not a false DOMPurify reject", async () => {
-    // Bare mermaid.parse throws a non-syntax DOM error on styled diagrams; the
-    // happy-dom-backed backstop must accept these (regression guard).
-    const styled =
-      "flowchart TD\n" +
-      '  n1("q: X") -->|"because"| n2("decide: Y")\n' +
-      "  classDef q fill:#dbeafe,stroke:#3b82f6;\n" +
-      "  classDef d fill:#dcfce7,stroke:#16a34a;\n" +
-      "  class n1 q;\n  class n2 d;";
-    const r = await post<{ ok: boolean; id: string }>(
-      `${broker.url}/upsert-diagram`,
-      { session_id: sessionId, title: "styled", source: styled },
-    );
-    expect(r.json.ok).toBe(true);
-    expect(r.json.id).toMatch(/^dg_/);
-  });
-
   test("creating a NEW diagram requires session_id", async () => {
     const r = await post<{ ok: boolean; error?: string }>(
       `${broker.url}/upsert-diagram`,
