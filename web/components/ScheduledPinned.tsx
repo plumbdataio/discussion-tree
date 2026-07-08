@@ -1,7 +1,8 @@
 import React from "react";
-import { Clock } from "lucide-react";
+import { Clock, Pencil } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MDView } from "./MDView.tsx";
+import { openScheduledEdit } from "../utils/scheduledList.ts";
 
 // Pending timer-send messages, pinned below a node's thread until they fire.
 // Shared by the default conversation board (DefaultBoardLayout) and concern
@@ -33,6 +34,21 @@ export function ScheduledPinned({ scheduled }: { scheduled: any[] }) {
                 minute: "2-digit",
               })}
             </span>
+            <button
+              type="button"
+              className="scheduled-pinned-edit"
+              title={t("timer.edit_title")}
+              aria-label={t("timer.edit_title")}
+              onClick={() =>
+                openScheduledEdit({
+                  id: m.id,
+                  text: m.text,
+                  fire_at: m.fire_at,
+                })
+              }
+            >
+              <Pencil size={11} strokeWidth={2} />
+            </button>
             <button
               type="button"
               className="scheduled-pinned-cancel"

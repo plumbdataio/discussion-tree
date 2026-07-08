@@ -15,3 +15,27 @@ export function subscribeOpenScheduledList(cb: () => void): () => void {
   window.addEventListener(OPEN_EVENT, cb);
   return () => window.removeEventListener(OPEN_EVENT, cb);
 }
+
+// Same pattern for the edit modal: any pending-reservation chip (pinned below a
+// thread, or a row in the reservations list) opens the shared edit modal with
+// the reservation's current text + fire time, carried on the event detail.
+export type ScheduledEditTarget = {
+  id: string;
+  text: string;
+  fire_at: string;
+};
+const EDIT_EVENT = "pd-open-scheduled-edit";
+
+export function openScheduledEdit(target: ScheduledEditTarget) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(EDIT_EVENT, { detail: target }));
+}
+
+export function subscribeOpenScheduledEdit(
+  cb: (target: ScheduledEditTarget) => void,
+): () => void {
+  if (typeof window === "undefined") return () => {};
+  const h = (e: Event) => cb((e as CustomEvent).detail as ScheduledEditTarget);
+  window.addEventListener(EDIT_EVENT, h);
+  return () => window.removeEventListener(EDIT_EVENT, h);
+}

@@ -352,7 +352,9 @@
     "sidebar_title": "送信予約中のメッセージ {{count}} 件",
     "cancel_title": "予約を取り消す",
     "list_title": "送信予約の一覧",
-    "list_empty": "送信予約中のメッセージはありません"
+    "list_empty": "送信予約中のメッセージはありません",
+    "edit_title": "予約を編集",
+    "save": "保存"
   },
   "timeline": {
     "button": "全コメントを時系列で表示",

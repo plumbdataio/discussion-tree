@@ -4403,6 +4403,36 @@ textarea.answer-input {
   margin-top: 4px;
   font-size: 13px;
 }
+.scheduled-list-edit,
+.scheduled-pinned-edit {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  padding: 0 2px;
+  line-height: 1;
+}
+.scheduled-list-edit:hover,
+.scheduled-pinned-edit:hover {
+  color: var(--accent, #3b82f6);
+}
+
+/* Edit-reservation small modal (text + fire time). */
+.scheduled-edit-modal {
+  max-width: 460px;
+  width: min(460px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.scheduled-edit-text {
+  width: 100%;
+  min-height: 90px;
+  resize: vertical;
+}
 
 /* Pending timer sends, pinned below the thread until they fire. Dashed light-blue
    chips so they read as "scheduled, not yet sent" — distinct from real messages. */

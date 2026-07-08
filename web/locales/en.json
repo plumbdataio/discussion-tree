@@ -352,7 +352,9 @@
     "sidebar_title": "{{count}} scheduled message(s)",
     "cancel_title": "Cancel this scheduled send",
     "list_title": "Scheduled sends",
-    "list_empty": "No scheduled sends"
+    "list_empty": "No scheduled sends",
+    "edit_title": "Edit reservation",
+    "save": "Save"
   },
   "timeline": {
     "button": "All comments (timeline)",

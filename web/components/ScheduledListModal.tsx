@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Clock } from "lucide-react";
+import { Clock, Pencil } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MDView } from "./MDView.tsx";
-import { subscribeOpenScheduledList } from "../utils/scheduledList.ts";
+import {
+  openScheduledEdit,
+  subscribeOpenScheduledList,
+} from "../utils/scheduledList.ts";
 
 // Global cross-session reservations list. Rendered once (frontend.tsx); opened
 // from the sidebar clock indicator or a board-header button via the
@@ -113,6 +116,21 @@ export function ScheduledListModal() {
                       ? ` › ${m.board_is_default ? t("default_board.title") : m.board_title}`
                       : ""}
                   </span>
+                  <button
+                    type="button"
+                    className="scheduled-list-edit"
+                    title={t("timer.edit_title")}
+                    aria-label={t("timer.edit_title")}
+                    onClick={() =>
+                      openScheduledEdit({
+                        id: m.id,
+                        text: m.text,
+                        fire_at: m.fire_at,
+                      })
+                    }
+                  >
+                    <Pencil size={12} strokeWidth={2} />
+                  </button>
                   <button
                     type="button"
                     className="scheduled-list-cancel"
