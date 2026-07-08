@@ -354,7 +354,11 @@
     "list_title": "送信予約の一覧",
     "list_empty": "送信予約中のメッセージはありません",
     "edit_title": "予約を編集",
-    "save": "保存"
+    "save": "保存",
+    "confirm_title": "送信予約中のメッセージがあります",
+    "confirm_body": "このセッションには送信予約が {{count}} 件あります。今このメッセージを送りますか？",
+    "confirm_send": "送る",
+    "confirm_cancel": "やめる"
   },
   "timeline": {
     "button": "全コメントを時系列で表示",

@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from "react";
 import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { TimerSendButton } from "./TimerSendButton.tsx";
 import { ScheduledPinned } from "./ScheduledPinned.tsx";
+import { confirmBeforeSend } from "../utils/timerConfirm.ts";
 import { useTranslation } from "react-i18next";
 import type { BoardView, Node, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
@@ -139,6 +140,14 @@ export function DefaultBoardLayout({
   const handleSubmit = async () => {
     const text = draft.trim();
     if (!text) return;
+    // If this session has an armed pending timer send, confirm before sending
+    // a LIVE message (once — showing the confirm disarms it).
+    const proceed = await confirmBeforeSend(
+      !!(data as any).owner_timer_confirm_armed,
+      data.board.session_id,
+      (data as any).owner_scheduled_count ?? 0,
+    );
+    if (!proceed) return;
     setSubmitting(true);
     setTentativeText(text);
     setDraft("");

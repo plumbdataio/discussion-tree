@@ -853,6 +853,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
                     ownerAlive={ownerAlive}
                     ownerSessionId={ownerSessionId}
                     scheduled={(data as any).scheduled ?? []}
+                    ownerConfirmArmed={!!(data as any).owner_timer_confirm_armed}
                     onSubmit={handleSubmit}
                   />
                 ))}

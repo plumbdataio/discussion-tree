@@ -203,6 +203,7 @@ export function getBoardView(boardId: string) {
   const owner_context_usage = getContextUsage(board.session_id);
   const owner_bg_task_count = bgTaskCountForSession(board.session_id);
   const owner_scheduled_count = pendingScheduledCount(board.session_id);
+  const owner_timer_confirm_armed = pendingArmedCount(board.session_id) > 0;
   return {
     board,
     nodes,
@@ -215,6 +216,7 @@ export function getBoardView(boardId: string) {
     owner_context_usage,
     owner_bg_task_count,
     owner_scheduled_count,
+    owner_timer_confirm_armed,
     scheduled: pendingScheduledList(board.id),
     owner_can_cli_send,
   };
@@ -259,6 +261,23 @@ function pendingScheduledCount(sessionId: string): number {
     );
   } catch {
     return 0; // table not present yet (very early call) — treat as none
+  }
+}
+
+// Count of the session's pending reservations still ARMED for the confirm (see
+// confirm_armed in scheduled-messages.ts). Same lazy/no-import posture.
+let _schedArmedStmt: ReturnType<typeof db.prepare> | null = null;
+function pendingArmedCount(sessionId: string): number {
+  try {
+    if (!_schedArmedStmt)
+      _schedArmedStmt = db.prepare(
+        "SELECT COUNT(*) AS n FROM scheduled_messages WHERE session_id = ? AND sent_at IS NULL AND confirm_armed = 1",
+      );
+    return (
+      (_schedArmedStmt.get(sessionId) as { n: number } | undefined)?.n ?? 0
+    );
+  } catch {
+    return 0;
   }
 }
 

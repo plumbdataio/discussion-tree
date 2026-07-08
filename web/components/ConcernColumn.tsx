@@ -20,6 +20,7 @@ export function ConcernColumn({
   ownerAlive,
   ownerSessionId,
   scheduled,
+  ownerConfirmArmed,
   onSubmit,
 }: {
   concern: Node;
@@ -32,6 +33,7 @@ export function ConcernColumn({
   // Pending timer-send messages for the board — forwarded to each ItemCard,
   // which pins the ones targeting its own node.
   scheduled?: any[];
+  ownerConfirmArmed?: boolean;
   onSubmit: (nodeId: string, text: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
@@ -134,6 +136,7 @@ export function ConcernColumn({
                   ownerAlive={ownerAlive}
                   ownerSessionId={ownerSessionId}
                   scheduled={scheduled}
+                  ownerConfirmArmed={ownerConfirmArmed}
                   onSubmit={onSubmit}
                 />
               ),

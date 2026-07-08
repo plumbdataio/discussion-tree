@@ -24,6 +24,17 @@ db.run(`
 db.run(
   "CREATE INDEX IF NOT EXISTS idx_sched_pending ON scheduled_messages (sent_at, fire_at)",
 );
+// confirm_armed: 1 while this reservation should still trigger the "you have a
+// pending timer send — send this live message now?" confirm. New rows default
+// to 1 (armed); showing the confirm once disarms ALL of a session's pending
+// rows, and a fresh reservation re-arms naturally. (Idempotent add.)
+try {
+  db.run(
+    "ALTER TABLE scheduled_messages ADD COLUMN confirm_armed INTEGER NOT NULL DEFAULT 1",
+  );
+} catch {
+  /* column already exists */
+}
 
 const insertStmt = db.prepare(
   "INSERT INTO scheduled_messages (id, session_id, board_id, node_id, text, fire_at, created_at) VALUES (?,?,?,?,?,?,?)",
@@ -63,6 +74,19 @@ const markSentStmt = db.prepare(
 const pendingCountStmt = db.prepare(
   "SELECT COUNT(*) AS n FROM scheduled_messages WHERE session_id = ? AND sent_at IS NULL",
 );
+const armedCountStmt = db.prepare(
+  "SELECT COUNT(*) AS n FROM scheduled_messages WHERE session_id = ? AND sent_at IS NULL AND confirm_armed = 1",
+);
+const disarmStmt = db.prepare(
+  "UPDATE scheduled_messages SET confirm_armed = 0 WHERE session_id = ? AND sent_at IS NULL",
+);
+
+// Whether the "you have a pending timer send — send this live message now?"
+// confirm should fire for a session: true iff it has >=1 pending reservation
+// still armed. Powers the board view's owner_timer_confirm_armed flag.
+export function armedConfirmCountForSession(sessionId: string): number {
+  return (armedCountStmt.get(sessionId) as { n: number } | undefined)?.n ?? 0;
+}
 
 // Count of still-pending (unfired) scheduled messages for a session — powers the
 // sidebar badge and the header banner. Safe to import from sessions.ts (no cycle);
@@ -123,6 +147,15 @@ function handleCancelScheduledMessage(body: any) {
   return { ok: res.changes > 0 };
 }
 
+// The confirm was shown once for this session — disarm ALL its pending
+// reservations so it won't fire again until a fresh reservation re-arms.
+function handleTimerConfirmAck(body: any) {
+  const session_id = String(body?.session_id ?? "");
+  if (!session_id) return { ok: false, error: "session_id is required" };
+  disarmStmt.run(session_id);
+  return { ok: true };
+}
+
 function handleUpdateScheduledMessage(body: any) {
   const id = String(body?.id ?? "");
   const text = String(body?.text ?? "").trim();
@@ -173,4 +206,5 @@ export const routes = {
   "/list-all-scheduled-messages": handleListAllScheduledMessages,
   "/cancel-scheduled-message": handleCancelScheduledMessage,
   "/update-scheduled-message": handleUpdateScheduledMessage,
+  "/timer-confirm-ack": handleTimerConfirmAck,
 };

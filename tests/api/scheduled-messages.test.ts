@@ -191,4 +191,28 @@ describe("scheduled-messages", () => {
     expect(row.fire_at).toBe(new Date(t2).toISOString());
     await post(`${broker.url}/cancel-scheduled-message`, { id: s.json.id });
   });
+
+  test("confirm arms on schedule and disarms on ack (count unchanged)", async () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const s = await post<{ id: string }>(`${broker.url}/schedule-message`, {
+      board_id: boardId,
+      node_id: "i1",
+      text: "arm the confirm",
+      fire_at: future,
+    });
+    let v = await get<any>(`${broker.url}/api/board/${boardId}`);
+    expect(v.json.owner_timer_confirm_armed).toBe(true);
+
+    const ack = await post<{ ok: boolean }>(
+      `${broker.url}/timer-confirm-ack`,
+      { session_id: sessionId },
+    );
+    expect(ack.json.ok).toBe(true);
+
+    v = await get<any>(`${broker.url}/api/board/${boardId}`);
+    // disarmed, but still pending (ack doesn't cancel it)
+    expect(v.json.owner_timer_confirm_armed).toBe(false);
+    expect(v.json.owner_scheduled_count).toBeGreaterThan(0);
+    await post(`${broker.url}/cancel-scheduled-message`, { id: s.json.id });
+  });
 });

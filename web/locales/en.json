@@ -354,7 +354,11 @@
     "list_title": "Scheduled sends",
     "list_empty": "No scheduled sends",
     "edit_title": "Edit reservation",
-    "save": "Save"
+    "save": "Save",
+    "confirm_title": "You have scheduled sends pending",
+    "confirm_body": "This session has {{count}} scheduled send(s). Send this message now anyway?",
+    "confirm_send": "Send now",
+    "confirm_cancel": "Cancel"
   },
   "timeline": {
     "button": "All comments (timeline)",

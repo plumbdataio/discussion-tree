@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from "react";
 import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { ScheduledPinned } from "./ScheduledPinned.tsx";
 import { TimerSendButton } from "./TimerSendButton.tsx";
+import { confirmBeforeSend } from "../utils/timerConfirm.ts";
 import { Maximize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Activity, Node, ThreadItem } from "../../shared/types.ts";
@@ -27,6 +28,7 @@ export function ItemCard({
   ownerAlive,
   ownerSessionId,
   scheduled,
+  ownerConfirmArmed,
   onSubmit,
 }: {
   node: Node;
@@ -42,6 +44,9 @@ export function ItemCard({
   // Pending timer-send messages for the whole board; ItemCard shows the ones
   // targeting THIS node pinned below its thread.
   scheduled?: any[];
+  // True when the owning session has an armed pending reservation — gate a live
+  // send behind the confirm.
+  ownerConfirmArmed?: boolean;
   onSubmit: (nodeId: string, text: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
@@ -156,6 +161,13 @@ export function ItemCard({
   const handleSubmit = async () => {
     const text = draft.trim();
     if (!text) return;
+    // Confirm a live send while this session has an armed pending timer send.
+    const proceed = await confirmBeforeSend(
+      !!ownerConfirmArmed,
+      ownerSessionId,
+      scheduled?.length ?? 0,
+    );
+    if (!proceed) return;
     setSubmitting(true);
     setTentativeText(text);
     setDraft("");

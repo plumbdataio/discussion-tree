@@ -4434,6 +4434,16 @@ textarea.answer-input {
   resize: vertical;
 }
 
+/* "You have a pending timer send — send this live message now?" confirm. */
+.timer-confirm-modal {
+  max-width: 420px;
+  width: min(420px, 92vw);
+}
+.timer-confirm-body {
+  margin: 8px 0 4px;
+  line-height: 1.5;
+}
+
 /* Pending timer sends, pinned below the thread until they fire. Dashed light-blue
    chips so they read as "scheduled, not yet sent" — distinct from real messages. */
 .scheduled-pinned {
