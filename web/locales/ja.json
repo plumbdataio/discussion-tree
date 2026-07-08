@@ -347,7 +347,8 @@
     "picker_label": "送信する日時",
     "schedule": "予約",
     "close": "閉じる",
-    "schedule_failed": "予約に失敗しました: {{message}}"
+    "schedule_failed": "予約に失敗しました: {{message}}",
+    "banner": "送信予約中のメッセージが {{count}} 件あります"
   },
   "timeline": {
     "button": "全コメントを時系列で表示",

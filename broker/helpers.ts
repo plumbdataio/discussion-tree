@@ -202,6 +202,7 @@ export function getBoardView(boardId: string) {
   // number per page render.
   const owner_context_usage = getContextUsage(board.session_id);
   const owner_bg_task_count = bgTaskCountForSession(board.session_id);
+  const owner_scheduled_count = pendingScheduledCount(board.session_id);
   return {
     board,
     nodes,
@@ -213,8 +214,28 @@ export function getBoardView(boardId: string) {
     owner_session_name,
     owner_context_usage,
     owner_bg_task_count,
+    owner_scheduled_count,
     owner_can_cli_send,
   };
+}
+
+// Pending (unfired) scheduled-message count for the owning session — powers the
+// header banner. Lazy-prepared (the scheduled_messages table is created by
+// broker/scheduled-messages.ts on its own import) and NOT imported from there,
+// to avoid a helpers → scheduled-messages → threads → helpers import cycle.
+let _schedCountStmt: ReturnType<typeof db.prepare> | null = null;
+function pendingScheduledCount(sessionId: string): number {
+  try {
+    if (!_schedCountStmt)
+      _schedCountStmt = db.prepare(
+        "SELECT COUNT(*) AS n FROM scheduled_messages WHERE session_id = ? AND sent_at IS NULL",
+      );
+    return (
+      (_schedCountStmt.get(sessionId) as { n: number } | undefined)?.n ?? 0
+    );
+  } catch {
+    return 0; // table not present yet (very early call) — treat as none
+  }
 }
 
 export function buildNodePath(boardId: string, nodeId: string): string {

@@ -4294,6 +4294,18 @@ textarea.answer-input {
   cursor: not-allowed;
 }
 
+/* "N messages scheduled to send" banner, one row below the header. Deliberately
+   low-pressure (unlike the pink 5h-limit banner) — a faint accent-tinted strip
+   that reads the same in light and dark. */
+.scheduled-banner {
+  flex: 0 0 auto;
+  padding: 7px 16px;
+  font-size: 13px;
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--text);
+  border-bottom: 1px solid rgba(59, 130, 246, 0.22);
+}
+
 textarea.answer-input:focus {
   outline: 2px solid var(--accent-soft);
   border-color: var(--accent);

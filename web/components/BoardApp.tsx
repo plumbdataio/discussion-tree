@@ -777,6 +777,13 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
         </header>
       }
     >
+        {((data as any).owner_scheduled_count ?? 0) > 0 && (
+          <div className="scheduled-banner">
+            {t("timer.banner", {
+              count: (data as any).owner_scheduled_count,
+            })}
+          </div>
+        )}
         <div className="board-container">
           {data.board.is_default ? (
             // key={data.board.id} forces a fresh mount whenever the

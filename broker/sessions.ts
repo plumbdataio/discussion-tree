@@ -12,6 +12,7 @@ import {
   scheduledSendAtForSession,
 } from "./activity.ts";
 import { getContextUsage } from "./context-usage.ts";
+import { pendingScheduledCountForSession } from "./scheduled-messages.ts";
 import {
   db,
   insertSession,
@@ -614,6 +615,7 @@ export function handleListSessions() {
       context_usage,
       bg_task_count: bgTaskCountForSession(s.id),
       scheduled_send_at: scheduledSendAtForSession(s.id),
+      scheduled_message_count: pendingScheduledCountForSession(s.id),
       boards: enrichBoards(activeBoards),
       archived_boards: enrichBoards(archivedBoards),
       maps,

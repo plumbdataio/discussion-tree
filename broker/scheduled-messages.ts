@@ -44,6 +44,18 @@ const dueStmt = db.prepare(
 const markSentStmt = db.prepare(
   "UPDATE scheduled_messages SET sent_at = ? WHERE id = ?",
 );
+const pendingCountStmt = db.prepare(
+  "SELECT COUNT(*) AS n FROM scheduled_messages WHERE session_id = ? AND sent_at IS NULL",
+);
+
+// Count of still-pending (unfired) scheduled messages for a session — powers the
+// sidebar badge and the header banner. Safe to import from sessions.ts (no cycle);
+// helpers.ts uses its own lazy copy to avoid a helpers↔threads↔scheduled cycle.
+export function pendingScheduledCountForSession(sessionId: string): number {
+  return (
+    (pendingCountStmt.get(sessionId) as { n: number } | undefined)?.n ?? 0
+  );
+}
 
 function handleScheduleMessage(body: any) {
   const board_id = String(body?.board_id ?? "");
