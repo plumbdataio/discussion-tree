@@ -125,6 +125,7 @@ export function fireDueScheduledMessages(): void {
         board_id: m.board_id,
         node_id: m.node_id,
         text: m.text,
+        via_timer: true,
       }).catch(() => {});
     }
     if (due.length > 0) broadcastToAll({ type: "scheduled-messages-update" });

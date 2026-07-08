@@ -343,6 +343,13 @@ safeAlter("ALTER TABLE pending_messages ADD COLUMN thread_item_id INTEGER");
 safeAlter(
   "ALTER TABLE pending_messages ADD COLUMN requeued INTEGER NOT NULL DEFAULT 0",
 );
+// Set when a scheduled "timer send" fires this message rather than the user
+// sending it live. The per-CC poller appends a footer note so the receiving CC
+// knows the user is likely away and shouldn't block on confirmation. Default 0
+// so ordinary live submissions are untouched.
+safeAlter(
+  "ALTER TABLE pending_messages ADD COLUMN via_timer INTEGER NOT NULL DEFAULT 0",
+);
 
 // Anchors (= per-session pinned thread items). The "favorites" name is the
 // implementation-level term; user-facing UI calls these "anchors".
@@ -680,6 +687,12 @@ export const selectPending = db.prepare(
 );
 export const markDelivered = db.prepare(
   `UPDATE pending_messages SET delivered = 1 WHERE id = ?`,
+);
+// Flag a pending row as delivered by a scheduled timer (see scheduled-messages
+// fireDueScheduledMessages). Kept separate from insertPending so its signature —
+// and its other callers (checklist notes) — stay untouched.
+export const markPendingViaTimer = db.prepare(
+  `UPDATE pending_messages SET via_timer = 1 WHERE id = ?`,
 );
 // Re-queue a message whose channel push threw: clear delivered so it re-drains,
 // and flag requeued so the submit-timeout cancel can't drop it mid-retry. The

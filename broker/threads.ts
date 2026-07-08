@@ -17,6 +17,7 @@ import {
   insertPending,
   insertThread,
   markDelivered,
+  markPendingViaTimer,
   resetDeliveredForRepushStmt,
   recomputeBoardStatus,
   selectBoard,
@@ -230,6 +231,12 @@ export async function handleSubmitAnswer(body: any): Promise<
     kind,
   );
   const pendingId = Number(insertResult.lastInsertRowid);
+
+  // A scheduled timer send (not a live submission) — flag the row so the
+  // poller appends a "user is likely away, don't block on confirmation" note.
+  if (body.via_timer) {
+    markPendingViaTimer.run(pendingId);
+  }
 
   // Immediate "working" feedback: the user just sent something, show the
   // badge now rather than waiting for the CC's first PreToolUse hook.
