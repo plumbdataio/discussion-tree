@@ -777,6 +777,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
         </header>
       }
     >
+        <div className="board-main">
         {((data as any).owner_scheduled_count ?? 0) > 0 && (
           <div className="scheduled-banner">
             {t("timer.banner", {
@@ -820,6 +821,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
               <BoardNavButtons boardId={boardId ?? ""} dataVersion={data} />
             </>
           )}
+        </div>
         </div>
       {structureRequestOpen && boardId && (
         <BoardStructureRequestModal

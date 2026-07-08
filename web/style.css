@@ -4294,6 +4294,17 @@ textarea.answer-input {
   cursor: not-allowed;
 }
 
+/* The main area is a flex ROW child (next to the sidebar), so the banner and the
+   board must stack VERTICALLY inside this wrapper — otherwise the banner becomes
+   a tall left column instead of a top strip. */
+.board-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+}
+
 /* "N messages scheduled to send" banner, one row below the header. Deliberately
    low-pressure (unlike the pink 5h-limit banner) — a faint accent-tinted strip
    that reads the same in light and dark. */
