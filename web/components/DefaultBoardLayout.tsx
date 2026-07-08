@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from "react";
 import { ResizableTextarea } from "./ResizableTextarea.tsx";
+import { TimerSendButton } from "./TimerSendButton.tsx";
 import { useTranslation } from "react-i18next";
 import type { BoardView, Node, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
@@ -249,12 +250,17 @@ export function DefaultBoardLayout({
               {t("item_card.image_uploading")}
             </span>
           )}
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || uploading || !draft.trim() || !ownerAlive}
-          >
-            {t("item_card.send_button")}
-          </button>
+          <TimerSendButton
+            sendLabel={t("item_card.send_button")}
+            sendDisabled={
+              submitting || uploading || !draft.trim() || !ownerAlive
+            }
+            onSend={handleSubmit}
+            boardId={data.board.id}
+            nodeId={node.id}
+            getText={() => draft}
+            onScheduled={() => setDraft("")}
+          />
         </div>
       </div>
 

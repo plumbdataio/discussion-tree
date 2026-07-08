@@ -53,12 +53,22 @@ import {
 import { routes as threadsRoutes } from "./broker/threads.ts";
 import { routes as uploadsRoutes } from "./broker/uploads.ts";
 import { routes as spawnRoutes } from "./broker/spawn.ts";
+import {
+  routes as scheduledMessagesRoutes,
+  fireDueScheduledMessages,
+} from "./broker/scheduled-messages.ts";
 import { subscribe, unsubscribe } from "./broker/ws.ts";
 
 // --- Periodic maintenance ---
 
 cleanStaleSessions();
 setInterval(cleanStaleSessions, STALE_SESSION_SWEEP_MS);
+// Timer-send: deliver any scheduled message whose fire_at has passed. A short
+// interval keeps firing within ~15s of the requested time (fine for the
+// "send tonight" use case) without polling the DB hard.
+const SCHEDULED_FIRE_INTERVAL_MS = 15_000;
+fireDueScheduledMessages();
+setInterval(fireDueScheduledMessages, SCHEDULED_FIRE_INTERVAL_MS);
 startActivityWatchdog();
 initPower();
 initCliVerbosity();
@@ -92,6 +102,7 @@ const POST_ROUTES: Record<string, RouteHandler> = {
   ...mapRoutes,
   ...mapChecklistRoutes,
   ...diagramsRoutes,
+  ...scheduledMessagesRoutes,
   ...spawnRoutes,
 };
 

@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from "react";
 import { ResizableTextarea } from "./ResizableTextarea.tsx";
+import { TimerSendButton } from "./TimerSendButton.tsx";
 import { Maximize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Activity, Node, ThreadItem } from "../../shared/types.ts";
@@ -259,12 +260,17 @@ export function ItemCard({
               {t("item_card.image_uploading")}
             </span>
           )}
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || uploading || !draft.trim() || !ownerAlive}
-          >
-            {t("item_card.send_button")}
-          </button>
+          <TimerSendButton
+            sendLabel={t("item_card.send_button")}
+            sendDisabled={
+              submitting || uploading || !draft.trim() || !ownerAlive
+            }
+            onSend={handleSubmit}
+            boardId={node.board_id}
+            nodeId={node.id}
+            getText={() => draft}
+            onScheduled={() => setDraft("")}
+          />
         </div>
       </div>
 

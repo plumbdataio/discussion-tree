@@ -342,6 +342,13 @@
     "to_bottom": "Scroll to bottom",
     "to_bottom_short": "To bottom"
   },
+  "timer": {
+    "button_title": "Timer send (deliver at a set time)",
+    "picker_label": "Send at",
+    "schedule": "Schedule",
+    "close": "Close",
+    "schedule_failed": "Failed to schedule: {{message}}"
+  },
   "timeline": {
     "button": "All comments (timeline)",
     "title": "All comments — chronological",

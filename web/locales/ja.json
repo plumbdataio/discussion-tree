@@ -342,6 +342,13 @@
     "to_bottom": "一番下までスクロール",
     "to_bottom_short": "一番下まで"
   },
+  "timer": {
+    "button_title": "タイマー送信（指定時刻に送信）",
+    "picker_label": "送信する日時",
+    "schedule": "予約",
+    "close": "閉じる",
+    "schedule_failed": "予約に失敗しました: {{message}}"
+  },
   "timeline": {
     "button": "全コメントを時系列で表示",
     "title": "全コメント (時系列)",
