@@ -4202,31 +4202,37 @@ textarea.answer-input {
    faint divider — no gap between them. */
 .send-timer-group {
   display: inline-flex;
+  align-items: stretch;
   position: relative;
 }
-.send-timer-group .send-btn {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+/* !important + child combinator beat the per-composer `.actions button` rules
+   (higher specificity) that would otherwise re-round the joining corners and
+   re-add spacing. Both halves: no margin; flatten the corners that meet. */
+.send-timer-group > .send-btn,
+.send-timer-group > .timer-btn {
+  margin: 0 !important;
 }
-.send-timer-group .timer-btn {
+.send-timer-group > .send-btn {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+.send-timer-group > .timer-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 10px;
+  align-self: stretch; /* match the send button's height exactly */
+  padding: 0 12px;
   border: none;
-  border-left: 1px solid rgba(255, 255, 255, 0.4);
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  border-top-right-radius: 6px;
-  border-bottom-right-radius: 6px;
+  border-left: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 0 6px 6px 0 !important;
   background: var(--accent);
   color: #fff;
   cursor: pointer;
 }
-.send-timer-group .timer-btn:hover:not(:disabled) {
+.send-timer-group > .timer-btn:hover:not(:disabled) {
   filter: brightness(1.08);
 }
-.send-timer-group .timer-btn:disabled {
+.send-timer-group > .timer-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
