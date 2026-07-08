@@ -28,11 +28,20 @@ const toolHeartbeats = new Map<string, number>();
 // delay — UNLESS it recovers on its own first (clearStall cancels the timer).
 // Hook-driven (not /usage API scraping), so unlike the 5h auto-resume in the
 // external cc-usage bridge this can live in dt itself. The delay lets a
-// transient "temporarily limiting requests" 429 clear before we resume; it's
-// harmless if it ever fires for a 5h cap (the message just waits at the choice
-// prompt and is picked up once a choice is made).
+// transient "temporarily limiting requests" 429 clear before we resume.
+//
+// A stall that does NOT clear — most notably a 5h usage cap, which won't lift
+// until its window resets — otherwise turned this into a ~30s hammer loop:
+// continue → capped again → stall → continue → … (observed spamming "continue"
+// for over an hour on a 5h cap). So a STREAK CAP backs off after
+// MAX_AUTO_CONTINUE_STREAK consecutive nudges that never led to recovery; the
+// streak resets the moment the session genuinely shows life again
+// (cancelAutoContinue), so a later, unrelated transient stall still gets its
+// full retries.
 const autoContinueTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const autoContinueStreak = new Map<string, number>();
 const AUTO_CONTINUE_DELAY_MS = Number(process.env.DT_AUTO_CONTINUE_MS) || 30_000;
+const MAX_AUTO_CONTINUE_STREAK = Number(process.env.DT_AUTO_CONTINUE_MAX) || 3;
 const selectDefaultBoardForSession = db.prepare(
   "SELECT id FROM boards WHERE session_id = ? AND is_default = 1 LIMIT 1",
 );
@@ -41,6 +50,14 @@ const selectSessionStalledAt = db.prepare(
 );
 
 function scheduleAutoContinue(sessionId: string): void {
+  const streak = autoContinueStreak.get(sessionId) ?? 0;
+  if (streak >= MAX_AUTO_CONTINUE_STREAK) {
+    // Persistent stall (e.g. a 5h usage cap that won't lift until its window
+    // resets) — stop hammering "continue" every ~30s. It resumes once the
+    // session shows real life again, which resets the streak below.
+    return;
+  }
+  autoContinueStreak.set(sessionId, streak + 1);
   const prev = autoContinueTimers.get(sessionId);
   if (prev) clearTimeout(prev);
   autoContinueTimers.set(
@@ -168,6 +185,13 @@ export function clearStall(sessionId: string): void {
   const res = clearSessionStalledStmt.run(sessionId);
   if (res.changes > 0) {
     cancelAutoContinue(sessionId); // recovered on its own — don't nudge it
+    // GENUINE life (this path is driven by the tool heartbeat / normal Stop /
+    // re-attach) — reset the back-off streak so a later unrelated stall gets its
+    // full retries. Deliberately NOT reset in clearStallBefore: that fires on a
+    // channel push-ACK, which during a 5h cap merely means our own "continue"
+    // was delivered to a still-parked CC — not real work — and resetting there
+    // would defeat the cap and let the ~30s hammer loop run forever.
+    autoContinueStreak.delete(sessionId);
     broadcastToAll({ type: "session-stall-update" });
   }
 }
