@@ -32,6 +32,19 @@ export function TimerSendButton({
   const [busy, setBusy] = useState(false);
   const hasText = !!getText().trim();
 
+  // datetime-local wants "YYYY-MM-DDTHH:mm" in LOCAL time. Default to now + 1h so
+  // the picker opens pre-filled with a sensible value the user can nudge.
+  const defaultWhen = () => {
+    const d = new Date(Date.now() + 60 * 60 * 1000);
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  const togglePicker = () =>
+    setOpen((v) => {
+      if (!v) setWhen(defaultWhen()); // fresh default each time it opens
+      return !v;
+    });
+
   const schedule = async () => {
     const text = getText().trim();
     if (!text || !when) return;
@@ -84,7 +97,7 @@ export function TimerSendButton({
         title={t("timer.button_title")}
         aria-label={t("timer.button_title")}
         disabled={!hasText || busy}
-        onClick={() => setOpen((v) => !v)}
+        onClick={togglePicker}
       >
         <Clock size={14} strokeWidth={1.9} />
       </button>

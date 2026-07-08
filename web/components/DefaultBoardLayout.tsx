@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from "react";
 import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { TimerSendButton } from "./TimerSendButton.tsx";
+import { Clock } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { BoardView, Node, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
@@ -47,6 +48,10 @@ export function DefaultBoardLayout({
   // Real messages only — drop system rows (status changes etc.), matching how
   // the timeline modal counts on concern boards.
   const messageCount = myThread.filter((it) => it.source !== "system").length;
+  // Pending timer sends for this node, pinned below the thread until they fire.
+  const scheduledForNode = ((data as any).scheduled ?? []).filter(
+    (m: any) => m.node_id === node.id,
+  );
 
   // Persisted-on-localStorage draft (cleared on successful send).
   const [draft, setDraft] = useDraft(data.board.id, node.id);
@@ -219,6 +224,41 @@ export function DefaultBoardLayout({
           relative to .default-board (which is position: relative). */}
       <ScrollToBottomButton scrollRef={threadRef} reversed />
 
+      {scheduledForNode.length > 0 && (
+        <div className="scheduled-pinned">
+          {scheduledForNode.map((m: any) => (
+            <div key={m.id} className="scheduled-pinned-item">
+              <Clock size={13} strokeWidth={2} className="scheduled-pinned-clock" />
+              <span className="scheduled-pinned-time">
+                {new Date(m.fire_at).toLocaleString([], {
+                  month: "2-digit",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+              <MDView className="scheduled-pinned-text" text={m.text} />
+              <button
+                type="button"
+                className="scheduled-pinned-cancel"
+                title={t("timer.cancel_title")}
+                aria-label={t("timer.cancel_title")}
+                onClick={() => {
+                  fetch("/cancel-scheduled-message", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id: m.id }),
+                  }).catch(() => {
+                    /* WS scheduled-messages-update refetches the board */
+                  });
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="default-board-input">
         <ResizableTextarea
           className="answer-input"

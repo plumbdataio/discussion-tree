@@ -4330,6 +4330,52 @@ textarea.answer-input {
   font-weight: 600;
 }
 
+/* Pending timer sends, pinned below the thread until they fire. Dashed light-blue
+   chips so they read as "scheduled, not yet sent" — distinct from real messages. */
+.scheduled-pinned {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 8px;
+}
+.scheduled-pinned-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  border: 1px dashed rgba(59, 130, 246, 0.45);
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.06);
+  color: var(--muted);
+}
+.scheduled-pinned-clock {
+  flex: 0 0 auto;
+}
+.scheduled-pinned-time {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+.scheduled-pinned-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text);
+}
+.scheduled-pinned-cancel {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+}
+.scheduled-pinned-cancel:hover {
+  color: var(--text);
+}
+
 textarea.answer-input:focus {
   outline: 2px solid var(--accent-soft);
   border-color: var(--accent);

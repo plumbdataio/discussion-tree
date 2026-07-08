@@ -215,8 +215,32 @@ export function getBoardView(boardId: string) {
     owner_context_usage,
     owner_bg_task_count,
     owner_scheduled_count,
+    scheduled: pendingScheduledList(board.id),
     owner_can_cli_send,
   };
+}
+
+// Pending (unfired) scheduled messages for a board — rendered pinned at the
+// bottom of each node's thread until they fire. Same lazy/no-import posture as
+// pendingScheduledCount above.
+let _schedListStmt: ReturnType<typeof db.prepare> | null = null;
+function pendingScheduledList(
+  boardId: string,
+): { id: string; node_id: string; text: string; fire_at: string }[] {
+  try {
+    if (!_schedListStmt)
+      _schedListStmt = db.prepare(
+        "SELECT id, node_id, text, fire_at FROM scheduled_messages WHERE board_id = ? AND sent_at IS NULL ORDER BY fire_at",
+      );
+    return _schedListStmt.all(boardId) as {
+      id: string;
+      node_id: string;
+      text: string;
+      fire_at: string;
+    }[];
+  } catch {
+    return [];
+  }
 }
 
 // Pending (unfired) scheduled-message count for the owning session — powers the
