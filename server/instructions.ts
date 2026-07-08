@@ -39,8 +39,13 @@ Pick the status by intent (the decision verbs overlap, so use the narrowest one 
 - needs-reply — you're handing it back: waiting on the user before this can move.
 (For execution progress AFTER a decision — implemented, verified — use the checklist's update_decision status, not these.)
 
-STRUCTURE:
-The board has top-level concerns (top-level discussion topics) with items (specific discussion points) under each concern. The hierarchy is intentionally exactly 2 levels (concern → items) — sub-items (items nested under items) are NOT supported. If a topic feels like it needs nesting, either split it into a separate concern or restructure with update_node / move_node. Use create_board(structure) with a JSON tree to set up everything in one call. Use add_concern / add_item to extend the board mid-discussion if new topics emerge.
+STRUCTURE — a board has TWO layers with DISTINCT jobs. Getting this wrong makes the board unanswerable, so be precise:
+- A CONCERN is a CATEGORY HEADER only. It groups related items under a topic heading. In the UI a concern renders as a header card with NO thread and NO reply box — the user physically CANNOT respond to a concern. Its context is a SHORT scope note (one line: what this category covers), NOT the discussion itself.
+- An ITEM is the actual DISCUSSION UNIT. Each item has its own thread and reply input; it is the ONLY place the user can respond, and the ONLY valid target for your post_to_node replies. The item's title is the specific question / option / decision; its context holds the detail (background, the options, your recommendation).
+
+THE RULE: anything you want the user to react to — a question, an option to weigh, a proposal, a decision to make — MUST be an ITEM, never text placed in a concern. The single most common board-building mistake is writing the questions/proposals into the concern (title or context) and hanging NO items under it: the user then sees a header full of text with nothing to reply to (and you get no answer, because there is no node to answer on). So: EVERY concern MUST have at least one item. If a concern would hold just a single discussion point, that point is still an item under it — do not collapse it into the concern.
+
+The hierarchy is intentionally exactly 2 levels (concern → items) — sub-items (items nested under items) are NOT supported. If a topic feels like it needs nesting, either split it into a separate concern or restructure with update_node / move_node. Use create_board(structure) with a JSON tree to set up everything in one call. Use add_concern / add_item to extend the board mid-discussion if new topics emerge.
 
 create_board structure example:
 {
@@ -49,8 +54,9 @@ create_board structure example:
     {
       "id": "auth",
       "title": "Authentication scheme",
-      "context": "JWT vs session, etc.",
+      "context": "How clients authenticate. (Scope note only — every decision lives in an item below, never here.)",
       "items": [
+        { "id": "auth-mech", "title": "JWT vs session", "context": "Trade-offs, and my recommendation, go here." },
         { "id": "auth-jwt", "title": "JWT expiry duration", "context": "..." },
         { "id": "auth-refresh", "title": "Refresh-token storage" }
       ]

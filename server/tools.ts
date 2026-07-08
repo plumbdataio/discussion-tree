@@ -17,14 +17,14 @@ export const TOOLS = [
   {
     name: "create_board",
     description:
-      "Create a discussion board with concerns and items as a JSON tree. Returns the URL to share with the user. TITLE STYLE: short titles (<40 chars), one consistent grammar across siblings, no redundant board/concern prefix on child items — see NODE / CONCERN TITLE FORMATTING in the server instructions.",
+      "Create a discussion board with concerns and items as a JSON tree. Returns the URL to share with the user. STRUCTURE RULE (critical): a CONCERN is a category header with NO reply thread — the user cannot answer it. Every question / option / decision you want a reply on MUST be an ITEM under a concern (items are the only nodes with a reply thread). Never write the discussion into a concern and leave it without items — the user would see a header with nothing to answer. Every concern needs at least one item. TITLE STYLE: short titles (<40 chars), one consistent grammar across siblings, no redundant board/concern prefix on child items — see NODE / CONCERN TITLE FORMATTING in the server instructions.",
     inputSchema: {
       type: "object" as const,
       properties: {
         structure: {
           type: "object" as const,
           description:
-            "Board structure with top-level title and concerns array. Each concern can have items, each item can have nested items.",
+            "Board structure with top-level title and concerns array. Each concern holds items — the repliable discussion units. The tree is exactly 2 levels (concern -> items); items do NOT nest further.",
           properties: {
             title: {
               type: "string" as const,
@@ -32,16 +32,16 @@ export const TOOLS = [
             },
             concerns: {
               type: "array" as const,
-              description: "Top-level concern nodes (discussion topics)",
+              description: "Top-level concern nodes = category headers (NOT repliable; they only group the items)",
               items: {
                 type: "object" as const,
                 properties: {
                   id: { type: "string" as const, description: "Optional stable ID" },
                   title: { type: "string" as const },
-                  context: { type: "string" as const, description: "Optional context/background" },
+                  context: { type: "string" as const, description: "Optional SHORT scope note for the category — never the discussion itself (that goes in the items)" },
                   items: {
                     type: "array" as const,
-                    description: "Discussion items hanging below this concern",
+                    description: "Discussion items hanging below this concern — the repliable units. Every concern needs at least one.",
                   },
                 },
                 required: ["title"],
@@ -57,7 +57,7 @@ export const TOOLS = [
   {
     name: "add_concern",
     description:
-      "Add a top-level concern (a discussion topic) to an existing board, optionally with items. NOTE: the default conversation board (the auto-created 'Conversation' board, one per cc_session_id) has a FIXED structure of one concern + one item; add_concern / add_item / move_node / reorder_node / delete_node all REJECT it. If a user message on the default board needs structured option-evaluation, create_board a NEW board for it instead of trying to grow the default board. TITLE STYLE: short (<40 chars), no redundant board/concern prefix, match sibling grammar — see NODE / CONCERN TITLE FORMATTING in the server instructions.",
+      "Add a top-level concern (a CATEGORY HEADER — not repliable) to an existing board, together with its items. A concern only groups items; the user can only reply on ITEMS, so always give the concern at least one item (put every question / decision in an item, never in the concern itself). NOTE: the default conversation board (the auto-created 'Conversation' board, one per cc_session_id) has a FIXED structure of one concern + one item; add_concern / add_item / move_node / reorder_node / delete_node all REJECT it. If a user message on the default board needs structured option-evaluation, create_board a NEW board for it instead of trying to grow the default board. TITLE STYLE: short (<40 chars), no redundant board/concern prefix, match sibling grammar — see NODE / CONCERN TITLE FORMATTING in the server instructions.",
     inputSchema: {
       type: "object" as const,
       properties: {
