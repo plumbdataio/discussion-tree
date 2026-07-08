@@ -77,6 +77,35 @@ describe("nodes", () => {
     expect(r.json.error).toMatch(/sub-item/i);
   });
 
+  test("/add-concern returns a clean error (not a 500) when concern is missing", async () => {
+    const r = await post<{ ok?: boolean; error?: string }>(
+      `${broker.url}/add-concern`,
+      { board_id: boardId },
+    );
+    expect(r.status).toBe(200);
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toMatch(/concern.*title/i);
+  });
+
+  test("/add-concern rejects a concern with no title", async () => {
+    const r = await post<{ ok?: boolean; error?: string }>(
+      `${broker.url}/add-concern`,
+      { board_id: boardId, concern: { context: "no title here" } },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toMatch(/title/i);
+  });
+
+  test("/add-item returns a clean error (not a 500) when item is missing", async () => {
+    const r = await post<{ ok?: boolean; error?: string }>(
+      `${broker.url}/add-item`,
+      { board_id: boardId, concern_id: "c1" },
+    );
+    expect(r.status).toBe(200);
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toMatch(/item.*title/i);
+  });
+
   test("/update-node updates title / context", async () => {
     const r = await post<{ ok: boolean }>(`${broker.url}/update-node`, {
       board_id: boardId,

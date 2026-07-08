@@ -75,7 +75,23 @@ export function handleAddConcern(body: any) {
   if (isDefaultBoard(body.board_id)) {
     return { ok: false, error: DEFAULT_BOARD_LOCKED_ERROR };
   }
-  const concern = body.concern as NodeInput;
+  // Validate before touching `concern.id` — a missing / malformed `concern`
+  // (e.g. a caller that passed title/items flat instead of nested) otherwise
+  // throws "undefined is not an object (evaluating 'concern.id')" and surfaces
+  // as an opaque 500. Return a clean, actionable error instead.
+  const concern = body.concern as NodeInput | undefined;
+  if (
+    !concern ||
+    typeof concern !== "object" ||
+    typeof concern.title !== "string" ||
+    !concern.title.trim()
+  ) {
+    return {
+      ok: false,
+      error:
+        "add_concern requires a `concern` object with a non-empty `title` (shape: { title, context?, items? }).",
+    };
+  }
   const id = concern.id || generateId("c");
   const pos = maxChildPos(body.board_id, null) + 1;
   insertNode.run(
@@ -101,8 +117,22 @@ export function handleAddItem(body: any) {
   if (isDefaultBoard(body.board_id)) {
     return { ok: false, error: DEFAULT_BOARD_LOCKED_ERROR };
   }
-  const item = body.item as NodeInput;
-  if (item && Array.isArray(item.items) && item.items.length > 0) {
+  // Same guard as add_concern: validate before touching `item.id` so a
+  // missing / malformed `item` returns a clean error rather than a 500.
+  const item = body.item as NodeInput | undefined;
+  if (
+    !item ||
+    typeof item !== "object" ||
+    typeof item.title !== "string" ||
+    !item.title.trim()
+  ) {
+    return {
+      ok: false,
+      error:
+        "add_item requires an `item` object with a non-empty `title` (shape: { title, context? }).",
+    };
+  }
+  if (Array.isArray(item.items) && item.items.length > 0) {
     return {
       ok: false,
       error:
