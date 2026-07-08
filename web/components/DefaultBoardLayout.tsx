@@ -228,33 +228,39 @@ export function DefaultBoardLayout({
         <div className="scheduled-pinned">
           {scheduledForNode.map((m: any) => (
             <div key={m.id} className="scheduled-pinned-item">
-              <Clock size={13} strokeWidth={2} className="scheduled-pinned-clock" />
-              <span className="scheduled-pinned-time">
-                {new Date(m.fire_at).toLocaleString([], {
-                  month: "2-digit",
-                  day: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
+              <div className="scheduled-pinned-head">
+                <Clock
+                  size={12}
+                  strokeWidth={2}
+                  className="scheduled-pinned-clock"
+                />
+                <span className="scheduled-pinned-time">
+                  {new Date(m.fire_at).toLocaleString([], {
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+                <button
+                  type="button"
+                  className="scheduled-pinned-cancel"
+                  title={t("timer.cancel_title")}
+                  aria-label={t("timer.cancel_title")}
+                  onClick={() => {
+                    fetch("/cancel-scheduled-message", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ id: m.id }),
+                    }).catch(() => {
+                      /* WS scheduled-messages-update refetches the board */
+                    });
+                  }}
+                >
+                  ×
+                </button>
+              </div>
               <MDView className="scheduled-pinned-text" text={m.text} />
-              <button
-                type="button"
-                className="scheduled-pinned-cancel"
-                title={t("timer.cancel_title")}
-                aria-label={t("timer.cancel_title")}
-                onClick={() => {
-                  fetch("/cancel-scheduled-message", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ id: m.id }),
-                  }).catch(() => {
-                    /* WS scheduled-messages-update refetches the board */
-                  });
-                }}
-              >
-                ×
-              </button>
             </div>
           ))}
         </div>
