@@ -4345,6 +4345,11 @@ textarea.answer-input {
   max-width: 560px;
   width: min(560px, 92vw);
 }
+/* Keep the count badge clear of the absolutely-positioned close (×), which sits
+   at right:10px and is 32px wide. */
+.scheduled-list-modal .node-modal-header {
+  padding-right: 40px;
+}
 .scheduled-list {
   list-style: none;
   margin: 0;
