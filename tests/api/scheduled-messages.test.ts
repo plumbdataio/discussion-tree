@@ -144,4 +144,51 @@ describe("scheduled-messages", () => {
     expect(msg.via_timer).toBe(0);
     await submitP;
   });
+
+  test("list-all returns pending reservations with session + board names joined", async () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const s = await post<{ id: string }>(`${broker.url}/schedule-message`, {
+      board_id: boardId,
+      node_id: "i1",
+      text: "cross-session list row",
+      fire_at: future,
+    });
+    const all = await post<{ scheduled: any[] }>(
+      `${broker.url}/list-all-scheduled-messages`,
+      {},
+    );
+    const row = all.json.scheduled.find(
+      (m: any) => m.text === "cross-session list row",
+    );
+    expect(row).toBeTruthy();
+    expect(row.board_title).toBe("Timer board");
+    // session_name is joined (may be null if the session has no name set) — the
+    // key is present either way, proving the LEFT JOIN ran.
+    expect("session_name" in row).toBe(true);
+    await post(`${broker.url}/cancel-scheduled-message`, { id: s.json.id });
+  });
+
+  test("update changes a pending reservation's text and fire time", async () => {
+    const t1 = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const t2 = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
+    const s = await post<{ id: string }>(`${broker.url}/schedule-message`, {
+      board_id: boardId,
+      node_id: "i1",
+      text: "before edit",
+      fire_at: t1,
+    });
+    const u = await post<{ ok: boolean; fire_at: string }>(
+      `${broker.url}/update-scheduled-message`,
+      { id: s.json.id, text: "after edit", fire_at: t2 },
+    );
+    expect(u.json.ok).toBe(true);
+    const list = await post<{ scheduled: any[] }>(
+      `${broker.url}/list-scheduled-messages`,
+      { board_id: boardId },
+    );
+    const row = list.json.scheduled.find((m: any) => m.id === s.json.id);
+    expect(row.text).toBe("after edit");
+    expect(row.fire_at).toBe(new Date(t2).toISOString());
+    await post(`${broker.url}/cancel-scheduled-message`, { id: s.json.id });
+  });
 });

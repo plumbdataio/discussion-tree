@@ -35,8 +35,24 @@ const listBySessionStmt = db.prepare(
 const listByBoardStmt = db.prepare(
   "SELECT id, board_id, node_id, text, fire_at, created_at FROM scheduled_messages WHERE board_id = ? AND sent_at IS NULL ORDER BY fire_at",
 );
+// Cross-session view: every still-pending reservation on the machine, with the
+// owning session name + target board title joined in so the list can show WHERE
+// each one is headed. Powers the reservations-list modal (opened from the
+// sidebar clock or the header button). Ordered by fire time, soonest first.
+const listAllPendingStmt = db.prepare(`
+  SELECT sm.id, sm.session_id, sm.board_id, sm.node_id, sm.text, sm.fire_at, sm.created_at,
+         s.name AS session_name, b.title AS board_title, b.is_default AS board_is_default
+  FROM scheduled_messages sm
+  LEFT JOIN sessions s ON s.id = sm.session_id
+  LEFT JOIN boards b ON b.id = sm.board_id
+  WHERE sm.sent_at IS NULL
+  ORDER BY sm.fire_at
+`);
 const cancelStmt = db.prepare(
   "DELETE FROM scheduled_messages WHERE id = ? AND sent_at IS NULL",
+);
+const updateStmt = db.prepare(
+  "UPDATE scheduled_messages SET text = ?, fire_at = ? WHERE id = ? AND sent_at IS NULL",
 );
 const dueStmt = db.prepare(
   "SELECT id, board_id, node_id, text FROM scheduled_messages WHERE sent_at IS NULL AND fire_at <= ? ORDER BY fire_at",
@@ -95,12 +111,29 @@ function handleListScheduledMessages(body: any) {
   return { ok: true, scheduled };
 }
 
+function handleListAllScheduledMessages() {
+  return { ok: true, scheduled: listAllPendingStmt.all() };
+}
+
 function handleCancelScheduledMessage(body: any) {
   const id = String(body?.id ?? "");
   if (!id) return { ok: false, error: "id is required" };
   const res = cancelStmt.run(id);
   if (res.changes > 0) broadcastToAll({ type: "scheduled-messages-update" });
   return { ok: res.changes > 0 };
+}
+
+function handleUpdateScheduledMessage(body: any) {
+  const id = String(body?.id ?? "");
+  const text = String(body?.text ?? "").trim();
+  const when = new Date(String(body?.fire_at ?? ""));
+  if (!id) return { ok: false, error: "id is required" };
+  if (!text) return { ok: false, error: "message text is empty" };
+  if (isNaN(when.getTime()))
+    return { ok: false, error: "invalid fire_at (need an ISO timestamp)" };
+  const res = updateStmt.run(text, when.toISOString(), id);
+  if (res.changes > 0) broadcastToAll({ type: "scheduled-messages-update" });
+  return { ok: res.changes > 0, fire_at: when.toISOString() };
 }
 
 // Deliver every message whose fire_at has passed. Called on a broker interval.
@@ -137,5 +170,7 @@ export function fireDueScheduledMessages(): void {
 export const routes = {
   "/schedule-message": handleScheduleMessage,
   "/list-scheduled-messages": handleListScheduledMessages,
+  "/list-all-scheduled-messages": handleListAllScheduledMessages,
   "/cancel-scheduled-message": handleCancelScheduledMessage,
+  "/update-scheduled-message": handleUpdateScheduledMessage,
 };

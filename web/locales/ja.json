@@ -350,7 +350,9 @@
     "schedule_failed": "予約に失敗しました: {{message}}",
     "banner": "送信予約中のメッセージが {{count}} 件あります",
     "sidebar_title": "送信予約中のメッセージ {{count}} 件",
-    "cancel_title": "予約を取り消す"
+    "cancel_title": "予約を取り消す",
+    "list_title": "送信予約の一覧",
+    "list_empty": "送信予約中のメッセージはありません"
   },
   "timeline": {
     "button": "全コメントを時系列で表示",

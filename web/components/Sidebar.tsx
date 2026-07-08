@@ -33,6 +33,7 @@ import {
   useSettings,
 } from "../utils/settings.ts";
 import { useTmuxIntegration } from "../utils/tmuxIntegration.ts";
+import { openScheduledList } from "../utils/scheduledList.ts";
 
 // Module-scope cache so Sidebar remounts during SPA navigation don't show a
 // "Loading…" flash — the previous fetch result is reused as initial state
@@ -322,7 +323,8 @@ function SessionItem({
           </button>
         )}
         {((s as any).scheduled_message_count ?? 0) > 0 && (
-          <span
+          <button
+            type="button"
             className="session-timer-indicator"
             title={t("timer.sidebar_title", {
               count: (s as any).scheduled_message_count,
@@ -330,12 +332,18 @@ function SessionItem({
             aria-label={t("timer.sidebar_title", {
               count: (s as any).scheduled_message_count,
             })}
+            onClick={(e) => {
+              // Inside the session-row link — don't navigate, just open the list.
+              e.preventDefault();
+              e.stopPropagation();
+              openScheduledList();
+            }}
           >
             <Clock size={13} strokeWidth={2} />
             <span className="session-timer-count">
               {(s as any).scheduled_message_count}
             </span>
-          </span>
+          </button>
         )}
         {/* CTX chip is rendered LAST so it sits at the right edge of the
             right-aligned indicators cell. The working spinner (and the other

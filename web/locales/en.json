@@ -350,7 +350,9 @@
     "schedule_failed": "Failed to schedule: {{message}}",
     "banner": "{{count}} scheduled message(s) waiting to send",
     "sidebar_title": "{{count}} scheduled message(s)",
-    "cancel_title": "Cancel this scheduled send"
+    "cancel_title": "Cancel this scheduled send",
+    "list_title": "Scheduled sends",
+    "list_empty": "No scheduled sends"
   },
   "timeline": {
     "button": "All comments (timeline)",

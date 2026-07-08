@@ -9,6 +9,7 @@ import { GlobalBanner } from "./components/GlobalBanner.tsx";
 import { MapView } from "./components/MapView.tsx";
 import { DiagramView } from "./components/DiagramView.tsx";
 import { RootDashboard } from "./components/RootDashboard.tsx";
+import { ScheduledListModal } from "./components/ScheduledListModal.tsx";
 import { SessionDashboard } from "./components/SessionDashboard.tsx";
 import { ToastContainer } from "./components/Toast.tsx";
 import { useSettings } from "./utils/settings.ts";
@@ -104,6 +105,7 @@ function App() {
       </AppShell>
       <AnchorButton />
       <GearButton />
+      <ScheduledListModal />
       <ToastContainer />
     </>
   );

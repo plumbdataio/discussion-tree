@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Cog, ScrollText, Shrink, Wand2 } from "lucide-react";
+import { AlertTriangle, Clock, Cog, ScrollText, Shrink, Wand2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Activity, BoardView } from "../../shared/types.ts";
 import { ActivityBadge } from "./ActivityBadge.tsx";
@@ -32,6 +32,7 @@ import {
 } from "../utils/nodeStatusFilter.ts";
 import { postSubmitAnswer } from "../utils/api.ts";
 import { readBoardCache, writeBoardCache } from "../utils/boardCache.ts";
+import { openScheduledList } from "../utils/scheduledList.ts";
 import { translateError } from "../utils/errors.ts";
 import { buildTree } from "../utils/tree.ts";
 import { useDocumentTitle } from "../utils/useDocumentTitle.ts";
@@ -749,6 +750,18 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
               <ScrollText size={14} strokeWidth={1.9} />
             </button>
           )}
+          {/* Cross-session reservations list — opens the same global modal the
+              sidebar clock does. Always available so the user can review/cancel
+              timer sends from anywhere. */}
+          <button
+            type="button"
+            className="board-timeline-btn board-scheduled-btn"
+            title={t("timer.list_title")}
+            aria-label={t("timer.list_title")}
+            onClick={() => openScheduledList()}
+          >
+            <Clock size={14} strokeWidth={1.9} />
+          </button>
           {(data.owner_bg_task_count ?? 0) > 0 && (
             <button
               type="button"
