@@ -35,7 +35,12 @@ port="${DISCUSSION_TREE_PORT:-7898}"
 : "${stop_hook_active:=false}"
 
 body=$(jq -n --arg s "$sid" '{cc_session_id:$s}')
-resp=$(curl -sS --max-time 1 \
+# --max-time is a fail-open budget: on timeout curl yields '{}' -> count 0 -> no
+# nag. /get-unanswered is a tiny sqlite read (normally <50ms), but on a
+# memory-pressured machine the broker can take ~1s+, so a 1s budget intermittently
+# times out and the nag silently no-ops. 3s covers the loaded case while keeping
+# worst-case turn-end delay small; we still fail open if the broker is truly down.
+resp=$(curl -sS --max-time 3 \
   -X POST \
   -H "Content-Type: application/json" \
   -d "$body" \
