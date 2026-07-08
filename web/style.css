@@ -4221,9 +4221,12 @@ textarea.answer-input {
   align-items: center;
   justify-content: center;
   align-self: stretch; /* match the send button's height exactly */
-  padding: 0 12px;
-  border: none;
-  border-left: 1px solid rgba(255, 255, 255, 0.45);
+  /* !important throughout: the per-composer `.actions button` rules (higher
+     specificity) otherwise re-widen the padding and paint the border the accent
+     colour — making the seam line invisible (blue on blue). */
+  padding: 0 8px !important; /* tight — just the clock icon */
+  border: none !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.6) !important; /* visible seam */
   border-radius: 0 6px 6px 0 !important;
   background: var(--accent);
   color: #fff;
