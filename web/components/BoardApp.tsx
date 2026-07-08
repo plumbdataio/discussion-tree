@@ -839,6 +839,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
                     activity={nodeActivity}
                     ownerAlive={ownerAlive}
                     ownerSessionId={ownerSessionId}
+                    scheduled={(data as any).scheduled ?? []}
                     onSubmit={handleSubmit}
                   />
                 ))}

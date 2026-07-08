@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from "react";
 import { ResizableTextarea } from "./ResizableTextarea.tsx";
+import { ScheduledPinned } from "./ScheduledPinned.tsx";
 import { TimerSendButton } from "./TimerSendButton.tsx";
 import { Maximize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -25,6 +26,7 @@ export function ItemCard({
   activity,
   ownerAlive,
   ownerSessionId,
+  scheduled,
   onSubmit,
 }: {
   node: Node;
@@ -37,6 +39,9 @@ export function ItemCard({
   // ThreadMessage so the Anchor toggle can persist against the
   // right session.
   ownerSessionId: string;
+  // Pending timer-send messages for the whole board; ItemCard shows the ones
+  // targeting THIS node pinned below its thread.
+  scheduled?: any[];
   onSubmit: (nodeId: string, text: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
@@ -55,6 +60,9 @@ export function ItemCard({
   const [nodeExpanded, setNodeExpanded] = useState(false);
   const [msgTarget, setMsgTarget] = useState<number | null>(null);
   const myThread = threads[node.id] ?? [];
+  const scheduledForNode = (scheduled ?? []).filter(
+    (m: any) => m.node_id === node.id,
+  );
   const threadRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const flashing = flashingNodes.has(node.id);
@@ -238,6 +246,8 @@ export function ItemCard({
         ))}
       </div>
       <ScrollToBottomButton scrollRef={threadRef} reversed />
+
+      <ScheduledPinned scheduled={scheduledForNode} />
 
       <div className="input-row">
         <ResizableTextarea

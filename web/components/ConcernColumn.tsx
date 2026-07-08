@@ -19,6 +19,7 @@ export function ConcernColumn({
   activity,
   ownerAlive,
   ownerSessionId,
+  scheduled,
   onSubmit,
 }: {
   concern: Node;
@@ -28,6 +29,9 @@ export function ConcernColumn({
   activity: Activity | null;
   ownerAlive: boolean;
   ownerSessionId: string;
+  // Pending timer-send messages for the board — forwarded to each ItemCard,
+  // which pins the ones targeting its own node.
+  scheduled?: any[];
   onSubmit: (nodeId: string, text: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
@@ -129,6 +133,7 @@ export function ConcernColumn({
                   activity={activity}
                   ownerAlive={ownerAlive}
                   ownerSessionId={ownerSessionId}
+                  scheduled={scheduled}
                   onSubmit={onSubmit}
                 />
               ),
