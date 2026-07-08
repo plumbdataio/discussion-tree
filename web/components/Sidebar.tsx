@@ -321,6 +321,22 @@ function SessionItem({
             <span className="session-bg-count">{s.bg_task_count}</span>
           </button>
         )}
+        {((s as any).scheduled_message_count ?? 0) > 0 && (
+          <span
+            className="session-timer-indicator"
+            title={t("timer.sidebar_title", {
+              count: (s as any).scheduled_message_count,
+            })}
+            aria-label={t("timer.sidebar_title", {
+              count: (s as any).scheduled_message_count,
+            })}
+          >
+            <Clock size={13} strokeWidth={2} />
+            <span className="session-timer-count">
+              {(s as any).scheduled_message_count}
+            </span>
+          </span>
+        )}
         {/* CTX chip is rendered LAST so it sits at the right edge of the
             right-aligned indicators cell. The working spinner (and the other
             transient indicators) appear to its LEFT, so they no longer push the

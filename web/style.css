@@ -4306,6 +4306,19 @@ textarea.answer-input {
   border-bottom: 1px solid rgba(59, 130, 246, 0.22);
 }
 
+/* Sidebar: clock + count next to a session name when it has pending timer sends. */
+.session-timer-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+.session-timer-count {
+  font-size: 11px;
+  font-weight: 600;
+}
+
 textarea.answer-input:focus {
   outline: 2px solid var(--accent-soft);
   border-color: var(--accent);
