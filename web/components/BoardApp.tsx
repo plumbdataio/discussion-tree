@@ -95,22 +95,36 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     }
   }, [data, unreadOverride, nodeStatusFilter]);
 
+  // Always holds the board id currently in the URL. A fetch (or WS-nudged
+  // refetch) started for board A can resolve AFTER the user has navigated to
+  // board B — on a busy board this races constantly, and a late A-response
+  // that calls setData would clobber B's data, leaving the user stuck viewing
+  // A under B's URL (the exact "jumped to a different board" bug). Guarding
+  // every setData in fetchBoard on `boardIdRef.current === boardId` drops those
+  // stale responses. Updated on every render so it never lags the URL.
+  const boardIdRef = useRef(boardId);
+  boardIdRef.current = boardId;
+
   const fetchBoard = useCallback(async () => {
     if (!boardId) return;
     try {
       const res = await fetch(`/api/board/${boardId}`);
+      // Navigated away while the request was in flight — drop the response.
+      if (boardIdRef.current !== boardId) return;
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         setError(translateError(t, j, `HTTP ${res.status}`));
         return;
       }
       const view = (await res.json()) as BoardView;
+      if (boardIdRef.current !== boardId) return;
       setData(view);
       // Persist for next cold start (iOS tab eviction / hard reload).
       writeBoardCache(boardId, view).catch(() => {
         /* best effort */
       });
     } catch (e) {
+      if (boardIdRef.current !== boardId) return;
       setError(e instanceof Error ? e.message : String(e));
     }
   }, [boardId, t]);
@@ -120,13 +134,18 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
       setError(t("errors.not_found"));
       return;
     }
+    // Clear a previous board's error so it can't linger over the new one.
+    setError(null);
     // Stale-while-revalidate: render the cached snapshot immediately so
     // a reloaded tab has something on screen before the network round-
-    // trip completes, then overwrite once the fresh fetch lands.
+    // trip completes, then overwrite once the fresh fetch lands. On a board
+    // SWITCH, `prev` still holds the PREVIOUS board's data, so prefer the new
+    // board's cache instead of keeping it — otherwise the old board renders
+    // under the new URL until the fetch resolves.
     let cancelled = false;
     readBoardCache(boardId).then((cached) => {
       if (cancelled || !cached) return;
-      setData((prev) => prev ?? cached);
+      setData((prev) => (prev && prev.board.id === boardId ? prev : cached));
     });
     fetchBoard();
     return () => {
@@ -519,7 +538,13 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
       </AppLayout>
     );
   }
-  if (!data) {
+  // `data` can momentarily belong to the PREVIOUS board right after a switch
+  // (state lags the boardId prop by a render, and an in-flight refetch may not
+  // have landed yet). Never render a mismatched board — show the loading shell
+  // until THIS board's data arrives. This is the last line of defense behind
+  // the fetchBoard staleness guard against "content shows a different board
+  // than the URL".
+  if (!data || data.board.id !== boardId) {
     // Render the same header shell as the loaded board — only the main pane
     // shows "loading" — so a navigation doesn't blank it. (The sidebar itself
     // is persistent in AppShell and never reloads on navigation.)
