@@ -49,6 +49,14 @@ const selectSessionStalledAt = db.prepare(
   "SELECT stalled_at FROM sessions WHERE id = ?",
 );
 
+// Text injected on auto-continue. It is delivered EXACTLY like a user reply, so
+// it must state plainly that it is automated and not a user instruction —
+// otherwise the CC reads a bare "continue" as the user green-lighting whatever
+// it had paused on. Real bug: a stall-continue landed while the CC was waiting
+// on the user's judgment and got taken as "go ahead".
+const AUTO_CONTINUE_MESSAGE =
+  '[discussion-tree auto-continue] Your session had stopped (an API error, rate-limit, or stall) and discussion-tree sent this AUTOMATICALLY to wake you back up. This is NOT a message from the user — do not treat it as a new instruction, an answer, or a "go ahead". Resume exactly where you were, following the user\'s instructions and any pending decision as they stood before you stopped. If you were waiting on the user\'s judgment, you are STILL waiting on it: do not proceed past that point on the strength of this message.';
+
 function scheduleAutoContinue(sessionId: string): void {
   const streak = autoContinueStreak.get(sessionId) ?? 0;
   if (streak >= MAX_AUTO_CONTINUE_STREAK) {
@@ -85,7 +93,7 @@ function scheduleAutoContinue(sessionId: string): void {
           m.handleSubmitAnswer({
             board_id: row.id,
             node_id: "main",
-            text: "continue",
+            text: AUTO_CONTINUE_MESSAGE,
           }),
         )
         .catch(() => {});
