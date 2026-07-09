@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { Clock, Pencil } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { MDView } from "./MDView.tsx";
 import { openScheduledEdit } from "../utils/scheduledList.ts";
 
@@ -10,6 +11,8 @@ import { openScheduledEdit } from "../utils/scheduledList.ts";
 // `scheduled` prop is the list already filtered to THIS node.
 export function ScheduledPinned({ scheduled }: { scheduled: any[] }) {
   const { t } = useTranslation();
+  // Reservation id awaiting delete confirmation (× is one click away, so gate it).
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   if (!scheduled || scheduled.length === 0) return null;
   const cancel = (id: string) => {
     fetch("/cancel-scheduled-message", {
@@ -54,7 +57,7 @@ export function ScheduledPinned({ scheduled }: { scheduled: any[] }) {
               className="scheduled-pinned-cancel"
               title={t("timer.cancel_title")}
               aria-label={t("timer.cancel_title")}
-              onClick={() => cancel(m.id)}
+              onClick={() => setConfirmId(m.id)}
             >
               ×
             </button>
@@ -62,6 +65,20 @@ export function ScheduledPinned({ scheduled }: { scheduled: any[] }) {
           <MDView className="scheduled-pinned-text" text={m.text} />
         </div>
       ))}
+      {confirmId && (
+        <ConfirmDialog
+          title={t("timer.delete_title")}
+          message={t("timer.delete_body")}
+          confirmLabel={t("timer.delete_confirm")}
+          cancelLabel={t("timer.confirm_cancel")}
+          tone="warn"
+          onConfirm={() => {
+            cancel(confirmId);
+            setConfirmId(null);
+          }}
+          onCancel={() => setConfirmId(null)}
+        />
+      )}
     </div>
   );
 }

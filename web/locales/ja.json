@@ -358,7 +358,10 @@
     "confirm_title": "送信予約中のメッセージがあります",
     "confirm_body": "このセッションには送信予約が {{count}} 件あります。今このメッセージを送りますか？",
     "confirm_send": "送る",
-    "confirm_cancel": "やめる"
+    "confirm_cancel": "やめる",
+    "delete_title": "予約を削除しますか？",
+    "delete_body": "この送信予約を削除します。元に戻せません。",
+    "delete_confirm": "削除"
   },
   "timeline": {
     "button": "全コメントを時系列で表示",

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Clock, Pencil } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { MDView } from "./MDView.tsx";
 import {
   openScheduledEdit,
@@ -16,6 +17,7 @@ export function ScheduledListModal() {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const refetch = useCallback(() => {
     setLoading(true);
@@ -136,7 +138,7 @@ export function ScheduledListModal() {
                     className="scheduled-list-cancel"
                     title={t("timer.cancel_title")}
                     aria-label={t("timer.cancel_title")}
-                    onClick={() => cancel(m.id)}
+                    onClick={() => setConfirmId(m.id)}
                   >
                     ×
                   </button>
@@ -145,6 +147,20 @@ export function ScheduledListModal() {
               </li>
             ))}
           </ul>
+        )}
+        {confirmId && (
+          <ConfirmDialog
+            title={t("timer.delete_title")}
+            message={t("timer.delete_body")}
+            confirmLabel={t("timer.delete_confirm")}
+            cancelLabel={t("timer.confirm_cancel")}
+            tone="warn"
+            onConfirm={() => {
+              cancel(confirmId);
+              setConfirmId(null);
+            }}
+            onCancel={() => setConfirmId(null)}
+          />
         )}
       </div>
     </div>

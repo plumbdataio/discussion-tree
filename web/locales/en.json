@@ -358,7 +358,10 @@
     "confirm_title": "You have scheduled sends pending",
     "confirm_body": "This session has {{count}} scheduled send(s). Send this message now anyway?",
     "confirm_send": "Send now",
-    "confirm_cancel": "Cancel"
+    "confirm_cancel": "Cancel",
+    "delete_title": "Delete this reservation?",
+    "delete_body": "This scheduled send will be deleted. This can't be undone.",
+    "delete_confirm": "Delete"
   },
   "timeline": {
     "button": "All comments (timeline)",
