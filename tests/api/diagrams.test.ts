@@ -99,6 +99,38 @@ describe("diagrams — upsert (create / replace) + validation", () => {
     expect(r.json.ok).toBe(true);
   });
 
+  // Real mermaid.parse backstop (isolated worker, broker/mermaid-validate.ts):
+  // a source that clears the header check but is syntactically broken (nested
+  // unescaped quotes in a node label) is rejected at upsert, not just at render.
+  // The worker's first spawn pays a one-time ~1.5s warm, hence the longer wait.
+  test(
+    "upsert rejects a header-valid but syntactically broken source",
+    async () => {
+      const broken = 'flowchart TD\n  A["outer "inner" broke"] --> B';
+      const r = await post<{ ok: boolean; error?: string }>(
+        `${broker.url}/upsert-diagram`,
+        { session_id: sessionId, title: "broken", source: broken },
+      );
+      expect(r.json.ok).toBe(false);
+      expect(r.json.error).toMatch(/syntax|parse/i);
+    },
+    15_000,
+  );
+
+  test(
+    "upsert accepts a styled diagram (classDef) the parser must not false-reject",
+    async () => {
+      const styled =
+        "flowchart TD\n  A:::c --> B\n  classDef c fill:#dff";
+      const r = await post<{ ok: boolean; id: string }>(
+        `${broker.url}/upsert-diagram`,
+        { session_id: sessionId, title: "styled", source: styled },
+      );
+      expect(r.json.ok).toBe(true);
+    },
+    15_000,
+  );
+
   test("creating a NEW diagram requires session_id", async () => {
     const r = await post<{ ok: boolean; error?: string }>(
       `${broker.url}/upsert-diagram`,
