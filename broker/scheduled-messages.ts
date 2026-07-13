@@ -7,7 +7,19 @@
 import { db } from "./db.ts";
 import { generateId } from "./helpers.ts";
 import { handleSubmitAnswer } from "./threads.ts";
+import { handleMapChat } from "./maps.ts";
+import { handleDiagramChat } from "./diagrams.ts";
 import { broadcastToAll } from "./ws.ts";
+
+// A reservation can target any of the three chat surfaces. board_id holds the
+// CONTAINER id (board / map / diagram) and node_id the node within it (a board
+// node, a map node or "__general__", or the diagram chat node) — the surface
+// column says which delivery path fires it.
+type Surface = "board" | "map" | "diagram";
+const SURFACES: Surface[] = ["board", "map", "diagram"];
+function asSurface(v: unknown): Surface {
+  return SURFACES.includes(v as Surface) ? (v as Surface) : "board";
+}
 
 db.run(`
   CREATE TABLE IF NOT EXISTS scheduled_messages (
@@ -35,27 +47,47 @@ try {
 } catch {
   /* column already exists */
 }
+// surface: which chat surface this reservation fires into (board / map /
+// diagram). Existing rows predate timer-on-map/diagram, so they default to
+// "board". (Idempotent add.)
+try {
+  db.run(
+    "ALTER TABLE scheduled_messages ADD COLUMN surface TEXT NOT NULL DEFAULT 'board'",
+  );
+} catch {
+  /* column already exists */
+}
 
 const insertStmt = db.prepare(
-  "INSERT INTO scheduled_messages (id, session_id, board_id, node_id, text, fire_at, created_at) VALUES (?,?,?,?,?,?,?)",
+  "INSERT INTO scheduled_messages (id, session_id, board_id, node_id, text, fire_at, created_at, surface) VALUES (?,?,?,?,?,?,?,?)",
 );
 const sessionForBoard = db.prepare("SELECT session_id FROM boards WHERE id = ?");
+const sessionForMap = db.prepare("SELECT session_id FROM maps WHERE id = ?");
+const sessionForDiagram = db.prepare(
+  "SELECT session_id FROM diagrams WHERE id = ?",
+);
 const listBySessionStmt = db.prepare(
-  "SELECT id, board_id, node_id, text, fire_at, created_at FROM scheduled_messages WHERE session_id = ? AND sent_at IS NULL ORDER BY fire_at",
+  "SELECT id, board_id, node_id, text, fire_at, created_at, surface FROM scheduled_messages WHERE session_id = ? AND sent_at IS NULL ORDER BY fire_at",
 );
 const listByBoardStmt = db.prepare(
-  "SELECT id, board_id, node_id, text, fire_at, created_at FROM scheduled_messages WHERE board_id = ? AND sent_at IS NULL ORDER BY fire_at",
+  "SELECT id, board_id, node_id, text, fire_at, created_at, surface FROM scheduled_messages WHERE board_id = ? AND sent_at IS NULL ORDER BY fire_at",
 );
 // Cross-session view: every still-pending reservation on the machine, with the
-// owning session name + target board title joined in so the list can show WHERE
-// each one is headed. Powers the reservations-list modal (opened from the
-// sidebar clock or the header button). Ordered by fire time, soonest first.
+// owning session name + target container title joined in so the list can show
+// WHERE each one is headed. The container can be a board, a map, or a diagram —
+// board_id holds whichever id, so we LEFT JOIN all three and COALESCE the title.
+// Powers the reservations-list modal (opened from the sidebar clock or the
+// header button). Ordered by fire time, soonest first.
 const listAllPendingStmt = db.prepare(`
-  SELECT sm.id, sm.session_id, sm.board_id, sm.node_id, sm.text, sm.fire_at, sm.created_at,
-         s.name AS session_name, b.title AS board_title, b.is_default AS board_is_default
+  SELECT sm.id, sm.session_id, sm.board_id, sm.node_id, sm.text, sm.fire_at, sm.created_at, sm.surface,
+         s.name AS session_name,
+         COALESCE(b.title, mp.title, dg.title) AS board_title,
+         COALESCE(b.is_default, 0) AS board_is_default
   FROM scheduled_messages sm
   LEFT JOIN sessions s ON s.id = sm.session_id
   LEFT JOIN boards b ON b.id = sm.board_id
+  LEFT JOIN maps mp ON mp.id = sm.board_id
+  LEFT JOIN diagrams dg ON dg.id = sm.board_id
   WHERE sm.sent_at IS NULL
   ORDER BY sm.fire_at
 `);
@@ -66,7 +98,7 @@ const updateStmt = db.prepare(
   "UPDATE scheduled_messages SET text = ?, fire_at = ? WHERE id = ? AND sent_at IS NULL",
 );
 const dueStmt = db.prepare(
-  "SELECT id, board_id, node_id, text FROM scheduled_messages WHERE sent_at IS NULL AND fire_at <= ? ORDER BY fire_at",
+  "SELECT id, board_id, node_id, text, surface FROM scheduled_messages WHERE sent_at IS NULL AND fire_at <= ? ORDER BY fire_at",
 );
 const markSentStmt = db.prepare(
   "UPDATE scheduled_messages SET sent_at = ? WHERE id = ?",
@@ -101,15 +133,22 @@ function handleScheduleMessage(body: any) {
   const board_id = String(body?.board_id ?? "");
   const node_id = String(body?.node_id ?? "");
   const text = String(body?.text ?? "").trim();
+  const surface = asSurface(body?.surface);
   const when = new Date(String(body?.fire_at ?? ""));
   if (!board_id || !node_id)
     return { ok: false, error: "board_id and node_id are required" };
   if (!text) return { ok: false, error: "message text is empty" };
   if (isNaN(when.getTime()))
     return { ok: false, error: "invalid fire_at (need an ISO timestamp)" };
-  const srow = sessionForBoard.get(board_id) as
-    | { session_id: string }
-    | undefined;
+  // Resolve the owning session from whichever container this surface targets, so
+  // the sidebar badge / confirm counts (keyed by session_id) work on all three.
+  const lookup =
+    surface === "map"
+      ? sessionForMap
+      : surface === "diagram"
+        ? sessionForDiagram
+        : sessionForBoard;
+  const srow = lookup.get(board_id) as { session_id: string } | undefined;
   const id = generateId("sm");
   insertStmt.run(
     id,
@@ -119,6 +158,7 @@ function handleScheduleMessage(body: any) {
     text,
     when.toISOString(),
     new Date().toISOString(),
+    surface,
   );
   broadcastToAll({ type: "scheduled-messages-update" });
   return { ok: true, id, fire_at: when.toISOString() };
@@ -184,15 +224,37 @@ export function fireDueScheduledMessages(): void {
       board_id: string;
       node_id: string;
       text: string;
+      surface: Surface;
     }[];
     for (const m of due) {
       markSentStmt.run(new Date().toISOString(), m.id);
-      void handleSubmitAnswer({
-        board_id: m.board_id,
-        node_id: m.node_id,
-        text: m.text,
-        via_timer: true,
-      }).catch(() => {});
+      // Deliver through the surface's own user->CC path so it arrives exactly
+      // like a live message there (board=user_input_relay, map=map_chat,
+      // diagram=diagram_chat). via_timer tags it so the poller appends the
+      // "user is likely away" footer regardless of surface. Fire-and-forget: an
+      // offline owner drops it the same on every surface (all three gate on
+      // alive), which matches the pre-existing board behavior.
+      if (m.surface === "map") {
+        void handleMapChat({
+          map_id: m.board_id,
+          node_id: m.node_id,
+          text: m.text,
+          via_timer: true,
+        }).catch(() => {});
+      } else if (m.surface === "diagram") {
+        void handleDiagramChat({
+          diagram_id: m.board_id,
+          text: m.text,
+          via_timer: true,
+        }).catch(() => {});
+      } else {
+        void handleSubmitAnswer({
+          board_id: m.board_id,
+          node_id: m.node_id,
+          text: m.text,
+          via_timer: true,
+        }).catch(() => {});
+      }
     }
     if (due.length > 0) broadcastToAll({ type: "scheduled-messages-update" });
   } finally {

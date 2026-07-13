@@ -250,7 +250,7 @@ function pendingScheduledList(
 // broker/scheduled-messages.ts on its own import) and NOT imported from there,
 // to avoid a helpers → scheduled-messages → threads → helpers import cycle.
 let _schedCountStmt: ReturnType<typeof db.prepare> | null = null;
-function pendingScheduledCount(sessionId: string): number {
+export function pendingScheduledCount(sessionId: string): number {
   try {
     if (!_schedCountStmt)
       _schedCountStmt = db.prepare(
@@ -267,7 +267,7 @@ function pendingScheduledCount(sessionId: string): number {
 // Count of the session's pending reservations still ARMED for the confirm (see
 // confirm_armed in scheduled-messages.ts). Same lazy/no-import posture.
 let _schedArmedStmt: ReturnType<typeof db.prepare> | null = null;
-function pendingArmedCount(sessionId: string): number {
+export function pendingArmedCount(sessionId: string): number {
   try {
     if (!_schedArmedStmt)
       _schedArmedStmt = db.prepare(

@@ -3,9 +3,13 @@
 // tools (upsert / get / list / delete); there is NO user upload path. Upsert
 // replaces the whole source (no partial update) and broadcasts so the open page
 // re-renders live.
-import { db, insertPending, insertThread } from "./db.ts";
+import { db, insertPending, insertThread, markPendingViaTimer } from "./db.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
-import { generateId } from "./helpers.ts";
+import {
+  generateId,
+  pendingScheduledCount,
+  pendingArmedCount,
+} from "./helpers.ts";
 import {
   activities,
   bgTaskCountForSession,
@@ -134,6 +138,10 @@ export function getDiagramView(id: string) {
     owner_context_usage: getContextUsage(sessionId),
     owner_bg_task_count: bgTaskCountForSession(sessionId),
     owner_can_cli_send: ownerRow?.alive === 1 && !!ownerRow?.tmux_pane,
+    // Timer-send confirm gate — a live send from this diagram warns if the
+    // session has an armed pending reservation (any surface). Same as the board.
+    owner_scheduled_count: pendingScheduledCount(sessionId),
+    owner_timer_confirm_armed: pendingArmedCount(sessionId) > 0,
   };
 }
 
@@ -274,6 +282,9 @@ export async function handleDiagramChat(body: any) {
     "diagram_chat",
   );
   const pendingId = Number(insertResult.lastInsertRowid);
+  // A scheduled timer send — flag the row so the poller appends the "user is
+  // likely away, don't block on confirmation" footer, same as the board path.
+  if (body?.via_timer) markPendingViaTimer.run(pendingId);
   markWorkingFromUserSubmit(row.session_id);
   const deadline = Date.now() + SUBMIT_DELIVERY_TIMEOUT_MS;
   const checkDelivered = db.prepare(

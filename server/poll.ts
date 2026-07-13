@@ -144,15 +144,6 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
           `[discussion-tree] Also mirror your reply via post_to_node(board_id="${msg.board_id}", node_id="${msg.node_id}", status=…). Even when this message calls for work, REPLY FIRST (CLI + post_to_node) and THEN start — especially when it is a question that sets the direction, or something you could begin acting on: the user is waiting on your answer and generally prefers to confirm before you proceed.`,
         );
         if (activeBoardLine) reminderParts.push(activeBoardLine);
-        // Timer send: this message was queued earlier and fired on a schedule,
-        // so the user is very likely AWAY right now — the "user is waiting /
-        // confirm before you proceed" guidance above does NOT apply. Tell the CC
-        // to carry the work through autonomously instead of stalling for input.
-        if ((msg as any).via_timer) {
-          reminderParts.push(
-            `[discussion-tree] DELIVERY = scheduled timer: the user queued this earlier to fire now, so they are very likely AWAY and not watching for a live back-and-forth. This OVERRIDES the "reply first, the user is waiting, confirm before you proceed" note above: do NOT stall waiting for confirmation. Do post your reply on the board (so it's there when they return), then carry out the work through to a sensible stopping point, making the reasonable calls yourself where you'd normally check in. Leave any genuine blockers / decisions as clearly-marked questions on the board for them to answer later.`,
-          );
-        }
       } else if (kind === "board_structure_request" && msg.board_id) {
         reminderParts.push(
           `[discussion-tree] The user submitted a STRUCTURE-CHANGE request for board "${msg.board_id}". Interpret the message above as instructions to modify the board's structure: use add_concern, add_item, update_node, move_node, reorder_node, or delete_node as appropriate. Apply the changes, then append a SHORT SUMMARY of what you did (or chose NOT to do, with reason) to that board's dedicated audit-trail node — to find it, call get_board(board_id="${msg.board_id}") and look for the item node with is_log=1 (titled "Structure changes" under the "Board log" concern). Post your summary there via post_to_node. The user's original request is already auto-recorded on that same log node, so your post pairs with it. Do NOT post into any user content node, and do NOT treat this as a normal thread reply.`,
@@ -167,6 +158,22 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
         const shape = await fetchMapShape(msg.board_id);
         reminderParts.push(
           `[discussion-tree] Map message (${target}). Respond by GROWING THE MAP (add_map_node / connect_map_nodes / update_map_node) and/or reply via post_to_map_node(map_id="${msg.board_id}", node_id="${msg.node_id || "__general__"}"). Incremental, a few nodes at a time.${shape ? `\n\n${shape}` : ""}`,
+        );
+      } else if (kind === "diagram_chat" && msg.board_id) {
+        // diagram_chat: board_id IS the diagram_id. The user is chatting about a
+        // Mermaid diagram; CC responds by EDITING it (upsert_diagram, live
+        // re-render) and/or replying in the chat thread via post_diagram_chat.
+        reminderParts.push(
+          `[discussion-tree] Diagram message (diagram "${msg.board_id}"). Respond by EDITING the diagram via upsert_diagram(id="${msg.board_id}", ...) (it re-renders live) and/or reply via post_diagram_chat(diagram_id="${msg.board_id}", message=…).`,
+        );
+      }
+      // Timer send: this message was queued earlier and fired on a schedule, so
+      // the user is very likely AWAY right now — the "user is waiting / confirm
+      // before you proceed" guidance does NOT apply. Appended for ANY surface
+      // (board / map / diagram) that produced a reply reminder.
+      if ((msg as any).via_timer && reminderParts.length > 0) {
+        reminderParts.push(
+          `[discussion-tree] DELIVERY = scheduled timer: the user queued this earlier to fire now, so they are very likely AWAY and not watching for a live back-and-forth. This OVERRIDES the "reply first, the user is waiting, confirm before you proceed" note above: do NOT stall waiting for confirmation. Do post your reply on the surface above (so it's there when they return), then carry out the work through to a sensible stopping point, making the reasonable calls yourself where you'd normally check in. Leave any genuine blockers / decisions as clearly-marked questions there for them to answer later.`,
         );
       }
       // A verbosity override only makes sense on a turn that expects a reply
@@ -206,6 +213,10 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
             // channel-meta constraint (a non-string value silently kills all
             // channel delivery).
             ...(kind === "map_chat" ? { map_id: String(msg.board_id) } : {}),
+            // Same for diagram_chat: board_id IS the diagram_id.
+            ...(kind === "diagram_chat"
+              ? { diagram_id: String(msg.board_id) }
+              : {}),
           },
         },
         });

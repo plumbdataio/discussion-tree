@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import type { MapNodeKind, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
 import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
+import { TimerSendButton } from "./TimerSendButton.tsx";
 import { renderSystemMessage } from "./SystemMessage.tsx";
 import { formatThreadTimestamp } from "../utils/format.ts";
 import { useDraft } from "../utils/drafts.ts";
@@ -37,6 +38,8 @@ export function MapNodeModal({
   onClose,
   scrollToItemId = null,
   sendChat,
+  surface = "map",
+  beforeSend,
 }: {
   mapId: string;
   nodeId: string;
@@ -51,6 +54,13 @@ export function MapNodeModal({
   // Override the post endpoint. Defaults to the map chat (/map-chat); the
   // diagram surface reuses this modal but posts to /diagram-chat instead.
   sendChat?: (text: string) => Promise<Response>;
+  // Which surface the timer-send targets ("map" for map nodes + general chat,
+  // "diagram" when this modal is reused by the diagram surface).
+  surface?: "map" | "diagram";
+  // Confirm gate run before a LIVE send (not a timer schedule): resolves false
+  // to abort when the session has an armed pending timer reservation. Omitted =
+  // no gate.
+  beforeSend?: () => Promise<boolean>;
 }) {
   const { t } = useTranslation();
   // Same localStorage draft key as the inline card composer, so the draft
@@ -123,6 +133,7 @@ export function MapNodeModal({
   const send = async () => {
     const text = draft.trim();
     if (!text || sending || !ownerAlive) return;
+    if (beforeSend && !(await beforeSend())) return;
     setSending(true);
     setDraft("");
     try {
@@ -243,12 +254,17 @@ export function MapNodeModal({
             {uploading && (
               <span className="upload-status">{t("map.uploading")}</span>
             )}
-            <button
-              onClick={send}
-              disabled={sending || uploading || !draft.trim() || !ownerAlive}
-            >
-              {t("map.send")}
-            </button>
+            <TimerSendButton
+              sendLabel={t("map.send")}
+              sendDisabled={
+                sending || uploading || !draft.trim() || !ownerAlive
+              }
+              onSend={send}
+              boardId={mapId}
+              nodeId={nodeId}
+              surface={surface}
+              getText={() => draft}
+            />
           </div>
         </div>
       </div>

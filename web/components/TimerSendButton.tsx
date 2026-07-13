@@ -15,14 +15,19 @@ export function TimerSendButton({
   onSend,
   boardId,
   nodeId,
+  surface = "board",
   getText,
   onScheduled,
 }: {
   sendLabel: string;
   sendDisabled: boolean;
   onSend: () => void;
+  // boardId/nodeId are generic container+node ids: for surface="map" boardId is
+  // the map_id and nodeId a map node ("__general__" for the map-wide chat); for
+  // surface="diagram" boardId is the diagram_id and nodeId is "__chat__".
   boardId: string;
   nodeId: string;
+  surface?: "board" | "map" | "diagram";
   getText: () => string;
   onScheduled?: () => void;
 }) {
@@ -58,6 +63,7 @@ export function TimerSendButton({
         body: JSON.stringify({
           board_id: boardId,
           node_id: nodeId,
+          surface,
           text,
           fire_at: fireAt.toISOString(),
         }),

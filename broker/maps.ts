@@ -32,6 +32,7 @@ import {
   insertPending,
   insertThread,
   markDelivered,
+  markPendingViaTimer,
   renameMap,
   archiveMapStmt,
   selectMap,
@@ -55,7 +56,11 @@ import {
 } from "./db.ts";
 import { activities, bgTaskCountForSession, markWorkingFromUserSubmit } from "./activity.ts";
 import { getContextUsage } from "./context-usage.ts";
-import { generateId } from "./helpers.ts";
+import {
+  generateId,
+  pendingScheduledCount,
+  pendingArmedCount,
+} from "./helpers.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
 import { PUBLIC_URL, SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
 
@@ -584,6 +589,9 @@ export async function handleMapChat(body: any): Promise<
     "map_chat",
   );
   const pendingId = Number(insertResult.lastInsertRowid);
+  // A scheduled timer send — flag the row so the poller appends the "user is
+  // likely away, don't block on confirmation" footer, same as the board path.
+  if (body?.via_timer) markPendingViaTimer.run(pendingId);
   markWorkingFromUserSubmit(map.session_id);
 
   const deadline = Date.now() + SUBMIT_DELIVERY_TIMEOUT_MS;
@@ -678,6 +686,10 @@ export function getMapView(mapId: string) {
     owner_context_usage: getContextUsage(map.session_id),
     owner_bg_task_count: bgTaskCountForSession(map.session_id),
     owner_can_cli_send: ownerRow?.alive === 1 && !!ownerRow?.tmux_pane,
+    // Timer-send confirm gate — a live send from this map warns if the session
+    // has an armed pending reservation (any surface). Same flags as the board.
+    owner_scheduled_count: pendingScheduledCount(map.session_id),
+    owner_timer_confirm_armed: pendingArmedCount(map.session_id) > 0,
   };
 }
 

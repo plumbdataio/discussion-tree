@@ -216,3 +216,84 @@ describe("scheduled-messages", () => {
     await post(`${broker.url}/cancel-scheduled-message`, { id: s.json.id });
   });
 });
+
+// Timer-send is not board-only: a reservation carries a `surface` (board / map /
+// diagram) so the fire loop delivers through that surface's own user->CC path.
+// These cover the surface being stored + surfaced (list-all title joined from
+// the right container table) and the map/diagram views exposing the same
+// confirm-gate flags as a board.
+describe("scheduled-messages: surfaces (map / diagram)", () => {
+  const future = () => new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+  test("schedule on a map stores surface=map and joins the map title", async () => {
+    const m = await post<{ map_id: string }>(`${broker.url}/create-map`, {
+      session_id: sessionId,
+      title: "Timer map",
+    });
+    const mapId = m.json.map_id;
+    await post(`${broker.url}/schedule-message`, {
+      board_id: mapId,
+      node_id: "__general__",
+      surface: "map",
+      text: "map reservation",
+      fire_at: future(),
+    });
+    const all = await post<{ scheduled: any[] }>(
+      `${broker.url}/list-all-scheduled-messages`,
+      {},
+    );
+    const row = all.json.scheduled.find((r: any) => r.text === "map reservation");
+    expect(row).toBeTruthy();
+    expect(row.surface).toBe("map");
+    expect(row.board_title).toBe("Timer map");
+    // map views carry the confirm-gate flags too
+    const v = await get<any>(`${broker.url}/api/map/${mapId}`);
+    expect(v.json.owner_timer_confirm_armed).toBe(true);
+    expect(v.json.owner_scheduled_count).toBeGreaterThan(0);
+  });
+
+  test("schedule on a diagram stores surface=diagram and joins the diagram title", async () => {
+    const d = await post<{ id: string }>(`${broker.url}/upsert-diagram`, {
+      session_id: sessionId,
+      title: "Timer diagram",
+      source: "flowchart TD\n  A --> B\n",
+    });
+    const diagramId = d.json.id;
+    await post(`${broker.url}/schedule-message`, {
+      board_id: diagramId,
+      node_id: "__chat__",
+      surface: "diagram",
+      text: "diagram reservation",
+      fire_at: future(),
+    });
+    const all = await post<{ scheduled: any[] }>(
+      `${broker.url}/list-all-scheduled-messages`,
+      {},
+    );
+    const row = all.json.scheduled.find(
+      (r: any) => r.text === "diagram reservation",
+    );
+    expect(row).toBeTruthy();
+    expect(row.surface).toBe("diagram");
+    expect(row.board_title).toBe("Timer diagram");
+    const v = await get<any>(`${broker.url}/api/diagram/${diagramId}`);
+    expect(v.json.owner_timer_confirm_armed).toBe(true);
+    expect(v.json.owner_scheduled_count).toBeGreaterThan(0);
+  });
+
+  test("surface defaults to board when omitted", async () => {
+    const s = await post<{ id: string }>(`${broker.url}/schedule-message`, {
+      board_id: boardId,
+      node_id: "i1",
+      text: "no surface given",
+      fire_at: future(),
+    });
+    const list = await post<{ scheduled: any[] }>(
+      `${broker.url}/list-scheduled-messages`,
+      { board_id: boardId },
+    );
+    const row = list.json.scheduled.find((r: any) => r.id === s.json.id);
+    expect(row.surface).toBe("board");
+    await post(`${broker.url}/cancel-scheduled-message`, { id: s.json.id });
+  });
+});

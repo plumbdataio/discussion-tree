@@ -49,6 +49,8 @@ import { MAP_GENERAL_NODE } from "../../shared/types.ts";
 import { MapNode, MapContext, type MapCtx } from "./MapNode.tsx";
 import { MapFrameNode } from "./MapFrameNode.tsx";
 import { MapNodeModal } from "./MapNodeModal.tsx";
+import { TimerSendButton } from "./TimerSendButton.tsx";
+import { confirmBeforeSend } from "../utils/timerConfirm.ts";
 import { CliCommandButton } from "./CliCommandButton.tsx";
 import { TimelineModal } from "./TimelineModal.tsx";
 import { buildTimelineEntries } from "../utils/timeline.ts";
@@ -765,6 +767,8 @@ export function MapView({ mapId }: { mapId: string }) {
             mapId,
             sessionId: view.map.session_id,
             ownerAlive,
+            confirmArmed: !!(view as any).owner_timer_confirm_armed,
+            scheduledCount: (view as any).owner_scheduled_count ?? 0,
             locked,
             onResize,
             recordFrameUpdate,
@@ -964,6 +968,13 @@ export function MapView({ mapId }: { mapId: string }) {
               sessionId={view.map.session_id}
               ownerAlive={ownerAlive}
               thread={generalThread}
+              beforeSend={() =>
+                confirmBeforeSend(
+                  !!(view as any).owner_timer_confirm_armed,
+                  view.map.session_id,
+                  (view as any).owner_scheduled_count ?? 0,
+                )
+              }
             />
           </div>
         {timelineOpen && (
@@ -1003,6 +1014,13 @@ export function MapView({ mapId }: { mapId: string }) {
                 messages={view.threads[jump.nodeId] ?? []}
                 ownerAlive={ownerAlive}
                 scrollToItemId={jump.itemId}
+                beforeSend={() =>
+                  confirmBeforeSend(
+                    !!(view as any).owner_timer_confirm_armed,
+                    view.map.session_id,
+                    (view as any).owner_scheduled_count ?? 0,
+                  )
+                }
                 onClose={() => {
                   const nid = jump.nodeId;
                   setJump(null);
@@ -1027,11 +1045,13 @@ function MapGeneralChat({
   sessionId,
   ownerAlive,
   thread,
+  beforeSend,
 }: {
   mapId: string;
   sessionId: string;
   ownerAlive: boolean;
   thread: ThreadItem[];
+  beforeSend?: () => Promise<boolean>;
 }) {
   const { t } = useTranslation();
   const [draft, setDraft, clearDraft] = useDraft(mapId, MAP_GENERAL_NODE);
@@ -1072,6 +1092,7 @@ function MapGeneralChat({
   const send = async () => {
     const text = draft.trim();
     if (!text || sending || !ownerAlive) return;
+    if (beforeSend && !(await beforeSend())) return;
     setSending(true);
     clearDraft();
     try {
@@ -1155,13 +1176,15 @@ function MapGeneralChat({
           }}
         />
         <div className="map-chat-send-row">
-          <button
-            type="button"
-            disabled={sending || uploading || !draft.trim() || !ownerAlive}
-            onClick={send}
-          >
-            {uploading ? t("map.uploading") : t("map.send")}
-          </button>
+          <TimerSendButton
+            sendLabel={uploading ? t("map.uploading") : t("map.send")}
+            sendDisabled={sending || uploading || !draft.trim() || !ownerAlive}
+            onSend={send}
+            boardId={mapId}
+            nodeId={MAP_GENERAL_NODE}
+            surface="map"
+            getText={() => draft}
+          />
         </div>
       </div>
       {expanded && (
@@ -1173,6 +1196,7 @@ function MapGeneralChat({
           messages={thread}
           ownerAlive={ownerAlive}
           scrollToItemId={msgTarget}
+          beforeSend={beforeSend}
           onClose={() => {
             setExpanded(false);
             setMsgTarget(null);

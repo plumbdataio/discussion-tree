@@ -32,6 +32,7 @@ import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
 import { ChecklistCard } from "./ChecklistCard.tsx";
 import { MapNodeModal } from "./MapNodeModal.tsx";
 import { useDraft } from "../utils/drafts.ts";
+import { confirmBeforeSend } from "../utils/timerConfirm.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useAnyPreviewModalOpen } from "../utils/previewModalLock.ts";
 import { useVisibleDwell } from "../utils/useVisibleDwell.ts";
@@ -50,6 +51,11 @@ export interface MapCtx {
   mapId: string;
   sessionId: string;
   ownerAlive: boolean;
+  // Timer-send confirm gate: whether the owning session has an armed pending
+  // reservation (any surface), plus its pending count. A live per-node send
+  // warns before going out when armed. Absent = no gate.
+  confirmArmed?: boolean;
+  scheduledCount?: number;
   // When the canvas is locked, only structural mutation is frozen (position /
   // size / edges). The card itself stays fully interactive (text select,
   // scroll, type, preview), so the only thing the node needs to know is to
@@ -130,6 +136,11 @@ function MapCardComposer({ nodeId }: { nodeId: string }) {
   const send = async () => {
     const text = draft.trim();
     if (!text || sending || !ctx.ownerAlive) return;
+    if (
+      ctx.confirmArmed &&
+      !(await confirmBeforeSend(true, ctx.sessionId, ctx.scheduledCount ?? 0))
+    )
+      return;
     setSending(true);
     clearDraft();
     try {

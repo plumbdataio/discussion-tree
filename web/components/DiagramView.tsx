@@ -21,6 +21,8 @@ import { CliCommandButton } from "./CliCommandButton.tsx";
 import { useHeaderActivity } from "../utils/useHeaderActivity.ts";
 import { ThreadMessage } from "./ThreadMessage.tsx";
 import { MapNodeModal } from "./MapNodeModal.tsx";
+import { TimerSendButton } from "./TimerSendButton.tsx";
+import { confirmBeforeSend } from "../utils/timerConfirm.ts";
 import { useDraft } from "../utils/drafts.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useDocumentTitle } from "../utils/useDocumentTitle.ts";
@@ -423,6 +425,13 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
             sessionId={view.diagram.session_id}
             ownerAlive={ownerAlive}
             thread={view.thread}
+            beforeSend={() =>
+              confirmBeforeSend(
+                !!(view as any).owner_timer_confirm_armed,
+                view.diagram.session_id,
+                (view as any).owner_scheduled_count ?? 0,
+              )
+            }
           />
         </div>
     </AppLayout>
@@ -542,11 +551,13 @@ function DiagramChat({
   sessionId,
   ownerAlive,
   thread,
+  beforeSend,
 }: {
   diagramId: string;
   sessionId: string;
   ownerAlive: boolean;
   thread: ThreadItem[];
+  beforeSend?: () => Promise<boolean>;
 }) {
   const { t } = useTranslation();
   const [draft, setDraft, clearDraft] = useDraft(diagramId, DIAGRAM_CHAT_NODE);
@@ -586,6 +597,7 @@ function DiagramChat({
   const send = async () => {
     const text = draft.trim();
     if (!text || sending || !ownerAlive) return;
+    if (beforeSend && !(await beforeSend())) return;
     setSending(true);
     clearDraft();
     try {
@@ -669,24 +681,28 @@ function DiagramChat({
           }}
         />
         <div className="map-chat-send-row">
-          <button
-            type="button"
-            disabled={sending || uploading || !draft.trim() || !ownerAlive}
-            onClick={send}
-          >
-            {uploading ? t("diagram.uploading") : t("diagram.send")}
-          </button>
+          <TimerSendButton
+            sendLabel={uploading ? t("diagram.uploading") : t("diagram.send")}
+            sendDisabled={sending || uploading || !draft.trim() || !ownerAlive}
+            onSend={send}
+            boardId={diagramId}
+            nodeId={DIAGRAM_CHAT_NODE}
+            surface="diagram"
+            getText={() => draft}
+          />
         </div>
       </div>
       {expanded && (
         <MapNodeModal
           mapId={diagramId}
           nodeId={DIAGRAM_CHAT_NODE}
+          surface="diagram"
           title={t("diagram.chat_title")}
           context=""
           messages={thread}
           ownerAlive={ownerAlive}
           scrollToItemId={msgTarget}
+          beforeSend={beforeSend}
           sendChat={(text) => postDiagramChat(diagramId, text)}
           onClose={() => {
             setExpanded(false);
