@@ -1,8 +1,19 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Clock, Pencil } from "lucide-react";
+import { Clock, Pencil, Network, ChartNetwork } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
+import { DiagramIcon } from "./DiagramIcon.tsx";
 import { MDView } from "./MDView.tsx";
+
+// A small surface-type marker before the target, so a map / diagram reservation
+// reads apart from a board one. Same icons the sidebar uses for each surface.
+function SurfaceIcon({ surface }: { surface?: string }) {
+  if (surface === "map")
+    return <ChartNetwork size={12} strokeWidth={2} aria-label="map" />;
+  if (surface === "diagram")
+    return <DiagramIcon size={12} strokeWidth={2} aria-label="diagram" />;
+  return <Network size={12} strokeWidth={2} aria-label="board" />;
+}
 import {
   openScheduledEdit,
   subscribeOpenScheduledList,
@@ -112,7 +123,10 @@ export function ScheduledListModal() {
                   <span className="scheduled-list-time">
                     <Clock size={12} strokeWidth={2} /> {fmt(m.fire_at)}
                   </span>
-                  <span className="scheduled-list-target">
+                  <span
+                    className={`scheduled-list-target surface-${m.surface || "board"}`}
+                  >
+                    <SurfaceIcon surface={m.surface} />
                     {m.session_name || "?"}
                     {m.board_title
                       ? ` › ${m.board_is_default ? t("default_board.title") : m.board_title}`

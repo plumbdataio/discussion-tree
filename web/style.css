@@ -4391,6 +4391,22 @@ textarea.answer-input {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Surface-type marker: the icon takes the surface's identity color (board blue /
+   map red / diagram green), so a reservation's target reads at a glance. */
+.scheduled-list-target svg {
+  flex: 0 0 auto;
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+.scheduled-list-target.surface-board svg {
+  color: #3b82f6;
+}
+.scheduled-list-target.surface-map svg {
+  color: #ef4444;
+}
+.scheduled-list-target.surface-diagram svg {
+  color: #22c55e;
+}
 .scheduled-list-cancel {
   flex: 0 0 auto;
   background: none;
