@@ -216,8 +216,16 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
     // mis-sizes the boxes). The sequence guard drops a stale render if `source`
     // changed mid-flight; `cancelled` drops it if the effect was torn down.
     document.fonts.ready
-      .then(() => {
+      .then(async () => {
         if (cancelled || seq !== renderSeq.current) return undefined;
+        // Validate the syntax FIRST so WE own the error surface. mermaid injects
+        // its default "Syntax error in text" bomb SVG only from render()'s error
+        // path — so by catching the parse failure here (mermaid.parse rejects on
+        // invalid syntax) and skipping render() entirely, no bomb is ever drawn,
+        // while the real parse-error message still flows to our red panel via the
+        // .catch below. (Relying on render()'s own throw is fragile: mermaid's
+        // suppressErrorRendering also swallows that throw, blanking our panel.)
+        await mermaid.parse(source);
         return mermaid.render(`dg-render-${seq}`, source);
       })
       .then((res) => {
