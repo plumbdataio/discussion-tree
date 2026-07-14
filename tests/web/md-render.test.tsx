@@ -126,6 +126,19 @@ describe("MDView tilde / strikethrough", () => {
     expect(out).toContain("~/Codes/bar");
   });
 
+  test("single-tilde path jammed against CJK punctuation does NOT strike", () => {
+    // Regression: the cjk-friendly-gfm-strikethrough companion registers its OWN
+    // strikethrough tokenizer that, left at its default, re-enabled single ~…~
+    // striking even though remark-gfm had singleTilde:false. A "。~/path" (tilde
+    // right after CJK punctuation) tripped the companion's CJK-boundary logic —
+    // the space-separated case above missed it. Real report: writing
+    // "~/.claude-pd です。~/.claude-pd に…" struck the text out. Fixed by passing
+    // singleTilde:false to the companion too.
+    const out = html("~/.claude-pd です。~/.claude-pd に○○を");
+    expect(out).not.toContain("<del>");
+    expect(out).toContain("~/.claude-pd");
+  });
+
   test("standard double-tilde strikethrough still works", () => {
     const out = html("これは ~~取り消し~~ です");
     expect(out).toContain("<del>取り消し</del>");

@@ -35,7 +35,12 @@ function MDViewImpl({
         remarkPlugins={[
           [remarkGfm, { singleTilde: false }],
           remarkCjkFriendly,
-          remarkCjkFriendlyGfmStrikethrough,
+          // singleTilde:false here TOO — this CJK strikethrough companion
+          // registers its OWN micromark strikethrough tokenizer, which defaults
+          // singleTilde back to true and re-enables single ~x~ striking,
+          // overriding remark-gfm's option above (so a bare "~/foo ... ~/bar"
+          // got struck again). Pass the same option to keep them in sync.
+          [remarkCjkFriendlyGfmStrikethrough, { singleTilde: false }],
           remarkBreaks,
         ]}
         urlTransform={urlTransform}
