@@ -18,7 +18,9 @@ import {
   insertThread,
   markDelivered,
   markPendingViaTimer,
+  markPushedStmt,
   resetDeliveredForRepushStmt,
+  resweepUnackedStmt,
   recomputeBoardStatus,
   selectBoard,
   selectPending,
@@ -439,6 +441,46 @@ export function handleDeliveryFailed(body: { message_id?: number }): {
   return { ok: true };
 }
 
+// Option A ACK: the per-CC poller calls this once its channel push to CC for
+// this row RESOLVES (bytes on the pipe). Stamps pushed_at so the resweep leaves
+// the row alone. A push that is SILENTLY lost never reaches this call, so
+// pushed_at stays NULL and resweepUnackedMessages re-delivers it. Idempotent.
+export function handleMessageAcked(body: { message_id?: number }): {
+  ok: boolean;
+} {
+  if (typeof body.message_id !== "number") return { ok: false };
+  markPushedStmt.run(new Date().toISOString(), body.message_id);
+  return { ok: true };
+}
+
+// Grace before a drained-but-unacked row is considered lost. Must exceed the
+// submit-delivery timeout + a poll cycle so it never fights a slow-but-fine
+// delivery — only genuinely-lost pushes age past it. Env-overridable (0 allowed)
+// so a test can make rows eligible immediately.
+const UNACKED_RESWEEP_GRACE_MS = (() => {
+  const v = Number(process.env.DT_UNACKED_RESWEEP_GRACE_MS);
+  return Number.isFinite(v) && v >= 0 ? v : 60_000;
+})();
+
+// Re-queue rows that drained (delivered=1) but were never acked (pushed_at NULL)
+// past the grace window, so a SILENTLY-lost channel push (process stalled /
+// OOM-killed under memory pressure — no throw, so Option B never fired) gets
+// re-delivered on the next poll. Gated inside the SQL on the session having
+// acked at least once, so a poller too old to ack is never swept (else every
+// message would re-deliver forever). Runs on a broker interval. Returns the
+// number re-queued for logging.
+export function resweepUnackedMessages(): number {
+  const cutoff = new Date(Date.now() - UNACKED_RESWEEP_GRACE_MS).toISOString();
+  const res = resweepUnackedStmt.run(cutoff);
+  return res.changes;
+}
+
+// Manual trigger for the resweep (the broker also runs it on an interval) — used
+// by ops and tests to run it on demand.
+export function handleResweepUnacked(): { ok: boolean; requeued: number } {
+  return { ok: true, requeued: resweepUnackedMessages() };
+}
+
 function broadcastUnreadAll() {
   // Tell every connected client to refetch the sidebar — unread counts may
   // have shifted on a board they're not currently viewing.
@@ -491,6 +533,8 @@ export const routes = {
   "/submit-answer": handleSubmitAnswer,
   "/poll-messages": handlePollMessages,
   "/delivery-failed": handleDeliveryFailed,
+  "/message-acked": handleMessageAcked,
+  "/resweep-unacked": handleResweepUnacked,
   "/mark-thread-items-read": handleMarkThreadItemsRead,
   "/mark-board-read": handleMarkBoardRead,
 };

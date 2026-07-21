@@ -50,7 +50,10 @@ import {
   handleListSessions,
   routes as sessionsRoutes,
 } from "./broker/sessions.ts";
-import { routes as threadsRoutes } from "./broker/threads.ts";
+import {
+  routes as threadsRoutes,
+  resweepUnackedMessages,
+} from "./broker/threads.ts";
 import { routes as uploadsRoutes } from "./broker/uploads.ts";
 import { routes as spawnRoutes } from "./broker/spawn.ts";
 import {
@@ -69,6 +72,15 @@ setInterval(cleanStaleSessions, STALE_SESSION_SWEEP_MS);
 const SCHEDULED_FIRE_INTERVAL_MS = 15_000;
 fireDueScheduledMessages();
 setInterval(fireDueScheduledMessages, SCHEDULED_FIRE_INTERVAL_MS);
+// Delivery resilience (Option A): re-queue any message that drained but was
+// never acked by CC past the grace window, so a silently-lost channel push
+// (memory pressure) gets re-delivered instead of vanishing. Gated per-session on
+// the poller being ack-capable, so old pollers are untouched.
+const UNACKED_RESWEEP_INTERVAL_MS = 20_000;
+setInterval(() => {
+  const n = resweepUnackedMessages();
+  if (n > 0) console.error(`[resweep] re-queued ${n} unacked message(s)`);
+}, UNACKED_RESWEEP_INTERVAL_MS);
 startActivityWatchdog();
 initPower();
 initCliVerbosity();

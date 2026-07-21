@@ -261,6 +261,10 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
         session_id: sessionId,
         pushed_at: pushedAt,
       }).catch(() => {});
+      // Option A per-message ACK: confirm THIS row's push resolved, so the
+      // broker's resweep won't re-deliver it. A push that is silently lost never
+      // reaches here → pushed_at stays NULL → the row is re-queued and retried.
+      void brokerFetch("/message-acked", { message_id: msg.id }).catch(() => {});
       log(
         `Pushed [${kind}] for ${msg.node_id || "(meta)"} ${
           msg.node_path ? `(${msg.node_path.slice(0, 60)})` : ""

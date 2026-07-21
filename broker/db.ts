@@ -350,6 +350,14 @@ safeAlter(
 safeAlter(
   "ALTER TABLE pending_messages ADD COLUMN via_timer INTEGER NOT NULL DEFAULT 0",
 );
+// Per-message delivery ACK (Option A resilience). The poller stamps this once
+// its channel push to CC RESOLVES for this row. delivered=1 is still set at
+// DRAIN (before the push), so a push that is SILENTLY lost — process stalled /
+// OOM-killed under memory pressure, no thrown error, so Option B (which only
+// fires on a THROWN push) never runs — would otherwise leave the row
+// delivered=1 forever and never reach CC. A broker sweep re-queues rows that
+// stayed delivered=1 with pushed_at NULL past a grace window (resweepUnackedStmt).
+safeAlter("ALTER TABLE pending_messages ADD COLUMN pushed_at TEXT");
 
 // Anchors (= per-session pinned thread items). The "favorites" name is the
 // implementation-level term; user-facing UI calls these "anchors".
@@ -687,6 +695,25 @@ export const selectPending = db.prepare(
 );
 export const markDelivered = db.prepare(
   `UPDATE pending_messages SET delivered = 1 WHERE id = ?`,
+);
+// Option A: the poller stamps pushed_at once its channel push RESOLVES for this
+// row (proof the notification bytes hit the pipe). Missing = never confirmed.
+export const markPushedStmt = db.prepare(
+  `UPDATE pending_messages SET pushed_at = ? WHERE id = ?`,
+);
+// Re-queue rows drained (delivered=1) but never acked (pushed_at NULL) past the
+// grace cutoff, so a SILENTLY-lost push gets re-delivered. Gated on the session
+// having acked >=1 message (EXISTS ...): an OLD poller that doesn't ack never
+// sets pushed_at, so without this gate the sweep would re-deliver ALL of its
+// messages (a duplicate storm). requeued=1 protects the row from the submit-
+// timeout cancel; the materialized thread_item is reused (thread_item_id guard),
+// so the re-push never duplicates the message in the UI.
+export const resweepUnackedStmt = db.prepare(
+  `UPDATE pending_messages SET delivered = 0, requeued = 1
+   WHERE delivered = 1 AND pushed_at IS NULL AND cancelled = 0 AND created_at < ?
+     AND EXISTS (SELECT 1 FROM pending_messages p2
+                 WHERE p2.session_id = pending_messages.session_id
+                   AND p2.pushed_at IS NOT NULL)`,
 );
 // Flag a pending row as delivered by a scheduled timer (see scheduled-messages
 // fireDueScheduledMessages). Kept separate from insertPending so its signature —
