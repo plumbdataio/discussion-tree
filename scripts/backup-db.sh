@@ -66,6 +66,16 @@ echo "$(date '+%F %T') backed up to $DEST"
 # salvaged/re-created snapshot carries a fresh mtime that does NOT reflect the
 # day it captured, so an mtime sort would let it occupy a "newest KEEP" slot and
 # wrongly evict a genuinely-recent daily.
+# Origin for the biweekly phase = the OLDEST snapshot's date, so the very first
+# backup ever anchors the series (its date, +14d, +28d, ...) rather than an
+# arbitrary epoch parity. Stable, because that oldest snapshot is itself phase-0
+# and thus an anchor kept forever.
+_oldest="$(ls -1 "$BACKUP_DIR"/discussion-tree-*.sqlite 2>/dev/null | sed -E 's#.*-([0-9]{8})\.sqlite#\1#' | sort | head -1)"
+_origin_day=0
+if [ -n "$_oldest" ]; then
+  _oe="$(date -j -f "%Y%m%d %H%M%S" "${_oldest} 120000" +%s 2>/dev/null || echo 0)"
+  _origin_day=$(( _oe / 86400 ))
+fi
 i=0
 ls -1 "$BACKUP_DIR"/discussion-tree-*.sqlite 2>/dev/null | sort -r | while IFS= read -r f; do
   i=$((i + 1))
@@ -77,7 +87,7 @@ ls -1 "$BACKUP_DIR"/discussion-tree-*.sqlite 2>/dev/null | sort -r | while IFS= 
   esac
   epoch="$(date -j -f "%Y%m%d %H%M%S" "${d} 120000" +%s 2>/dev/null || echo "")"
   [ -z "$epoch" ] && continue # unparseable date → keep
-  [ $(( (epoch / 86400) % ARCHIVE_EVERY_DAYS )) -eq 0 ] && continue # biweekly anchor → keep forever
+  [ $(( ((epoch / 86400) - _origin_day) % ARCHIVE_EVERY_DAYS )) -eq 0 ] && continue # biweekly anchor (phased from the first backup) → keep forever
   osascript -e "tell application \"Finder\" to delete (POSIX file \"$f\")" \
     >/dev/null 2>&1 || true # old + not an anchor → prune
 done || true
