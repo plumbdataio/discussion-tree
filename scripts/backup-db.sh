@@ -5,19 +5,26 @@
 # keeping the most recent KEEP_GENERATIONS copies. Intended to run daily via
 # launchd (see the discussion-tree-ops skill for the plist).
 #
+# Two-tier (grandfather-father-son) retention: the newest KEEP_GENERATIONS daily
+# snapshots, PLUS every snapshot on a biweekly anchor date kept FOREVER, so there
+# is always long-range history without an unbounded daily pile.
+#
 # Env:
 #   BACKUP_DIR         (required) where snapshots land — e.g. a synced
 #                      cloud-storage folder. Passed via env so the
 #                      environment-specific path never gets committed.
 #   DISCUSSION_TREE_DB (optional) DB path; defaults to the broker's default
 #                      $HOME/.discussion-tree/db.sqlite.
-#   KEEP_GENERATIONS   (optional) how many daily snapshots to retain; 30.
+#   KEEP_GENERATIONS   (optional) recent daily snapshots to retain; 14.
+#   ARCHIVE_EVERY_DAYS (optional) a snapshot whose date is a multiple of this
+#                      many days since the epoch is kept forever; 14 (biweekly).
 
 set -euo pipefail
 
 SRC="${DISCUSSION_TREE_DB:-$HOME/.discussion-tree/db.sqlite}"
 BACKUP_DIR="${BACKUP_DIR:?BACKUP_DIR env var required}"
-KEEP="${KEEP_GENERATIONS:-30}"
+KEEP="${KEEP_GENERATIONS:-14}"
+ARCHIVE_EVERY_DAYS="${ARCHIVE_EVERY_DAYS:-14}"
 
 if [ ! -f "$SRC" ]; then
   echo "$(date '+%F %T') ERROR: source DB not found: $SRC" >&2
@@ -46,14 +53,31 @@ fi
 # Log success BEFORE pruning, so a snapshot is recorded even if the prune hiccups.
 echo "$(date '+%F %T') backed up to $DEST"
 
-# Prune: keep the newest KEEP files, delete the rest. Delete via FINDER (a
-# SafeFiles-trusted app) rather than /bin/rm — the latter is blocked in the
-# protected dir, which used to fail the whole job (set -e) and skip the log
-# above, leaving old snapshots to pile up. Finder moves them to the Trash.
-# Per-file and non-fatal so one stubborn file can't fail the run.
-ls -1t "$BACKUP_DIR"/discussion-tree-*.sqlite 2>/dev/null \
-  | tail -n "+$((KEEP + 1))" \
-  | while IFS= read -r old; do
-      osascript -e "tell application \"Finder\" to delete (POSIX file \"$old\")" \
-        >/dev/null 2>&1 || true
-    done || true
+# Prune (two-tier): keep the newest KEEP snapshots, PLUS any whose date is a
+# biweekly anchor (day-of-epoch a multiple of ARCHIVE_EVERY_DAYS) FOREVER. A file
+# is deleted only if it is BOTH older than the newest KEEP AND not an anchor
+# date — one folder, one naming scheme, so existing anchor-date snapshots are
+# preserved automatically. Delete via FINDER (a SafeFiles-trusted app) rather
+# than /bin/rm, which is blocked in the protected dir (that used to fail the run
+# under set -e and skip the log above). Finder moves them to the Trash. Per-file
+# and non-fatal so one stubborn file can't fail the run.
+#
+# Order by DATE (the YYYYMMDD in the filename), newest first — NOT by mtime. A
+# salvaged/re-created snapshot carries a fresh mtime that does NOT reflect the
+# day it captured, so an mtime sort would let it occupy a "newest KEEP" slot and
+# wrongly evict a genuinely-recent daily.
+i=0
+ls -1 "$BACKUP_DIR"/discussion-tree-*.sqlite 2>/dev/null | sort -r | while IFS= read -r f; do
+  i=$((i + 1))
+  [ "$i" -le "$KEEP" ] && continue # within the newest KEEP → keep
+  d="$(basename "$f" | sed -E 's/^discussion-tree-([0-9]{8})\.sqlite$/\1/')"
+  case "$d" in
+    [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;;
+    *) continue ;; # not a date-named snapshot → don't risk it, keep
+  esac
+  epoch="$(date -j -f "%Y%m%d %H%M%S" "${d} 120000" +%s 2>/dev/null || echo "")"
+  [ -z "$epoch" ] && continue # unparseable date → keep
+  [ $(( (epoch / 86400) % ARCHIVE_EVERY_DAYS )) -eq 0 ] && continue # biweekly anchor → keep forever
+  osascript -e "tell application \"Finder\" to delete (POSIX file \"$f\")" \
+    >/dev/null 2>&1 || true # old + not an anchor → prune
+done || true
