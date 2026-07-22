@@ -387,6 +387,34 @@ describe("maps — list + search", () => {
     expect(mine.node_count).toBe(1);
   });
 
+  // The map equivalent of closing a board / archiving a diagram. This is the
+  // route the archive_map MCP tool calls — before that tool existed there was
+  // no way to hide a map from the sidebar over MCP (close_board / archive_diagram
+  // don't touch maps), so a "completed" map stayed in the list forever.
+  test("/map-archive hides a map from /list-maps; unarchive restores it", async () => {
+    const mapId = await createMap("archive-me");
+    const listed = async () => {
+      const r = await post<{ maps: any[] }>(`${broker.url}/list-maps`, {
+        session_id: sessionId,
+      });
+      return r.json.maps.some((m) => m.id === mapId);
+    };
+    expect(await listed()).toBe(true);
+
+    const arch = await post<{ ok: boolean }>(`${broker.url}/map-archive`, {
+      map_id: mapId,
+    });
+    expect(arch.json.ok).toBe(true);
+    expect(await listed()).toBe(false);
+
+    const unarch = await post<{ ok: boolean }>(`${broker.url}/map-archive`, {
+      map_id: mapId,
+      archived: false,
+    });
+    expect(unarch.json.ok).toBe(true);
+    expect(await listed()).toBe(true);
+  });
+
   test("/search-maps matches node content, message bodies, and map titles", async () => {
     const mapId = await createMap("searchable-zenith");
     await addNode(mapId, {

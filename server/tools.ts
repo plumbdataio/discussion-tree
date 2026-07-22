@@ -857,6 +857,22 @@ export const TOOLS = [
     },
   },
   {
+    name: "archive_map",
+    description:
+      "Archive a map (hide it from the active sidebar list) or unarchive it. Soft — the map, its nodes and threads stay; only the sidebar/list hide it. THIS is how you close/retire a map: close_board works only on boards and archive_diagram only on diagrams, so neither hides a map — use this. Pass archived:false to restore.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        map_id: { type: "string" as const },
+        archived: {
+          type: "boolean" as const,
+          description: "true (default) to archive, false to unarchive.",
+        },
+      },
+      required: ["map_id"],
+    },
+  },
+  {
     name: "upsert_diagram",
     description:
       "Create or replace a Mermaid diagram on its own rendered page (a 3rd surface alongside boards & maps). Omit `id` (or pass an unknown one) to CREATE; pass an existing `id` to REPLACE its whole source (no partial edits). `source` is raw Mermaid — ONE diagram per source (e.g. one `flowchart` / `sequenceDiagram`). The broker rejects empty / non-Mermaid sources; the page shows any residual parse error and re-renders live on every upsert.",
@@ -1798,6 +1814,21 @@ export async function dispatchToolCall(
         );
         if (!res.ok) return textResult(res.error ?? "rename_map failed", true);
         return textResult(`Map ${a.map_id} renamed to "${a.title}".`);
+      }
+
+      case "archive_map": {
+        ensureSession();
+        const a = args as { map_id: string; archived?: boolean };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/map-archive",
+          { map_id: a.map_id, archived: a.archived },
+        );
+        if (!res.ok) return textResult(res.error ?? "archive_map failed", true);
+        return textResult(
+          a.archived === false
+            ? `Map ${a.map_id} unarchived.`
+            : `Map ${a.map_id} archived (hidden from the sidebar).`,
+        );
       }
 
       case "upsert_diagram": {
