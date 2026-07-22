@@ -9,6 +9,7 @@
 // boards owned by other sessions too.
 
 import { db } from "./db.ts";
+import { attachChecklistItems } from "./helpers.ts";
 
 type Scope = "this_session" | "all";
 
@@ -120,6 +121,12 @@ export function handleGetBoardView(body: {
       "SELECT * FROM nodes WHERE board_id = ? AND deleted_at IS NULL ORDER BY position",
     )
     .all(body.board_id) as any[];
+  // Attach checklist_items to is_checklist nodes so get_board surfaces the
+  // checklist rows. The web read (getBoardView) already does this; this read
+  // used to omit it, so get_board reported a checklist node as having zero
+  // rows even when checklist_items held rows. The structure list always
+  // includes every node, so attach regardless of any node_ids thread filter.
+  attachChecklistItems(body.board_id, nodes);
 
   const nodeFilter = Array.isArray(body.node_ids) && body.node_ids.length > 0
     ? new Set(body.node_ids)

@@ -137,6 +137,34 @@ function buildSourcePreview(s: ChecklistItemSource): ChecklistSourcePreview {
     : { missing: true, board_title };
 }
 
+// Attach the checklist_items array (each with its source previews) to every
+// is_checklist node in `nodes`, mutating them in place; ordinary nodes are
+// left untouched (the property stays absent). SHARED by the web read
+// (getBoardView, powering /api/board/:id) and the MCP read
+// (handleGetBoardView in reads.ts, powering the get_board tool) so the two
+// surfaces can't drift: the MCP read used to omit this entirely, so get_board
+// reported a checklist node as having zero rows even when checklist_items held
+// rows — the browser showed them, the tool didn't.
+export function attachChecklistItems(boardId: string, nodes: Node[]): void {
+  for (const n of nodes) {
+    if (!n.is_checklist) continue;
+    const items = selectChecklistItemsByNode.all(
+      boardId,
+      n.id,
+    ) as ChecklistItem[];
+    // Attach each item's structured sources (where the decision was made),
+    // each enriched with a preview of the cited content.
+    for (const it of items) {
+      const sources = selectChecklistSourcesByItem.all(
+        it.id,
+      ) as ChecklistItemSource[];
+      for (const s of sources) s.preview = buildSourcePreview(s);
+      it.sources = sources;
+    }
+    n.checklist_items = items;
+  }
+}
+
 export function getBoardView(boardId: string) {
   const board = selectBoard.get(boardId) as Board | null;
   if (!board) return null;
@@ -145,26 +173,9 @@ export function getBoardView(boardId: string) {
   ensureBoardLogNode(boardId);
   const nodes = selectNodesByBoard.all(boardId) as Node[];
   // Attach the checklist_items array to any decision-checklist node so the
-  // frontend can render the list without a second round-trip. Ordinary
-  // nodes are left untouched (the property stays absent).
-  for (const n of nodes) {
-    if (n.is_checklist) {
-      const items = selectChecklistItemsByNode.all(
-        boardId,
-        n.id,
-      ) as ChecklistItem[];
-      // Attach each item's structured sources (where the decision was made),
-      // each enriched with a preview of the cited content.
-      for (const it of items) {
-        const sources = selectChecklistSourcesByItem.all(
-          it.id,
-        ) as ChecklistItemSource[];
-        for (const s of sources) s.preview = buildSourcePreview(s);
-        it.sources = sources;
-      }
-      n.checklist_items = items;
-    }
-  }
+  // frontend can render the list without a second round-trip (shared with the
+  // MCP read path so the two can't diverge — see attachChecklistItems).
+  attachChecklistItems(boardId, nodes);
   const threads = selectThreadsByBoard.all(boardId) as ThreadItem[];
   const threadsByNode: Record<string, ThreadItem[]> = {};
   for (const t of threads) {

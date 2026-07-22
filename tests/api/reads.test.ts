@@ -177,6 +177,76 @@ describe("/get-board-view", () => {
     expect(r.json.ok).toBe(false);
     expect(r.json.error).toMatch(/not found/i);
   });
+
+  // Regression: the MCP read path (get_board → /get-board-view) used to omit
+  // checklist_items entirely, so a checklist node came back looking empty even
+  // when it held rows (the browser /api/board/:id path showed them; the tool
+  // didn't). Both now share attachChecklistItems.
+  test("attaches checklist_items (with source previews) to is_checklist nodes", async () => {
+    const cb = await post<{ board_id: string }>(`${broker.url}/create-board`, {
+      session_id: sessionA,
+      structure: {
+        title: "Checklist read-through",
+        concerns: [
+          {
+            id: "cl-c",
+            title: "Rollout steps",
+            items: [
+              { id: "cl-node", title: "Steps checklist" },
+              { id: "cl-src", title: "Decision source node" },
+            ],
+          },
+        ],
+      },
+    });
+    const clBoard = cb.json.board_id;
+
+    const flag = await post<{ ok: boolean }>(
+      `${broker.url}/set-node-checklist`,
+      { board_id: clBoard, node_id: "cl-node", is_checklist: true },
+    );
+    expect(flag.json.ok).toBe(true);
+
+    await post(`${broker.url}/record-decision`, {
+      board_id: clBoard,
+      node_id: "cl-node",
+      summary: "Env vars must be set before deploy.",
+    });
+    const withSrc = await post<{ ok: boolean; item_id: number }>(
+      `${broker.url}/record-decision`,
+      {
+        board_id: clBoard,
+        node_id: "cl-node",
+        summary: "Migration must run once.",
+        sources: [{ kind: "node", id: "cl-src", board: clBoard }],
+      },
+    );
+    expect(withSrc.json.ok).toBe(true);
+
+    const r = await post<{ ok: boolean; nodes: any[] }>(
+      `${broker.url}/get-board-view`,
+      { board_id: clBoard },
+    );
+    expect(r.json.ok).toBe(true);
+
+    const clNode = r.json.nodes.find((n) => n.id === "cl-node");
+    expect(clNode).toBeTruthy();
+    expect(Array.isArray(clNode.checklist_items)).toBe(true);
+    expect(clNode.checklist_items.length).toBe(2);
+    const summaries = clNode.checklist_items.map((it: any) => it.summary);
+    expect(summaries).toContain("Env vars must be set before deploy.");
+
+    // The cited node source comes back with a resolved preview.
+    const cited = clNode.checklist_items.find(
+      (it: any) => it.summary === "Migration must run once.",
+    );
+    expect(cited.sources.length).toBe(1);
+    expect(cited.sources[0].preview.title).toBe("Decision source node");
+
+    // A non-checklist node carries no checklist_items property at all.
+    const plainNode = r.json.nodes.find((n) => n.id === "cl-src");
+    expect(plainNode.checklist_items).toBeUndefined();
+  });
 });
 
 describe("/search-boards", () => {
