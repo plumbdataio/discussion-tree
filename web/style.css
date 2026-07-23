@@ -6610,6 +6610,90 @@ ul.maps li.current .sidebar-map-link {
   background: var(--accent-soft);
   color: var(--accent);
 }
+.issues-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 8px;
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.issues-filter-btn:hover {
+  color: var(--text);
+}
+.issues-filter-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.issues-filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.issues-lane-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.issue-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 560;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+.issue-chip .issue-dot {
+  opacity: 0.35;
+}
+.issue-chip.on {
+  color: var(--lane);
+  border-color: var(--lane);
+  background: var(--lane-bg);
+}
+.issue-chip.on .issue-dot {
+  opacity: 1;
+}
+.issue-chip-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+  font-size: 10.5px;
+}
+.issues-filter-check,
+.issues-filter-age {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.issues-filter-check input {
+  accent-color: var(--accent);
+}
+.issues-filter-age select {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+}
 .issues-empty {
   padding: 40px 12px;
   text-align: center;

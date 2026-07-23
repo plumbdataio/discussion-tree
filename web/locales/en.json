@@ -14,7 +14,13 @@
     "col_status": "Status",
     "col_issue": "Issue",
     "col_source": "Source",
-    "col_updated": "Updated"
+    "col_updated": "Updated",
+    "filters": "Filters",
+    "include_closed": "Include closed boards",
+    "age_within": "Updated:",
+    "age_all": "All time",
+    "age_days": "{{count}}d",
+    "empty_filtered": "No issues match the current filters"
   },
   "header": {
     "back_to_session": "← Back to session",

@@ -15,6 +15,8 @@ export type SessionIssue = {
   board_id: string;
   board_title: string;
   is_default: number;
+  board_status: string;
+  board_closed: number;
   node_id: string;
   title: string;
   status: string;
@@ -40,6 +42,8 @@ const selectIssues = db.prepare(`
   SELECT n.board_id                             AS board_id,
          b.title                                AS board_title,
          b.is_default                           AS is_default,
+         b.status                               AS board_status,
+         b.closed                               AS board_closed,
          n.id                                   AS node_id,
          n.title                                AS title,
          n.status                               AS status,
@@ -68,12 +72,15 @@ export function getSessionIssues(sessionId: string): {
   session_name: string | null;
   issues: SessionIssue[];
   counts: Record<IssueLane, number>;
+  filters: unknown;
 } {
   const sess = selectSessionName.get(sessionId) as { name: string | null } | null;
   const rows = selectIssues.all(sessionId) as Array<{
     board_id: string;
     board_title: string;
     is_default: number;
+    board_status: string;
+    board_closed: number;
     node_id: string;
     title: string;
     status: string;
@@ -84,6 +91,8 @@ export function getSessionIssues(sessionId: string): {
     board_id: r.board_id,
     board_title: r.board_title,
     is_default: r.is_default,
+    board_status: r.board_status,
+    board_closed: r.board_closed,
     node_id: r.node_id,
     title: r.title,
     status: r.status,
@@ -98,5 +107,60 @@ export function getSessionIssues(sessionId: string): {
     session_name: sess?.name ?? null,
     issues,
     counts,
+    filters: getSessionIssueFilters(sessionId),
   };
 }
+
+// --- Per-session filter persistence -----------------------------------------
+// The issue view's filters (which lanes to show, whether to include
+// closed/settled boards, an optional "updated within" cutoff) are saved PER
+// SESSION in the DB — not localStorage — so the same session shows the same
+// view across browsers/devices (the user rarely wants a different filter per
+// browser, and re-setting it everywhere is a chore). The blob is opaque to the
+// broker: the client owns the shape; we just store and hand back the JSON.
+db.run(`
+  CREATE TABLE IF NOT EXISTS session_issue_filters (
+    session_id TEXT PRIMARY KEY,
+    filters    TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )
+`);
+const selectFilters = db.prepare(
+  "SELECT filters FROM session_issue_filters WHERE session_id = ?",
+);
+const upsertFilters = db.prepare(
+  `INSERT INTO session_issue_filters (session_id, filters, updated_at)
+   VALUES (?, ?, ?)
+   ON CONFLICT(session_id)
+     DO UPDATE SET filters = excluded.filters, updated_at = excluded.updated_at`,
+);
+
+export function getSessionIssueFilters(sessionId: string): unknown {
+  const row = selectFilters.get(sessionId) as { filters: string } | undefined;
+  if (!row) return null;
+  try {
+    return JSON.parse(row.filters);
+  } catch {
+    return null;
+  }
+}
+
+export function handleSetSessionIssueFilters(body: {
+  session_id?: string;
+  filters?: unknown;
+}): { ok: boolean; error?: string } {
+  if (!body.session_id) return { ok: false, error: "session_id required" };
+  if (body.filters === undefined) {
+    return { ok: false, error: "filters required" };
+  }
+  upsertFilters.run(
+    body.session_id,
+    JSON.stringify(body.filters),
+    new Date().toISOString(),
+  );
+  return { ok: true };
+}
+
+export const routes = {
+  "/session-issue-filters": handleSetSessionIssueFilters,
+};

@@ -69,9 +69,17 @@ afterAll(async () => {
 async function fetchIssues() {
   const r = await get<{
     ok: boolean;
-    issues: Array<{ node_id: string; title: string; lane: string; board_id: string }>;
+    issues: Array<{
+      node_id: string;
+      title: string;
+      lane: string;
+      board_id: string;
+      board_status: string;
+      board_closed: number;
+    }>;
     counts: Record<string, number>;
     session_name: string | null;
+    filters: any;
   }>(`${broker.url}/api/session-issues/${sessionId}`);
   return r.json;
 }
@@ -114,5 +122,31 @@ describe("/api/session-issues", () => {
     );
     expect(r.json.ok).toBe(true);
     expect(r.json.issues).toEqual([]);
+  });
+
+  test("issues carry board status/closed for client-side filtering", async () => {
+    const j = await fetchIssues();
+    const anyIssue = j.issues.find((i) => i.node_id === "n-wait")!;
+    expect(typeof anyIssue.board_status).toBe("string");
+    expect([0, 1]).toContain(anyIssue.board_closed);
+  });
+
+  test("per-session filters round-trip through the DB", async () => {
+    const before = await fetchIssues();
+    expect(before.filters).toBeNull(); // none saved yet
+
+    const filters = {
+      lanes: { wait: true, prog: false, todo: true, done: false },
+      includeClosedBoards: true,
+      maxAgeDays: 30,
+    };
+    const save = await post<{ ok: boolean }>(
+      `${broker.url}/session-issue-filters`,
+      { session_id: sessionId, filters },
+    );
+    expect(save.json.ok).toBe(true);
+
+    const after = await fetchIssues();
+    expect(after.filters).toEqual(filters);
   });
 });
