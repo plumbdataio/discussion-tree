@@ -9,6 +9,10 @@ import React, { forwardRef, useRef } from "react";
 //    leaves the box — which also stops a drag that strays outside an enclosing
 //    preview modal from registering as a backdrop click and closing it.
 
+// @reusable-ui ResizableTextarea — USE WHEN: any chat / multi-line text
+//   composer. INSTEAD OF a raw <textarea>: adds the custom top-right resize
+//   handle (native grip off) + pointer-capture drag. Drop-in — forwards all
+//   <textarea> props and the ref.
 const MIN_H = 60;
 const MAX_H = 600;
 

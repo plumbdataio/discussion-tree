@@ -3,6 +3,9 @@ import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { MarkdownAnchor, urlTransform } from "./MarkdownAnchor.tsx";
+// @reusable-ui MDView — USE WHEN: rendering user- or CC-authored markdown text
+//   (GFM + CJK-aware bold/strikethrough). INSTEAD OF: raw text or
+//   dangerouslySetInnerHTML.
 // CommonMark's flanking rules drop **bold** whose content is edged by CJK
 // punctuation (a corner bracket / fullwidth paren), so it renders with literal
 // asterisks. This maintained micromark-level extension fixes it at parse time —

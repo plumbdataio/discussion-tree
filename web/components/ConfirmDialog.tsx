@@ -1,6 +1,8 @@
 import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
 
+// @reusable-ui ConfirmDialog — USE WHEN: confirming a destructive / irreversible
+//   action before it runs. INSTEAD OF: window.confirm() or a hand-rolled dialog.
 // Generic two-button confirmation. Used currently by the anchor list
 // modal's "remove from this side" path so the user can't kill a pinned
 // message with a stray click. Keep it simple — title + message body
