@@ -9,6 +9,7 @@ import {
   Cog,
   Filter,
   GripVertical,
+  Inbox,
   Menu,
   MessageCircle,
   RefreshCw,
@@ -34,6 +35,7 @@ import {
 } from "../utils/settings.ts";
 import { useTmuxIntegration } from "../utils/tmuxIntegration.ts";
 import { openScheduledList } from "../utils/scheduledList.ts";
+import { openSessionIssues } from "../utils/sessionIssues.ts";
 
 // Module-scope cache so Sidebar remounts during SPA navigation don't show a
 // "Loading…" flash — the previous fetch result is reused as initial state
@@ -151,6 +153,15 @@ function SessionItem({
   // filter. See isBoardVisible for why the first two bypass the filter.
   const visibleBoards = s.boards.filter((b) =>
     isBoardVisible(b, filter, currentBoardId),
+  );
+
+  // "Waiting on you" total for the session — the sum of every board's
+  // needs-reply node count. Powers the badge on the per-session issues entry
+  // (same data the issues view aggregates), so the count is visible without
+  // opening the modal.
+  const sessionNeedsReply = s.boards.reduce(
+    (n, b) => n + (b.stats?.needs_reply ?? 0),
+    0,
   );
 
   const isDragging = draggingId === s.id;
@@ -421,6 +432,41 @@ function SessionItem({
           <div className="empty empty-boards">{t("sidebar.no_boards")}</div>
         ) : (
           <ul className="boards">
+            <li className="sidebar-issues-entry">
+              <button
+                type="button"
+                className={
+                  "sidebar-issues-link" +
+                  (sessionNeedsReply > 0 ? " has-needs-reply" : "")
+                }
+                onClick={() =>
+                  openSessionIssues({
+                    sessionId: s.id,
+                    sessionName: s.name ?? null,
+                  })
+                }
+                title={t("issues.open_title")}
+              >
+                <span className="sidebar-board-title">
+                  <Inbox
+                    className="sidebar-issues-icon"
+                    size={13}
+                    strokeWidth={1.75}
+                  />
+                  {t("issues.sidebar_entry")}
+                </span>
+                {sessionNeedsReply > 0 && (
+                  <span
+                    className="sidebar-issues-count"
+                    title={t("sidebar.needs_reply_title", {
+                      count: sessionNeedsReply,
+                    })}
+                  >
+                    {sessionNeedsReply}
+                  </span>
+                )}
+              </button>
+            </li>
             {visibleBoards.map((b) => {
               const hasUnread = (b.unread_count ?? 0) > 0;
               // needs-reply is a node-level status: at least one node in this

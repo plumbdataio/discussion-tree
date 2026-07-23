@@ -1,4 +1,21 @@
 {
+  "issues": {
+    "title": "Issues",
+    "sidebar_entry": "Issues",
+    "open_title": "See this session's issues",
+    "empty": "No issues in this session",
+    "waiting_on_you": "Waiting on you {{count}}",
+    "view_table": "Table view",
+    "view_kanban": "Kanban view",
+    "lane_wait": "Waiting on you",
+    "lane_prog": "In progress",
+    "lane_todo": "Not started",
+    "lane_done": "Settled",
+    "col_status": "Status",
+    "col_issue": "Issue",
+    "col_source": "Source",
+    "col_updated": "Updated"
+  },
   "header": {
     "back_to_session": "← Back to session",
     "live": "live",

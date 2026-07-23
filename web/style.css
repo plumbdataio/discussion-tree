@@ -6469,3 +6469,348 @@ ul.maps li.current .sidebar-map-link {
 .cli-explainer-body {
   white-space: pre-wrap;
 }
+
+/* ============================================================
+   Per-session issue view (SessionIssuesModal) + sidebar entry
+   ============================================================ */
+:root {
+  --issue-wait: #d9820a;
+  --issue-wait-bg: #fdf1e0;
+  --issue-wait-line: #f0c78a;
+  --issue-wait-tint: #fef8ef;
+  --issue-prog: #2563eb;
+  --issue-prog-bg: #e7eefe;
+  --issue-todo: #7a8596;
+  --issue-todo-bg: #eef1f5;
+  --issue-done: #10b981;
+  --issue-done-bg: #e3f5ec;
+}
+:root[data-theme="dark"] {
+  --issue-wait: #eaa64a;
+  --issue-wait-bg: #2a2012;
+  --issue-wait-line: #54401f;
+  --issue-wait-tint: #1c1913;
+  --issue-prog: #5b8def;
+  --issue-prog-bg: #152439;
+  --issue-todo: #8b95a6;
+  --issue-todo-bg: #1b212b;
+  --issue-done: #34d399;
+  --issue-done-bg: #10261b;
+}
+
+/* lane classes set the two vars the atoms below read */
+.issue-lane-wait {
+  --lane: var(--issue-wait);
+  --lane-bg: var(--issue-wait-bg);
+}
+.issue-lane-prog {
+  --lane: var(--issue-prog);
+  --lane-bg: var(--issue-prog-bg);
+}
+.issue-lane-todo {
+  --lane: var(--issue-todo);
+  --lane-bg: var(--issue-todo-bg);
+}
+.issue-lane-done {
+  --lane: var(--issue-done);
+  --lane-bg: var(--issue-done-bg);
+}
+.issue-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--lane, var(--muted));
+  display: inline-block;
+}
+.issue-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 620;
+  padding: 3px 9px 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: var(--lane);
+  background: var(--lane-bg);
+}
+.issue-age {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* modal shell: wider than a node modal so the 4-column kanban breathes */
+.session-issues-modal {
+  width: min(1040px, 94vw);
+  max-width: 94vw;
+}
+.issues-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.issues-header .node-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.issues-session {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+}
+.issues-header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.issues-wait-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 640;
+  color: var(--issue-wait);
+  background: var(--issue-wait-bg);
+  border: 1px solid var(--issue-wait-line);
+  border-radius: 999px;
+  padding: 4px 11px 4px 9px;
+  font-variant-numeric: tabular-nums;
+}
+.issues-view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.issues-view-toggle button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 9px;
+  background: var(--panel);
+  color: var(--muted);
+  border: none;
+  cursor: pointer;
+}
+.issues-view-toggle button + button {
+  border-left: 1px solid var(--border);
+}
+.issues-view-toggle button:hover {
+  color: var(--text);
+}
+.issues-view-toggle button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.issues-empty {
+  padding: 40px 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* table view */
+.issues-table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-top: 14px;
+}
+.issues-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 520px;
+  font-size: 12.5px;
+}
+.issues-table thead th {
+  text-align: left;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 640;
+  padding: 9px 13px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+}
+.issues-table tbody td {
+  padding: 9px 13px;
+  border-top: 1px solid var(--border);
+  vertical-align: middle;
+}
+.issues-table tbody tr:hover {
+  background: var(--bg);
+}
+.issues-table tbody tr.issue-lane-wait {
+  background: var(--issue-wait-tint);
+}
+.issues-table tbody tr.issue-lane-wait td:first-child {
+  box-shadow: inset 3px 0 0 var(--issue-wait);
+}
+.issues-table .col-issue {
+  max-width: 340px;
+}
+.issues-table tr.issue-lane-done .issue-link {
+  color: var(--muted);
+}
+.issue-link {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 500;
+}
+.issue-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.issues-table .col-src {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* kanban view */
+.issues-kanban {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(210px, 1fr);
+  gap: 11px;
+  overflow-x: auto;
+  margin-top: 14px;
+  padding-bottom: 4px;
+}
+.issue-col {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  display: flex;
+  flex-direction: column;
+  min-height: 90px;
+}
+.issue-col.issue-lane-wait {
+  border-color: var(--issue-wait-line);
+  background: var(--issue-wait-tint);
+}
+.issue-col-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 9px;
+  border-bottom: 1px solid var(--border);
+}
+.issue-col-label {
+  font-size: 12px;
+  font-weight: 680;
+  color: var(--lane);
+}
+.issue-col-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 1px 7px;
+  font-variant-numeric: tabular-nums;
+}
+.issue-col-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+.issue-card {
+  display: block;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 10px;
+  text-decoration: none;
+  color: var(--text);
+  transition:
+    transform 0.08s ease,
+    border-color 0.12s ease;
+}
+.issue-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+}
+.issue-col.issue-lane-wait .issue-card {
+  border-left: 3px solid var(--issue-wait);
+}
+.issue-card-title {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 520;
+  line-height: 1.35;
+}
+.issue-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.issue-card-foot .issue-src {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.issue-card-foot .issue-age {
+  margin-left: auto;
+}
+
+/* sidebar per-session issues entry (first row under an expanded session) */
+.sidebar-issues-entry {
+  list-style: none;
+}
+.sidebar-issues-link {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--muted);
+  font: inherit;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.sidebar-issues-link:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+.sidebar-issues-icon {
+  color: var(--muted);
+}
+.sidebar-issues-link.has-needs-reply {
+  color: var(--issue-wait);
+}
+.sidebar-issues-link.has-needs-reply .sidebar-issues-icon {
+  color: var(--issue-wait);
+}
+.sidebar-issues-count {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--issue-wait);
+  border-radius: 999px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}

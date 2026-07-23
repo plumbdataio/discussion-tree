@@ -33,6 +33,7 @@ import {
 } from "./broker/diagrams.ts";
 import { routes as mapChecklistRoutes } from "./broker/map-checklist.ts";
 import { getBoardView } from "./broker/helpers.ts";
+import { getSessionIssues } from "./broker/session-issues.ts";
 import { routes as nodesRoutes } from "./broker/nodes.ts";
 import {
   initCliVerbosity,
@@ -222,6 +223,13 @@ const server = Bun.serve({
 
     if (req.method === "GET" && path === "/api/sessions") {
       return Response.json(handleListSessions());
+    }
+
+    // Per-session issue view (the "issues" surface): aggregates the session's
+    // item nodes into status lanes. Pure projection of existing node status.
+    if (req.method === "GET" && path.startsWith("/api/session-issues/")) {
+      const id = path.slice("/api/session-issues/".length);
+      return Response.json(getSessionIssues(id));
     }
 
     // Divergent-discussion map read API — the map view (/map/:id, served by
