@@ -74,11 +74,13 @@ function boardIsClosed(i: Issue): boolean {
   return i.board_closed === 1 || i.board_status === "settled";
 }
 
-function applyFilters(issues: Issue[], f: IssueFilters): Issue[] {
+// Content filters ONLY (closed boards + age) — deliberately NOT the lane
+// toggles. Per-lane counts are computed over this set, so a lane's count reads
+// "how many would show if this lane is on" and doesn't flip to 0 when hidden.
+function applyContentFilters(issues: Issue[], f: IssueFilters): Issue[] {
   const cutoff =
     f.maxAgeDays != null ? Date.now() - f.maxAgeDays * 86400000 : null;
   return issues.filter((i) => {
-    if (!f.lanes[i.lane]) return false;
     if (!f.includeClosedBoards && boardIsClosed(i)) return false;
     if (cutoff != null) {
       const ts = i.updated_at ? new Date(i.updated_at).getTime() : 0;
@@ -182,9 +184,18 @@ export function SessionIssuesModal() {
   if (!open) return null;
 
   const rawIssues = data?.issues ?? [];
-  const rawCounts = data?.counts ?? { wait: 0, prog: 0, todo: 0, done: 0 };
   const name = data?.session_name ?? fallbackName ?? "?";
-  const visible = applyFilters(rawIssues, filters);
+  // Counts reflect what's currently shown: content-filtered (closed boards +
+  // age) per lane; the lane toggles then decide what renders in the body.
+  const contentFiltered = applyContentFilters(rawIssues, filters);
+  const laneCounts: Record<IssueLane, number> = {
+    wait: 0,
+    prog: 0,
+    todo: 0,
+    done: 0,
+  };
+  for (const i of contentFiltered) laneCounts[i.lane]++;
+  const visible = contentFiltered.filter((i) => filters.lanes[i.lane]);
 
   const laneLabel = (l: IssueLane) => t(`issues.lane_${l}`);
   const boardName = (i: Issue) =>
@@ -233,10 +244,10 @@ export function SessionIssuesModal() {
             <span className="issues-session">{name}</span>
           </h2>
           <div className="issues-header-right">
-            {rawCounts.wait > 0 && (
+            {laneCounts.wait > 0 && (
               <span className="issues-wait-badge">
                 <span className="issue-dot issue-lane-wait" />
-                {t("issues.waiting_on_you", { count: rawCounts.wait })}
+                {t("issues.waiting_on_you", { count: laneCounts.wait })}
               </span>
             )}
             <button
@@ -287,7 +298,7 @@ export function SessionIssuesModal() {
                 >
                   <span className="issue-dot" />
                   {laneLabel(l)}
-                  <span className="issue-chip-count">{rawCounts[l]}</span>
+                  <span className="issue-chip-count">{laneCounts[l]}</span>
                 </button>
               ))}
             </div>
@@ -320,6 +331,14 @@ export function SessionIssuesModal() {
                 ))}
               </select>
             </label>
+            <button
+              type="button"
+              className="issues-reset-btn"
+              onClick={() => persist(DEFAULT_FILTERS)}
+              title={t("issues.reset")}
+            >
+              {t("issues.reset")}
+            </button>
           </div>
         )}
 

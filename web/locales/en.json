@@ -20,7 +20,8 @@
     "age_within": "Updated:",
     "age_all": "All time",
     "age_days": "{{count}}d",
-    "empty_filtered": "No issues match the current filters"
+    "empty_filtered": "No issues match the current filters",
+    "reset": "Reset"
   },
   "header": {
     "back_to_session": "← Back to session",

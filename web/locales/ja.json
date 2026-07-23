@@ -20,7 +20,8 @@
     "age_within": "更新:",
     "age_all": "すべて",
     "age_days": "{{count}}日以内",
-    "empty_filtered": "フィルタ条件に一致する課題はありません"
+    "empty_filtered": "フィルタ条件に一致する課題はありません",
+    "reset": "リセット"
   },
   "header": {
     "back_to_session": "← セッションへ戻る",
