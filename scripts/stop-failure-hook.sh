@@ -20,10 +20,15 @@ set -e
 
 input=$(cat)
 sid=$(printf '%s' "$input" | jq -r '.session_id // empty')
+# transcript_path lets the broker classify WHY the turn stopped (rate-limit /
+# login-expired / transient) from the tail, so it only auto-continues transient
+# errors instead of hammering "continue" at a usage cap or a login expiry.
+transcript=$(printf '%s' "$input" | jq -r '.transcript_path // empty')
 port="${DISCUSSION_TREE_PORT:-7898}"
 
 if [ -n "$sid" ]; then
-  body=$(jq -n --arg s "$sid" '{cc_session_id:$s}')
+  body=$(jq -n --arg s "$sid" --arg tp "$transcript" \
+    '{cc_session_id:$s, transcript_path:$tp}')
   curl -sS --max-time 1 -X POST \
     -H "Content-Type: application/json" \
     -d "$body" \

@@ -14,11 +14,16 @@ import {
   clearSessionStalledStmt,
   clearSessionStalledBeforeStmt,
   db,
+  insertThread,
   selectAliveSessionByCcPid,
   setSessionCompactingStmt,
   setSessionStalledStmt,
 } from "./db.ts";
-import { broadcastToAll } from "./ws.ts";
+import { broadcast, broadcastToAll } from "./ws.ts";
+import {
+  classifyStallFromTranscript,
+  type StallReason,
+} from "./stall-reason.ts";
 
 export const activities = new Map<string, Activity>();
 const toolHeartbeats = new Map<string, number>();
@@ -160,11 +165,19 @@ function lookupAliveSessionByCcId(ccSessionId: string): string | null {
 // every client to refetch so the warning appears (or clears) instantly.
 
 // The StopFailure hook fires when a turn ends with an API error (rate limit,
-// "retry also failed", auth, …). Message-agnostic by design: ANY error-stop
-// raises the SAME warning. Mark the owning session stalled.
+// "retry also failed", auth, …). The stall WARNING is message-agnostic — ANY
+// error-stop raises the same ⚠️ badge — but the RESPONSE is now per-cause: only
+// a transient error deserves an auto-continue nudge. A usage cap or a login
+// expiry won't clear on a nudge, so blindly continuing them just hammered
+// "continue" ~every 30s (up to the streak cap) for nothing. The cause is
+// classified from the transcript tail passed by the hook (transcript_path);
+// `reason` is a direct override used by tests. Unknown → "transient" (fail
+// open = the old always-continue behavior).
 export function handleSessionStalled(body: {
   cc_session_id?: string;
-}): { ok: boolean } {
+  transcript_path?: string;
+  reason?: string;
+}): { ok: boolean; reason?: StallReason } {
   if (!body.cc_session_id) return { ok: false };
   const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
   if (!sessionId) return { ok: false };
@@ -181,8 +194,54 @@ export function handleSessionStalled(body: {
     broadcastActivity(sessionId, null);
   }
   broadcastToAll({ type: "session-stall-update" });
-  scheduleAutoContinue(sessionId);
-  return { ok: true };
+
+  const reason: StallReason =
+    (body.reason as StallReason | undefined) ??
+    (body.transcript_path
+      ? classifyStallFromTranscript(body.transcript_path)
+      : "transient");
+
+  if (reason === "rate_limit") {
+    // A 5h / weekly cap won't lift on a nudge; the cc-usage bridge resumes at
+    // the reset time. Leave the stall badge, but do NOT auto-continue.
+  } else if (reason === "login") {
+    // Only the human can re-auth. Don't nudge; drop a one-time UI notice so the
+    // user knows to /login (the bare ⚠️ badge alone doesn't say why).
+    notifyLoginRequired(sessionId);
+  } else {
+    scheduleAutoContinue(sessionId);
+  }
+  return { ok: true, reason };
+}
+
+// Sessions we've already dropped a "login expired" notice into for the current
+// stall episode — so repeated StopFailure fires don't spam the board. Cleared
+// on genuine recovery (clearStall).
+const loginNoticeSent = new Set<string>();
+
+// Drop a one-time system note into the session's default board so the human
+// sees WHY it stopped (login expired) and that no auto-continue will save it —
+// only a terminal /login will. Uses a plain "system" thread item (visible, but
+// not counted as an unread CC message). Best-effort.
+function notifyLoginRequired(sessionId: string): void {
+  if (loginNoticeSent.has(sessionId)) return;
+  loginNoticeSent.add(sessionId);
+  const row = selectDefaultBoardForSession.get(sessionId) as
+    | { id: string }
+    | null;
+  if (!row) return;
+  insertThread.run(
+    row.id,
+    "main",
+    "system",
+    "[discussion-tree] Login expired — this session stopped because its login/auth expired. Auto-continue was NOT sent (a nudge can't fix auth). Run /login in this session's terminal to resume.",
+    new Date().toISOString(),
+  );
+  broadcast(row.id, {
+    type: "thread-update",
+    node_id: "main",
+    source: "system",
+  });
 }
 
 // Clear the stall the moment a session shows life again — called from the
@@ -200,6 +259,8 @@ export function clearStall(sessionId: string): void {
     // was delivered to a still-parked CC — not real work — and resetting there
     // would defeat the cap and let the ~30s hammer loop run forever.
     autoContinueStreak.delete(sessionId);
+    // A recovered session can raise a fresh login notice next time it expires.
+    loginNoticeSent.delete(sessionId);
     broadcastToAll({ type: "session-stall-update" });
   }
 }
