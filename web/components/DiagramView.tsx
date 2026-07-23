@@ -22,6 +22,7 @@ import { useHeaderActivity } from "../utils/useHeaderActivity.ts";
 import { ThreadMessage } from "./ThreadMessage.tsx";
 import { MapNodeModal } from "./MapNodeModal.tsx";
 import { TimerSendButton } from "./TimerSendButton.tsx";
+import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { confirmBeforeSend } from "../utils/timerConfirm.ts";
 import { useDraft } from "../utils/drafts.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
@@ -649,7 +650,7 @@ function DiagramChat({
         <div ref={bottomRef} />
       </div>
       <div className="map-chat-input">
-        <textarea
+        <ResizableTextarea
           value={draft}
           rows={2}
           disabled={!ownerAlive}

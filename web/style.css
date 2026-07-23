@@ -5787,6 +5787,12 @@ button.secondary {
   background: var(--panel);
   color: var(--text);
 }
+/* The map/diagram chat composers now use ResizableTextarea (custom top-right
+   handle); kill the native bottom-right grip. More specific than
+   `.map-chat-input textarea { resize: vertical }`, so it wins. */
+.map-chat-input .answer-input-wrap textarea {
+  resize: none;
+}
 .map-chat-send-row { display: flex; justify-content: flex-end; }
 .map-chat-send-row button {
   padding: 6px 16px;

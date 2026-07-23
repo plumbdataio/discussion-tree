@@ -50,6 +50,7 @@ import { MapNode, MapContext, type MapCtx } from "./MapNode.tsx";
 import { MapFrameNode } from "./MapFrameNode.tsx";
 import { MapNodeModal } from "./MapNodeModal.tsx";
 import { TimerSendButton } from "./TimerSendButton.tsx";
+import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { confirmBeforeSend } from "../utils/timerConfirm.ts";
 import { CliCommandButton } from "./CliCommandButton.tsx";
 import { TimelineModal } from "./TimelineModal.tsx";
@@ -1146,7 +1147,7 @@ function MapGeneralChat({
         <div ref={bottomRef} />
       </div>
       <div className="map-chat-input">
-        <textarea
+        <ResizableTextarea
           value={draft}
           rows={2}
           disabled={!ownerAlive}
