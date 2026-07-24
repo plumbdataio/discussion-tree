@@ -78,10 +78,12 @@ if [ "$count" -gt 0 ] && [ "$block" = "true" ]; then
   # user simply not wanting a reply, are legitimate, so the escape hatch
   # (reset_unanswered_posts) is offered as a first-class option, not a "desync"
   # afterthought.
-  nodes=$(printf '%s' "$resp" | jq -r '.nodes[]?.node_path | "  - " + .')
-  msg="discussion-tree: these node(s) have a user submission you have not replied to with a post_to_node message yet:
+  # The reply tool differs per surface (a diagram has no node to post_to_node
+  # at), so the broker names it per row and this just prints what it says.
+  nodes=$(printf '%s' "$resp" | jq -r '.nodes[]? | "  - " + .node_path + "  → reply with " + (.reply_tool // "post_to_node")')
+  msg="discussion-tree: these thread(s) have a user submission you have not replied to yet:
 ${nodes}
-Is that intentional? If you already handled it (you replied on a different node, or the user doesn't want a reply), call reset_unanswered_posts to yield. Otherwise post_to_node an actual reply message to the node(s) above — a status-only post does NOT count."
+Is that intentional? If you already handled it (you replied on a different node, or the user doesn't want a reply), call reset_unanswered_posts to yield. Otherwise post an actual reply message using the tool named above — a status-only post does NOT count."
   jq -n --arg reason "$msg" '{decision:"block", reason:$reason}'
 fi
 

@@ -200,6 +200,14 @@ db.run(
     PRIMARY KEY (session_id, board_id, node_id)
   )`,
 );
+// Which surface the unanswered submission came from. The nag names the tool the
+// CC must reply WITH, and that differs per surface (post_to_node on a board,
+// post_diagram_chat on a diagram) — telling the CC to post_to_node a diagram
+// would send it chasing a node that doesn't exist. 'board' covers every
+// pre-existing row, which is what they were.
+safeAlter(
+  "ALTER TABLE unanswered_nodes ADD COLUMN surface TEXT NOT NULL DEFAULT 'board'",
+);
 // The tmux pane id ($TMUX_PANE, e.g. "%3") + socket (first field of $TMUX) of
 // the Claude Code process, captured at attach time from the MCP server's own
 // env (it runs inside the same pane as CC). Present only when CC was launched

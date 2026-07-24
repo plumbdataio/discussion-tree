@@ -291,7 +291,13 @@ export function handleGetUnansweredPosts(body: {
   ok: boolean;
   count: number;
   block?: boolean;
-  nodes?: { board_id: string; node_id: string; node_path: string }[];
+  nodes?: {
+    board_id: string;
+    node_id: string;
+    node_path: string;
+    surface?: string;
+    reply_tool?: string;
+  }[];
   session_id?: string;
 } {
   if (!body.cc_session_id) return { ok: false, count: 0 };
@@ -311,11 +317,23 @@ export function handleGetUnansweredPosts(body: {
   // Per-node: the unanswered set is the rows in unanswered_nodes for this
   // session. The nag names these nodes so the CC knows exactly which user
   // submissions are still unreplied (oldest first).
-  const nodes = db
+  const rawNodes = db
     .prepare(
-      "SELECT board_id, node_id, node_path FROM unanswered_nodes WHERE session_id = ? ORDER BY created_at ASC",
+      "SELECT board_id, node_id, node_path, surface FROM unanswered_nodes WHERE session_id = ? ORDER BY created_at ASC",
     )
-    .all(row.id) as { board_id: string; node_id: string; node_path: string }[];
+    .all(row.id) as {
+    board_id: string;
+    node_id: string;
+    node_path: string;
+    surface: string;
+  }[];
+  // Hand the hook the tool to reply WITH, rather than making the shell script
+  // infer it from the surface — a diagram has no node to post_to_node at.
+  const nodes = rawNodes.map((n) => ({
+    ...n,
+    reply_tool:
+      n.surface === "diagram" ? "post_diagram_chat" : "post_to_node",
+  }));
   const count = nodes.length;
   if (count <= 0) {
     // Nothing pending — clear any streak so the next backlog starts fresh.

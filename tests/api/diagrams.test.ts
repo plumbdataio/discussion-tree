@@ -1,4 +1,11 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import {
+  describe,
+  test,
+  expect,
+  beforeAll,
+  beforeEach,
+  afterAll,
+} from "bun:test";
 import {
   startBroker,
   post,
@@ -10,11 +17,12 @@ import {
 
 let broker: BrokerHandle;
 let sessionId: string;
+let ccSessionId: string;
 
 beforeAll(async () => {
   broker = await startBroker();
   sessionId = await registerSession(broker.url);
-  await attachCC(broker.url, sessionId);
+  ccSessionId = await attachCC(broker.url, sessionId);
 });
 afterAll(async () => {
   await broker.kill();
@@ -408,5 +416,90 @@ describe("diagrams — lifecycle (reclaim across a CC restart)", () => {
     await new Promise((r) => setTimeout(r, 120));
     await post(`${broker.url}/poll-messages`, { session_id: b });
     expect((await chat).json.ok).toBe(true);
+  });
+});
+
+// A diagram chat is a question addressed to the CC, so leaving it unreplied is
+// the same failure the board nag already catches. The wrinkle is that the CC
+// cannot answer a diagram with post_to_node — there is no node — so the nag has
+// to name the right tool per surface.
+describe("diagrams — the Stop-hook nag covers diagram chat", () => {
+  type Unanswered = {
+    count: number;
+    nodes: {
+      node_path: string;
+      surface?: string;
+      reply_tool?: string;
+    }[];
+  };
+  const unanswered = async () =>
+    (await post<Unanswered>(`${broker.url}/get-unanswered`, {
+      cc_session_id: ccSessionId,
+    })).json;
+
+  // /diagram-chat blocks until the owner polls, so fire-then-poll.
+  async function userSays(diagramId: string, text: string) {
+    const chat = post<{ ok: boolean }>(`${broker.url}/diagram-chat`, {
+      diagram_id: diagramId,
+      text,
+    });
+    await new Promise((r) => setTimeout(r, 150));
+    await post(`${broker.url}/poll-messages`, { session_id: sessionId });
+    expect((await chat).json.ok).toBe(true);
+  }
+
+  beforeEach(async () => {
+    await post(`${broker.url}/reset-unanswered`, { session_id: sessionId });
+  });
+
+  test("an unreplied diagram chat is nagged, naming post_diagram_chat", async () => {
+    const id = await createDiagram("Nag me");
+    await userSays(id, "why is this edge dashed?");
+    const u = await unanswered();
+    expect(u.count).toBe(1);
+    expect(u.nodes[0].node_path).toContain("Nag me");
+    expect(u.nodes[0].surface).toBe("diagram");
+    // The whole point: post_to_node would send the CC after a node that
+    // doesn't exist on a diagram.
+    expect(u.nodes[0].reply_tool).toBe("post_diagram_chat");
+  });
+
+  test("a real post_diagram_chat clears it", async () => {
+    const id = await createDiagram("Answer me");
+    await userSays(id, "why is this edge dashed?");
+    expect((await unanswered()).count).toBe(1);
+    await post(`${broker.url}/post-diagram-chat`, {
+      diagram_id: id,
+      message: "It marks an async hop.",
+    });
+    expect((await unanswered()).count).toBe(0);
+  });
+
+  test("an empty post does NOT count as an answer", async () => {
+    const id = await createDiagram("Empty post");
+    await userSays(id, "why is this edge dashed?");
+    await post(`${broker.url}/post-diagram-chat`, {
+      diagram_id: id,
+      message: "   ",
+    });
+    expect((await unanswered()).count).toBe(1);
+  });
+
+  test("map chat stays out of the nag", async () => {
+    // Deliberate asymmetry: on a map the CC answers by growing the graph, not
+    // necessarily by posting, so nagging there would over-fire.
+    const m = await post<{ ok: boolean; map_id: string }>(
+      `${broker.url}/create-map`,
+      { session_id: sessionId, title: "No nag here" },
+    );
+    const mapId = m.json.map_id;
+    const chat = post<{ ok: boolean }>(`${broker.url}/map-chat`, {
+      map_id: mapId,
+      text: "add a node for the cache",
+    });
+    await new Promise((r) => setTimeout(r, 150));
+    await post(`${broker.url}/poll-messages`, { session_id: sessionId });
+    expect((await chat).json.ok).toBe(true);
+    expect((await unanswered()).count).toBe(0);
   });
 });

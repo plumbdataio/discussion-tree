@@ -306,6 +306,20 @@ export async function handleDiagramChat(body: any) {
       if (d.thread_item_id == null) {
         insertThread.run(id, DIAGRAM_CHAT_NODE, "user", text, now);
       }
+      // Track it for the Stop-hook nag, exactly like a board submission: a
+      // diagram chat IS a question addressed to the CC, and leaving it
+      // unanswered is the same failure. (Map chat stays excluded — there the CC
+      // is expected to answer by GROWING THE MAP, not necessarily by posting.)
+      // Upsert keeps the original created_at so the longest-waiting entry stays
+      // first in the nag.
+      db.run(
+        `INSERT INTO unanswered_nodes
+           (session_id, board_id, node_id, node_path, created_at, surface)
+         VALUES (?, ?, ?, ?, ?, 'diagram')
+         ON CONFLICT(session_id, board_id, node_id)
+         DO UPDATE SET node_path = excluded.node_path`,
+        [row.session_id, id, DIAGRAM_CHAT_NODE, `${row.title} > chat`, now],
+      );
       broadcast(id, {
         type: "thread-update",
         node_id: DIAGRAM_CHAT_NODE,
@@ -327,8 +341,24 @@ export async function handleDiagramChat(body: any) {
 export function handlePostDiagramChat(body: any) {
   const id = String(body?.diagram_id ?? "");
   const message = String(body?.message ?? "");
-  const row = db.prepare("SELECT id FROM diagrams WHERE id = ?").get(id);
+  const row = db
+    .prepare("SELECT id, session_id FROM diagrams WHERE id = ?")
+    .get(id) as { id: string; session_id: string } | undefined;
   if (!row) return { ok: false, error: "diagram not found" };
+  // Clear the nag for this diagram — but only for a post that actually carries
+  // a reply. Same rule as post_to_node: an empty post is not an answer.
+  // Clearing also resets the streak so a later submission re-arms the nag even
+  // if an earlier backlog had hit the cap.
+  if (message.trim().length > 0) {
+    db.run(
+      "DELETE FROM unanswered_nodes WHERE session_id = ? AND board_id = ? AND node_id = ?",
+      [row.session_id, id, DIAGRAM_CHAT_NODE],
+    );
+    db.run(
+      "UPDATE sessions SET unanswered_nag_streak = 0, unanswered_nag_count = 0, unanswered_nag_sig = '' WHERE id = ?",
+      [row.session_id],
+    );
+  }
   insertThread.run(id, DIAGRAM_CHAT_NODE, "cc", message, new Date().toISOString());
   broadcast(id, {
     type: "thread-update",
