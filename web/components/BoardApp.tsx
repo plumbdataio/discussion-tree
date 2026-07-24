@@ -32,6 +32,7 @@ import {
 } from "../utils/nodeStatusFilter.ts";
 import { postSubmitAnswer } from "../utils/api.ts";
 import { readBoardCache, writeBoardCache } from "../utils/boardCache.ts";
+import { useLiveSocket } from "../utils/liveSocket.ts";
 import { openScheduledList } from "../utils/scheduledList.ts";
 import { translateError } from "../utils/errors.ts";
 import { buildTree } from "../utils/tree.ts";
@@ -47,7 +48,6 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   const { t } = useTranslation();
   const [data, setData] = useState<BoardView | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [wsConnected, setWsConnected] = useState(false);
   const [flashingNodes, setFlashingNodes] = useState<Set<string>>(new Set());
   const [activitiesBySession, setActivitiesBySession] = useState<
     Record<string, Activity | null>
@@ -61,11 +61,10 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   const [headerCanLeft, setHeaderCanLeft] = useState(false);
   const [headerCanRight, setHeaderCanRight] = useState(false);
   const headerRef = useRef<HTMLElement | null>(null);
-  // Bumped by Page Lifecycle "resume" events so the WS effect below
-  // re-runs (re-establishes a fresh socket) after the browser unfreezes
-  // the tab — the previous socket would have been closed by the
-  // freeze handler.
-  const [wsEpoch, setWsEpoch] = useState(0);
+  // Flash timers for CC-authored updates. Held in a ref (not effect-local) so
+  // the WS message handler can schedule them while a single unmount effect
+  // clears them — no setState into a torn-down tree.
+  const flashTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   // Per-status node filter — read here so the hook order is stable
   // across the early-return branches below. The downstream filtering
   // happens after `data` is known to be present. Keyed by boardId so
@@ -356,33 +355,23 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
       : undefined,
   ]);
 
-  useEffect(() => {
-    if (!boardId) return;
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${proto}://${window.location.host}/ws/${boardId}`);
-    ws.addEventListener("open", () => setWsConnected(true));
-    ws.addEventListener("close", () => setWsConnected(false));
-    // Track in-flight flash timers so unmount / board switch clears them
-    // and we don't leak setState calls into a torn-down tree.
-    const flashTimers = new Set<ReturnType<typeof setTimeout>>();
-    // Page Lifecycle: close the socket cleanly when the browser is about
-    // to freeze the tab. A frozen tab can't send WS frames anyway, and
-    // a still-open socket can mislead the OS into thinking we're active.
-    const onFreeze = () => {
-      try {
-        ws.close();
-      } catch {
-        /* ignore — close may race with native teardown */
-      }
-    };
-    document.addEventListener("freeze", onFreeze as any);
-    ws.addEventListener("message", (e) => {
-      let msg: any = null;
-      try {
-        msg = JSON.parse(e.data);
-      } catch {
-        /* ignore parse errors */
-      }
+  // Clear any pending flash timer on unmount / board switch so a fired timer
+  // can't push state into a torn-down tree.
+  useEffect(
+    () => () => {
+      for (const h of flashTimers.current) clearTimeout(h);
+      flashTimers.current.clear();
+    },
+    [],
+  );
+
+  // Live feed for this board. useLiveSocket owns the whole socket lifecycle:
+  // backoff reconnection, the Page Lifecycle freeze/resume dance, and a resync
+  // on every (re)connect. That last part is the point — a board page has NO
+  // polling fallback, so a socket that died silently used to leave the UI
+  // frozen on stale data until the user reloaded by hand.
+  const handleWsMessage = useCallback(
+    (msg: any) => {
       if (msg) {
         if (
           msg.type === "thread-update" &&
@@ -396,14 +385,14 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
             return next;
           });
           const handle = setTimeout(() => {
-            flashTimers.delete(handle);
+            flashTimers.current.delete(handle);
             setFlashingNodes((prev) => {
               const next = new Set(prev);
               next.delete(id);
               return next;
             });
           }, 1500);
-          flashTimers.add(handle);
+          flashTimers.current.add(handle);
         } else if (msg.type === "activity") {
           const sid: string = msg.session_id;
           setActivitiesBySession((prev) => ({
@@ -465,27 +454,15 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
         }
       }
       fetchBoard();
-    });
-    return () => {
-      document.removeEventListener("freeze", onFreeze as any);
-      ws.close();
-      for (const h of flashTimers) clearTimeout(h);
-      flashTimers.clear();
-    };
-  }, [boardId, fetchBoard, wsEpoch]);
+    },
+    [fetchBoard],
+  );
 
-  // Page Lifecycle: the browser unfreezes the tab. Re-fetch the board so
-  // we catch up on any state that moved while we slept, and bump
-  // wsEpoch so the WS effect above tears down + re-establishes the
-  // socket (the freeze handler closed it).
-  useEffect(() => {
-    const onResume = () => {
-      fetchBoard();
-      setWsEpoch((n) => n + 1);
-    };
-    document.addEventListener("resume", onResume as any);
-    return () => document.removeEventListener("resume", onResume as any);
-  }, [fetchBoard]);
+  const wsConnected = useLiveSocket({
+    channel: boardId,
+    onResync: fetchBoard,
+    onMessage: handleWsMessage,
+  });
 
   // Watch the header for "is there content out of view?" so the CSS-level
   // arrow affordances only show when there's actually somewhere to flick.

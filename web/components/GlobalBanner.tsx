@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import type { GlobalBanner as GlobalBannerData } from "../../shared/types.ts";
+import { useLiveSocket } from "../utils/liveSocket.ts";
 
 // Renders the single broker-side global banner at the top of every
 // page. Maintains its own dedicated WS connection (channel name
@@ -26,14 +27,11 @@ const SIDEBAR_REFRESH_TYPES = new Set([
 export function GlobalBanner() {
   const [banner, setBanner] = useState<GlobalBannerData | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(null);
-  // Bumped on a Page Lifecycle "resume" so the _banner WS effect below re-runs
-  // and re-establishes a fresh socket after the tab unfreezes (a frozen tab's
-  // socket is dead). GlobalBanner is the SOLE forwarder of sidebar activity, so
-  // its socket must survive resume the way BoardApp's board socket does.
-  const [wsEpoch, setWsEpoch] = useState(0);
 
-  useEffect(() => {
-    let cancelled = false;
+  // Pull the current banner. Runs on mount AND after every (re)connect — a
+  // banner set or cleared while the socket was down would otherwise never
+  // reach this tab, since the broker only pushes the transition.
+  const fetchBanner = useCallback(() => {
     fetch("/get-global-banner", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -41,92 +39,65 @@ export function GlobalBanner() {
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
-        if (cancelled || !j) return;
+        if (!j) return;
         setBanner(j.banner ?? null);
       })
       .catch(() => {
-        /* tolerate — WS will catch the next update anyway */
+        /* tolerate — the WS carries the next update anyway */
       });
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
-  useEffect(() => {
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${proto}://${window.location.host}/ws/_banner`);
-    const onMsg = (e: MessageEvent) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg?.type === "global-banner-update") {
-          setBanner(msg.banner ?? null);
-        } else if (
-          msg?.type === "session-reattached" &&
-          typeof msg.session_id === "string"
-        ) {
-          // The MCP server's heartbeat self-healing loop re-bound this session
-          // after its broker binding was lost. One-shot signal — let the
-          // sidebar flash a brief spinner so the human sees the recovery too
-          // (the agent gets a channel notice separately). Not a sidebar-refresh:
-          // there's no /api/sessions change, just a transient UI flash.
-          window.dispatchEvent(
-            new CustomEvent("pd-session-reattached", {
-              detail: { session_id: msg.session_id },
-            }),
-          );
-        } else if (
-          msg?.type === "activity" &&
-          typeof msg.session_id === "string"
-        ) {
-          // GlobalBanner is mounted on EVERY page, so forward live activity to
-          // the sidebar here too. Otherwise the immediate "working" spinner on a
-          // user submit only shows on a board page (BoardApp forwards it) — on
-          // the map / session / home pages, or right after a board-WS reconnect,
-          // the sidebar would wait for the 10s /api/sessions poll. The sidebar's
-          // handler just sets activitiesBySession[sid], so the double-fire on a
-          // board page is harmless and idempotent.
-          window.dispatchEvent(
-            new CustomEvent("pd-activity-update", {
-              detail: {
-                session_id: msg.session_id,
-                activity: msg.activity ?? null,
-              },
-            }),
-          );
-        } else if (SIDEBAR_REFRESH_TYPES.has(msg?.type)) {
-          // GlobalBanner is mounted on EVERY page, so it's the only socket that
-          // can nudge the sidebar on the map / session / home pages (BoardApp
-          // forwards these only on a board page). Each of these message types
-          // changes something the sidebar shows — stall warning, board/map
-          // title (rename → sidebar-refresh), unread counts, BG markers,
-          // schedule markers — so refetch /api/sessions. On a board page this
-          // just double-fires a harmless, idempotent refetch.
-          window.dispatchEvent(new Event("pd-sidebar-refresh"));
-        }
-      } catch {
-        /* ignore */
+  // This socket is mounted on EVERY page and is the sole forwarder of sidebar
+  // activity, so it must survive freeze/resume and broker bounces — that whole
+  // lifecycle now lives in useLiveSocket.
+  useLiveSocket({
+    channel: "_banner",
+    onResync: fetchBanner,
+    onMessage: (msg) => {
+      if (msg?.type === "global-banner-update") {
+        setBanner(msg.banner ?? null);
+      } else if (
+        msg?.type === "session-reattached" &&
+        typeof msg.session_id === "string"
+      ) {
+        // The MCP server's heartbeat self-healing loop re-bound this session
+        // after its broker binding was lost. One-shot signal — let the sidebar
+        // flash a brief spinner so the human sees the recovery too (the agent
+        // gets a channel notice separately). Not a sidebar-refresh: there's no
+        // /api/sessions change, just a transient UI flash.
+        window.dispatchEvent(
+          new CustomEvent("pd-session-reattached", {
+            detail: { session_id: msg.session_id },
+          }),
+        );
+      } else if (msg?.type === "activity" && typeof msg.session_id === "string") {
+        // GlobalBanner is mounted on EVERY page, so forward live activity to
+        // the sidebar here too. Otherwise the immediate "working" spinner on a
+        // user submit only shows on a board page (BoardApp forwards it) — on
+        // the map / session / home pages, or right after a board-WS reconnect,
+        // the sidebar would wait for the 10s /api/sessions poll. The sidebar's
+        // handler just sets activitiesBySession[sid], so the double-fire on a
+        // board page is harmless and idempotent.
+        window.dispatchEvent(
+          new CustomEvent("pd-activity-update", {
+            detail: {
+              session_id: msg.session_id,
+              activity: msg.activity ?? null,
+            },
+          }),
+        );
+      } else if (SIDEBAR_REFRESH_TYPES.has(msg?.type)) {
+        // GlobalBanner is mounted on EVERY page, so it's the only socket that
+        // can nudge the sidebar on the map / session / home pages (BoardApp
+        // forwards these only on a board page). Each of these message types
+        // changes something the sidebar shows — stall warning, board/map
+        // title (rename → sidebar-refresh), unread counts, BG markers,
+        // schedule markers — so refetch /api/sessions. On a board page this
+        // just double-fires a harmless, idempotent refetch.
+        window.dispatchEvent(new Event("pd-sidebar-refresh"));
       }
-    };
-    ws.addEventListener("message", onMsg);
-    return () => {
-      ws.removeEventListener("message", onMsg);
-      try {
-        ws.close();
-      } catch {
-        /* race with native teardown — ignore */
-      }
-    };
-  }, [wsEpoch]);
-
-  // Page Lifecycle: when the tab unfreezes, bump wsEpoch so the WS effect above
-  // tears down + re-establishes a fresh socket (a frozen tab's socket is dead).
-  // Without this the sole sidebar-activity source would go silent after a resume
-  // until the 10s /api/sessions poll. Mirrors BoardApp's resume handling.
-  useEffect(() => {
-    const onResume = () => setWsEpoch((n) => n + 1);
-    document.addEventListener("resume", onResume as any);
-    return () => document.removeEventListener("resume", onResume as any);
-  }, []);
+    },
+  });
 
   // Auto-clear stale entries client-side too: the broker schedules its
   // own expiry timer but that's lost across broker restarts; this

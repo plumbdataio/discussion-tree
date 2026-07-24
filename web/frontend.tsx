@@ -4,6 +4,7 @@ import i18n, { resolveLanguage } from "./i18n.ts";
 import { AnchorButton } from "./components/AnchorButton.tsx";
 import { AppShell } from "./components/AppShell.tsx";
 import { BoardApp } from "./components/BoardApp.tsx";
+import { ConnectionBanner } from "./components/ConnectionBanner.tsx";
 import { GearButton } from "./components/GearButton.tsx";
 import { GlobalBanner } from "./components/GlobalBanner.tsx";
 import { MapView } from "./components/MapView.tsx";
@@ -99,6 +100,7 @@ function App() {
   return (
     <>
       <GlobalBanner />
+      <ConnectionBanner />
       <AppShell
         currentBoardId={boardId}
         currentMapId={mapId}

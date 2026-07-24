@@ -63,6 +63,7 @@ import { useHeaderActivity } from "../utils/useHeaderActivity.ts";
 import { useDraft } from "../utils/drafts.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useDocumentTitle } from "../utils/useDocumentTitle.ts";
+import { useLiveSocket } from "../utils/liveSocket.ts";
 import {
   extractImageFiles,
   postMapAddFrame,
@@ -145,7 +146,6 @@ export function MapView({ mapId }: { mapId: string }) {
   const { t } = useTranslation();
   const [view, setView] = useState<MapViewData | null>(null);
   const [notFound, setNotFound] = useState(false);
-  const [wsConnected, setWsConnected] = useState(false);
   const [rfNodes, setRfNodes] = useState<RFNode[]>([]);
   const [rfEdges, setRfEdges] = useState<RFEdge[]>([]);
   // The canvas starts LOCKED (read-only: no select / drag / connect) so the
@@ -321,60 +321,42 @@ export function MapView({ mapId }: { mapId: string }) {
     view ? view.map.title || t("map.untitled") : undefined,
   ]);
 
-  // Initial load + WS subscription (refetch on any map / thread update).
+  // Initial load. The live feed below refetches on every frame AND on every
+  // (re)connect, so this only has to cover the first paint.
   useEffect(() => {
     didFit.current = false;
     fetchMap();
-    let ws: WebSocket | null = null;
-    let closed = false;
-    let retry: ReturnType<typeof setTimeout> | null = null;
-    const connect = () => {
-      if (closed) return;
-      const proto = location.protocol === "https:" ? "wss" : "ws";
-      ws = new WebSocket(`${proto}://${location.host}/ws/${mapId}`);
-      ws.onopen = () => setWsConnected(true);
-      ws.onclose = () => {
-        setWsConnected(false);
-        if (!closed) retry = setTimeout(connect, 1500);
-      };
-      ws.onmessage = (ev) => {
-        // Any frame (map-update / thread-update) means refetch the snapshot —
-        // that also refreshes the header's owner_stalled chip.
-        fetchMap();
-        // A stall update also drives the sidebar's per-session warning, which
-        // (on a map page) only this socket can nudge.
-        try {
-          const msg = JSON.parse(ev.data as string);
-          if (
-            msg?.type === "session-stall-update" ||
-            msg?.type === "session-compacting-update"
-          ) {
-            window.dispatchEvent(new Event("pd-sidebar-refresh"));
-          } else if (
-            msg?.type === "map-node-overlap" &&
-            typeof msg.node_id === "string"
-          ) {
-            // A freshly-placed node landed across another card / an edge. Queue
-            // a transient warning flash applied once the node has rendered (the
-            // fetchMap above brings it in) — see the pendingOverlap effect.
-            pendingOverlap.current.add(msg.node_id);
-          }
-        } catch {
-          /* non-JSON frame — ignore */
-        }
-      };
-    };
-    connect();
-    return () => {
-      closed = true;
-      if (retry) clearTimeout(retry);
-      try {
-        ws?.close();
-      } catch {
-        /* ignore */
-      }
-    };
   }, [mapId, fetchMap]);
+
+  // Live updates. useLiveSocket owns reconnection (exponential backoff, resume
+  // handling) and re-runs onResync after every reconnect, so anything that
+  // changed while the socket was down still lands — the previous fixed-interval
+  // retry reconnected but never caught up on what it missed.
+  const wsConnected = useLiveSocket({
+    channel: mapId,
+    onResync: fetchMap,
+    onMessage: (msg) => {
+      // Any frame (map-update / thread-update) means refetch the snapshot —
+      // that also refreshes the header's owner_stalled chip.
+      fetchMap();
+      // A stall update also drives the sidebar's per-session warning, which
+      // (on a map page) only this socket can nudge.
+      if (
+        msg?.type === "session-stall-update" ||
+        msg?.type === "session-compacting-update"
+      ) {
+        window.dispatchEvent(new Event("pd-sidebar-refresh"));
+      } else if (
+        msg?.type === "map-node-overlap" &&
+        typeof msg.node_id === "string"
+      ) {
+        // A freshly-placed node landed across another card / an edge. Queue
+        // a transient warning flash applied once the node has rendered (the
+        // fetchMap above brings it in) — see the pendingOverlap effect.
+        pendingOverlap.current.add(msg.node_id);
+      }
+    },
+  });
 
   // Fit the view once, after the first non-empty snapshot renders. React Flow
   // measures node sizes asynchronously, so a single early fitView can fit to a

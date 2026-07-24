@@ -1,4 +1,10 @@
 {
+  "connection": {
+    "offline": "Lost the connection to the server. Reconnecting…",
+    "reload": "Reload",
+    "reload_title": "Reload the page instead of waiting for the reconnect",
+    "restored": "Reconnected"
+  },
   "issues": {
     "title": "Issues",
     "sidebar_entry": "Issues",

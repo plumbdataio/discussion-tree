@@ -19,6 +19,7 @@ import { ContextMeter } from "./ContextMeter.tsx";
 import { ActivityBadge } from "./ActivityBadge.tsx";
 import { CliCommandButton } from "./CliCommandButton.tsx";
 import { useHeaderActivity } from "../utils/useHeaderActivity.ts";
+import { useLiveSocket } from "../utils/liveSocket.ts";
 import { ThreadMessage } from "./ThreadMessage.tsx";
 import { MapNodeModal } from "./MapNodeModal.tsx";
 import { TimerSendButton } from "./TimerSendButton.tsx";
@@ -72,7 +73,6 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
   const [notFound, setNotFound] = useState(false);
   const [svg, setSvg] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [wsConnected, setWsConnected] = useState(false);
   const renderSeq = useRef(0);
   const canvasRef = useRef<HTMLDivElement>(null);
   const pzRef = useRef<{
@@ -134,47 +134,22 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
     view ? view.diagram.title || t("diagram.untitled") : undefined,
   ]);
 
-  // Live update + reconnect: the broker broadcasts on the diagram's id channel
+  // Live update: the broker broadcasts on the diagram's id channel
   // (diagram-update on upsert, thread-update on a chat post, diagram-deleted on
-  // delete). Mirror the map's resilient connect/retry so a freeze/resume or a
-  // broker bounce re-subscribes instead of going silent.
-  useEffect(() => {
-    let ws: WebSocket | null = null;
-    let closed = false;
-    let retry: ReturnType<typeof setTimeout> | null = null;
-    const connect = () => {
-      if (closed) return;
-      const proto = location.protocol === "https:" ? "wss" : "ws";
-      ws = new WebSocket(`${proto}://${location.host}/ws/${diagramId}`);
-      ws.onopen = () => setWsConnected(true);
-      ws.onclose = () => {
-        setWsConnected(false);
-        if (!closed) retry = setTimeout(connect, 1500);
-      };
-      ws.onmessage = (e) => {
-        try {
-          const m = JSON.parse(e.data as string);
-          if (m?.type === "diagram-update" || m?.type === "thread-update") {
-            fetchDiagram();
-          } else if (m?.type === "diagram-deleted") {
-            setNotFound(true);
-          }
-        } catch {
-          /* non-JSON frame — ignore */
-        }
-      };
-    };
-    connect();
-    return () => {
-      closed = true;
-      if (retry) clearTimeout(retry);
-      try {
-        ws?.close();
-      } catch {
-        /* race with teardown */
+  // delete). useLiveSocket owns reconnection and re-runs onResync afterwards,
+  // so an upsert that landed while the socket was down still shows up — the
+  // previous fixed-interval retry reconnected but never caught up.
+  const wsConnected = useLiveSocket({
+    channel: diagramId,
+    onResync: fetchDiagram,
+    onMessage: (m) => {
+      if (m?.type === "diagram-update" || m?.type === "thread-update") {
+        fetchDiagram();
+      } else if (m?.type === "diagram-deleted") {
+        setNotFound(true);
       }
-    };
-  }, [diagramId]);
+    },
+  });
 
   // Render the Mermaid source to SVG whenever it changes. The render is async
   // and the source can change again mid-flight (a fresh upsert), so a sequence

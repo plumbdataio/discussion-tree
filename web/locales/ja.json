@@ -1,4 +1,10 @@
 {
+  "connection": {
+    "offline": "サーバーとの接続が切れました。再接続しています…",
+    "reload": "再読み込み",
+    "reload_title": "再接続を待たずにページを読み込み直します",
+    "restored": "再接続しました"
+  },
   "issues": {
     "title": "課題",
     "sidebar_entry": "課題ビュー",
