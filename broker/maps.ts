@@ -526,6 +526,23 @@ export function handlePostToMapNode(body: any) {
     if (node.is_checklist) return { ok: false, error: CHECKLIST_POST_REJECT };
   }
   if (!message.trim()) return { ok: false, error: "message required" };
+  // A real reply to a real node clears its nag (the general chat is never
+  // tracked, so nothing to clear there). Same rule as post_to_node: a non-empty
+  // message counts, and clearing resets the streak so a later submission
+  // re-arms even if an earlier backlog had hit the cap.
+  if (nodeId !== MAP_GENERAL_NODE) {
+    const owner = selectMap.get(mapId) as MapRow | undefined;
+    if (owner) {
+      db.run(
+        "DELETE FROM unanswered_nodes WHERE session_id = ? AND board_id = ? AND node_id = ?",
+        [owner.session_id, mapId, nodeId],
+      );
+      db.run(
+        "UPDATE sessions SET unanswered_nag_streak = 0, unanswered_nag_count = 0, unanswered_nag_sig = '' WHERE id = ?",
+        [owner.session_id],
+      );
+    }
+  }
   const inserted = insertThread.run(
     mapId,
     nodeId,
@@ -607,6 +624,21 @@ export async function handleMapChat(body: any): Promise<
       // back only if it somehow didn't.
       if (row.thread_item_id == null) {
         insertThread.run(mapId, nodeId, "user", text, now);
+      }
+      // Track it for the Stop-hook nag — but ONLY for a real node, never the
+      // general chat. A per-node thread is a question addressed to the CC (same
+      // as a board node), whereas the general chat is where the CC answers by
+      // GROWING THE MAP, so nagging there would over-fire. Upsert keeps the
+      // original created_at so the longest-waiting entry stays first in the nag.
+      if (nodeId !== MAP_GENERAL_NODE) {
+        db.run(
+          `INSERT INTO unanswered_nodes
+             (session_id, board_id, node_id, node_path, created_at, surface)
+           VALUES (?, ?, ?, ?, ?, 'map')
+           ON CONFLICT(session_id, board_id, node_id)
+           DO UPDATE SET node_path = excluded.node_path`,
+          [map.session_id, mapId, nodeId, path, now],
+        );
       }
       broadcast(mapId, {
         type: "thread-update",

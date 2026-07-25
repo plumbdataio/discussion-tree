@@ -1,4 +1,11 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import {
+  describe,
+  test,
+  expect,
+  beforeAll,
+  beforeEach,
+  afterAll,
+} from "bun:test";
 import {
   startBroker,
   post,
@@ -10,11 +17,12 @@ import {
 
 let broker: BrokerHandle;
 let sessionId: string;
+let ccSessionId: string;
 
 beforeAll(async () => {
   broker = await startBroker();
   sessionId = await registerSession(broker.url);
-  await attachCC(broker.url, sessionId);
+  ccSessionId = await attachCC(broker.url, sessionId);
 });
 afterAll(async () => {
   await broker.kill();
@@ -1089,3 +1097,93 @@ describe("maps — grouping frames", () => {
   });
 });
 
+
+// A per-node thread on a map is a question addressed to the CC — same as a
+// board node — so an unreplied one now blocks the Stop hook. The map's GENERAL
+// chat stays out (the CC answers it by growing the graph, not by posting), and
+// the reply tool the nag names has to be post_to_map_node, not post_to_node.
+describe("maps — the Stop-hook nag covers per-node threads (not general chat)", () => {
+  type Unanswered = {
+    count: number;
+    nodes: { node_path: string; surface?: string; reply_tool?: string }[];
+  };
+  const unanswered = async () =>
+    (await post<Unanswered>(`${broker.url}/get-unanswered`, {
+      cc_session_id: ccSessionId,
+    })).json;
+
+  // /map-chat blocks until the owner polls, so fire-then-poll.
+  async function userSays(mapId: string, nodeId: string | null, text: string) {
+    const body: Record<string, unknown> = { map_id: mapId, text };
+    if (nodeId) body.node_id = nodeId;
+    const chat = post<{ ok: boolean }>(`${broker.url}/map-chat`, body);
+    await new Promise((r) => setTimeout(r, 150));
+    await post(`${broker.url}/poll-messages`, { session_id: sessionId });
+    expect((await chat).json.ok).toBe(true);
+  }
+
+  beforeEach(async () => {
+    await post(`${broker.url}/reset-unanswered`, { session_id: sessionId });
+  });
+
+  test("an unreplied per-node thread is nagged, naming post_to_map_node", async () => {
+    const mapId = await createMap("Node nag");
+    const n = await addNode(mapId, { title: "Cache layer", kind: "idea" });
+    await userSays(mapId, n, "should this be write-through?");
+    const u = await unanswered();
+    expect(u.count).toBe(1);
+    expect(u.nodes[0].node_path).toContain("Cache layer");
+    expect(u.nodes[0].surface).toBe("map");
+    // The whole point of the surface column: a map node is answered with
+    // post_to_map_node, NOT post_to_node.
+    expect(u.nodes[0].reply_tool).toBe("post_to_map_node");
+  });
+
+  test("a real post_to_map_node reply clears it", async () => {
+    const mapId = await createMap("Node answer");
+    const n = await addNode(mapId, { title: "Queue choice", kind: "question" });
+    await userSays(mapId, n, "SQS or a Redis list?");
+    expect((await unanswered()).count).toBe(1);
+    await post(`${broker.url}/map-post`, {
+      map_id: mapId,
+      node_id: n,
+      message: "SQS — we already run it.",
+    });
+    expect((await unanswered()).count).toBe(0);
+  });
+
+  test("an empty post_to_map_node does NOT count as an answer", async () => {
+    const mapId = await createMap("Node empty");
+    const n = await addNode(mapId, { title: "Auth model", kind: "question" });
+    await userSays(mapId, n, "session or token?");
+    await post(`${broker.url}/map-post`, {
+      map_id: mapId,
+      node_id: n,
+      message: "   ",
+    });
+    expect((await unanswered()).count).toBe(1);
+  });
+
+  test("the GENERAL chat stays out of the nag", async () => {
+    // Deliberate asymmetry: the map-wide chat is where the CC answers by growing
+    // the graph, so nagging it would over-fire. A node_id-less /map-chat is the
+    // general chat.
+    const mapId = await createMap("General stays quiet");
+    await userSays(mapId, null, "add a node for the cache, please");
+    expect((await unanswered()).count).toBe(0);
+  });
+
+  test("a reply to the general chat does NOT clear a pending node nag", async () => {
+    // Answering the general chat is not answering the node's question.
+    const mapId = await createMap("Cross-thread");
+    const n = await addNode(mapId, { title: "Sharding key", kind: "question" });
+    await userSays(mapId, n, "by tenant or by region?");
+    expect((await unanswered()).count).toBe(1);
+    await post(`${broker.url}/map-post`, {
+      map_id: mapId,
+      node_id: "__general__",
+      message: "unrelated note in the general chat",
+    });
+    expect((await unanswered()).count).toBe(1);
+  });
+});

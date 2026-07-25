@@ -332,7 +332,11 @@ export function handleGetUnansweredPosts(body: {
   const nodes = rawNodes.map((n) => ({
     ...n,
     reply_tool:
-      n.surface === "diagram" ? "post_diagram_chat" : "post_to_node",
+      n.surface === "diagram"
+        ? "post_diagram_chat"
+        : n.surface === "map"
+          ? "post_to_map_node"
+          : "post_to_node",
   }));
   const count = nodes.length;
   if (count <= 0) {
