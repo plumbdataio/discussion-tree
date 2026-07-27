@@ -151,3 +151,28 @@ describe("MDView tilde / strikethrough", () => {
     expect(html("これは~~取り消し~~です")).toContain("<del>取り消し</del>");
   });
 });
+
+// A lone `*` must not open emphasis. dt messages carry shell globs and config
+// paths constantly, and CommonMark would pair two of them up and CONSUME the
+// asterisks — showing the reader a path that does not exist. Pinned at the
+// render level because the guarantee users care about is the final HTML.
+describe("MDView lone-asterisk paths", () => {
+  test("two config-dir globs render literally, with no <em> between them", () => {
+    const out = html(
+      "~/.claude-*/CLAUDE.md なのか、~/.claude-*/settings.json なのか",
+    );
+    expect(out).not.toContain("<em>");
+    // The star survives, so the path is still the path.
+    expect(out).toContain("~/.claude-*/CLAUDE.md");
+    expect(out).toContain("~/.claude-*/settings.json");
+  });
+
+  test("**bold** still renders, and _italic_ remains available", () => {
+    expect(html("これは **太字** です")).toContain("<strong>太字</strong>");
+    expect(html("これは _斜体_ です")).toContain("<em>斜体</em>");
+  });
+
+  test("a glob inside a code span is untouched", () => {
+    expect(html("`ls ~/.claude-*/`")).toContain("ls ~/.claude-*/");
+  });
+});
