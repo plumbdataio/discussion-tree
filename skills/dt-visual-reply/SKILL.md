@@ -72,8 +72,17 @@ this reply*: a chart of real numbers, a measured timeline, a mockup, a
 screenshot, anything with a visual style mermaid cannot express. It sits inline
 in the thread exactly where the argument needs it.
 
-When in doubt: will the user want to open this again next week? → diagram
-surface. Is it "look at this, here's why"? → image in the post.
+When in doubt, ask **"could mermaid express this?"** — not "will they look at it
+again?". Longevity is the weaker test: a scaled floor plan, a chart of real
+numbers, or a rendered mockup can all be long-lived assets the user revisits for
+weeks, and none of them fit mermaid. If the shape needs real coordinates, real
+data, or a specific visual style, it is an image no matter how permanent it is.
+
+For a long-lived image, keep the SOURCE in the repo (a YAML/JSON description plus a small
+render script) and treat the PNG as a build artifact you re-post on each change.
+The user then reviews the picture while you reason over the text — and nothing
+drifts, because there is one source of truth. Say where the source lives when you
+post it.
 
 ## 3. Generate the image
 
