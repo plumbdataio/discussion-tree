@@ -3,12 +3,12 @@ import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { MarkdownAnchor, urlTransform } from "./MarkdownAnchor.tsx";
-// A lone `*` must not open emphasis: dt messages are full of globs and config
-// paths (`~/.claude-*`, `web/**\/*.tsx`), and two of them pair up, italicise
-// everything between, and eat the asterisks — turning `~/.claude-*/CLAUDE.md`
-// into a different, wrong path. Same call already made for `~` via
-// singleTilde:false; emphasis has no such option, so we escape pre-parse.
-import { escapeLoneAsterisks } from "../utils/markdownText.ts";
+// Emphasis spellings that collide with code tokens are neutralised pre-parse:
+// a lone `*` (globs) and `__` (dunders / Jest dirs) would otherwise pair up,
+// swallow their own delimiters, and show the reader a path that does not exist.
+// `**bold**` and `_italic_` survive — one spelling each. Same call already made
+// for `~` via singleTilde:false; emphasis has no such option, hence the escape.
+import { escapeCodeHostileEmphasis } from "../utils/markdownText.ts";
 // @reusable-ui MDView — USE WHEN: rendering user- or CC-authored markdown text
 //   (GFM + CJK-aware bold/strikethrough). INSTEAD OF: raw text or
 //   dangerouslySetInnerHTML.
@@ -66,7 +66,7 @@ function MDViewImpl({
           ),
         }}
       >
-        {escapeLoneAsterisks(text)}
+        {escapeCodeHostileEmphasis(text)}
       </ReactMarkdown>
     </div>
   );

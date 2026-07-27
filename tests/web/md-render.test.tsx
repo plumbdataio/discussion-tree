@@ -175,4 +175,15 @@ describe("MDView lone-asterisk paths", () => {
   test("a glob inside a code span is untouched", () => {
     expect(html("`ls ~/.claude-*/`")).toContain("ls ~/.claude-*/");
   });
+
+  test("dunder paths render literally, bold/italic keep one spelling each", () => {
+    const out = html("src/__tests__/foo.ts と __init__.py");
+    expect(out).not.toContain("<strong>");
+    expect(out).toContain("src/__tests__/foo.ts");
+    expect(out).toContain("__init__.py");
+    // *this* is literal now; ** and _ are the surviving spellings.
+    expect(html("*ast*")).not.toContain("<em>");
+    expect(html("**b**")).toContain("<strong>b</strong>");
+    expect(html("_i_")).toContain("<em>i</em>");
+  });
 });
