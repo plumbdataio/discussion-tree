@@ -125,40 +125,50 @@ Matplotlib is not the only option: a headless-browser screenshot of HTML/SVG
 works for UI mockups, and a plain screenshot of something you built is often
 the most honest evidence. The upload path below is the same for any PNG.
 
-## 4. Attach it to the post
+## 4. Put it where the browser can already see it
 
-The broker stores the file and hands back a URL you embed as normal markdown.
+dt serves a static asset folder: the broker exposes
+`~/.discussion-tree/uploads/<board_id>/` on the web at `/uploads/<board_id>/…`
+— that's where the user's pasted images live too. So there is nothing to
+"upload" and no base64 to encode: you copy the finished PNG into that folder and
+link it. **The file being in the folder IS the publish step.**
 
 ```bash
-curl -s -X POST "http://127.0.0.1:${DISCUSSION_TREE_PORT:-7898}/upload-image" \
-  -H 'Content-Type: application/json' \
-  -d "{\"board_id\":\"<board or map id>\",\"filename\":\"fig.png\",\"data_base64\":\"$(base64 < out.png | tr -d '\n')\"}"
-# -> {"ok":true,"url":"/uploads/<board_id>/img_xxx.png"}
+# <board_id> = the board / map / diagram id you're about to post to.
+DIR="${DISCUSSION_TREE_HOME:-$HOME/.discussion-tree}/uploads/<board_id>"
+mkdir -p "$DIR"
+NAME="agent_$(date +%s)_$RANDOM.png"   # unique; agent_ marks it as yours
+cp out.png "$DIR/$NAME"
+echo "/uploads/<board_id>/$NAME"       # <- the URL to embed
 ```
 
-**Pipe the base64 through the shell like this — never read it into your own
-context.** A 10 MB image is ~13 MB of base64 text; materialising that in the
-conversation is catastrophic. `$(base64 < file)` keeps the bytes inside the
-shell.
-
-Then put the returned URL in the message body, at the point in the argument
-where it belongs:
+Then put that URL in the message body, at the point in the argument where it
+belongs:
 
 ```
 post_to_node(board_id=..., node_id=..., message="""
 ...prose leading up to it...
 
-![measured timeline](/uploads/<board_id>/img_xxx.png)
+![measured timeline](/uploads/<board_id>/agent_…​.png)
 
 ...what the reader should conclude from it...
 """)
 ```
 
-Same for `post_to_map_node` and `post_diagram_chat`. `board_id` accepts a map
-id too — it is only used as the storage folder.
+- The folder is keyed by the board / map / diagram id — a map or diagram id
+  works the same (`post_to_map_node`, `post_diagram_chat`).
+- Use a UNIQUE filename (timestamp + `$RANDOM`) so you never clobber another
+  image; the `agent_` prefix keeps yours distinct from the user's pasted ones.
+- The broker serves ONLY from inside that folder (path traversal is blocked),
+  so writing there is safe and self-contained — no API call, no base64, nothing
+  lands in your context.
+- Off-box fallback (rare — e.g. the broker's home dir isn't reachable): POST
+  base64 to the broker's `/upload-image` (`{board_id, filename, data_base64}`)
+  and use the returned url. Same result, more steps; pipe base64 through the
+  shell, never into your context. The direct copy above is preferred.
 
-Limits: **10 MB**, extension whitelist (png/jpg/webp/gif). A matplotlib PNG is
-typically ~100 KB, so the ceiling is not a practical concern.
+A matplotlib PNG is typically ~100 KB; there's no practical size ceiling on the
+direct copy (the `/upload-image` fallback caps at 10 MB).
 
 ## 5. Before you send
 
