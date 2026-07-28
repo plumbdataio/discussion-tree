@@ -6636,12 +6636,25 @@ ul.maps li.current .sidebar-map-link {
   box-sizing: border-box;
 }
 
+/* Fixed size, not content size. The ledger is scanned and edited in place, so
+   the modal must not resize under the pointer: with a short list, expanding a
+   row grew the box and slid the row you had just clicked upwards. The list
+   scrolls inside instead, and the frame is wide because the rows are wide
+   (chip + session + title + time). */
 .issue-modal {
-  max-width: 1100px;
+  max-width: min(1280px, 94vw);
+  height: min(880px, 86vh);
+  max-height: 86vh;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow: hidden; /* the inner .issue-scroll owns the scrolling */
   border-left-color: #f59e0b;
+}
+.issue-scroll {
+  flex: 1;
+  min-height: 0; /* without this a flex child refuses to shrink and overflows */
+  overflow-y: auto;
 }
 .issue-modal-head {
   display: flex;
@@ -6708,18 +6721,12 @@ ul.maps li.current .sidebar-map-link {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 14px;
+  gap: 8px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
 }
-.issue-filter-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.issue-filter-group.grow {
-  flex: 1;
-  justify-content: flex-end;
+.issue-filters .issue-search {
+  margin-left: auto;
 }
 .issue-filter-chip {
   display: inline-flex;
@@ -6842,6 +6849,138 @@ ul.maps li.current .sidebar-map-link {
   flex: 1;
 }
 
+/* MultiSelectDropdown — see web/components/MultiSelectDropdown.tsx */
+.ms-wrap {
+  position: relative;
+}
+.ms-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  padding: 4px 8px 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.ms-button:hover {
+  border-color: var(--border-strong);
+}
+.ms-button.has-selection {
+  border-color: var(--border-strong);
+}
+.ms-label {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap; /* the label wraps mid-word on a phone otherwise */
+  flex: none;
+}
+.ms-summary {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ms-caret {
+  color: var(--muted);
+  flex: none;
+}
+.ms-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 190px;
+  max-width: 320px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.ms-option,
+.ms-clear {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+.ms-option:hover,
+.ms-clear:hover {
+  background: var(--bg);
+}
+.ms-option.on {
+  font-weight: 600;
+}
+.ms-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  flex: none;
+  color: var(--accent);
+}
+.ms-option-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ms-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--muted);
+}
+.ms-clear {
+  margin-top: 3px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--muted);
+}
+.ms-empty {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+/* The colour coding the filter chips used to carry, kept on the option rows so
+   an owner/state still reads at a glance inside the menu. */
+.ms-option.owner-user.on,
+.ms-button.owner-user.has-selection {
+  background: var(--user);
+  border-color: var(--user-border);
+}
+.ms-option.owner-cc.on,
+.ms-button.owner-cc.has-selection {
+  background: var(--cc);
+  border-color: var(--cc-border);
+}
+.ms-option.state-doing.on,
+.ms-button.state-doing.has-selection {
+  background: #fef3c7;
+  border-color: #fbbf24;
+}
+.ms-option.state-done.on,
+.ms-button.state-done.has-selection {
+  background: #dcfce7;
+  border-color: #4ade80;
+}
+
 .issue-chip {
   display: inline-flex;
   align-items: center;
@@ -6854,6 +6993,84 @@ ul.maps li.current .sidebar-map-link {
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--muted);
+}
+/* The chip doubles as the owner/state control (the two <select>s that used to
+   sit at the far right of every row are gone). */
+.issue-chip-wrap {
+  position: relative;
+  display: inline-block;
+}
+.issue-chip-button {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+}
+.issue-chip-button:hover .issue-chip {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.issue-chip-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 5px);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  cursor: default;
+}
+.issue-chip-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.issue-chip-menu-label {
+  width: 38px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.issue-seg {
+  padding: 3px 9px;
+  font: inherit;
+  font-size: 11.5px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+.issue-seg:hover {
+  border-color: var(--border-strong);
+}
+.issue-seg.on {
+  font-weight: 700;
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--bg);
+}
+.issue-seg.owner-user.on {
+  background: var(--user);
+  border-color: var(--user-border);
+}
+.issue-seg.owner-cc.on {
+  background: var(--cc);
+  border-color: var(--cc-border);
+}
+.issue-seg.state-doing.on {
+  background: #fef3c7;
+  border-color: #fbbf24;
+}
+.issue-seg.state-done.on {
+  background: #dcfce7;
+  border-color: #4ade80;
 }
 .issue-chip.owner-user {
   background: var(--user);
@@ -6928,22 +7145,22 @@ ul.maps li.current .sidebar-map-link {
   color: var(--muted);
   font-size: 11.5px;
 }
+/* Second column, ahead of the title: which session an issue belongs to is how
+   the cross-session ledger is read, so it should not be something you scan past
+   the title to find. */
 .issue-cell-session {
-  max-width: 140px;
+  max-width: 170px;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: 600;
+  color: var(--text);
+  opacity: 0.75;
 }
+/* Relative ("3h ago"), which reads as a last-touched time without needing a
+   header row to say so; the absolute times are in the cell's hover title. */
 .issue-cell-updated {
-  font-variant-numeric: tabular-nums;
-}
-.issue-cell-controls {
-  width: 1%;
-  white-space: nowrap;
-}
-.issue-controls-row {
-  display: flex;
-  gap: 5px;
-  justify-content: flex-end;
+  text-align: right;
+  cursor: help;
 }
 .issue-detail-row td {
   padding: 0 8px 12px;
@@ -7061,10 +7278,6 @@ ul.maps li.current .sidebar-map-link {
   color: var(--text);
   line-height: 1.45;
 }
-.issue-card-controls {
-  display: flex;
-  gap: 5px;
-}
 
 :root[data-theme="dark"] .issue-chip.owner-user {
   color: #fcd34d;
@@ -7072,13 +7285,27 @@ ul.maps li.current .sidebar-map-link {
 :root[data-theme="dark"] .issue-chip.owner-cc {
   color: #7dd3fc;
 }
-:root[data-theme="dark"] .issue-filter-chip.state-doing.on {
+:root[data-theme="dark"] .issue-filter-chip.state-doing.on,
+:root[data-theme="dark"] .ms-option.state-doing.on,
+:root[data-theme="dark"] .ms-button.state-doing.has-selection,
+:root[data-theme="dark"] .issue-seg.state-doing.on {
   background: #3a2f10;
   border-color: #a16207;
 }
-:root[data-theme="dark"] .issue-filter-chip.state-done.on {
+:root[data-theme="dark"] .issue-filter-chip.state-done.on,
+:root[data-theme="dark"] .ms-option.state-done.on,
+:root[data-theme="dark"] .ms-button.state-done.has-selection,
+:root[data-theme="dark"] .issue-seg.state-done.on {
   background: #12331f;
   border-color: #15803d;
+}
+:root[data-theme="dark"] .issue-seg.owner-user.on,
+:root[data-theme="dark"] .ms-option.owner-user.on {
+  color: #fcd34d;
+}
+:root[data-theme="dark"] .issue-seg.owner-cc.on,
+:root[data-theme="dark"] .ms-option.owner-cc.on {
+  color: #7dd3fc;
 }
 :root[data-theme="dark"] .issue-delete {
   color: #fca5a5;
@@ -7092,14 +7319,20 @@ ul.maps li.current .sidebar-map-link {
 /* Narrow screens: the table's secondary columns are the first to go, and the
    board becomes a single scrolling column rather than four cramped ones. */
 @media (max-width: 768px) {
-  .issue-cell-session,
   .issue-cell-updated {
     display: none;
   }
-  .issue-filter-group.grow {
-    justify-content: flex-start;
+  .issue-modal {
+    height: 92vh;
+    max-height: 92vh;
+  }
+  .issue-filters .issue-search {
+    margin-left: 0;
   }
   .issue-search input {
     width: 100px;
+  }
+  .ms-button {
+    max-width: 150px;
   }
 }

@@ -327,3 +327,61 @@ describe("issues — survive a CC restart", () => {
     expect(after.json.issue.session_id).toBe(b);
   });
 });
+
+// Filing an issue against the right session is the difference between a
+// cross-session ledger and a pile: getting it wrong once put four issues on an
+// unrelated session and they only surfaced because the user spotted them.
+describe("issues — which session an issue is filed under", () => {
+  test("the pick list covers live sessions and any session still holding an issue", async () => {
+    const live = await registerSession(broker.url, "/tmp/pick-live");
+    const retired = await registerSession(broker.url, "/tmp/pick-retired");
+    const bare = await registerSession(broker.url, "/tmp/pick-bare");
+    await create({ title: "on the retired one", session_id: retired });
+    await post(`${broker.url}/unregister`, { session_id: retired });
+    await post(`${broker.url}/unregister`, { session_id: bare });
+
+    const r = await post<{
+      sessions: { id: string; alive: boolean }[];
+    }>(`${broker.url}/list-issue-sessions`, {});
+    const ids = r.json.sessions.map((s) => s.id);
+
+    expect(ids).toContain(live);
+    // Dead but still owns an issue — without it those rows cannot be filtered.
+    expect(ids).toContain(retired);
+    expect(r.json.sessions.find((s) => s.id === retired)!.alive).toBe(false);
+    // Dead and owns nothing: pure noise in a list that is already long.
+    expect(ids).not.toContain(bare);
+  });
+
+  test("an issue can be re-homed, and detached entirely", async () => {
+    const from = await registerSession(broker.url, "/tmp/rehome-a");
+    const to = await registerSession(broker.url, "/tmp/rehome-b");
+    const issue = (await create({ title: "filed in the wrong place", session_id: from }))
+      .issue;
+
+    const moved = await post<{ issue: Issue }>(`${broker.url}/update-issue`, {
+      issue_id: issue.id,
+      session_id: to,
+    });
+    expect(moved.json.issue.session_id).toBe(to);
+
+    const detached = await post<{ issue: Issue }>(`${broker.url}/update-issue`, {
+      issue_id: issue.id,
+      session_id: null,
+    });
+    expect(detached.json.issue.session_id).toBe(null);
+
+    // Omitting the field leaves it alone — otherwise every quick owner/state
+    // edit from a row would silently detach the issue.
+    const untouched = await post<{ issue: Issue }>(`${broker.url}/update-issue`, {
+      issue_id: issue.id,
+      session_id: to,
+    });
+    expect(untouched.json.issue.session_id).toBe(to);
+    const afterOwnerEdit = await post<{ issue: Issue }>(
+      `${broker.url}/update-issue`,
+      { issue_id: issue.id, owner: "user" },
+    );
+    expect(afterOwnerEdit.json.issue.session_id).toBe(to);
+  });
+});

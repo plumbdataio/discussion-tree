@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ClipboardList,
   Plus,
@@ -13,12 +13,14 @@ import { useTranslation } from "react-i18next";
 import { MDView } from "./MDView.tsx";
 import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
+import { MultiSelectDropdown } from "./MultiSelectDropdown.tsx";
 import {
   DEFAULT_FILTERS,
   ISSUE_OWNERS,
   ISSUE_STATES,
   createIssue,
   deleteIssue,
+  fetchIssueSessions,
   fetchIssues,
   loadFilters,
   notifyIssuesChanged,
@@ -30,6 +32,7 @@ import {
   type Issue,
   type IssueFilters,
   type IssueOwner,
+  type IssueSession,
   type IssueState,
 } from "../utils/issues.ts";
 
@@ -58,23 +61,123 @@ type Draft = {
   body: string;
   owner: IssueOwner;
   state: IssueState;
+  sessionId: string | null;
 };
 
-const emptyDraft = (): Draft => ({
+// Issues filed against no session at all are rare but real (anything raised
+// before a session existed, or deliberately detached). Without a value standing
+// for them they would vanish the moment any session was picked, with nothing on
+// screen to say why — the same silent-hiding this view was built to avoid.
+const NO_SESSION = "__none__";
+
+const emptyDraft = (sessionId: string | null): Draft => ({
   id: null,
   title: "",
   body: "",
   owner: "cc",
   state: "todo",
+  sessionId,
 });
 
-function OwnerStateChip({ issue }: { issue: Issue }) {
+// A session is named by whoever set it; fall back to the last path segment of
+// its cwd, which is what the sidebar shows for unnamed ones.
+export function sessionLabel(s: {
+  name?: string | null;
+  cwd?: string | null;
+  id: string;
+}): string {
+  if (s.name) return s.name;
+  if (s.cwd) return s.cwd.split("/").filter(Boolean).pop() || s.cwd;
+  return s.id;
+}
+
+// The chip is both the current value and the control for it: the header used to
+// carry two <select>s per row, which put the editing affordance far from the
+// thing being edited and ate a whole column. Clicking here opens both axes at
+// once, which is how they are actually changed (owner moves when state does).
+function OwnerStateChip({
+  issue,
+  onSet,
+}: {
+  issue: Issue;
+  onSet?: (patch: Partial<Issue>) => void;
+}) {
   const { t } = useTranslation();
-  return (
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey, true);
+    };
+  }, [open]);
+
+  const chip = (
     <span className={`issue-chip owner-${issue.owner} state-${issue.state}`}>
       <span className="issue-chip-owner">{t(`issues.owner.${issue.owner}`)}</span>
       <span className="issue-chip-sep">/</span>
       <span className="issue-chip-state">{t(`issues.state.${issue.state}`)}</span>
+    </span>
+  );
+  if (!onSet) return chip;
+
+  return (
+    <span className="issue-chip-wrap" ref={wrapRef}>
+      <button
+        type="button"
+        className="issue-chip-button"
+        title={t("issues.chip_hint")}
+        aria-label={t("issues.chip_hint")}
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+      >
+        {chip}
+      </button>
+      {open && (
+        <div className="issue-chip-menu" onClick={(e) => e.stopPropagation()}>
+          <div className="issue-chip-menu-row">
+            <span className="issue-chip-menu-label">{t("issues.owner_label")}</span>
+            {ISSUE_OWNERS.map((o) => (
+              <button
+                key={o}
+                type="button"
+                className={`issue-seg owner-${o}${issue.owner === o ? " on" : ""}`}
+                onClick={() => onSet({ owner: o })}
+              >
+                {t(`issues.owner.${o}`)}
+              </button>
+            ))}
+          </div>
+          <div className="issue-chip-menu-row">
+            <span className="issue-chip-menu-label">{t("issues.state_label")}</span>
+            {ISSUE_STATES.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={`issue-seg state-${s}${issue.state === s ? " on" : ""}`}
+                onClick={() => onSet({ state: s })}
+              >
+                {t(`issues.state.${s}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </span>
   );
 }
@@ -83,6 +186,7 @@ export function IssueTrackerModal() {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [issues, setIssues] = useState<Issue[]>([]);
+  const [sessions, setSessions] = useState<IssueSession[]>([]);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<IssueFilters>(DEFAULT_FILTERS);
   const [filtersLoaded, setFiltersLoaded] = useState(false);
@@ -119,6 +223,14 @@ export function IssueTrackerModal() {
           })
           .catch(() => refetch(false))
           .finally(() => setFiltersLoaded(true));
+        // Sessions come from the broker rather than from the issues on screen:
+        // a session you have not filed anything against yet still has to be
+        // pickable, otherwise a new issue cannot be filed where you are working.
+        fetchIssueSessions()
+          .then((r) => setSessions(r.sessions ?? []))
+          .catch(() => {
+            /* the dropdown just stays empty; filing without a session works */
+          });
       }),
     [refetch],
   );
@@ -146,47 +258,80 @@ export function IssueTrackerModal() {
     return () => document.removeEventListener("keydown", onKey);
   }, [open, draft]);
 
-  const sessions = useMemo(() => {
-    const seen = new Map<string, string>();
+  // Names for sessions referenced by an issue but missing from the broker list
+  // (deleted rows can outlive their session), so a row never renders blank.
+  const sessionNames = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of sessions) m.set(s.id, sessionLabel(s));
     for (const i of issues) {
-      if (!i.session_id) continue;
-      if (!seen.has(i.session_id)) {
-        seen.set(i.session_id, i.session_name || i.session_cwd || i.session_id);
+      if (i.session_id && !m.has(i.session_id)) {
+        m.set(
+          i.session_id,
+          sessionLabel({
+            id: i.session_id,
+            name: i.session_name,
+            cwd: i.session_cwd,
+          }),
+        );
       }
     }
-    return [...seen.entries()].map(([id, name]) => ({ id, name }));
-  }, [issues]);
+    return m;
+  }, [sessions, issues]);
 
-  // Text search and session narrow the pool BEFORE the owner/state counts are
-  // taken, so the numbers on those chips describe what toggling them would
-  // actually reveal — a count that drops to zero because of its own toggle is
-  // the bug that made the previous view's lane counts useless.
+  // Text search narrows the pool BEFORE the owner/state counts are taken, so
+  // the numbers describe what toggling them would actually reveal — a count
+  // that drops to zero because of its own toggle is the bug that made the
+  // previous view's lane counts useless. Session is on the same footing as
+  // owner and state now, so it is counted the same way rather than pre-applied.
   const pool = useMemo(() => {
     const q = filters.q.trim().toLowerCase();
-    return issues.filter((i) => {
-      if (filters.sessionId && i.session_id !== filters.sessionId) return false;
-      if (q && !(`${i.title}\n${i.body}`.toLowerCase().includes(q))) return false;
-      return true;
-    });
-  }, [issues, filters.sessionId, filters.q]);
+    return issues.filter((i) =>
+      q ? `${i.title}\n${i.body}`.toLowerCase().includes(q) : true,
+    );
+  }, [issues, filters.q]);
+
+  const inSessions = useCallback(
+    (i: Issue) =>
+      filters.sessionIds.length === 0 ||
+      filters.sessionIds.includes(i.session_id ?? NO_SESSION),
+    [filters.sessionIds],
+  );
 
   const ownerCounts = useMemo(() => {
     const c: Record<string, number> = { user: 0, cc: 0, external: 0 };
-    for (const i of pool) if (filters.states.includes(i.state)) c[i.owner]++;
+    for (const i of pool) {
+      if (filters.states.includes(i.state) && inSessions(i)) c[i.owner]++;
+    }
     return c;
-  }, [pool, filters.states]);
+  }, [pool, filters.states, inSessions]);
 
   const stateCounts = useMemo(() => {
     const c: Record<string, number> = { todo: 0, doing: 0, done: 0, dropped: 0 };
-    for (const i of pool) if (filters.owners.includes(i.owner)) c[i.state]++;
+    for (const i of pool) {
+      if (filters.owners.includes(i.owner) && inSessions(i)) c[i.state]++;
+    }
     return c;
-  }, [pool, filters.owners]);
+  }, [pool, filters.owners, inSessions]);
+
+  const sessionCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const i of pool) {
+      if (filters.owners.includes(i.owner) && filters.states.includes(i.state)) {
+        const key = i.session_id ?? NO_SESSION;
+        c[key] = (c[key] ?? 0) + 1;
+      }
+    }
+    return c;
+  }, [pool, filters.owners, filters.states]);
 
   const visible = useMemo(
     () =>
       pool
         .filter(
-          (i) => filters.owners.includes(i.owner) && filters.states.includes(i.state),
+          (i) =>
+            filters.owners.includes(i.owner) &&
+            filters.states.includes(i.state) &&
+            inSessions(i),
         )
         .sort(
           (a, b) =>
@@ -194,11 +339,30 @@ export function IssueTrackerModal() {
             STATE_RANK[a.state] - STATE_RANK[b.state] ||
             b.updated_at.localeCompare(a.updated_at),
         ),
-    [pool, filters.owners, filters.states],
+    [pool, filters.owners, filters.states, inSessions],
   );
 
-  const toggle = <T extends string>(list: T[], v: T): T[] =>
-    list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
+  // Only sessions that actually hold an issue — a live session with nothing
+  // filed against it is a row reading "0" in a list of a dozen, and narrowing
+  // to it can only ever empty the view. (Filing a NEW issue is the other way
+  // round and offers every live session; see sessionPicker.) Anything already
+  // selected stays listed even at zero, or the filter could not be undone.
+  const sessionOptions = useMemo(() => {
+    const withIssues = new Set(
+      issues.map((i) => i.session_id ?? NO_SESSION),
+    );
+    const named = new Map(sessions.map((s) => [s.id, sessionLabel(s)]));
+    return [...new Set([...withIssues, ...filters.sessionIds])]
+      .map((id) => ({
+        value: id,
+        label:
+          id === NO_SESSION
+            ? t("issues.session_none")
+            : named.get(id) ?? sessionNames.get(id) ?? id,
+        count: sessionCounts[id] ?? 0,
+      }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [sessions, issues, sessionCounts, sessionNames, filters.sessionIds, t]);
 
   const afterMutation = (includeDeleted: boolean) => {
     refetch(includeDeleted);
@@ -217,6 +381,7 @@ export function IssueTrackerModal() {
       body: draft.body,
       owner: draft.owner,
       state: draft.state,
+      session_id: draft.sessionId,
     };
     const r = draft.id
       ? await updateIssue(draft.id, fields)
@@ -248,6 +413,23 @@ export function IssueTrackerModal() {
       minute: "2-digit",
     });
 
+  // Relative, because "3h ago" reads as a last-touched time without a column
+  // header saying so — and a header row was exactly what was not wanted. The
+  // absolute times, and which is which, live in the hover title.
+  const ago = (iso: string) => {
+    const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (mins < 1) return t("issues.ago_now");
+    if (mins < 60) return t("issues.ago_min", { n: mins });
+    const hours = Math.round(mins / 60);
+    if (hours < 24) return t("issues.ago_hour", { n: hours });
+    const days = Math.round(hours / 24);
+    if (days < 100) return t("issues.ago_day", { n: days });
+    return fmt(iso);
+  };
+
+  const timeHint = (i: Issue) =>
+    t("issues.time_hint", { updated: fmt(i.updated_at), created: fmt(i.created_at) });
+
   const renderRowBody = (i: Issue) => (
     <div className="issue-row-detail">
       {i.body ? (
@@ -257,7 +439,8 @@ export function IssueTrackerModal() {
       )}
       <div className="issue-row-detail-actions">
         <span className="issue-timestamps">
-          {t("issues.created")} {fmt(i.created_at)}
+          {t("issues.created")} {fmt(i.created_at)} · {t("issues.updated")}{" "}
+          {fmt(i.updated_at)}
           {i.closed_at ? ` · ${t("issues.closed")} ${fmt(i.closed_at)}` : ""}
         </span>
         {i.deleted_at ? (
@@ -282,6 +465,7 @@ export function IssueTrackerModal() {
                   body: i.body,
                   owner: i.owner,
                   state: i.state,
+                  sessionId: i.session_id,
                 })
               }
             >
@@ -300,35 +484,24 @@ export function IssueTrackerModal() {
     </div>
   );
 
-  const selects = (i: Issue) => (
-    <>
-      <select
-        className="issue-select"
-        value={i.owner}
-        aria-label={t("issues.owner_label")}
-        onChange={(e) => quickSet(i, { owner: e.target.value as IssueOwner })}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {ISSUE_OWNERS.map((o) => (
-          <option key={o} value={o}>
-            {t(`issues.owner.${o}`)}
-          </option>
-        ))}
-      </select>
-      <select
-        className="issue-select"
-        value={i.state}
-        aria-label={t("issues.state_label")}
-        onChange={(e) => quickSet(i, { state: e.target.value as IssueState })}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {ISSUE_STATES.map((s) => (
-          <option key={s} value={s}>
-            {t(`issues.state.${s}`)}
-          </option>
-        ))}
-      </select>
-    </>
+  const sessionPicker = (
+    value: string | null,
+    onPick: (id: string | null) => void,
+  ) => (
+    <select
+      className="issue-select"
+      value={value ?? ""}
+      aria-label={t("issues.session_label")}
+      onChange={(e) => onPick(e.target.value || null)}
+    >
+      <option value="">{t("issues.session_none")}</option>
+      {sessions.map((s) => (
+        <option key={s.id} value={s.id}>
+          {sessionLabel(s)}
+          {s.alive ? "" : ` (${t("issues.session_ended")})`}
+        </option>
+      ))}
+    </select>
   );
 
   return (
@@ -377,7 +550,13 @@ export function IssueTrackerModal() {
               className="issue-new"
               onClick={() => {
                 setError(null);
-                setDraft(emptyDraft());
+                // Default to the session whose issues are on screen when that
+                // is unambiguous — filing where you are looking is the common
+                // case, and getting it wrong is how issues ended up on the
+                // wrong session before.
+                const only =
+                  filters.sessionIds.length === 1 ? filters.sessionIds[0] : null;
+                setDraft(emptyDraft(only === NO_SESSION ? null : only));
               }}
             >
               <Plus size={14} strokeWidth={2.25} /> {t("issues.new")}
@@ -386,96 +565,78 @@ export function IssueTrackerModal() {
         </div>
 
         <div className="issue-filters">
-          <div className="issue-filter-group">
-            {ISSUE_OWNERS.map((o) => (
-              <button
-                key={o}
-                type="button"
-                className={
-                  `issue-filter-chip owner-${o}` +
-                  (filters.owners.includes(o) ? " on" : "")
-                }
-                onClick={() =>
-                  setFilters((f) => ({ ...f, owners: toggle(f.owners, o) }))
-                }
-              >
-                {t(`issues.owner.${o}`)}
-                <span className="issue-filter-n">{ownerCounts[o]}</span>
-              </button>
-            ))}
-          </div>
-          <div className="issue-filter-group">
-            {ISSUE_STATES.map((s) => (
-              <button
-                key={s}
-                type="button"
-                className={
-                  `issue-filter-chip state-${s}` +
-                  (filters.states.includes(s) ? " on" : "")
-                }
-                onClick={() =>
-                  setFilters((f) => ({ ...f, states: toggle(f.states, s) }))
-                }
-              >
-                {t(`issues.state.${s}`)}
-                <span className="issue-filter-n">{stateCounts[s]}</span>
-              </button>
-            ))}
-          </div>
-          <div className="issue-filter-group grow">
-            <label className="issue-search">
-              <Search size={13} strokeWidth={2} />
-              <input
-                type="text"
-                value={filters.q}
-                placeholder={t("issues.search_placeholder")}
-                onChange={(e) =>
-                  setFilters((f) => ({ ...f, q: e.target.value }))
-                }
-              />
-            </label>
-            <select
-              className="issue-select"
-              value={filters.sessionId ?? ""}
-              aria-label={t("issues.session_label")}
-              onChange={(e) =>
-                setFilters((f) => ({ ...f, sessionId: e.target.value || null }))
-              }
-            >
-              <option value="">{t("issues.all_sessions")}</option>
-              {sessions.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className={
-                "issue-filter-chip bin" + (filters.showDeleted ? " on" : "")
-              }
-              onClick={() =>
-                setFilters((f) => {
-                  const next = !f.showDeleted;
-                  refetch(next);
-                  return { ...f, showDeleted: next };
-                })
-              }
-              title={t("issues.bin_hint")}
-            >
-              <Trash2 size={12} strokeWidth={2} /> {t("issues.bin")}
-            </button>
-            <button
-              type="button"
-              className="issue-reset"
-              onClick={() => {
-                setFilters(DEFAULT_FILTERS);
-                refetch(false);
-              }}
-            >
-              {t("issues.reset")}
-            </button>
-          </div>
+          <MultiSelectDropdown
+            label={t("issues.owner_label")}
+            allLabel={t("issues.all_owners")}
+            selected={filters.owners}
+            onChange={(next) =>
+              setFilters((f) => ({ ...f, owners: next as IssueOwner[] }))
+            }
+            options={ISSUE_OWNERS.map((o) => ({
+              value: o,
+              label: t(`issues.owner.${o}`),
+              count: ownerCounts[o],
+              className: `owner-${o}`,
+            }))}
+          />
+          <MultiSelectDropdown
+            label={t("issues.state_label")}
+            allLabel={t("issues.all_states")}
+            selected={filters.states}
+            onChange={(next) =>
+              setFilters((f) => ({ ...f, states: next as IssueState[] }))
+            }
+            options={ISSUE_STATES.map((s) => ({
+              value: s,
+              label: t(`issues.state.${s}`),
+              count: stateCounts[s],
+              className: `state-${s}`,
+            }))}
+          />
+          <MultiSelectDropdown
+            className="ms-session"
+            label={t("issues.session_label")}
+            allLabel={t("issues.all_sessions")}
+            selected={filters.sessionIds}
+            onChange={(next) => setFilters((f) => ({ ...f, sessionIds: next }))}
+            options={sessionOptions}
+          />
+          <label className="issue-search">
+            <Search size={13} strokeWidth={2} />
+            <input
+              type="text"
+              name="issue-search"
+              value={filters.q}
+              placeholder={t("issues.search_placeholder")}
+              onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
+            />
+          </label>
+          <button
+            type="button"
+            className={
+              "issue-filter-chip bin" + (filters.showDeleted ? " on" : "")
+            }
+            onClick={() =>
+              setFilters((f) => {
+                const next = !f.showDeleted;
+                refetch(next);
+                return { ...f, showDeleted: next };
+              })
+            }
+            title={t("issues.bin_hint")}
+          >
+            <Trash2 size={12} strokeWidth={2} /> {t("issues.bin")}
+          </button>
+          <button
+            type="button"
+            className="issue-reset"
+            onClick={() => {
+              setFilters(DEFAULT_FILTERS);
+              refetch(false);
+            }}
+          >
+            {t("issues.reset")}
+          </button>
         </div>
 
         {error && <div className="modal-error">{error}</div>}
@@ -485,6 +646,7 @@ export function IssueTrackerModal() {
             <input
               className="issue-editor-title"
               type="text"
+              name="issue-title"
               value={draft.title}
               autoFocus
               placeholder={t("issues.title_placeholder")}
@@ -540,6 +702,9 @@ export function IssueTrackerModal() {
                   </option>
                 ))}
               </select>
+              {sessionPicker(draft.sessionId, (id) =>
+                setDraft((d) => d && { ...d, sessionId: id }),
+              )}
               <span className="grow" />
               <button
                 type="button"
@@ -560,97 +725,109 @@ export function IssueTrackerModal() {
           </div>
         )}
 
-        {visible.length === 0 ? (
-          <div className="issue-empty">
-            {loading ? t("sidebar.loading") : t("issues.empty")}
-          </div>
-        ) : view === "table" ? (
-          <table className="issue-table">
-            <tbody>
-              {visible.map((i) => (
-                <React.Fragment key={i.id}>
-                  <tr
-                    className={
-                      "issue-row" +
-                      (i.deleted_at ? " deleted" : "") +
-                      (expanded === i.id ? " expanded" : "")
-                    }
-                    onClick={() => setExpanded(expanded === i.id ? null : i.id)}
-                  >
-                    <td className="issue-cell-chip">
-                      <OwnerStateChip issue={i} />
-                    </td>
-                    <td className="issue-cell-title">
-                      {i.title}
-                      {i.deleted_at && (
-                        <span className="issue-deleted-tag">
-                          {t("issues.deleted")}
-                        </span>
-                      )}
-                    </td>
-                    <td className="issue-cell-session">
-                      {i.session_name || ""}
-                    </td>
-                    <td className="issue-cell-updated">{fmt(i.updated_at)}</td>
-                    <td className="issue-cell-controls">
-                      {/* The flex row is a div, not the td: a td with
-                          display:flex leaves the table's column model, and the
-                          other cells stop lining up. */}
-                      <div className="issue-controls-row">
-                        {!i.deleted_at && selects(i)}
-                      </div>
-                    </td>
-                  </tr>
-                  {expanded === i.id && (
-                    <tr className="issue-detail-row">
-                      <td colSpan={5}>{renderRowBody(i)}</td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className="issue-board">
-            {ISSUE_STATES.filter((s) => filters.states.includes(s)).map((s) => (
-              <div key={s} className={`issue-col state-${s}`}>
-                <div className="issue-col-head">
-                  {t(`issues.state.${s}`)}
-                  <span className="issue-filter-n">
-                    {visible.filter((i) => i.state === s).length}
-                  </span>
-                </div>
-                <div className="issue-col-body">
-                  {visible
-                    .filter((i) => i.state === s)
-                    .map((i) => (
-                      <div
-                        key={i.id}
-                        className={
-                          "issue-card" + (i.deleted_at ? " deleted" : "")
-                        }
-                        onClick={() =>
-                          setExpanded(expanded === i.id ? null : i.id)
-                        }
-                      >
-                        <div className="issue-card-top">
-                          <OwnerStateChip issue={i} />
-                          <span className="issue-card-session">
-                            {i.session_name || ""}
+        <div className="issue-scroll">
+          {visible.length === 0 ? (
+            <div className="issue-empty">
+              {loading ? t("sidebar.loading") : t("issues.empty")}
+            </div>
+          ) : view === "table" ? (
+            <table className="issue-table">
+              <tbody>
+                {visible.map((i) => (
+                  <React.Fragment key={i.id}>
+                    <tr
+                      className={
+                        "issue-row" +
+                        (i.deleted_at ? " deleted" : "") +
+                        (expanded === i.id ? " expanded" : "")
+                      }
+                      onClick={() => setExpanded(expanded === i.id ? null : i.id)}
+                    >
+                      <td className="issue-cell-chip">
+                        <OwnerStateChip
+                          issue={i}
+                          onSet={
+                            i.deleted_at
+                              ? undefined
+                              : (patch) => void quickSet(i, patch)
+                          }
+                        />
+                      </td>
+                      <td className="issue-cell-session">
+                        {i.session_id ? sessionNames.get(i.session_id) ?? "" : ""}
+                      </td>
+                      <td className="issue-cell-title">
+                        {i.title}
+                        {i.deleted_at && (
+                          <span className="issue-deleted-tag">
+                            {t("issues.deleted")}
                           </span>
-                        </div>
-                        <div className="issue-card-title">{i.title}</div>
-                        {expanded === i.id && renderRowBody(i)}
-                        {!i.deleted_at && (
-                          <div className="issue-card-controls">{selects(i)}</div>
                         )}
-                      </div>
-                    ))}
+                      </td>
+                      <td className="issue-cell-updated" title={timeHint(i)}>
+                        {ago(i.updated_at)}
+                      </td>
+                    </tr>
+                    {expanded === i.id && (
+                      <tr className="issue-detail-row">
+                        <td colSpan={4}>{renderRowBody(i)}</td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="issue-board">
+              {ISSUE_STATES.filter((s) => filters.states.includes(s)).map((s) => (
+                <div key={s} className={`issue-col state-${s}`}>
+                  <div className="issue-col-head">
+                    {t(`issues.state.${s}`)}
+                    <span className="issue-filter-n">
+                      {visible.filter((i) => i.state === s).length}
+                    </span>
+                  </div>
+                  <div className="issue-col-body">
+                    {visible
+                      .filter((i) => i.state === s)
+                      .map((i) => (
+                        <div
+                          key={i.id}
+                          className={
+                            "issue-card" + (i.deleted_at ? " deleted" : "")
+                          }
+                          onClick={() =>
+                            setExpanded(expanded === i.id ? null : i.id)
+                          }
+                        >
+                          <div className="issue-card-top">
+                            <OwnerStateChip
+                              issue={i}
+                              onSet={
+                                i.deleted_at
+                                  ? undefined
+                                  : (patch) => void quickSet(i, patch)
+                              }
+                            />
+                            <span
+                              className="issue-card-session"
+                              title={timeHint(i)}
+                            >
+                              {i.session_id
+                                ? sessionNames.get(i.session_id) ?? ""
+                                : ""}
+                            </span>
+                          </div>
+                          <div className="issue-card-title">{i.title}</div>
+                          {expanded === i.id && renderRowBody(i)}
+                        </div>
+                      ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
 
         {confirmDelete && (
           <ConfirmDialog

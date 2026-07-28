@@ -458,6 +458,17 @@
       "doing": "In progress",
       "done": "Done",
       "dropped": "Dropped"
-    }
+    },
+    "updated": "updated",
+    "all_owners": "All owners",
+    "all_states": "All states",
+    "session_none": "No session",
+    "session_ended": "ended",
+    "chip_hint": "Click to change owner / state",
+    "ago_now": "just now",
+    "ago_min": "{{n}}m ago",
+    "ago_hour": "{{n}}h ago",
+    "ago_day": "{{n}}d ago",
+    "time_hint": "updated {{updated}} · created {{created}}"
   }
 }

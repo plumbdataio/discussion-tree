@@ -213,6 +213,13 @@ export function handleUpdateIssue(body: any):
     sets.push("owner = ?");
     args.push(owner);
   }
+  // Re-homing an issue to another session. Explicit null detaches it, which is
+  // how an issue that turned out not to belong anywhere stops being filtered
+  // away by a session the user no longer looks at.
+  if (body?.session_id !== undefined) {
+    sets.push("session_id = ?");
+    args.push(body.session_id ? String(body.session_id) : null);
+  }
   let nextState: IssueState = current.state;
   if (body?.state !== undefined) {
     const state = coerceState(body.state);
@@ -291,6 +298,38 @@ export function handleListIssues(body: any): {
     // how the user scans the list.
     " ORDER BY i.updated_at DESC";
   return { ok: true, issues: db.prepare(sql).all(...args) as IssueRow[] };
+}
+
+// The sessions an issue may be filed under. Deliberately NOT /api/sessions:
+// that one carries every board and unread count for the sidebar, and this only
+// needs a name to put in a dropdown.
+//
+// Live sessions plus any session that already owns an issue. A dead session
+// with issues still has to be selectable, or its rows become unfilterable; a
+// live one with none has to be, or a new issue cannot be filed against the
+// session you are working in right now.
+export function handleListIssueSessions(): {
+  ok: true;
+  sessions: { id: string; name: string | null; cwd: string | null; alive: boolean }[];
+} {
+  const rows = db
+    .prepare(
+      `SELECT s.id, s.name, s.cwd, s.alive
+         FROM sessions s
+        WHERE s.alive = 1
+           OR EXISTS (SELECT 1 FROM issues i WHERE i.session_id = s.id)
+        ORDER BY s.alive DESC, COALESCE(s.name, s.cwd, s.id)`,
+    )
+    .all() as { id: string; name: string | null; cwd: string | null; alive: number }[];
+  return {
+    ok: true,
+    sessions: rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      cwd: r.cwd,
+      alive: r.alive === 1,
+    })),
+  };
 }
 
 const DEFAULT_FILTER_ID = "default";
@@ -582,6 +621,7 @@ export const routes = {
   "/get-issue": handleGetIssue,
   "/delete-issue": handleDeleteIssue,
   "/restore-issue": handleRestoreIssue,
+  "/list-issue-sessions": handleListIssueSessions,
   "/get-issue-filters": handleGetIssueFilters,
   "/set-issue-filters": handleSetIssueFilters,
 };

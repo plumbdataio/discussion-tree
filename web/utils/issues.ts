@@ -32,10 +32,20 @@ export type Issue = {
   deleted_at?: string | null;
 };
 
+export type IssueSession = {
+  id: string;
+  name: string | null;
+  cwd: string | null;
+  alive: boolean;
+};
+
 export type IssueFilters = {
   owners: IssueOwner[];
   states: IssueState[];
-  sessionId: string | null;
+  // Empty means "every session", the same convention the other two axes use.
+  // Multi-select because the sessions worth looking at together are rarely one
+  // (a repo and its sibling tooling repo, say) and never all.
+  sessionIds: string[];
   q: string;
   showDeleted: boolean;
 };
@@ -46,7 +56,7 @@ export type IssueFilters = {
 export const DEFAULT_FILTERS: IssueFilters = {
   owners: ["user"],
   states: [...OPEN_STATES],
-  sessionId: null,
+  sessionIds: [],
   q: "",
   showDeleted: false,
 };
@@ -68,7 +78,11 @@ export function sanitizeFilters(raw: unknown): IssueFilters {
     // "nothing selected" as "no filter on this axis".
     owners: owners.length ? owners : [...ISSUE_OWNERS],
     states: states.length ? states : [...ISSUE_STATES],
-    sessionId: typeof f.sessionId === "string" ? f.sessionId : null,
+    // Unlike owners/states this one is legitimately empty = unfiltered, so it
+    // is kept as-is rather than widened.
+    sessionIds: Array.isArray(f.sessionIds)
+      ? f.sessionIds.filter((s): s is string => typeof s === "string")
+      : [],
     q: typeof f.q === "string" ? f.q : "",
     showDeleted: f.showDeleted === true,
   };
@@ -118,6 +132,13 @@ export function restoreIssue(id: string) {
   return callBroker<{ ok: boolean; error?: string }>("/restore-issue", {
     issue_id: id,
   });
+}
+
+export function fetchIssueSessions() {
+  return callBroker<{ ok: boolean; sessions: IssueSession[] }>(
+    "/list-issue-sessions",
+    {},
+  );
 }
 
 export function loadFilters() {

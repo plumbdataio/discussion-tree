@@ -458,6 +458,17 @@
       "doing": "進行中",
       "done": "完了",
       "dropped": "取り下げ"
-    }
+    },
+    "updated": "更新",
+    "all_owners": "全担当",
+    "all_states": "全状態",
+    "session_none": "セッション指定なし",
+    "session_ended": "終了",
+    "chip_hint": "クリックで担当・状態を変更",
+    "ago_now": "たった今",
+    "ago_min": "{{n}}分前",
+    "ago_hour": "{{n}}時間前",
+    "ago_day": "{{n}}日前",
+    "time_hint": "更新 {{updated}} ・ 作成 {{created}}"
   }
 }
