@@ -126,8 +126,14 @@ export const TOOLS = [
           description:
             "Status the node should be in AFTER this post. 'discussing' if ongoing without decision; 'adopted'/'rejected'/'agreed'/'resolved' for decisions; 'needs-reply' to flag for user attention.",
         },
+        issue_ids: {
+          type: "array" as const,
+          items: { type: "string" as const },
+          description:
+            "Issues this message belongs to (from list_issues). REQUIRED — pass [] when it genuinely belongs to none, but decide rather than defaulting: this is what makes an issue's conversation readable as one timeline across boards. A message covering two issues gets both ids.",
+        },
       },
-      required: ["board_id", "node_id", "message", "status"],
+      required: ["board_id", "node_id", "message", "status", "issue_ids"],
     },
   },
   {
@@ -751,8 +757,14 @@ export const TOOLS = [
             'Map node id, or "__general__" / omit for the map-wide chat.',
         },
         message: { type: "string" as const },
+        issue_ids: {
+          type: "array" as const,
+          items: { type: "string" as const },
+          description:
+            "Issues this message belongs to (from list_issues). REQUIRED — pass [] when it genuinely belongs to none, but decide rather than defaulting: this is what makes an issue's conversation readable as one timeline across boards. A message covering two issues gets both ids.",
+        },
       },
-      required: ["map_id", "message"],
+      required: ["map_id", "message", "issue_ids"],
     },
   },
   {
@@ -1035,8 +1047,14 @@ export const TOOLS = [
       properties: {
         diagram_id: { type: "string" as const },
         message: { type: "string" as const },
+        issue_ids: {
+          type: "array" as const,
+          items: { type: "string" as const },
+          description:
+            "Issues this message belongs to (from list_issues). REQUIRED — pass [] when it genuinely belongs to none, but decide rather than defaulting: this is what makes an issue's conversation readable as one timeline across boards. A message covering two issues gets both ids.",
+        },
       },
-      required: ["diagram_id", "message"],
+      required: ["diagram_id", "message", "issue_ids"],
     },
   },
 ];
@@ -1158,6 +1176,7 @@ export async function dispatchToolCall(
           node_id: string;
           message: string;
           status: string;
+          issue_ids?: string[];
         };
         const res = await brokerFetch<
           BoardStatusChangeResponse & {
@@ -1171,6 +1190,7 @@ export async function dispatchToolCall(
           node_id: a.node_id,
           message: a.message,
           status: a.status,
+          issue_ids: a.issue_ids,
         });
         if (res && res.ok === false) {
           return textResult(res.error ?? "post_to_node failed", true);
@@ -1764,6 +1784,7 @@ export async function dispatchToolCall(
           map_id: string;
           node_id?: string;
           message: string;
+          issue_ids?: string[];
         };
         const res = await brokerFetch<{
           ok: boolean;
@@ -2046,10 +2067,18 @@ export async function dispatchToolCall(
         return textResult(`Diagram ${a.id} deleted.`);
       }
       case "post_diagram_chat": {
-        const a = args as { diagram_id: string; message: string };
+        const a = args as {
+          diagram_id: string;
+          message: string;
+          issue_ids?: string[];
+        };
         const res = await brokerFetch<{ ok: boolean; error?: string }>(
           "/post-diagram-chat",
-          { diagram_id: a.diagram_id, message: a.message },
+          {
+            diagram_id: a.diagram_id,
+            message: a.message,
+            issue_ids: a.issue_ids,
+          },
         );
         if (!res.ok)
           return textResult(res.error ?? "post_diagram_chat failed", true);

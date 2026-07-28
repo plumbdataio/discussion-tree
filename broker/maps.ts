@@ -62,6 +62,7 @@ import {
   pendingArmedCount,
 } from "./helpers.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
+import { linkMessageToIssues } from "./issues.ts";
 import { PUBLIC_URL, SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
 
 const KINDS = new Set(["question", "idea", "research", "note", "selection"]);
@@ -519,6 +520,7 @@ export function handlePostToMapNode(body: any) {
   const mapId = String(body?.map_id ?? "");
   const nodeId = String(body?.node_id ?? MAP_GENERAL_NODE);
   const message = String(body?.message ?? "");
+  const issueIds = body?.issue_ids;
   if (!selectMap.get(mapId)) return { ok: false, error: "map not found" };
   if (nodeId !== MAP_GENERAL_NODE) {
     const node = selectMapNode.get(mapId, nodeId) as MapNode | undefined;
@@ -550,8 +552,10 @@ export function handlePostToMapNode(body: any) {
     message,
     new Date().toISOString(),
   );
+  const messageId = Number(inserted.lastInsertRowid);
+  linkMessageToIssues(messageId, issueIds);
   broadcast(mapId, { type: "thread-update", node_id: nodeId, source: "cc" });
-  return { ok: true, message_id: Number(inserted.lastInsertRowid) };
+  return { ok: true, message_id: messageId };
 }
 
 // The map's general chat + each node's input post here. Blocking, like

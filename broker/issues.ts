@@ -53,32 +53,53 @@ db.run("CREATE INDEX IF NOT EXISTS idx_issues_state ON issues(state)");
 safeAlterIssues("ALTER TABLE issues ADD COLUMN deleted_at TEXT");
 db.run("CREATE INDEX IF NOT EXISTS idx_issues_session ON issues(session_id)");
 
-// NOT USED BY ANY FEATURE YET — deliberately added ahead of need, and this note
-// is the price of doing that (see auto-memory
-// feedback_record_why_for_speculative_additions: a speculative column whose
-// rationale wasn't written down becomes an unanswerable "why is this here?" a
-// few compactions later).
+// Which MESSAGES belong to which issue. The point is not a "jump to the board"
+// link — it is being able to read one issue's conversation as a single timeline,
+// no matter which board, map or diagram each part of it happened on.
 //
-// What it is for: linking an issue to the board / node / map / diagram where its
-// discussion lives. MANUAL linking works from day one and is useful on its own
-// ("which board is this issue's discussion?"). The hard part — CC noticing mid
-// conversation that an existing node belongs to an issue and linking it without
-// being told — is a SEPARATE iteration, gated on measuring how often it is
-// missed. It is not obvious that it will pay off.
+// The unit is a message, not a node, and the relation is many-to-many. Both were
+// argued through on 2026-07-28: a node-level link needs 1/6 as many decisions,
+// but a single node routinely holds a one-off exchange about a different problem
+// ("wait, is this…?" mid-task), and folding that into the node's issue produces
+// an aggregate that looks right and isn't. A message is the smallest thing worth
+// splitting; when one message genuinely covers two issues it gets two links
+// rather than being cut up.
 //
-// SO: if this table is still empty after a few weeks, that means the proactive
-// linking was dropped — delete the table rather than leaving it as furniture.
-// Decision trail: dt board bd_d5a34e7f4de4f06eeba66168a50ba139.
+// This replaces an earlier, wider (issue → board | node | map | diagram) shape
+// that was added speculatively and never written to. It is narrowed on purpose:
+// a message already identifies its board and node, so the wider form bought
+// nothing. Decision trail: dt board bd_d5a34e7f4de4f06eeba66168a50ba139.
+{
+  // The old table's primary key included a nullable column, so it could not
+  // actually reject duplicates. It never held a row, so replacing it outright is
+  // safe — but check rather than assume, and leave it alone if that ever stops
+  // being true.
+  const legacy = db
+    .prepare(
+      "SELECT COUNT(*) AS c FROM sqlite_master WHERE type='table' AND name='issue_links' AND sql LIKE '%target_id%'",
+    )
+    .get() as { c: number };
+  if (legacy.c > 0) {
+    const rows = (
+      db.prepare("SELECT COUNT(*) AS c FROM issue_links").get() as { c: number }
+    ).c;
+    if (rows === 0) db.run("DROP TABLE issue_links");
+    else console.error(`[issues] legacy issue_links has ${rows} row(s) — left in place`);
+  }
+}
 db.run(`
   CREATE TABLE IF NOT EXISTS issue_links (
-    issue_id    TEXT NOT NULL,
-    kind        TEXT NOT NULL,
-    target_id   TEXT NOT NULL,
-    node_id     TEXT,
-    created_at  TEXT NOT NULL,
-    PRIMARY KEY (issue_id, kind, target_id, node_id)
+    issue_id        TEXT NOT NULL,
+    thread_item_id  INTEGER NOT NULL,
+    created_at      TEXT NOT NULL,
+    PRIMARY KEY (issue_id, thread_item_id)
   )
 `);
+// Reverse lookup: "which issues does this message belong to", asked once per
+// message when rendering a thread.
+db.run(
+  "CREATE INDEX IF NOT EXISTS idx_issue_links_item ON issue_links(thread_item_id)",
+);
 
 // The cross-session view's filter state. One row, because the tracker itself is
 // cross-session — there is nothing to key it by. It lives in the DB rather than
@@ -239,6 +260,14 @@ export function handleListIssues(body: any): {
     where.push("i.session_id = ?");
     args.push(String(body.session_id));
   }
+  // Reverse lookup: which issues does this message belong to. Used when
+  // rendering a thread, and by the timeline view in the other direction.
+  if (body?.linked_to_message !== undefined) {
+    where.push(
+      "EXISTS (SELECT 1 FROM issue_links l WHERE l.issue_id = i.id AND l.thread_item_id = ?)",
+    );
+    args.push(String(body.linked_to_message));
+  }
   // Default view = what is actually outstanding. Closed issues are opt-in, so
   // the list answers "what is on my plate" without a filter dance every time.
   if (!state && body?.include_closed !== true) {
@@ -331,8 +360,57 @@ export function handleRestoreIssue(body: any):
   return { ok: true, issue: selectIssue.get(id) as IssueRow };
 }
 
+// Attach a just-posted message to zero or more issues. Called from the post
+// handlers rather than by the caller in a second round-trip, so a link can never
+// be lost between "the message exists" and "someone remembered to link it".
+//
+// Unknown ids are dropped rather than raising: a post must not fail because of a
+// stale issue id — losing the message is far worse than losing the link. The
+// count of accepted links comes back so the caller can tell the difference.
+export function linkMessageToIssues(
+  threadItemId: number,
+  issueIds: unknown,
+): number {
+  if (!Array.isArray(issueIds) || issueIds.length === 0) return 0;
+  const now = nowIso();
+  let linked = 0;
+  for (const raw of issueIds) {
+    const id = String(raw ?? "").trim();
+    if (!id) continue;
+    if (!selectIssue.get(id)) continue;
+    db.run(
+      "INSERT OR IGNORE INTO issue_links (issue_id, thread_item_id, created_at) VALUES (?, ?, ?)",
+      [id, threadItemId, now],
+    );
+    linked++;
+  }
+  return linked;
+}
+
+export function handleLinkIssueMessage(body: any):
+  | { ok: true; linked: number }
+  | { ok: false; error: string } {
+  const messageId = Number(body?.message_id ?? body?.thread_item_id);
+  if (!Number.isFinite(messageId)) return { ok: false, error: "message_id required" };
+  return { ok: true, linked: linkMessageToIssues(messageId, body?.issue_ids) };
+}
+
+export function handleUnlinkIssueMessage(body: any):
+  | { ok: true; unlinked: number }
+  | { ok: false; error: string } {
+  const messageId = Number(body?.message_id ?? body?.thread_item_id);
+  if (!Number.isFinite(messageId)) return { ok: false, error: "message_id required" };
+  const id = String(body?.issue_id ?? "");
+  const res = id
+    ? db.run("DELETE FROM issue_links WHERE issue_id = ? AND thread_item_id = ?", [id, messageId])
+    : db.run("DELETE FROM issue_links WHERE thread_item_id = ?", [messageId]);
+  return { ok: true, unlinked: res.changes };
+}
+
 export const routes = {
   "/create-issue": handleCreateIssue,
+  "/link-issue-message": handleLinkIssueMessage,
+  "/unlink-issue-message": handleUnlinkIssueMessage,
   "/update-issue": handleUpdateIssue,
   "/list-issues": handleListIssues,
   "/get-issue": handleGetIssue,

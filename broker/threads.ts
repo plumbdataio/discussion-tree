@@ -28,6 +28,7 @@ import {
   updateNodeStatus,
 } from "./db.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
+import { linkMessageToIssues } from "./issues.ts";
 import { getCliVerbosity } from "./cli-verbosity.ts";
 import { onBoardSettled, onNodeSettled } from "./checklist.ts";
 import { SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
@@ -136,6 +137,10 @@ export function handlePostToNode(body: any) {
     new Date().toISOString(),
   );
   const messageId = Number(inserted.lastInsertRowid);
+  // Link in the same call that posts. A second round-trip ("now link it") is a
+  // place the link can be forgotten, and forgetting is the whole failure mode
+  // this feature exists to fight.
+  linkMessageToIssues(messageId, body.issue_ids);
 
   // 2. Status update + transition log (only when the status actually changed).
   let statusChanged = false;

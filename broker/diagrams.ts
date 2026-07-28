@@ -5,6 +5,7 @@
 // re-renders live.
 import { db, insertPending, insertThread, markPendingViaTimer } from "./db.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
+import { linkMessageToIssues } from "./issues.ts";
 import {
   generateId,
   pendingScheduledCount,
@@ -362,7 +363,14 @@ export function handlePostDiagramChat(body: any) {
       [row.session_id],
     );
   }
-  insertThread.run(id, DIAGRAM_CHAT_NODE, "cc", message, new Date().toISOString());
+  const inserted = insertThread.run(
+    id,
+    DIAGRAM_CHAT_NODE,
+    "cc",
+    message,
+    new Date().toISOString(),
+  );
+  linkMessageToIssues(Number(inserted.lastInsertRowid), body?.issue_ids);
   broadcast(id, {
     type: "thread-update",
     node_id: DIAGRAM_CHAT_NODE,
