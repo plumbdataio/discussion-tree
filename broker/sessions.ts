@@ -426,6 +426,37 @@ export function handleAttachToBoard(body: any) {
   return { ok: true };
 }
 
+// Recover a cc_session_id from the CC process id alone.
+//
+// The MCP server normally learns its cc_session_id from the SessionStart hook's
+// hint file, but that file is written once per CC start and older builds deleted
+// it on first use — so an MCP server that restarts under a running CC (which is
+// what /mcp does) has nothing to read and cannot attach. The broker already
+// knows the mapping, because every session row records the cc_pid its hooks
+// reported, so it can answer the question directly.
+//
+// Scoped to rows seen recently: a pid is reused eventually, and binding to a
+// long-dead session that happened to hold this number would attach the caller to
+// somebody else's boards.
+const CC_PID_LOOKUP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+export function handleLookupCcSessionByPid(body: any): {
+  ok: boolean;
+  cc_session_id?: string;
+} {
+  const pid = Number(body?.cc_pid);
+  if (!Number.isFinite(pid)) return { ok: false };
+  const cutoff = new Date(Date.now() - CC_PID_LOOKUP_MAX_AGE_MS).toISOString();
+  const row = db
+    .prepare(
+      `SELECT cc_session_id FROM sessions
+        WHERE cc_pid = ? AND cc_session_id IS NOT NULL AND last_seen >= ?
+        ORDER BY last_seen DESC LIMIT 1`,
+    )
+    .get(pid, cutoff) as { cc_session_id: string } | null;
+  return row ? { ok: true, cc_session_id: row.cc_session_id } : { ok: false };
+}
+
 export function handleListSessions() {
   type SessionRow = {
     id: string;
@@ -889,6 +920,7 @@ export const routes = {
   "/heartbeat": handleHeartbeat,
   "/unregister": handleUnregister,
   "/attach-cc-session": handleAttachCCSession,
+  "/lookup-cc-session-by-pid": handleLookupCcSessionByPid,
   "/attach-to-board": handleAttachToBoard,
   "/set-session-name": handleSetSessionName,
   "/get-unanswered": handleGetUnansweredPosts,
