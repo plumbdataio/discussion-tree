@@ -175,3 +175,89 @@ describe("issue links — maintained after the fact", () => {
     expect(await linksOf(r.message_id)).toEqual([]);
   });
 });
+
+// The timeline is what the links were collected FOR: one decision's whole
+// conversation in a single column, whichever surface each part of it happened
+// on. A message that lives on a map or a diagram is not a corner case — those
+// post tools carry issue_ids too — and dropping them would produce an aggregate
+// that looks complete and isn't.
+describe("issue timeline — one conversation across every surface", () => {
+  test("board, map and diagram messages come back interleaved by time", async () => {
+    const issue = await mkIssue("spans three surfaces");
+
+    const map = await post<{ map_id: string }>(`${broker.url}/create-map`, {
+      session_id: sessionId,
+      title: "a map",
+    });
+    const diagram = await post<{ id: string }>(`${broker.url}/upsert-diagram`, {
+      session_id: sessionId,
+      title: "a diagram",
+      source: "graph TD\n A-->B",
+    });
+
+    const onBoard = (await postTo([issue])).message_id;
+    const onMap = (
+      await post<{ message_id: number }>(`${broker.url}/map-post`, {
+        session_id: sessionId,
+        map_id: map.json.map_id,
+        node_id: "__general__",
+        message: "said on the map",
+        issue_ids: [issue],
+      })
+    ).json.message_id;
+    const onDiagram = (
+      await post<{ message_id: number }>(`${broker.url}/post-diagram-chat`, {
+        session_id: sessionId,
+        diagram_id: diagram.json.id,
+        message: "said on the diagram",
+        issue_ids: [issue],
+      })
+    ).json.message_id;
+
+    const tl = await post<{
+      ok: boolean;
+      messages: {
+        id: number;
+        surface: string;
+        text: string;
+        path: string;
+        container_id: string;
+      }[];
+    }>(`${broker.url}/issue-timeline`, { issue_id: issue });
+
+    expect(tl.json.ok).toBe(true);
+    expect(tl.json.messages.map((m) => m.id)).toEqual([onBoard, onMap, onDiagram]);
+    expect(tl.json.messages.map((m) => m.surface)).toEqual([
+      "board",
+      "map",
+      "diagram",
+    ]);
+    // Full text, not a head: the caller is here to read.
+    expect(tl.json.messages[1].text).toBe("said on the map");
+    // Every row has to say where it came from, and carry enough to go there.
+    expect(tl.json.messages[2].container_id).toBe(diagram.json.id);
+    // A whole-surface chat has a synthetic node id that means nothing to a
+    // reader, so the path collapses to the container's own name.
+    expect(tl.json.messages[2].path).toBe("a diagram");
+    expect(tl.json.messages[0].path).toBe("links > Item 1");
+  });
+
+  test("an issue with nothing linked yet answers empty, not an error", async () => {
+    const issue = await mkIssue("nothing linked");
+    const tl = await post<{ ok: boolean; messages: unknown[] }>(
+      `${broker.url}/issue-timeline`,
+      { issue_id: issue },
+    );
+    expect(tl.json.ok).toBe(true);
+    expect(tl.json.messages).toEqual([]);
+  });
+
+  test("an unknown issue is an error, not an empty timeline", async () => {
+    const tl = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/issue-timeline`,
+      { issue_id: "iss_nope" },
+    );
+    expect(tl.json.ok).toBe(false);
+    expect(tl.json.error).toContain("not found");
+  });
+});

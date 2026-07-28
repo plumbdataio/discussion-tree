@@ -7,6 +7,7 @@ import {
   Table2,
   Columns3,
   Search,
+  MessagesSquare,
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -14,6 +15,7 @@ import { MDView } from "./MDView.tsx";
 import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { MultiSelectDropdown } from "./MultiSelectDropdown.tsx";
+import { IssueTimelineModal } from "./IssueTimelineModal.tsx";
 import {
   DEFAULT_FILTERS,
   ISSUE_OWNERS,
@@ -194,6 +196,7 @@ export function IssueTrackerModal() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Issue | null>(null);
+  const [timelineOf, setTimelineOf] = useState<Issue | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refetch = useCallback(
@@ -443,6 +446,15 @@ export function IssueTrackerModal() {
           {fmt(i.updated_at)}
           {i.closed_at ? ` · ${t("issues.closed")} ${fmt(i.closed_at)}` : ""}
         </span>
+        {/* The reason links are collected at all: read the whole conversation
+            for this issue in one column, wherever it happened. */}
+        <button
+          type="button"
+          className="issue-timeline-open"
+          onClick={() => setTimelineOf(i)}
+        >
+          <MessagesSquare size={13} strokeWidth={2} /> {t("issues.timeline")}
+        </button>
         {i.deleted_at ? (
           <button
             type="button"
@@ -828,6 +840,14 @@ export function IssueTrackerModal() {
             </div>
           )}
         </div>
+
+        {timelineOf && (
+          <IssueTimelineModal
+            issue={timelineOf}
+            onClose={() => setTimelineOf(null)}
+            onJump={() => setOpen(false)}
+          />
+        )}
 
         {confirmDelete && (
           <ConfirmDialog

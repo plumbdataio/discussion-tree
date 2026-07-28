@@ -469,6 +469,23 @@
     "ago_min": "{{n}}m ago",
     "ago_hour": "{{n}}h ago",
     "ago_day": "{{n}}d ago",
-    "time_hint": "updated {{updated}} · created {{created}}"
+    "time_hint": "updated {{updated}} · created {{created}}",
+    "timeline": "Conversation",
+    "timeline_count": "{{n}} message(s)",
+    "timeline_empty": "Nothing is linked to this issue yet.",
+    "timeline_jump": "Go there",
+    "timeline_jump_hint": "Open where this was said",
+    "surface": {
+      "board": "board",
+      "map": "map",
+      "diagram": "diagram",
+      "unknown": "gone"
+    },
+    "source": {
+      "user": "You",
+      "cc": "CC"
+    },
+    "timeline_more": "Show all",
+    "timeline_less": "Collapse"
   }
 }

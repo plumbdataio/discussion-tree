@@ -134,6 +134,28 @@ export function restoreIssue(id: string) {
   });
 }
 
+// One message in an issue's timeline. `surface` says which of the three kinds
+// of container it was said in, which is what decides where a click goes.
+export type IssueTimelineMessage = {
+  id: number;
+  source: "user" | "cc" | string;
+  at: string;
+  text: string;
+  surface: "board" | "map" | "diagram" | "unknown";
+  container_id: string;
+  node_id: string;
+  path: string;
+};
+
+export function fetchIssueTimeline(issueId: string) {
+  return callBroker<{
+    ok: boolean;
+    error?: string;
+    issue?: Issue;
+    messages: IssueTimelineMessage[];
+  }>("/issue-timeline", { issue_id: issueId });
+}
+
 export function fetchIssueSessions() {
   return callBroker<{ ok: boolean; sessions: IssueSession[] }>(
     "/list-issue-sessions",

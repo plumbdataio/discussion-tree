@@ -476,6 +476,101 @@ export function handleUnlinkIssueMessage(body: any):
   return { ok: true, unlinked: res.changes };
 }
 
+// WHERE A MESSAGE WAS SAID.
+//
+// thread_items.board_id is really a container id: boards, maps and diagrams all
+// keep their chat in the same table, and only one of the three joins matches.
+// Joining boards alone (as the review query first did) silently drops every
+// map and diagram message — which is exactly the "collected almost everything"
+// failure that makes an aggregated view untrustworthy.
+const LOCATION_JOINS = `
+         LEFT JOIN boards b ON b.id = t.board_id
+         LEFT JOIN maps mp ON mp.id = t.board_id
+         LEFT JOIN diagrams dg ON dg.id = t.board_id
+         LEFT JOIN nodes n ON n.board_id = t.board_id AND n.id = t.node_id
+         LEFT JOIN map_nodes mn ON mn.map_id = t.board_id AND mn.id = t.node_id`;
+
+const LOCATION_COLUMNS = `
+         COALESCE(b.title, mp.title, dg.title) AS container_title,
+         COALESCE(n.title, mn.title) AS node_title,
+         CASE WHEN b.id IS NOT NULL THEN 'board'
+              WHEN mp.id IS NOT NULL THEN 'map'
+              WHEN dg.id IS NOT NULL THEN 'diagram'
+              ELSE 'unknown' END AS surface`;
+
+// The session a message belongs to, whichever surface it is on.
+const LOCATION_SESSION = `COALESCE(b.session_id, mp.session_id, dg.session_id)`;
+
+type LocationRow = {
+  board_id: string;
+  node_id: string;
+  container_title: string | null;
+  node_title: string | null;
+  surface: string;
+};
+
+// "board > node". The whole-surface chats have a synthetic node id that means
+// nothing to a reader, so they collapse to the container's name alone.
+const GENERAL_NODES = new Set(["__chat__", "__general__", "main", "default"]);
+
+function locationPath(r: LocationRow): string {
+  const container = r.container_title ?? r.board_id;
+  if (r.node_title) return `${container} > ${r.node_title}`;
+  if (GENERAL_NODES.has(r.node_id)) return container;
+  return `${container} > ${r.node_id}`;
+}
+
+// Everything linked to one issue, in the order it was said, across every board,
+// map and diagram. This is the point of collecting links at all: the value is
+// not the jump, it is reading a decision's whole conversation in one column
+// without knowing where any of it happened.
+//
+// Unlike the review API this returns FULL text — the caller is here to read,
+// and one issue's thread is a few dozen messages, not a session's history.
+export function handleIssueTimeline(body: any):
+  | {
+      ok: true;
+      issue: IssueRow;
+      messages: unknown[];
+    }
+  | { ok: false; error: string } {
+  const issueId = String(body?.issue_id ?? "");
+  const issue = selectIssue.get(issueId) as IssueRow | undefined;
+  if (!issue) return { ok: false, error: "issue not found" };
+
+  const rows = db
+    .prepare(
+      `SELECT t.id, t.board_id, t.node_id, t.source, t.text, t.created_at,
+              ${LOCATION_COLUMNS}
+         FROM issue_links l
+         JOIN thread_items t ON t.id = l.thread_item_id
+         ${LOCATION_JOINS}
+        WHERE l.issue_id = ?
+        ORDER BY t.created_at, t.id`,
+    )
+    .all(issueId) as (LocationRow & {
+    id: number;
+    source: string;
+    text: string;
+    created_at: string;
+  })[];
+
+  return {
+    ok: true,
+    issue,
+    messages: rows.map((r) => ({
+      id: r.id,
+      source: r.source,
+      at: r.created_at,
+      text: r.text,
+      surface: r.surface,
+      container_id: r.board_id,
+      node_id: r.node_id,
+      path: locationPath(r),
+    })),
+  };
+}
+
 // The link-review ritual's read side: "show me what I said and what the user
 // said in this window, and what it is linked to".
 //
@@ -543,7 +638,7 @@ export function handleReviewMessageLinks(body: any): {
   const where: string[] = ["t.source IN ('user','cc')"];
   const args: string[] = [];
   if (sessionId) {
-    where.push("b.session_id = ?");
+    where.push(`${LOCATION_SESSION} = ?`);
     args.push(sessionId);
   }
   if (from) {
@@ -561,24 +656,21 @@ export function handleReviewMessageLinks(body: any): {
   }
   const rows = db
     .prepare(
-      `SELECT t.id, t.source, t.created_at,
-              b.title AS board_title, COALESCE(n.title, t.node_id) AS node_title,
+      `SELECT t.id, t.board_id, t.node_id, t.source, t.created_at,
+              ${LOCATION_COLUMNS},
               substr(t.text, 1, ${headChars}) AS head
          FROM thread_items t
-         JOIN boards b ON b.id = t.board_id
-         LEFT JOIN nodes n ON n.board_id = t.board_id AND n.id = t.node_id
+         ${LOCATION_JOINS}
         WHERE ${where.join(" AND ")}
         ORDER BY t.created_at
         LIMIT ${limit}`,
     )
-    .all(...args) as {
+    .all(...args) as (LocationRow & {
     id: number;
     source: string;
     created_at: string;
-    board_title: string;
-    node_title: string;
     head: string;
-  }[];
+  })[];
 
   const linkRows = db
     .prepare(
@@ -604,7 +696,8 @@ export function handleReviewMessageLinks(body: any): {
       id: r.id,
       source: r.source,
       at: r.created_at,
-      path: `${r.board_title} > ${r.node_title}`,
+      path: locationPath(r),
+      surface: r.surface,
       head: r.head,
       issues: byItem.get(r.id) ?? [],
     })),
@@ -622,6 +715,7 @@ export const routes = {
   "/delete-issue": handleDeleteIssue,
   "/restore-issue": handleRestoreIssue,
   "/list-issue-sessions": handleListIssueSessions,
+  "/issue-timeline": handleIssueTimeline,
   "/get-issue-filters": handleGetIssueFilters,
   "/set-issue-filters": handleSetIssueFilters,
 };

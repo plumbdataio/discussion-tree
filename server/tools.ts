@@ -922,6 +922,23 @@ export const TOOLS = [
     },
   },
   {
+    name: "get_issue_timeline",
+    description:
+      "Read one issue's whole conversation as a single timeline, across every board, map and diagram it happened on. Use this when you pick up an issue you no longer remember the discussion for — after a compaction, or when the user refers to a decision made somewhere you cannot see. This is what the issue_ids on every post are collected FOR. Returns full message text in the order it was said, each with the surface and path it came from; `head_chars` trims them when you only need to locate the thread.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        issue_id: { type: "string" as const },
+        head_chars: {
+          type: "number" as const,
+          description:
+            "Truncate each message to this many characters. Omit for full text, which is usually what you want — one issue is a few dozen messages, not a session.",
+        },
+      },
+      required: ["issue_id"],
+    },
+  },
+  {
     name: "link_message_to_issues",
     description:
       "Attach an already-posted message to one or more issues, or detach it. Posting normally carries its own links, so this is for fixing things up afterwards — most often during the review ritual. Pass issue_ids to add; pass unlink_issue_id to remove one.",
@@ -1976,6 +1993,28 @@ export async function dispatchToolCall(
           { ...(args as Record<string, unknown>), session_id: sessionId },
         );
         return textResult(JSON.stringify(res, null, 2));
+      }
+
+      case "get_issue_timeline": {
+        ensureSession();
+        const a = args as { issue_id: string; head_chars?: number };
+        const res = await brokerFetch<{
+          ok: boolean;
+          error?: string;
+          issue?: { title: string; owner: string; state: string };
+          messages: { text: string }[];
+        }>("/issue-timeline", { issue_id: a.issue_id });
+        if (!res.ok) return textResult(res.error ?? "issue not found", true);
+        const messages =
+          a.head_chars && a.head_chars > 0
+            ? res.messages.map((m) => ({
+                ...m,
+                text: m.text.slice(0, a.head_chars),
+              }))
+            : res.messages;
+        return textResult(
+          JSON.stringify({ issue: res.issue, messages }, null, 2),
+        );
       }
 
       case "link_message_to_issues": {

@@ -16,6 +16,7 @@ import {
 } from "../utils/favorites.ts";
 import {
   consumePendingJump,
+  getPendingJump,
   jumpToAnchor,
   subscribePendingJump,
 } from "../utils/anchorJump.ts";
@@ -202,11 +203,19 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   // the node it belongs to. Runs whenever the board's data changes (= initial
   // load, hot board switch) and whenever the jump channel notifies (= same-board
   // click in the timeline / bookmark modal).
+  //
+  // The jump is consumed only once its target is actually on the page. Taking
+  // it upfront looked equivalent and wasn't: arriving from another board, this
+  // effect re-runs the moment boardId changes while `data` still holds the
+  // PREVIOUS board, so the jump was consumed against a page that could not
+  // contain it and was gone by the time the right thread rendered. Leaving it
+  // pending lets the data-arrival run of this effect pick it up.
   useEffect(() => {
     if (!boardId || !data) return;
     const tryConsume = () => {
-      const tid = consumePendingJump(boardId);
-      if (tid == null) return;
+      const pendingJump = getPendingJump();
+      if (!pendingJump || pendingJump.boardId !== boardId) return;
+      const tid = pendingJump.threadItemId;
       // Two rAFs so the layout has had a chance to settle: data →
       // render → paint → measure.
       requestAnimationFrame(() => {
@@ -215,6 +224,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
             `[data-thread-item-id="${tid}"]`,
           ) as HTMLElement | null;
           if (!el) return;
+          consumePendingJump(boardId);
           // Instant jump (no smooth animation) — a long thread made the smooth
           // scroll take ~1s and feel like waiting. The highlight still marks it.
           el.scrollIntoView({ behavior: "instant", block: "center" });

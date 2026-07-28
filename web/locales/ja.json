@@ -469,6 +469,23 @@
     "ago_min": "{{n}}分前",
     "ago_hour": "{{n}}時間前",
     "ago_day": "{{n}}日前",
-    "time_hint": "更新 {{updated}} ・ 作成 {{created}}"
+    "time_hint": "更新 {{updated}} ・ 作成 {{created}}",
+    "timeline": "会話を見る",
+    "timeline_count": "{{n}}件の発言",
+    "timeline_empty": "この課題に紐づいた発言はまだありません。",
+    "timeline_jump": "元の場所へ",
+    "timeline_jump_hint": "この発言があった場所を開きます",
+    "surface": {
+      "board": "ボード",
+      "map": "マップ",
+      "diagram": "図",
+      "unknown": "不明"
+    },
+    "source": {
+      "user": "あなた",
+      "cc": "CC"
+    },
+    "timeline_more": "全文を表示",
+    "timeline_less": "折りたたむ"
   }
 }

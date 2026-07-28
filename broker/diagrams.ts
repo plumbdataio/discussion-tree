@@ -372,13 +372,17 @@ export function handlePostDiagramChat(body: any) {
     message,
     new Date().toISOString(),
   );
-  linkMessageToIssues(Number(inserted.lastInsertRowid), links.ids);
+  const messageId = Number(inserted.lastInsertRowid);
+  linkMessageToIssues(messageId, links.ids);
   broadcast(id, {
     type: "thread-update",
     node_id: DIAGRAM_CHAT_NODE,
     source: "cc",
   });
-  return { ok: true };
+  // Same shape as the board and map post handlers. The id is what a caller
+  // needs to fix up an issue link afterwards, and this was the only one of the
+  // three not handing it back.
+  return { ok: true, message_id: messageId };
 }
 
 export const routes = {
