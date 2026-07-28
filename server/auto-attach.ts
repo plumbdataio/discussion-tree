@@ -128,10 +128,7 @@ export async function tryAutoAttach(): Promise<boolean> {
     if (fs.existsSync(file)) break;
     await new Promise((r) => setTimeout(r, 100));
   }
-  // No card is not the end of it: a session started before the card was kept has
-  // none and never will, so fall back to asking the broker what it last saw for
-  // this CC pid. That is the path an MCP restart under a running CC takes.
-  const ccId = readHintCcId() ?? (await lookupCcIdByPid());
+  const ccId = readHintCcId();
   if (!ccId) return false;
 
   // Retry: cover the case where the broker is up but momentarily refusing
@@ -156,28 +153,6 @@ export async function tryAutoAttach(): Promise<boolean> {
   return false;
 }
 
-// Last resort when there is no hint file at all: ask the broker which
-// cc_session_id it last saw for this CC process id.
-//
-// The hint is written once per CC start, and builds before 2026-07-29 deleted it
-// on first use — so a session that predates this code has no card to read and
-// can never recover on its own, no matter how many times the MCP server
-// restarts. The broker has the answer anyway: every session row records the
-// cc_pid its hooks reported, and this process's ppid IS that pid. Scoped
-// broker-side to rows seen in the last day so a recycled pid cannot bind us to
-// somebody else's boards.
-async function lookupCcIdByPid(): Promise<string | null> {
-  try {
-    const res = await brokerFetch<{ ok: boolean; cc_session_id?: string }>(
-      "/lookup-cc-session-by-pid",
-      { cc_pid: process.ppid },
-    );
-    return res?.ok && res.cc_session_id ? res.cc_session_id : null;
-  } catch {
-    return null;
-  }
-}
-
 // Heartbeat-driven self-healing. Called once per heartbeat tick from
 // server.ts. Cheap on the happy path (= broker still has the binding;
 // nothing to do, no extra I/O). When the broker reports a null
@@ -191,7 +166,7 @@ export async function selfHealAttachOnce(
   brokerSideCcId: string | null,
 ): Promise<string | null> {
   if (brokerSideCcId) return null;
-  const ccId = readHintCcId() ?? (await lookupCcIdByPid());
+  const ccId = readHintCcId();
   if (!ccId) return null;
   if (!(await attemptAttach(ccId))) return null;
   setAttachedCcId(ccId);
