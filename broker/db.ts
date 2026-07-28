@@ -367,6 +367,38 @@ safeAlter(
 // stayed delivered=1 with pushed_at NULL past a grace window (resweepUnackedStmt).
 safeAlter("ALTER TABLE pending_messages ADD COLUMN pushed_at TEXT");
 
+// Foreign-key indexes for the core tables. These were missing entirely — every
+// table above had only its PRIMARY KEY — and the omission is invisible until
+// the data grows, because SQLite just scans instead.
+//
+// What it cost (measured 2026-07-28 on a 25 MB db: 19,910 thread_items / 1,754
+// nodes / 155 boards / 332 sessions): ONE /api/sessions took ~4.2s, almost all
+// of it re-scanning thread_items once per board inside a correlated subquery,
+// and again per board for the unread counts. The sidebar polls that endpoint
+// every 10s in every open tab, and Bun.serve is single-threaded — so the event
+// loop was saturated by the poll alone and every other request, including the
+// page itself, timed out. From outside it looked like a network fault; a
+// `sample` of the process showed 100% of samples parked inside sqlite3_step.
+// With these indexes the same call is ~0.01s (400x) for +1.7 MB of db.
+//
+// The lesson worth keeping: a missing index does not fail, it just gets slower
+// until it crosses the poll interval and then everything stops at once.
+for (const sql of [
+  // Read on almost every request: thread bodies, unread counts, "does this
+  // board have any messages".
+  "CREATE INDEX IF NOT EXISTS idx_thread_items_board ON thread_items(board_id)",
+  "CREATE INDEX IF NOT EXISTS idx_thread_items_board_node ON thread_items(board_id, node_id)",
+  "CREATE INDEX IF NOT EXISTS idx_nodes_board ON nodes(board_id)",
+  // Session -> its surfaces, walked for every row of the sidebar.
+  "CREATE INDEX IF NOT EXISTS idx_boards_session ON boards(session_id)",
+  // maps / diagrams get the same treatment next to their own definitions —
+  // those tables do not exist yet at this point in the file.
+  // The undelivered-message queue, scanned per session on every poll.
+  "CREATE INDEX IF NOT EXISTS idx_pending_session ON pending_messages(session_id, delivered)",
+]) {
+  db.run(sql);
+}
+
 // Anchors (= per-session pinned thread items). The "favorites" name is the
 // implementation-level term; user-facing UI calls these "anchors".
 // Scoped to a session_id so multiple sessions don't see each other's pins;
@@ -474,6 +506,9 @@ db.run(`
     deleted_at TEXT
   )
 `);
+// Walked once per session to build the sidebar (see the index block above for
+// what a missing foreign-key index cost here).
+db.run("CREATE INDEX IF NOT EXISTS idx_maps_session ON maps(session_id)");
 // Map nodes carry their own free-form position (x/y) and optional persisted
 // size (w/h) because the layout is spatial + stable (no auto-relayout — the
 // place the user drags a node to is remembered). kind ∈ question | idea |

@@ -45,6 +45,9 @@ try {
 } catch {
   /* column already exists */
 }
+// Walked once per session to build the sidebar — see the foreign-key index
+// block in db.ts for what leaving these out cost.
+db.run("CREATE INDEX IF NOT EXISTS idx_diagrams_session ON diagrams(session_id)");
 
 // Lightweight mermaid sanity check at upsert time. A full mermaid.parse needs a
 // DOM (jsdom) which is heavy in Bun, so we only reject the obvious failures:
