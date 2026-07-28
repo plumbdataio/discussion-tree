@@ -857,6 +857,79 @@ export const TOOLS = [
     },
   },
   {
+    name: "create_issue",
+    description:
+      "File an issue on the cross-session tracker — the ledger of outstanding work. Use it the MOMENT something surfaces that must not be forgotten and lives nowhere else: a promise you made, a follow-up the user asked for, a defect you noticed in passing, work you deferred. Do NOT wait to be told; an unfiled issue is a forgotten one. State is TWO independent axes: owner = who holds the ball (user = the human must act, cc = you must act, external = a third party / a release / someone else's reply), and state = todo / doing / done / dropped. There is deliberately no 'blocked' — say WHO it is blocked on via owner instead. Do not file what already lives on a board node as a discussion; file the outstanding ACTION.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        title: { type: "string" as const, description: "Short, action-shaped. Under ~60 chars." },
+        body: { type: "string" as const, description: "Markdown. Why it matters, links, how to verify it is done." },
+        owner: {
+          type: "string" as const,
+          enum: ["user", "cc", "external"],
+          description: "Who holds the ball. Default cc.",
+        },
+        state: {
+          type: "string" as const,
+          enum: ["todo", "doing", "done", "dropped"],
+          description: "Default todo. Use done to record something already finished.",
+        },
+        session_id: { type: "string" as const, description: "Owning session; defaults to yours." },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "update_issue",
+    description:
+      "Change an issue's title / body / owner / state. Keeping this current is YOUR job — move it to state=doing when you start, owner=user the moment you hand the ball back (and say so in your reply), state=done when it is verifiably finished. A tracker nobody updates is worse than none, because it looks authoritative while lying.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        issue_id: { type: "string" as const },
+        title: { type: "string" as const },
+        body: { type: "string" as const },
+        owner: { type: "string" as const, enum: ["user", "cc", "external"] },
+        state: { type: "string" as const, enum: ["todo", "doing", "done", "dropped"] },
+      },
+      required: ["issue_id"],
+    },
+  },
+  {
+    name: "list_issues",
+    description:
+      "Read the tracker. Defaults to what is still outstanding (done/dropped hidden). Use BEFORE saying 'what were we going to do next?' and before filing a new issue, so you extend an existing one instead of creating a duplicate. Filter by owner to answer 'what is the user waiting on me for' (owner=cc) or 'what am I waiting on them for' (owner=user).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        owner: { type: "string" as const, enum: ["user", "cc", "external"] },
+        state: { type: "string" as const, enum: ["todo", "doing", "done", "dropped"] },
+        session_id: { type: "string" as const },
+        include_closed: { type: "boolean" as const, description: "Include done / dropped." },
+      },
+    },
+  },
+  {
+    name: "delete_issue",
+    description:
+      "Hide an issue that turned out to be noise. LOGICAL delete — the row and its reasoning survive and restore_issue brings it back, so this is safe. Prefer state=dropped when the work was real but abandoned (that keeps it in the record as a decision); delete is for entries that should never have been filed.",
+    inputSchema: {
+      type: "object" as const,
+      properties: { issue_id: { type: "string" as const } },
+      required: ["issue_id"],
+    },
+  },
+  {
+    name: "restore_issue",
+    description: "Un-delete a logically-deleted issue.",
+    inputSchema: {
+      type: "object" as const,
+      properties: { issue_id: { type: "string" as const } },
+      required: ["issue_id"],
+    },
+  },
+  {
     name: "archive_map",
     description:
       "Archive a map (hide it from the active sidebar list) or unarchive it. Soft — the map, its nodes and threads stay; only the sidebar/list hide it. THIS is how you close/retire a map: close_board works only on boards and archive_diagram only on diagrams, so neither hides a map — use this. Pass archived:false to restore.",
@@ -1814,6 +1887,62 @@ export async function dispatchToolCall(
         );
         if (!res.ok) return textResult(res.error ?? "rename_map failed", true);
         return textResult(`Map ${a.map_id} renamed to "${a.title}".`);
+      }
+
+      case "create_issue": {
+        ensureSession();
+        const a = args as Record<string, unknown>;
+        const res = await brokerFetch<{ ok: boolean; error?: string; issue?: { id: string; owner: string; state: string } }>(
+          "/create-issue",
+          { ...a, session_id: a.session_id ?? sessionId },
+        );
+        if (!res.ok || !res.issue) return textResult(res.error ?? "create_issue failed", true);
+        return textResult(
+          `Issue ${res.issue.id} filed (${res.issue.owner} / ${res.issue.state}).`,
+        );
+      }
+
+      case "update_issue": {
+        ensureSession();
+        const res = await brokerFetch<{ ok: boolean; error?: string; issue?: { id: string; owner: string; state: string } }>(
+          "/update-issue",
+          args as Record<string, unknown>,
+        );
+        if (!res.ok || !res.issue) return textResult(res.error ?? "update_issue failed", true);
+        return textResult(
+          `Issue ${res.issue.id} now ${res.issue.owner} / ${res.issue.state}.`,
+        );
+      }
+
+      case "list_issues": {
+        ensureSession();
+        const res = await brokerFetch<{ ok: boolean; issues?: unknown[] }>(
+          "/list-issues",
+          args as Record<string, unknown>,
+        );
+        return textResult(JSON.stringify(res.issues ?? [], null, 2));
+      }
+
+      case "delete_issue": {
+        ensureSession();
+        const a = args as { issue_id: string };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/delete-issue",
+          { issue_id: a.issue_id },
+        );
+        if (!res.ok) return textResult(res.error ?? "delete_issue failed", true);
+        return textResult(`Issue ${a.issue_id} hidden (restore_issue undoes it).`);
+      }
+
+      case "restore_issue": {
+        ensureSession();
+        const a = args as { issue_id: string };
+        const res = await brokerFetch<{ ok: boolean; error?: string }>(
+          "/restore-issue",
+          { issue_id: a.issue_id },
+        );
+        if (!res.ok) return textResult(res.error ?? "restore_issue failed", true);
+        return textResult(`Issue ${a.issue_id} restored.`);
       }
 
       case "archive_map": {
