@@ -479,11 +479,23 @@ export function handleReviewMessageLinks(body: any): {
   // Default the window to "since this session last finished compacting" so the
   // caller never has to know its own compact boundary — it can't see one from
   // in here.
+  // Across every row sharing this cc_session_id — see the note in
+  // handleSessionCompactingDone. Restarting CC starts a new broker session row,
+  // so a boundary stamped before the restart lives on a different row; reading
+  // only this one would make the window "all of history" right after a restart.
+  // Falls back to this row alone when the session has no cc_session_id yet.
   const lastCompact = sessionId
     ? (
         db
-          .prepare("SELECT last_compact_at FROM sessions WHERE id = ?")
-          .get(sessionId) as { last_compact_at: string | null } | null
+          .prepare(
+            `SELECT MAX(last_compact_at) AS last_compact_at FROM sessions
+              WHERE id = ?
+                 OR (cc_session_id IS NOT NULL
+                     AND cc_session_id = (SELECT cc_session_id FROM sessions WHERE id = ?))`,
+          )
+          .get(sessionId, sessionId) as {
+          last_compact_at: string | null
+        } | null
       )?.last_compact_at ?? null
     : null;
   const from = body?.from ? String(body.from) : lastCompact;

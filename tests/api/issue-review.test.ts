@@ -103,6 +103,43 @@ describe("review — the window", () => {
   });
 });
 
+// A broker session row is per MCP-server process, so restarting CC starts a
+// fresh row while the CC session id stays the same. Boundaries stamped before
+// the restart live on the older row, and reading only the current one loses
+// them — which silently widens the review window to the hook's "last day"
+// fallback (or, for the API default, to all of history).
+describe("review — the compact boundary survives a CC restart", () => {
+  const restarted = async (stampedAt: string) => {
+    const ccId = `cc-restart-${Math.random().toString(36).slice(2, 8)}`;
+    const older = await registerSession(broker.url);
+    await attachCC(broker.url, older, ccId);
+    db.run("UPDATE sessions SET last_compact_at = ? WHERE id = ?", [stampedAt, older]);
+    // CC restarts: a brand-new row binds to the same CC session, with no
+    // boundary of its own.
+    const current = await registerSession(broker.url);
+    await attachCC(broker.url, current, ccId);
+    return { ccId, older, current };
+  };
+
+  test("the boundary handed back is the one stamped before the restart", async () => {
+    const { ccId } = await restarted("2026-07-01T00:00:00.000Z");
+    const done = await post<{ previous_compact_at: string | null }>(
+      `${broker.url}/session-compacting-done`,
+      { cc_session_id: ccId },
+    );
+    expect(done.json.previous_compact_at).toBe("2026-07-01T00:00:00.000Z");
+  });
+
+  test("the default window starts there too, rather than at all of history", async () => {
+    const { ccId } = await restarted("2026-07-02T00:00:00.000Z");
+    const r = await post<{ from: string | null }>(
+      `${broker.url}/review-message-links`,
+      { cc_session_id: ccId },
+    );
+    expect(r.json.from).toBe("2026-07-02T00:00:00.000Z");
+  });
+});
+
 describe("review — what it returns", () => {
   test("a head, not the message, and the path it was said on", async () => {
     const long = "x".repeat(500);

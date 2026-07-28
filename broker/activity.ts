@@ -334,11 +334,20 @@ export function handleSessionCompactingDone(body: {
   // Hand back the PREVIOUS boundary before overwriting it. The window worth
   // reviewing is the one that was just compacted — from the last boundary to
   // this one — and once this row is stamped that start point is gone.
+  //
+  // Looked up across EVERY row for this cc_session_id, not just the alive one.
+  // A broker session row is per MCP-server process, so restarting CC starts a
+  // fresh row while the CC session id stays the same: reading only the current
+  // row loses every boundary stamped before the last restart. Observed on
+  // 2026-07-29 — the review window silently fell back to "the last day" and
+  // reported 71 messages where the real compacted window held 23.
   const previous =
     (
       db
-        .prepare("SELECT last_compact_at FROM sessions WHERE id = ?")
-        .get(sessionId) as { last_compact_at: string | null } | null
+        .prepare(
+          "SELECT MAX(last_compact_at) AS last_compact_at FROM sessions WHERE cc_session_id = ?",
+        )
+        .get(body.cc_session_id) as { last_compact_at: string | null } | null
     )?.last_compact_at ?? null;
   // Remember WHEN the compaction happened. The link-review ritual reads back
   // "everything since the last compact", and CC cannot see its own compact
