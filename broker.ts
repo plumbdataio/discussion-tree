@@ -33,10 +33,6 @@ import {
 } from "./broker/diagrams.ts";
 import { routes as mapChecklistRoutes } from "./broker/map-checklist.ts";
 import { getBoardView } from "./broker/helpers.ts";
-import {
-  getSessionIssues,
-  routes as sessionIssuesRoutes,
-} from "./broker/session-issues.ts";
 import { routes as nodesRoutes } from "./broker/nodes.ts";
 import {
   initCliVerbosity,
@@ -120,7 +116,6 @@ const POST_ROUTES: Record<string, RouteHandler> = {
   ...diagramsRoutes,
   ...scheduledMessagesRoutes,
   ...spawnRoutes,
-  ...sessionIssuesRoutes,
 };
 
 // Routes that drive tmux (spawn a session, or inject a command into a live CC
@@ -229,12 +224,6 @@ const server = Bun.serve({
       return Response.json(handleListSessions());
     }
 
-    // Per-session issue view (the "issues" surface): aggregates the session's
-    // item nodes into status lanes. Pure projection of existing node status.
-    if (req.method === "GET" && path.startsWith("/api/session-issues/")) {
-      const id = path.slice("/api/session-issues/".length);
-      return Response.json(getSessionIssues(id));
-    }
 
     // Divergent-discussion map read API — the map view (/map/:id, served by
     // the SPA above) fetches this and subscribes to /ws/<map_id> for updates.

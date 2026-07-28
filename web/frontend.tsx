@@ -12,7 +12,6 @@ import { DiagramView } from "./components/DiagramView.tsx";
 import { RootDashboard } from "./components/RootDashboard.tsx";
 import { ScheduledEditModal } from "./components/ScheduledEditModal.tsx";
 import { ScheduledListModal } from "./components/ScheduledListModal.tsx";
-import { SessionIssuesModal } from "./components/SessionIssuesModal.tsx";
 import { TimerConfirmModal } from "./components/TimerConfirmModal.tsx";
 import { SessionDashboard } from "./components/SessionDashboard.tsx";
 import { ToastContainer } from "./components/Toast.tsx";
@@ -112,7 +111,6 @@ function App() {
       <GearButton />
       <ScheduledListModal />
       <ScheduledEditModal />
-      <SessionIssuesModal />
       <TimerConfirmModal />
       <ToastContainer />
     </>
