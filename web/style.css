@@ -4246,11 +4246,8 @@ textarea.answer-input {
   display: block;
   width: 100%;
 }
-/* Native corner off — the custom handle replaces it. Higher specificity than
-   the per-surface `.node-modal-input .answer-input { resize: vertical }` rules. */
-.answer-input-wrap textarea.answer-input {
-  resize: none;
-}
+/* Turning the native corner off is NOT done here — ResizableTextarea sets
+   `resize: none` inline, so it wins over every per-surface rule at once. */
 .answer-resize-handle {
   position: absolute;
   top: 3px;
@@ -4533,8 +4530,9 @@ textarea.answer-input {
 }
 .scheduled-edit-text {
   width: 100%;
-  min-height: 90px;
-  resize: vertical;
+  /* Matches ResizableTextarea's own floor — a larger min-height here would
+     silently stop the handle from dragging the box back down. */
+  min-height: 60px;
 }
 
 /* "You have a pending timer send — send this live message now?" confirm. */
@@ -4941,9 +4939,11 @@ button.secondary {
   }
 }
 
+/* No max-width override: this modal holds a history thread AND a composer, so
+   it reads better at the same 880px the preview modals use. It used to be
+   pinned to 640px, which made both halves cramped. */
 .modal-structure-request {
   border-left-color: #a855f7;
-  max-width: 640px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -5001,9 +5001,12 @@ button.secondary {
   font-size: 12px;
 }
 
+/* The starting height comes from the `rows` attribute, not from here: this is
+   a ResizableTextarea, and a min-height above the handle's own floor (60px)
+   would stop the user dragging the box back down. */
 .modal-textarea {
   width: 100%;
-  min-height: 180px;
+  min-height: 60px;
   padding: 10px 12px;
   font: inherit;
   font-size: 14px;
@@ -5012,7 +5015,6 @@ button.secondary {
   border-radius: 6px;
   background: var(--bg);
   color: var(--text);
-  resize: vertical;
   box-sizing: border-box;
 }
 .modal-textarea:focus {
@@ -5869,12 +5871,6 @@ button.secondary {
   background: var(--panel);
   color: var(--text);
 }
-/* The map/diagram chat composers now use ResizableTextarea (custom top-right
-   handle); kill the native bottom-right grip. More specific than
-   `.map-chat-input textarea { resize: vertical }`, so it wins. */
-.map-chat-input .answer-input-wrap textarea {
-  resize: none;
-}
 .map-chat-send-row { display: flex; justify-content: flex-end; }
 .map-chat-send-row button {
   padding: 6px 16px;
@@ -6372,7 +6368,6 @@ ul.maps li.current .sidebar-map-link {
 }
 .cli-command-args {
   width: 100%;
-  resize: vertical;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.5px;
   line-height: 1.5;

@@ -7,6 +7,7 @@
 // a session to resume). Gated behind the tmux-integration setting in the sidebar.
 
 import React, { useEffect, useState } from "react";
+import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -232,7 +233,7 @@ export function SpawnModal({ onClose }: { onClose: () => void }) {
                 <label className="settings-label">
                   {t("spawn.base_args_label")}
                 </label>
-                <textarea
+                <ResizableTextarea
                   className="cli-command-args"
                   rows={5}
                   value={baseArgsText}

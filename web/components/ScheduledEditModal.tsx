@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { useTranslation } from "react-i18next";
 import {
   subscribeOpenScheduledEdit,
@@ -101,7 +102,7 @@ export function ScheduledEditModal() {
           value={when}
           onChange={(e) => setWhen(e.target.value)}
         />
-        <textarea
+        <ResizableTextarea
           className="answer-input scheduled-edit-text"
           value={text}
           onChange={(e) => setText(e.target.value)}

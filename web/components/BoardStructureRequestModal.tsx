@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { BoardView, ThreadItem } from "../../shared/types.ts";
 import { ThreadMessage } from "./ThreadMessage.tsx";
+import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import {
   extractImageFiles,
   postBoardStructureRequest,
@@ -217,7 +218,7 @@ export function BoardStructureRequestModal({
             )}
           </div>
         )}
-        <textarea
+        <ResizableTextarea
           ref={textareaRef}
           className="modal-textarea"
           value={text}
@@ -230,7 +231,7 @@ export function BoardStructureRequestModal({
           }}
           onPaste={handlePaste}
           onDrop={handleDrop}
-          rows={8}
+          rows={10}
           placeholder={t("structure_request.placeholder")}
           disabled={sending}
         />

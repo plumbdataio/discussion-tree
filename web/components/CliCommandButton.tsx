@@ -10,6 +10,7 @@
 // (busy=true), where the command would be eaten as a chat message.
 
 import React, { useEffect, useRef, useState } from "react";
+import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { createPortal } from "react-dom";
 import { SquareTerminal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -175,7 +176,7 @@ function CliCommandModal({
           <label className="settings-label" htmlFor="cli-command-args">
             {t("cli.args_label")}
           </label>
-          <textarea
+          <ResizableTextarea
             id="cli-command-args"
             className="cli-command-args"
             rows={10}

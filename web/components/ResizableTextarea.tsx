@@ -10,9 +10,11 @@ import React, { forwardRef, useRef } from "react";
 //    preview modal from registering as a backdrop click and closing it.
 
 // @reusable-ui ResizableTextarea — USE WHEN: any chat / multi-line text
-//   composer. INSTEAD OF a raw <textarea>: adds the custom top-right resize
-//   handle (native grip off) + pointer-capture drag. Drop-in — forwards all
-//   <textarea> props and the ref.
+//   composer, in a panel or a modal. INSTEAD OF a raw <textarea>: adds the
+//   custom top-right resize handle (native grip off) + pointer-capture drag.
+//   Drop-in — forwards all <textarea> props and the ref, and needs NO
+//   accompanying CSS. Keep the surface's own `min-height` at or below MIN_H
+//   below, or the handle can't drag the box back down.
 const MIN_H = 60;
 const MAX_H = 600;
 
@@ -59,7 +61,18 @@ export const ResizableTextarea = forwardRef<
 
   return (
     <span className="answer-input-wrap">
-      <textarea ref={setRef} className={className} {...props} />
+      {/* `resize: none` lives here, not in CSS. Every surface styles its own
+          textarea with `resize: vertical`, so a stylesheet rule had to out-
+          specify each of them one by one — and every new caller silently kept
+          the native bottom-right grip until someone spotted it in a screenshot
+          (it happened twice). An inline style beats all of them at once, so
+          wrapping a textarea is now enough to guarantee the contract. */}
+      <textarea
+        ref={setRef}
+        className={className}
+        {...props}
+        style={{ ...props.style, resize: "none" }}
+      />
       <span
         className="answer-resize-handle"
         aria-hidden="true"
