@@ -366,6 +366,9 @@ safeAlter(
 // delivered=1 forever and never reach CC. A broker sweep re-queues rows that
 // stayed delivered=1 with pushed_at NULL past a grace window (resweepUnackedStmt).
 safeAlter("ALTER TABLE pending_messages ADD COLUMN pushed_at TEXT");
+// When this session last finished compacting. Written by /session-compacting-done
+// and read by the link-review ritual, which defaults to "everything since then".
+safeAlter("ALTER TABLE sessions ADD COLUMN last_compact_at TEXT");
 
 // Foreign-key indexes for the core tables. These were missing entirely — every
 // table above had only its PRIMARY KEY — and the omission is invisible until

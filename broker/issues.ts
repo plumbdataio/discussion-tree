@@ -407,8 +407,121 @@ export function handleUnlinkIssueMessage(body: any):
   return { ok: true, unlinked: res.changes };
 }
 
+// The link-review ritual's read side: "show me what I said and what the user
+// said in this window, and what it is linked to".
+//
+// It returns a HEAD of each message, not the message. 348 KB of full text for a
+// session's history is unusable inside a context that is already nearly full,
+// whereas ~3k tokens for one compaction window is nothing — and a head of 40
+// characters was measured to identify a message uniquely 100% of the time for CC
+// and 97% for the user. `path` is carried because identifying a message is not
+// the same as remembering it, and the board/node it lived on is the cheapest,
+// strongest reminder of what the exchange was about.
+//
+// `to` matters as much as `from`: the ritual is meant to run before a
+// compaction, but when it doesn't, the window has to be recoverable afterwards
+// by asking for everything up to the compact boundary. Without it that window
+// would be silently lost.
+export function handleReviewMessageLinks(body: any): {
+  ok: true;
+  from: string | null;
+  to: string | null;
+  total: number;
+  messages: unknown[];
+} {
+  const sessionId = String(body?.session_id ?? "");
+  const headChars = Math.max(
+    10,
+    Math.min(500, Number(body?.head_chars) || 60),
+  );
+  const limit = Math.max(1, Math.min(2000, Number(body?.limit) || 800));
+  // Default the window to "since this session last finished compacting" so the
+  // caller never has to know its own compact boundary — it can't see one from
+  // in here.
+  const lastCompact = sessionId
+    ? (
+        db
+          .prepare("SELECT last_compact_at FROM sessions WHERE id = ?")
+          .get(sessionId) as { last_compact_at: string | null } | null
+      )?.last_compact_at ?? null
+    : null;
+  const from = body?.from ? String(body.from) : lastCompact;
+  const to = body?.to ? String(body.to) : null;
+
+  const where: string[] = ["t.source IN ('user','cc')"];
+  const args: string[] = [];
+  if (sessionId) {
+    where.push("b.session_id = ?");
+    args.push(sessionId);
+  }
+  if (from) {
+    where.push("t.created_at >= ?");
+    args.push(from);
+  }
+  if (to) {
+    where.push("t.created_at <= ?");
+    args.push(to);
+  }
+  if (body?.unlinked_only !== false) {
+    where.push(
+      "NOT EXISTS (SELECT 1 FROM issue_links l WHERE l.thread_item_id = t.id)",
+    );
+  }
+  const rows = db
+    .prepare(
+      `SELECT t.id, t.source, t.created_at,
+              b.title AS board_title, COALESCE(n.title, t.node_id) AS node_title,
+              substr(t.text, 1, ${headChars}) AS head
+         FROM thread_items t
+         JOIN boards b ON b.id = t.board_id
+         LEFT JOIN nodes n ON n.board_id = t.board_id AND n.id = t.node_id
+        WHERE ${where.join(" AND ")}
+        ORDER BY t.created_at
+        LIMIT ${limit}`,
+    )
+    .all(...args) as {
+    id: number;
+    source: string;
+    created_at: string;
+    board_title: string;
+    node_title: string;
+    head: string;
+  }[];
+
+  const linkRows = db
+    .prepare(
+      "SELECT thread_item_id, issue_id FROM issue_links WHERE thread_item_id IN (SELECT value FROM json_each(?))",
+    )
+    .all(JSON.stringify(rows.map((r) => r.id))) as {
+    thread_item_id: number;
+    issue_id: string;
+  }[];
+  const byItem = new Map<number, string[]>();
+  for (const l of linkRows) {
+    const cur = byItem.get(l.thread_item_id) ?? [];
+    cur.push(l.issue_id);
+    byItem.set(l.thread_item_id, cur);
+  }
+
+  return {
+    ok: true,
+    from,
+    to,
+    total: rows.length,
+    messages: rows.map((r) => ({
+      id: r.id,
+      source: r.source,
+      at: r.created_at,
+      path: `${r.board_title} > ${r.node_title}`,
+      head: r.head,
+      issues: byItem.get(r.id) ?? [],
+    })),
+  };
+}
+
 export const routes = {
   "/create-issue": handleCreateIssue,
+  "/review-message-links": handleReviewMessageLinks,
   "/link-issue-message": handleLinkIssueMessage,
   "/unlink-issue-message": handleUnlinkIssueMessage,
   "/update-issue": handleUpdateIssue,

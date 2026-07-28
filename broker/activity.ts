@@ -331,6 +331,15 @@ export function handleSessionCompactingDone(body: {
   const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
   if (!sessionId) return { ok: false };
   clearCompacting(sessionId);
+  // Remember WHEN the compaction happened. The link-review ritual reads back
+  // "everything since the last compact", and CC cannot see its own compact
+  // boundary from inside dt — the only other record is a local hook artifact
+  // outside the DB. Stamped on completion rather than on entry so it marks the
+  // point the new context actually starts from.
+  db.run("UPDATE sessions SET last_compact_at = ? WHERE id = ?", [
+    new Date().toISOString(),
+    sessionId,
+  ]);
   return { ok: true };
 }
 

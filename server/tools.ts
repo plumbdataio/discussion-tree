@@ -893,6 +893,52 @@ export const TOOLS = [
     },
   },
   {
+    name: "review_message_links",
+    description:
+      "Review which messages are NOT yet attached to an issue, and fix that. Run this as part of the pre-compaction ritual — and after a compaction that happened without it, by passing `to` = the compact time to recover the window that would otherwise be lost. Returns a HEAD of each message plus the board/node it was on, which is enough to recognise it without spending context on full text. Follow up with link_message_to_issues for the ones that belong somewhere.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        from: {
+          type: "string" as const,
+          description:
+            "ISO time, inclusive. Defaults to when this session last finished compacting — you cannot see that boundary yourself, so leave it out unless you want a different window.",
+        },
+        to: {
+          type: "string" as const,
+          description: "ISO time, inclusive. Defaults to now.",
+        },
+        unlinked_only: {
+          type: "boolean" as const,
+          description:
+            "Default true — only messages with no issue yet, which is what needs deciding.",
+        },
+        head_chars: {
+          type: "number" as const,
+          description: "Characters of each message to return (default 60).",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "link_message_to_issues",
+    description:
+      "Attach an already-posted message to one or more issues, or detach it. Posting normally carries its own links, so this is for fixing things up afterwards — most often during the review ritual. Pass issue_ids to add; pass unlink_issue_id to remove one.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        message_id: { type: "number" as const },
+        issue_ids: {
+          type: "array" as const,
+          items: { type: "string" as const },
+        },
+        unlink_issue_id: { type: "string" as const },
+      },
+      required: ["message_id"],
+    },
+  },
+  {
     name: "update_issue",
     description:
       "Change an issue's title / body / owner / state. Keeping this current is YOUR job — move it to state=doing when you start, owner=user the moment you hand the ball back (and say so in your reply), state=done when it is verifiably finished. A tracker nobody updates is worse than none, because it looks authoritative while lying.",
@@ -1921,6 +1967,37 @@ export async function dispatchToolCall(
         return textResult(
           `Issue ${res.issue.id} filed (${res.issue.owner} / ${res.issue.state}).`,
         );
+      }
+
+      case "review_message_links": {
+        const sessionId = ensureSession();
+        const res = await brokerFetch<{ ok: boolean; total: number }>(
+          "/review-message-links",
+          { ...(args as Record<string, unknown>), session_id: sessionId },
+        );
+        return textResult(JSON.stringify(res, null, 2));
+      }
+
+      case "link_message_to_issues": {
+        ensureSession();
+        const a = args as {
+          message_id: number;
+          issue_ids?: string[];
+          unlink_issue_id?: string;
+        };
+        if (a.unlink_issue_id) {
+          const res = await brokerFetch<{ ok: boolean; unlinked: number }>(
+            "/unlink-issue-message",
+            { message_id: a.message_id, issue_id: a.unlink_issue_id },
+          );
+          return textResult(`Unlinked ${res.unlinked} link(s).`);
+        }
+        const res = await brokerFetch<{ ok: boolean; linked: number; error?: string }>(
+          "/link-issue-message",
+          { message_id: a.message_id, issue_ids: a.issue_ids ?? [] },
+        );
+        if (!res.ok) return textResult(res.error ?? "link failed", true);
+        return textResult(`Linked message ${a.message_id} to ${res.linked} issue(s).`);
       }
 
       case "update_issue": {
