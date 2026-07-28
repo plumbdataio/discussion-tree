@@ -73,6 +73,20 @@ Ask what the message *is*, not what it mentions.
   removable (`unlink_issue_id`); one that was never linked is invisible, and
   nobody ever finds out it is missing.
 
+## Reading the result — the reason any of this is done
+
+`get_issue_timeline(issue_id)` returns that issue's whole conversation in the
+order it was said, across every board, map and diagram, with full text.
+
+**Reach for it before answering from memory about an issue you have not touched
+this session** — after a compaction, or when the user refers to a decision made
+somewhere you cannot see. The issue body is a summary someone wrote at one
+moment; the timeline is what was actually said. Guessing from the body is how a
+confident wrong answer gets produced.
+
+Pass `head_chars` when you only need to locate the thread rather than read it.
+The user has the same view in the UI: an issue row → "会話を見る".
+
 ## A note on scope
 
 Both mechanisms above assume a session that runs long enough to be compacted. In
