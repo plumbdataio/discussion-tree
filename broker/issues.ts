@@ -459,7 +459,18 @@ export function handleReviewMessageLinks(body: any): {
   total: number;
   messages: unknown[];
 } {
-  const sessionId = String(body?.session_id ?? "");
+  // Hooks only know the CC-side session id, so accept either.
+  const sessionId = body?.session_id
+    ? String(body.session_id)
+    : body?.cc_session_id
+      ? ((
+          db
+            .prepare(
+              "SELECT id FROM sessions WHERE cc_session_id = ? AND alive = 1 ORDER BY last_seen DESC LIMIT 1",
+            )
+            .get(String(body.cc_session_id)) as { id: string } | null
+        )?.id ?? "")
+      : "";
   const headChars = Math.max(
     10,
     Math.min(500, Number(body?.head_chars) || 60),

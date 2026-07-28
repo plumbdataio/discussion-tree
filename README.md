@@ -17,6 +17,39 @@ CLI is serial. The moment you have three things to figure out at once with Claud
 - **Per-device UI settings.** Light / dark / system theme, language (English / Japanese / system), auto-mark-as-read, sidebar status filter. Per-device localStorage so your phone and laptop can behave differently.
 - **Inspired by a broker-daemon + MCP-server pattern.** Same broker-daemon-plus-MCP-server topology; the topic split (intra-session, structured) is where discussion-tree diverges.
 
+## Who this is for (and who it isn't)
+
+**discussion-tree assumes long-running Claude Code sessions.** That is worth
+saying plainly, because the common advice is the opposite: one session per
+feature, thrown away when the work is done. If that is how you work, dt still
+gives you the browser-side decision tree, boards, maps and diagrams — but a
+number of features will look like solutions to problems you don't have.
+
+Features that only make sense in a session that lives for days:
+
+- **Compaction hooks.** Reminders about boards whose threads you no longer
+  remember, unfinished checklists, and messages that were never attached to an
+  issue. A session that never compacts never sees any of them.
+- **Session reclaim across restarts.** Boards, maps, diagrams and issues follow
+  the same logical session through a restart rather than orphaning. Useful when
+  a session is a long-lived identity, irrelevant when it is disposable.
+- **Auto-continue on API stalls**, activity badges, context-remaining chips —
+  all about keeping one session alive and observable over time.
+
+Features that are just as useful either way — arguably *more* so with short
+sessions, because they are what survives:
+
+- **The issue tracker.** A cross-session ledger of outstanding work, maintained
+  deliberately rather than derived. It outlives any session, which is exactly
+  what you need if sessions are disposable.
+- **Boards, maps, diagrams, checklists** as durable, re-readable records.
+- **The mobile / off-device UI.**
+
+Nothing here forces the long-running style: the compaction features are hooks
+you can leave uninstalled, and everything else works in a session that lasts ten
+minutes. But the design pressure has come from long-running use, so if you are
+in the disposable-session camp, calibrate accordingly.
+
 ## Concepts
 
 The data model is intentionally shallow. Two structural levels and that's it:

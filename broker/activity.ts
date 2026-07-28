@@ -326,11 +326,20 @@ export function clearCompacting(sessionId: string): void {
 // resumed. Clear the badge.
 export function handleSessionCompactingDone(body: {
   cc_session_id?: string;
-}): { ok: boolean } {
+}): { ok: boolean; previous_compact_at?: string | null } {
   if (!body.cc_session_id) return { ok: false };
   const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
   if (!sessionId) return { ok: false };
   clearCompacting(sessionId);
+  // Hand back the PREVIOUS boundary before overwriting it. The window worth
+  // reviewing is the one that was just compacted — from the last boundary to
+  // this one — and once this row is stamped that start point is gone.
+  const previous =
+    (
+      db
+        .prepare("SELECT last_compact_at FROM sessions WHERE id = ?")
+        .get(sessionId) as { last_compact_at: string | null } | null
+    )?.last_compact_at ?? null;
   // Remember WHEN the compaction happened. The link-review ritual reads back
   // "everything since the last compact", and CC cannot see its own compact
   // boundary from inside dt — the only other record is a local hook artifact
@@ -340,7 +349,7 @@ export function handleSessionCompactingDone(body: {
     new Date().toISOString(),
     sessionId,
   ]);
-  return { ok: true };
+  return { ok: true, previous_compact_at: previous };
 }
 
 // --- Self-heal re-attach (transient UI cue) --------------------------------
