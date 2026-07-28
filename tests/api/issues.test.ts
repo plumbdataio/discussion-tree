@@ -233,6 +233,63 @@ describe("issues — delete is logical", () => {
   });
 });
 
+describe("issues — what the cross-session view needs", () => {
+  test("rows carry the name of the session they came from", async () => {
+    // The view is cross-session, so every row has to say which session it came
+    // from without the UI making a round-trip per row.
+    const { issue } = await create({ title: "labelled", session_id: sessionId });
+    const r = await post<{ issues: (Issue & { session_name: string | null })[] }>(
+      `${broker.url}/list-issues`,
+      {},
+    );
+    const mine = r.json.issues.find((i) => i.id === issue.id)!;
+    expect(mine.session_name !== undefined).toBe(true);
+  });
+
+  test("deleted issues are reachable on request, so the bin can restore them", async () => {
+    // Without a read path for deleted rows there is no bin to restore FROM,
+    // which makes the logical delete a physical one from the user's side.
+    const { issue } = await create({ title: "binned" });
+    await post(`${broker.url}/delete-issue`, { issue_id: issue.id });
+    const hidden = await post<{ issues: Issue[] }>(`${broker.url}/list-issues`, {
+      include_closed: true,
+    });
+    expect(hidden.json.issues.map((i) => i.id)).not.toContain(issue.id);
+    const bin = await post<{ issues: Issue[] }>(`${broker.url}/list-issues`, {
+      include_closed: true,
+      include_deleted: true,
+    });
+    expect(bin.json.issues.map((i) => i.id)).toContain(issue.id);
+  });
+
+  test("filters persist so they are not re-picked in every browser", async () => {
+    const empty = await post<{ filters: unknown }>(
+      `${broker.url}/get-issue-filters`,
+      {},
+    );
+    expect(empty.json.filters).toBeNull();
+    const shape = { owners: ["user"], states: ["todo"], q: "x" };
+    expect(
+      (await post<{ ok: boolean }>(`${broker.url}/set-issue-filters`, {
+        filters: shape,
+      })).json.ok,
+    ).toBe(true);
+    const back = await post<{ filters: typeof shape }>(
+      `${broker.url}/get-issue-filters`,
+      {},
+    );
+    expect(back.json.filters).toEqual(shape);
+
+    // Saving again replaces rather than accumulating rows.
+    await post(`${broker.url}/set-issue-filters`, { filters: { owners: [] } });
+    const after = await post<{ filters: { owners: string[] } }>(
+      `${broker.url}/get-issue-filters`,
+      {},
+    );
+    expect(after.json.filters.owners).toEqual([]);
+  });
+});
+
 describe("issues — survive a CC restart", () => {
   // A tracker that forgets its rows every time the CC restarts is not a
   // tracker. Broker session ids are per-process, so anything keyed to one has

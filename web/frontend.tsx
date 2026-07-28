@@ -13,6 +13,7 @@ import { RootDashboard } from "./components/RootDashboard.tsx";
 import { ScheduledEditModal } from "./components/ScheduledEditModal.tsx";
 import { ScheduledListModal } from "./components/ScheduledListModal.tsx";
 import { TimerConfirmModal } from "./components/TimerConfirmModal.tsx";
+import { IssueTrackerModal } from "./components/IssueTrackerModal.tsx";
 import { SessionDashboard } from "./components/SessionDashboard.tsx";
 import { ToastContainer } from "./components/Toast.tsx";
 import { useSettings } from "./utils/settings.ts";
@@ -112,6 +113,7 @@ function App() {
       <ScheduledListModal />
       <ScheduledEditModal />
       <TimerConfirmModal />
+      <IssueTrackerModal />
       <ToastContainer />
     </>
   );

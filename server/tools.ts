@@ -1890,7 +1890,7 @@ export async function dispatchToolCall(
       }
 
       case "create_issue": {
-        ensureSession();
+        const sessionId = ensureSession();
         const a = args as Record<string, unknown>;
         const res = await brokerFetch<{ ok: boolean; error?: string; issue?: { id: string; owner: string; state: string } }>(
           "/create-issue",

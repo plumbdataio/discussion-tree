@@ -6552,3 +6552,512 @@ ul.maps li.current .sidebar-map-link {
 .cli-explainer-body {
   white-space: pre-wrap;
 }
+
+/* ── Issue tracker ────────────────────────────────────────────────────────
+   The cross-session ledger (IssueTrackerModal). Deliberately a modal, not a
+   page: a route would change document.title and break the user's time
+   tracking, which is the constraint that made the previous, per-session
+   attempt per-session in the first place. */
+
+.sidebar-issues-btn {
+  position: relative; /* anchors the badge so it never nudges its siblings */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 6px;
+}
+.sidebar-issues-btn:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+.sidebar-issues-badge {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: #f59e0b;
+  color: #1a1a1a;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.issue-modal {
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-left-color: #f59e0b;
+}
+.issue-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-right: 28px; /* clear of the close button */
+}
+.issue-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 16px;
+  margin: 0;
+  color: var(--text);
+}
+.issue-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+.issue-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.issue-view-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.issue-view-toggle button {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  border: none;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+.issue-view-toggle button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.issue-new {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  font-size: 13px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.issue-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.issue-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.issue-filter-group.grow {
+  flex: 1;
+  justify-content: flex-end;
+}
+.issue-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap; /* "include deleted" wraps to two lines otherwise */
+  gap: 5px;
+  padding: 3px 9px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+.issue-filter-chip.on {
+  border-color: var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 600;
+}
+.issue-filter-chip.owner-user.on {
+  background: var(--user);
+  border-color: var(--user-border);
+}
+.issue-filter-chip.owner-cc.on {
+  background: var(--cc);
+  border-color: var(--cc-border);
+}
+.issue-filter-chip.state-doing.on {
+  background: #fef3c7;
+  border-color: #fbbf24;
+}
+.issue-filter-chip.state-done.on {
+  background: #dcfce7;
+  border-color: #4ade80;
+}
+.issue-filter-n {
+  /* The counts are taken BEFORE the owner/state toggles are applied, so a chip
+     never reads 0 just because it is switched off. */
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  opacity: 0.75;
+}
+.issue-search {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--muted);
+}
+.issue-search input {
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  width: 150px;
+}
+.issue-select {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+}
+.issue-reset {
+  font-size: 12px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.issue-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.issue-editor-title {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+}
+.issue-editor-body {
+  width: 100%;
+  min-height: 60px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  box-sizing: border-box;
+}
+.issue-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.issue-editor-actions .grow {
+  flex: 1;
+}
+
+.issue-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 11px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.issue-chip.owner-user {
+  background: var(--user);
+  border-color: var(--user-border);
+  color: #92400e;
+}
+.issue-chip.owner-cc {
+  background: var(--cc);
+  border-color: var(--cc-border);
+  color: #0c4a6e;
+}
+.issue-chip-sep {
+  opacity: 0.45;
+  font-weight: 400;
+}
+.issue-chip.state-done .issue-chip-state,
+.issue-chip.state-dropped .issue-chip-state {
+  opacity: 0.6;
+}
+
+.issue-empty {
+  padding: 28px 8px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.issue-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.issue-row {
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.issue-row:hover {
+  background: var(--bg);
+}
+.issue-row.expanded {
+  background: var(--bg);
+}
+.issue-row.deleted .issue-cell-title {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.issue-row td {
+  padding: 7px 8px;
+  vertical-align: middle;
+}
+.issue-cell-chip {
+  width: 1%;
+  white-space: nowrap;
+}
+.issue-cell-title {
+  color: var(--text);
+  font-weight: 500;
+}
+.issue-deleted-tag {
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 6px;
+}
+.issue-cell-session,
+.issue-cell-updated {
+  width: 1%;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.issue-cell-session {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.issue-cell-updated {
+  font-variant-numeric: tabular-nums;
+}
+.issue-cell-controls {
+  width: 1%;
+  white-space: nowrap;
+}
+.issue-controls-row {
+  display: flex;
+  gap: 5px;
+  justify-content: flex-end;
+}
+.issue-detail-row td {
+  padding: 0 8px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.issue-row-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.issue-body {
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.issue-body-empty {
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+.issue-row-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.issue-timestamps {
+  flex: 1;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.issue-edit,
+.issue-delete,
+.issue-restore {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.issue-delete {
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+.issue-restore {
+  color: var(--accent);
+}
+
+.issue-board {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.issue-col {
+  flex: 1 0 220px;
+  min-width: 220px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}
+.issue-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 4px 8px;
+}
+.issue-col-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.issue-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.issue-card.deleted .issue-card-title {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.issue-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.issue-card-session {
+  font-size: 10.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.issue-card-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.45;
+}
+.issue-card-controls {
+  display: flex;
+  gap: 5px;
+}
+
+:root[data-theme="dark"] .issue-chip.owner-user {
+  color: #fcd34d;
+}
+:root[data-theme="dark"] .issue-chip.owner-cc {
+  color: #7dd3fc;
+}
+:root[data-theme="dark"] .issue-filter-chip.state-doing.on {
+  background: #3a2f10;
+  border-color: #a16207;
+}
+:root[data-theme="dark"] .issue-filter-chip.state-done.on {
+  background: #12331f;
+  border-color: #15803d;
+}
+:root[data-theme="dark"] .issue-delete {
+  color: #fca5a5;
+  border-color: #7f1d1d;
+}
+:root[data-theme="dark"] .sidebar-issues-badge {
+  background: #d97706;
+  color: #fff;
+}
+
+/* Narrow screens: the table's secondary columns are the first to go, and the
+   board becomes a single scrolling column rather than four cramped ones. */
+@media (max-width: 768px) {
+  .issue-cell-session,
+  .issue-cell-updated {
+    display: none;
+  }
+  .issue-filter-group.grow {
+    justify-content: flex-start;
+  }
+  .issue-search input {
+    width: 100px;
+  }
+}

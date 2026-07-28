@@ -416,5 +416,48 @@
       "selection": "Selection",
       "checklist": "Checklist"
     }
+  },
+  "issues": {
+    "title": "Issues",
+    "open_label": "Issue tracker ({{count}} waiting on you)",
+    "new": "New",
+    "create": "Create",
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "restore": "Restore",
+    "deleted": "deleted",
+    "bin": "Include deleted",
+    "bin_hint": "Deletion is logical. Anything deleted can be restored from here.",
+    "reset": "Reset",
+    "empty": "No issues match.",
+    "no_body": "No details.",
+    "created": "created",
+    "closed": "closed",
+    "all_sessions": "All sessions",
+    "session_label": "Session",
+    "owner_label": "Owner",
+    "state_label": "State",
+    "search_placeholder": "Search title and details",
+    "title_placeholder": "One line: what needs doing",
+    "body_placeholder": "Background, links, what it depends on (markdown)",
+    "view_table": "Table view",
+    "view_board": "Board view",
+    "delete_title": "Delete this issue?",
+    "delete_body": "This is a logical delete — you can restore it any time from \"Include deleted\". To keep a record of something you decided against, set its state to \"Dropped\" instead.",
+    "error_title_required": "A title is required.",
+    "error_generic": "Could not save.",
+    "owner": {
+      "user": "You",
+      "cc": "CC",
+      "external": "External"
+    },
+    "state": {
+      "todo": "To do",
+      "doing": "In progress",
+      "done": "Done",
+      "dropped": "Dropped"
+    }
   }
 }

@@ -80,6 +80,18 @@ db.run(`
   )
 `);
 
+// The cross-session view's filter state. One row, because the tracker itself is
+// cross-session — there is nothing to key it by. It lives in the DB rather than
+// localStorage on the user's instruction: re-picking filters in every browser is
+// annoying, and wanting different filters per browser is not a real need.
+db.run(`
+  CREATE TABLE IF NOT EXISTS issue_filters (
+    id          TEXT PRIMARY KEY,
+    filters     TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+  )
+`);
+
 function safeAlterIssues(sql: string): void {
   try {
     db.run(sql);
@@ -98,6 +110,11 @@ export type IssueRow = {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  // Only present on list reads (joined from sessions), and null once the
+  // originating session row is gone.
+  session_name?: string | null;
+  session_cwd?: string | null;
+  deleted_at?: string | null;
 };
 
 const selectIssue = db.prepare(
@@ -210,31 +227,69 @@ export function handleListIssues(body: any): {
   const args: string[] = [];
   const owner = coerceOwner(body?.owner);
   if (owner) {
-    where.push("owner = ?");
+    where.push("i.owner = ?");
     args.push(owner);
   }
   const state = coerceState(body?.state);
   if (state) {
-    where.push("state = ?");
+    where.push("i.state = ?");
     args.push(state);
   }
   if (body?.session_id) {
-    where.push("session_id = ?");
+    where.push("i.session_id = ?");
     args.push(String(body.session_id));
   }
   // Default view = what is actually outstanding. Closed issues are opt-in, so
   // the list answers "what is on my plate" without a filter dance every time.
   if (!state && body?.include_closed !== true) {
-    where.push("state NOT IN ('done', 'dropped')");
+    where.push("i.state NOT IN ('done', 'dropped')");
   }
-  where.push("deleted_at IS NULL");
+  // Deleted rows are opt-in too, so the UI can offer a bin to restore from.
+  // Without a way to see them, a logical delete is a physical one as far as the
+  // user is concerned.
+  where.push(
+    body?.include_deleted === true
+      ? "1 = 1"
+      : "i.deleted_at IS NULL",
+  );
+  // session_name comes along so the cross-session view can say WHICH session an
+  // issue came from without a second round-trip per row.
   const sql =
-    "SELECT * FROM issues" +
+    "SELECT i.*, s.name AS session_name, s.cwd AS session_cwd" +
+    " FROM issues i LEFT JOIN sessions s ON s.id = i.session_id" +
     (where.length ? ` WHERE ${where.join(" AND ")}` : "") +
     // Oldest-updated first would bury fresh work; newest-updated first matches
     // how the user scans the list.
-    " ORDER BY updated_at DESC";
+    " ORDER BY i.updated_at DESC";
   return { ok: true, issues: db.prepare(sql).all(...args) as IssueRow[] };
+}
+
+const DEFAULT_FILTER_ID = "default";
+
+export function handleGetIssueFilters(): { ok: true; filters: unknown } {
+  const row = db
+    .prepare("SELECT filters FROM issue_filters WHERE id = ?")
+    .get(DEFAULT_FILTER_ID) as { filters: string } | undefined;
+  if (!row) return { ok: true, filters: null };
+  try {
+    return { ok: true, filters: JSON.parse(row.filters) };
+  } catch {
+    // A corrupt blob must not break the view — fall back to "no saved filters"
+    // and let the next save overwrite it.
+    return { ok: true, filters: null };
+  }
+}
+
+export function handleSetIssueFilters(body: any):
+  | { ok: true }
+  | { ok: false; error: string } {
+  if (body?.filters === undefined) return { ok: false, error: "filters required" };
+  db.run(
+    `INSERT INTO issue_filters (id, filters, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET filters = excluded.filters, updated_at = excluded.updated_at`,
+    [DEFAULT_FILTER_ID, JSON.stringify(body.filters), nowIso()],
+  );
+  return { ok: true };
 }
 
 export function handleGetIssue(body: any):
@@ -283,4 +338,6 @@ export const routes = {
   "/get-issue": handleGetIssue,
   "/delete-issue": handleDeleteIssue,
   "/restore-issue": handleRestoreIssue,
+  "/get-issue-filters": handleGetIssueFilters,
+  "/set-issue-filters": handleSetIssueFilters,
 };

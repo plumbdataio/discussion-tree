@@ -18,10 +18,12 @@ import {
   ChartNetwork,
   Network,
   Plus,
+  ClipboardList,
 } from "lucide-react";
 import { HelpBubbleIcon } from "./HelpBubbleIcon.tsx";
 import { DiagramIcon } from "./DiagramIcon.tsx";
 import { SpawnModal } from "./SpawnModal.tsx";
+import { IssueTrackerButton } from "./IssueTrackerButton.tsx";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { Activity, SessionListItem } from "../../shared/types.ts";
@@ -865,6 +867,7 @@ export function Sidebar({
         <div className="sidebar-title-row">
           <h2 className="sidebar-title">{t("sidebar.sessions")}</h2>
           <div className="sidebar-title-actions">
+            <IssueTrackerButton />
             {tmuxIntegration && (
               <button
                 type="button"

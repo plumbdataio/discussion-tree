@@ -416,5 +416,48 @@
       "selection": "Selection",
       "checklist": "Checklist"
     }
+  },
+  "issues": {
+    "title": "課題",
+    "open_label": "課題一覧（あなた待ち {{count}} 件）",
+    "new": "新規",
+    "create": "作成",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "edit": "編集",
+    "delete": "削除",
+    "restore": "復元",
+    "deleted": "削除済",
+    "bin": "削除済を含める",
+    "bin_hint": "削除は論理削除です。ここから復元できます。",
+    "reset": "リセット",
+    "empty": "該当する課題はありません。",
+    "no_body": "本文はありません。",
+    "created": "作成",
+    "closed": "完了",
+    "all_sessions": "全セッション",
+    "session_label": "セッション",
+    "owner_label": "担当",
+    "state_label": "状態",
+    "search_placeholder": "タイトル・本文を検索",
+    "title_placeholder": "何をやるかを一行で",
+    "body_placeholder": "経緯・判断材料・リンクなど（markdown可）",
+    "view_table": "テーブル表示",
+    "view_board": "カンバン表示",
+    "delete_title": "この課題を削除しますか？",
+    "delete_body": "論理削除なので、「削除済を含める」からいつでも復元できます。取り下げた経緯を残したい場合は、削除ではなく状態を「取り下げ」にしてください。",
+    "error_title_required": "タイトルを入力してください。",
+    "error_generic": "保存に失敗しました。",
+    "owner": {
+      "user": "あなた",
+      "cc": "CC",
+      "external": "外部"
+    },
+    "state": {
+      "todo": "未着手",
+      "doing": "進行中",
+      "done": "完了",
+      "dropped": "取り下げ"
+    }
   }
 }
