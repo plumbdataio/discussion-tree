@@ -64,6 +64,13 @@ afterAll(async () => {
   await broker.kill();
 });
 
+const countMessages = async (): Promise<number> => {
+  const v = await get<{ threads: Record<string, unknown[]> }>(
+    `${broker.url}/api/board/${boardId}`,
+  );
+  return Object.values(v.json.threads ?? {}).reduce((n, t) => n + t.length, 0);
+};
+
 const postTo = async (issue_ids?: unknown) =>
   (
     await post<{ ok: boolean; message_id: number }>(`${broker.url}/post-to-node`, {
@@ -93,13 +100,46 @@ describe("issue links — attached by the post itself", () => {
     expect(await linksOf(r.message_id)).toEqual([]);
   });
 
-  test("a stale issue id is dropped rather than failing the post", async () => {
-    // Losing the message is far worse than losing the link, so an unknown id
-    // must never take the post down with it.
+  test("a stale issue id rejects the post and says which id was wrong", async () => {
+    // Dropping the bad id would lose the link permanently AND invisibly. A
+    // rejection costs one retry with a corrected argument — which is what an
+    // agent does with an error — so what matters is that it names the id.
     const good = await mkIssue("issue C");
-    const r = await postTo([good, "iss_does_not_exist"]);
-    expect(r.ok).toBe(true);
-    expect(await linksOf(r.message_id)).toEqual([good]);
+    const before = await countMessages();
+    const r = (await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/post-to-node`,
+      {
+        session_id: sessionId,
+        board_id: boardId,
+        node_id: nodeId,
+        message: "hello",
+        status: "discussing",
+        issue_ids: [good, "iss_does_not_exist"],
+      },
+    )).json;
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("iss_does_not_exist");
+    expect(r.error).toContain("list_issues");
+    // Nothing landed: no half-posted message with only some of its links.
+    expect(await countMessages()).toBe(before);
+  });
+
+  test("a deleted issue counts as unknown", async () => {
+    const gone = await mkIssue("issue to delete");
+    await post(`${broker.url}/delete-issue`, { issue_id: gone });
+    const r = (await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/post-to-node`,
+      {
+        session_id: sessionId,
+        board_id: boardId,
+        node_id: nodeId,
+        message: "hello",
+        status: "discussing",
+        issue_ids: [gone],
+      },
+    )).json;
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("restore");
   });
 
   test("omitting the field entirely still posts", async () => {

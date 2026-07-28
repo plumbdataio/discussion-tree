@@ -5,7 +5,7 @@
 // re-renders live.
 import { db, insertPending, insertThread, markPendingViaTimer } from "./db.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
-import { linkMessageToIssues } from "./issues.ts";
+import { linkMessageToIssues, validateIssueIds } from "./issues.ts";
 import {
   generateId,
   pendingScheduledCount,
@@ -349,6 +349,8 @@ export function handlePostDiagramChat(body: any) {
     .prepare("SELECT id, session_id FROM diagrams WHERE id = ?")
     .get(id) as { id: string; session_id: string } | undefined;
   if (!row) return { ok: false, error: "diagram not found" };
+  const links = validateIssueIds(body?.issue_ids);
+  if (!links.ok) return { ok: false, error: links.error };
   // Clear the nag for this diagram — but only for a post that actually carries
   // a reply. Same rule as post_to_node: an empty post is not an answer.
   // Clearing also resets the streak so a later submission re-arms the nag even
@@ -370,7 +372,7 @@ export function handlePostDiagramChat(body: any) {
     message,
     new Date().toISOString(),
   );
-  linkMessageToIssues(Number(inserted.lastInsertRowid), body?.issue_ids);
+  linkMessageToIssues(Number(inserted.lastInsertRowid), links.ids);
   broadcast(id, {
     type: "thread-update",
     node_id: DIAGRAM_CHAT_NODE,

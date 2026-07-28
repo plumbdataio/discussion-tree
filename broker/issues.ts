@@ -360,31 +360,59 @@ export function handleRestoreIssue(body: any):
   return { ok: true, issue: selectIssue.get(id) as IssueRow };
 }
 
-// Attach a just-posted message to zero or more issues. Called from the post
-// handlers rather than by the caller in a second round-trip, so a link can never
-// be lost between "the message exists" and "someone remembered to link it".
+// Check the ids BEFORE anything is written, so a post either lands with all of
+// its links or does not land at all.
 //
-// Unknown ids are dropped rather than raising: a post must not fail because of a
-// stale issue id — losing the message is far worse than losing the link. The
-// count of accepted links comes back so the caller can tell the difference.
+// An unknown id is an error rather than something to quietly skip. Dropping it
+// loses the link permanently AND invisibly — nobody ever finds out — whereas an
+// error costs one retry with a corrected argument, which is exactly what an
+// agent does with a rejection. So the thing that actually matters is that the
+// rejection says WHICH id was wrong and where to look it up.
+export function validateIssueIds(issueIds: unknown):
+  | { ok: true; ids: string[] }
+  | { ok: false; error: string } {
+  if (issueIds === undefined || issueIds === null) return { ok: true, ids: [] };
+  if (!Array.isArray(issueIds)) {
+    return { ok: false, error: "issue_ids must be an array (use [] for none)" };
+  }
+  const ids: string[] = [];
+  const unknown: string[] = [];
+  for (const raw of issueIds) {
+    const id = String(raw ?? "").trim();
+    if (!id) continue;
+    if (selectIssue.get(id)) ids.push(id);
+    else unknown.push(id);
+  }
+  if (unknown.length) {
+    return {
+      ok: false,
+      error:
+        `unknown issue_ids: ${unknown.join(", ")} — nothing was posted. ` +
+        "Check the ids with list_issues (a deleted issue counts as unknown; " +
+        "restore it first or drop it from the list), then retry.",
+    };
+  }
+  return { ok: true, ids };
+}
+
+// Write the links for a just-posted message. Called from the post handlers
+// rather than by the caller in a second round-trip, so a link can never be lost
+// between "the message exists" and "someone remembered to link it". Ids are
+// expected to have been validated already.
 export function linkMessageToIssues(
   threadItemId: number,
   issueIds: unknown,
 ): number {
-  if (!Array.isArray(issueIds) || issueIds.length === 0) return 0;
+  const checked = validateIssueIds(issueIds);
+  if (!checked.ok) return 0;
   const now = nowIso();
-  let linked = 0;
-  for (const raw of issueIds) {
-    const id = String(raw ?? "").trim();
-    if (!id) continue;
-    if (!selectIssue.get(id)) continue;
+  for (const id of checked.ids) {
     db.run(
       "INSERT OR IGNORE INTO issue_links (issue_id, thread_item_id, created_at) VALUES (?, ?, ?)",
       [id, threadItemId, now],
     );
-    linked++;
   }
-  return linked;
+  return checked.ids.length;
 }
 
 export function handleLinkIssueMessage(body: any):
@@ -392,7 +420,9 @@ export function handleLinkIssueMessage(body: any):
   | { ok: false; error: string } {
   const messageId = Number(body?.message_id ?? body?.thread_item_id);
   if (!Number.isFinite(messageId)) return { ok: false, error: "message_id required" };
-  return { ok: true, linked: linkMessageToIssues(messageId, body?.issue_ids) };
+  const checked = validateIssueIds(body?.issue_ids);
+  if (!checked.ok) return { ok: false, error: checked.error };
+  return { ok: true, linked: linkMessageToIssues(messageId, checked.ids) };
 }
 
 export function handleUnlinkIssueMessage(body: any):

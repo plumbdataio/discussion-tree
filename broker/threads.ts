@@ -28,7 +28,7 @@ import {
   updateNodeStatus,
 } from "./db.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
-import { linkMessageToIssues } from "./issues.ts";
+import { linkMessageToIssues, validateIssueIds } from "./issues.ts";
 import { getCliVerbosity } from "./cli-verbosity.ts";
 import { onBoardSettled, onNodeSettled } from "./checklist.ts";
 import { SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
@@ -126,6 +126,12 @@ export function handlePostToNode(body: any) {
     };
   }
 
+  // Same posture as the status check: reject BEFORE writing, so the post either
+  // lands with all of its links or not at all. A bad id costs one retry; a
+  // silently dropped one loses the link for good and tells nobody.
+  const links = validateIssueIds(body.issue_ids);
+  if (!links.ok) return { ok: false, error: links.error };
+
   // 1. CC message goes in first so it appears before any status_change in
   //    the timeline. Keep its row id — returned as message_id so the caller
   //    can reference this exact post later (e.g. as a checklist source).
@@ -140,7 +146,7 @@ export function handlePostToNode(body: any) {
   // Link in the same call that posts. A second round-trip ("now link it") is a
   // place the link can be forgotten, and forgetting is the whole failure mode
   // this feature exists to fight.
-  linkMessageToIssues(messageId, body.issue_ids);
+  linkMessageToIssues(messageId, links.ids);
 
   // 2. Status update + transition log (only when the status actually changed).
   let statusChanged = false;

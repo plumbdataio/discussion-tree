@@ -62,7 +62,7 @@ import {
   pendingArmedCount,
 } from "./helpers.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
-import { linkMessageToIssues } from "./issues.ts";
+import { linkMessageToIssues, validateIssueIds } from "./issues.ts";
 import { PUBLIC_URL, SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
 
 const KINDS = new Set(["question", "idea", "research", "note", "selection"]);
@@ -528,6 +528,8 @@ export function handlePostToMapNode(body: any) {
     if (node.is_checklist) return { ok: false, error: CHECKLIST_POST_REJECT };
   }
   if (!message.trim()) return { ok: false, error: "message required" };
+  const links = validateIssueIds(issueIds);
+  if (!links.ok) return { ok: false, error: links.error };
   // A real reply to a real node clears its nag (the general chat is never
   // tracked, so nothing to clear there). Same rule as post_to_node: a non-empty
   // message counts, and clearing resets the streak so a later submission
@@ -553,7 +555,7 @@ export function handlePostToMapNode(body: any) {
     new Date().toISOString(),
   );
   const messageId = Number(inserted.lastInsertRowid);
-  linkMessageToIssues(messageId, issueIds);
+  linkMessageToIssues(messageId, links.ids);
   broadcast(mapId, { type: "thread-update", node_id: nodeId, source: "cc" });
   return { ok: true, message_id: messageId };
 }
