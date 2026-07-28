@@ -3,8 +3,22 @@
 // The hook (scripts/session-start-hook.sh) writes a small JSON file keyed by
 // CC's PID into <state-dir>/cc-sessions/. From the hook's POV $PPID is CC;
 // from this MCP server's POV process.ppid is also CC, so the two sides
-// agree on the filename. After we read+attach we delete the file
-// (idempotent — at most one attach per CC start).
+// agree on the filename.
+//
+// The file is KEPT after a successful attach. It used to be deleted, on the
+// assumption of at most one attach per CC start — but an MCP server can restart
+// while CC keeps running (`/mcp` reconnects it, and it is the cheapest way to
+// pick up new tools). SessionStart does not fire for that, so no new hint is
+// written, and the old one was already gone: the reconnected server had no way
+// to learn its own cc_session_id, registered an unbound session, and left the
+// user's boards behind. Both observed on 2026-07-28; the only fix was
+// restarting CC.
+//
+// Keeping it is safe because attaching is idempotent — the broker reclaims the
+// previous session's boards, exactly as it does across a CC restart. The one
+// real hazard is PID reuse: a NEW CC inheriting a dead one's PID would read a
+// stale card. Guarded below by matching the recorded cwd, and by ignoring hints
+// older than HINT_MAX_AGE_MS.
 
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -13,7 +27,7 @@ import { brokerFetch } from "./broker-client.ts";
 import { log } from "./log.ts";
 import { getSessionId, setAttachedCcId } from "./state.ts";
 
-function hintFilePath(): string {
+export function hintFilePath(): string {
   const ccPid = process.ppid;
   // Resolves the same way the hook does — DISCUSSION_TREE_HOME wins,
   // else default. CC inherits the env, so when the user overrides it the
@@ -27,13 +41,37 @@ function hintFilePath(): string {
 // Read the CC session id from the SessionStart hook's hint file. Returns
 // null when the file doesn't exist, is empty, or the JSON is malformed —
 // any of those is treated as "no hint, nothing to attach to right now".
-function readHintCcId(): string | null {
+// A hint older than this is treated as not ours. Long enough that a CC running
+// for days still re-attaches on an MCP restart, short enough that a recycled PID
+// is very unlikely to land on a card still inside the window.
+const HINT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+export function readHintCcId(): string | null {
   const file = hintFilePath();
   if (!fs.existsSync(file)) return null;
   try {
     const raw = fs.readFileSync(file, "utf8");
-    const parsed = JSON.parse(raw) as { cc_session_id?: string };
-    return parsed.cc_session_id ?? null;
+    const parsed = JSON.parse(raw) as {
+      cc_session_id?: string;
+      cwd?: string;
+      written_at?: number;
+    };
+    if (!parsed.cc_session_id) return null;
+    // PID reuse guard. The hook records CC's cwd, and this server runs with the
+    // same one — a card written by a different CC that happened to hold this PID
+    // will almost always disagree.
+    if (parsed.cwd && parsed.cwd !== process.cwd()) {
+      log(`Ignoring hint for pid ${process.ppid}: cwd mismatch`);
+      return null;
+    }
+    if (
+      typeof parsed.written_at === "number" &&
+      Date.now() - parsed.written_at * 1000 > HINT_MAX_AGE_MS
+    ) {
+      log(`Ignoring hint for pid ${process.ppid}: older than the max age`);
+      return null;
+    }
+    return parsed.cc_session_id;
   } catch {
     return null;
   }
@@ -106,11 +144,7 @@ export async function tryAutoAttach(): Promise<boolean> {
       log(
         `Auto-attached to CC session ${ccId} via hook hint (attempt ${i + 1})`,
       );
-      try {
-        fs.unlinkSync(file);
-      } catch {
-        /* idempotent — keeping the file is harmless if unlink races */
-      }
+      // Deliberately NOT deleted — see the note at the top of this file.
       return true;
     }
     log(`Auto-attach attempt ${i + 1} for ${ccId} failed, retrying`);
@@ -136,11 +170,5 @@ export async function selfHealAttachOnce(
   if (!ccId) return null;
   if (!(await attemptAttach(ccId))) return null;
   setAttachedCcId(ccId);
-  const file = hintFilePath();
-  try {
-    fs.unlinkSync(file);
-  } catch {
-    /* keeping the file is harmless */
-  }
   return ccId;
 }
