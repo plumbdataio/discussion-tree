@@ -481,6 +481,63 @@ export function handleResweepUnacked(): { ok: boolean; requeued: number } {
   return { ok: true, requeued: resweepUnackedMessages() };
 }
 
+// How long a finished row is kept before the purge takes it. Anything past this
+// is provably dead (see purgeOldDeliveredMessages), so the window only buys a
+// debugging trail. Env-overridable, and 0 is allowed so a test can make rows
+// eligible immediately.
+const PENDING_RETENTION_DAYS = (() => {
+  const v = Number(process.env.DT_PENDING_RETENTION_DAYS);
+  return Number.isFinite(v) && v >= 0 ? v : 7;
+})();
+
+// pending_messages is a DELIVERY QUEUE, not an archive: `text` is a copy made
+// for delivery, and the message itself lives in thread_items. Nothing ever read
+// finished rows, so they simply accumulated — 6,583 of them by 2026-07-28,
+// going back three months, which is also what made a missing index expensive.
+//
+// "Delivered means deletable" is NOT true, which is why this is time-based:
+//   - handleSubmitAnswer polls the row BY ID for a few seconds after delivery,
+//     waiting for delivered=1 and the materialized thread_item_id.
+//   - delivered=1 with pushed_at NULL is a resweep candidate: the push may have
+//     been silently lost and is re-queued within UNACKED_RESWEEP_GRACE_MS.
+//   - delivered=0 is still queued and must never be touched.
+// Past the retention window all three are settled: the browser is long gone,
+// and the resweep (every 20s) has either re-queued the row or will never do so
+// because its session can't ack. The unacked count is logged separately, since
+// those are messages that never reached CC and their disappearance is worth
+// seeing rather than inferring.
+export function purgeOldDeliveredMessages(): {
+  deleted: number;
+  unacked: number;
+} {
+  const cutoff = new Date(
+    Date.now() - PENDING_RETENTION_DAYS * 86_400_000,
+  ).toISOString();
+  const unacked = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS c FROM pending_messages
+          WHERE created_at < ? AND delivered = 1 AND pushed_at IS NULL AND cancelled = 0`,
+      )
+      .get(cutoff) as { c: number }
+  ).c;
+  const res = db.run(
+    `DELETE FROM pending_messages
+      WHERE created_at < ? AND (delivered = 1 OR cancelled = 1)`,
+    [cutoff],
+  );
+  return { deleted: res.changes, unacked };
+}
+
+// Manual trigger, for ops and tests.
+export function handlePurgePending(): {
+  ok: boolean;
+  deleted: number;
+  unacked: number;
+} {
+  return { ok: true, ...purgeOldDeliveredMessages() };
+}
+
 function broadcastUnreadAll() {
   // Tell every connected client to refetch the sidebar — unread counts may
   // have shifted on a board they're not currently viewing.
@@ -535,6 +592,7 @@ export const routes = {
   "/delivery-failed": handleDeliveryFailed,
   "/message-acked": handleMessageAcked,
   "/resweep-unacked": handleResweepUnacked,
+  "/purge-pending": handlePurgePending,
   "/mark-thread-items-read": handleMarkThreadItemsRead,
   "/mark-board-read": handleMarkBoardRead,
 };

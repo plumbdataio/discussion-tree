@@ -54,6 +54,7 @@ import {
 import {
   routes as threadsRoutes,
   resweepUnackedMessages,
+  purgeOldDeliveredMessages,
 } from "./broker/threads.ts";
 import { routes as uploadsRoutes } from "./broker/uploads.ts";
 import { routes as spawnRoutes } from "./broker/spawn.ts";
@@ -82,6 +83,22 @@ setInterval(() => {
   const n = resweepUnackedMessages();
   if (n > 0) console.error(`[resweep] re-queued ${n} unacked message(s)`);
 }, UNACKED_RESWEEP_INTERVAL_MS);
+// Retire finished queue rows. Hourly rather than on an interval tied to
+// delivery: nothing depends on it being prompt, and the point is only to stop
+// the queue growing without bound (see purgeOldDeliveredMessages). Runs once at
+// startup so a broker that is restarted daily still converges.
+const PENDING_PURGE_INTERVAL_MS = 3_600_000;
+const runPendingPurge = () => {
+  const { deleted, unacked } = purgeOldDeliveredMessages();
+  if (deleted > 0) {
+    console.error(
+      `[purge] removed ${deleted} finished queue row(s)` +
+        (unacked > 0 ? ` — ${unacked} had never been acked by CC` : ""),
+    );
+  }
+};
+runPendingPurge();
+setInterval(runPendingPurge, PENDING_PURGE_INTERVAL_MS);
 startActivityWatchdog();
 initPower();
 initCliVerbosity();
