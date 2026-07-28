@@ -3,6 +3,7 @@ import {
   startBroker,
   post,
   registerSession,
+  attachCC,
   type BrokerHandle,
 } from "../harness/broker-harness.ts";
 
@@ -229,5 +230,43 @@ describe("issues — delete is logical", () => {
     );
     expect(r.json.ok).toBe(false);
     expect(r.json.error).toMatch(/deleted/i);
+  });
+});
+
+describe("issues — survive a CC restart", () => {
+  // A tracker that forgets its rows every time the CC restarts is not a
+  // tracker. Broker session ids are per-process, so anything keyed to one has
+  // to be carried over by the attach_cc_session reclaim, exactly like boards,
+  // maps and diagrams already are.
+  test("the session filter still finds issues after the session id changes", async () => {
+    const cwd = "/tmp/pd-issue-life";
+    const ccId = `cc-issuelife-${Math.random().toString(36).slice(2, 8)}`;
+    const a = await registerSession(broker.url, cwd);
+    await attachCC(broker.url, a, ccId);
+    const open = await create({ title: "outlives a restart", session_id: a });
+    const gone = await create({ title: "deleted before restart", session_id: a });
+    await post(`${broker.url}/delete-issue`, { issue_id: gone.issue.id });
+
+    // The CC dies and comes back as a fresh broker session, same cc_session_id.
+    await post(`${broker.url}/unregister`, { session_id: a });
+    const b = await registerSession(broker.url, cwd);
+    await attachCC(broker.url, b, ccId);
+
+    const byNew = await post<{ issues: Issue[] }>(`${broker.url}/list-issues`, {
+      session_id: b,
+    });
+    expect(byNew.json.issues.map((i) => i.id)).toContain(open.issue.id);
+    const byOld = await post<{ issues: Issue[] }>(`${broker.url}/list-issues`, {
+      session_id: a,
+    });
+    expect(byOld.json.issues.map((i) => i.id)).not.toContain(open.issue.id);
+
+    // A deleted row moves too, so restoring it does not strand the issue on a
+    // session that no longer exists.
+    await post(`${broker.url}/restore-issue`, { issue_id: gone.issue.id });
+    const after = await post<{ issue: Issue }>(`${broker.url}/get-issue`, {
+      issue_id: gone.issue.id,
+    });
+    expect(after.json.issue.session_id).toBe(b);
   });
 });

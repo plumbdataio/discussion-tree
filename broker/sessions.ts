@@ -176,6 +176,15 @@ export function handleAttachCCSession(body: any) {
       `UPDATE diagrams SET session_id = ? WHERE session_id IN (${placeholders})`,
       [sessionId, ...deadIds],
     );
+    // Issues follow the same reclaim path. The whole point of the tracker is to
+    // outlive a single session, so an issue filed yesterday must still answer
+    // "filed from this session" today — without this, every CC restart makes
+    // the session filter come up empty and the ledger looks wiped. Deleted rows
+    // move too: a restore must not resurrect an issue onto a dead session.
+    db.run(
+      `UPDATE issues SET session_id = ? WHERE session_id IN (${placeholders})`,
+      [sessionId, ...deadIds],
+    );
     reclaimed.boards = b.changes;
     reclaimed.messages = m.changes;
 
@@ -220,6 +229,10 @@ export function handleAttachCCSession(body: any) {
       );
       db.run(
         `UPDATE diagrams SET session_id = ? WHERE session_id IN (${placeholders})`,
+        [sessionId, ...orphanIds],
+      );
+      db.run(
+        `UPDATE issues SET session_id = ? WHERE session_id IN (${placeholders})`,
         [sessionId, ...orphanIds],
       );
       reclaimed.orphan_boards = b.changes;
