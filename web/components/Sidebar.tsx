@@ -867,6 +867,28 @@ export function Sidebar({
         <div className="sidebar-title-row">
           <h2 className="sidebar-title">{t("sidebar.sessions")}</h2>
           <div className="sidebar-title-actions">
+            {/* Icon-only. The filter used to own a whole row of its own — a
+                label plus an "n of m" count — in a sidebar that must not grow
+                taller. The count is gone on request, but a filtered list that
+                gives no sign it is filtered is a trap, so a dot marks "not
+                everything is shown". It is absolutely positioned, so it never
+                shifts its siblings. */}
+            <button
+              type="button"
+              className={
+                "sidebar-filter-btn" + (filterOpen ? " open" : "")
+              }
+              aria-label={t("sidebar.filter_label")}
+              title={t("sidebar.filter_label")}
+              aria-expanded={filterOpen}
+              onClick={() => setFilterOpen((v) => !v)}
+            >
+              <Filter size={15} strokeWidth={2} />
+              {(visibleStatusCount < BOARD_STATUSES.length ||
+                shownSessionCount < allKeys.length) && (
+                <span className="sidebar-filter-dot" />
+              )}
+            </button>
             <IssueTrackerButton />
             {tmuxIntegration && (
               <button
@@ -910,27 +932,6 @@ export function Sidebar({
         </div>
 
         <div className="sidebar-filter">
-          <button
-            type="button"
-            className="sidebar-filter-toggle"
-            onClick={() => setFilterOpen((v) => !v)}
-          >
-            {filterOpen ? (
-              <ChevronDown size={12} strokeWidth={1.75} />
-            ) : (
-              <ChevronRight size={12} strokeWidth={1.75} />
-            )}
-            <Filter size={12} strokeWidth={1.75} />
-            <span className="sidebar-filter-label">
-              {t("sidebar.filter_label")}
-            </span>
-            <span className="sidebar-filter-summary">
-              {t("sidebar.filter_summary", {
-                visible: visibleStatusCount,
-                total: BOARD_STATUSES.length,
-              })}
-            </span>
-          </button>
           {filterOpen && (
             <div className="sidebar-filter-options">
               <div className="sidebar-filter-group-head">
