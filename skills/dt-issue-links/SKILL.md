@@ -50,6 +50,17 @@ It takes `from` and `to`. Both matter: if a compaction happened without the
 review, pass `to` = that compact time to recover the window afterwards. Without
 it that window is simply lost.
 
+## Before you rely on the tools being there
+
+`issue_ids`, `review_message_links` and `link_message_to_issues` arrive with a
+plugin version. Check they exist before reporting that anything was linked — a
+session that has not picked up the new tool list will post happily and link
+nothing, and it is easy to describe that as working.
+
+`/reload-plugins` reloads skills but NOT the MCP tool list (measured twice).
+`/mcp` reconnects the server and does pick it up, which is the cheapest fix; a
+session restart also works.
+
 ## What belongs to an issue
 
 Ask what the message *is*, not what it mentions.
