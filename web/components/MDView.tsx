@@ -64,6 +64,20 @@ function MDViewImpl({
               <table {...props} />
             </div>
           ),
+          // Images are the single biggest thing a long board holds in memory,
+          // and nothing about that is visible from the file sizes. A screenshot
+          // costs width × height × 4 bytes once decoded, regardless of how well
+          // the PNG compressed: the general board's 163 attachments are 43 MB on
+          // disk and ~1.9 GB decoded. Measured 2026-07-29 with that tab sitting
+          // at 986 MB while its JS heap was only 123 MB — the rest was pixels.
+          //
+          // loading="lazy" is what keeps that off the heap: images below the
+          // fold are never fetched or decoded, and the browser is free to drop
+          // ones that scroll far away. decoding="async" keeps the decode off the
+          // main thread so a big screenshot cannot stall the thread mid-scroll.
+          img: ({ node, ...props }) => (
+            <img {...props} loading="lazy" decoding="async" />
+          ),
         }}
       >
         {escapeCodeHostileEmphasis(text)}
