@@ -21,11 +21,20 @@ function resolveScopeFilter(
   // appear in the inactive list in the UI, but for MCP queries we focus on
   // currently-live work — searching all dead sessions would drown the LLM
   // in stale context).
+  //
+  // The issue-conversation container is excluded HERE rather than per query, so
+  // a query added later inherits it. It was hidden from list_boards on
+  // 2026-07-29 and search_boards immediately let it back in — CC searching for
+  // a phrase found the container, its neighbouring issues' nodes and their
+  // messages, which is precisely the "one issue reads as a tree of unrelated
+  // siblings" failure the hiding exists to prevent. Reachable by id; never
+  // offered.
+  const hidden = "COALESCE(b.is_issue_chat, 0) = 0";
   if (scope === "all") {
-    return { sql: "s.alive = 1", params: [] };
+    return { sql: `s.alive = 1 AND ${hidden}`, params: [] };
   }
   return {
-    sql: "s.alive = 1 AND s.id = ?",
+    sql: `s.alive = 1 AND s.id = ? AND ${hidden}`,
     params: [sessionId],
   };
 }
@@ -70,14 +79,6 @@ export function handleListBoards(body: {
          FROM boards b
          JOIN sessions s ON s.id = b.session_id
         WHERE ${filter.sql}
-          -- The issue-conversation board is deliberately invisible AS A BOARD.
-          -- Structurally it is one (that is what buys delivery, unread dots and
-          -- the timeline for free), but seeing it listed makes CC treat it as a
-          -- tree of related nodes, when to the user each issue is a single
-          -- serial conversation. That mismatch is the failure the user called
-          -- out on 2026-07-29: they read one thread, CC reads its neighbours
-          -- too. Reachable by id (jumps still work) — just never offered.
-          AND COALESCE(b.is_issue_chat, 0) = 0
         ORDER BY COALESCE(last_activity, b.created_at) DESC`,
     )
     .all(...filter.params) as Array<{

@@ -166,6 +166,19 @@ describe("issue chat — the board belongs to the issue's session", () => {
     expect(view.json.nodes.some((n) => n.is_log)).toBe(false);
   });
 
+  test("searching does not surface it either", async () => {
+    const id = await mkIssue("searchable");
+    await ccPost(id, "a distinctive phrase nobody else wrote: xyzzy42");
+    // Hiding it from list_boards but not from search let CC find the container
+    // by text, along with the neighbouring issues' nodes — the same "one issue
+    // reads as a tree of unrelated siblings" failure, through another door.
+    const r = await post<{ matches: { board_id: string }[] }>(
+      `${broker.url}/search-boards`,
+      { session_id: sessionId, scope: "all", q: "xyzzy42" },
+    );
+    expect(r.json.matches ?? []).toEqual([]);
+  });
+
   test("an issue with no session says so rather than picking one", async () => {
     const orphan = await mkIssue("filed nowhere", null);
     const r = await ccPost(orphan, "hello?");
