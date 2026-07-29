@@ -75,6 +75,12 @@ type Draft = {
   sessionId: string | null;
 };
 
+// Ids are routinely shortened in prose ("iss_ms5kq850"), so a link carries a
+// prefix rather than the full id. The timestamp half is unique in practice.
+function matchesFocus(i: Issue, focusId: string | null): boolean {
+  return !!focusId && i.id.startsWith(focusId);
+}
+
 const emptyDraft = (sessionId: string | null): Draft => ({
   id: null,
   title: "",
@@ -208,6 +214,7 @@ export function IssueTrackerModal() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Issue | null>(null);
   const [timelineOf, setTimelineOf] = useState<Issue | null>(null);
+  const [focusId, setFocusId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Reset per editor session so the warning appears again for the next issue.
   const [sessionWarned, setSessionWarned] = useState(false);
@@ -227,8 +234,14 @@ export function IssueTrackerModal() {
 
   useEffect(
     () =>
-      subscribeOpenIssueTracker(() => {
+      subscribeOpenIssueTracker((focusId) => {
         setOpen(true);
+        // Arriving from a link in a message: show that issue expanded, and show
+        // it even if the saved filters would exclude it (it is often closed, or
+        // owned by another session). Landing on "no results" after following a
+        // link would make the links not worth having.
+        setFocusId(focusId);
+        setExpanded(null); // resolved to a real id once the list arrives
         // Filters live in the DB (not localStorage) so they are the same in
         // every browser — read them once per open, not per mount.
         loadFilters()
@@ -334,21 +347,30 @@ export function IssueTrackerModal() {
     return c;
   }, [pool, inOwners, inStates]);
 
+  // Expand whatever the link resolved to, once the rows are in hand.
+  useEffect(() => {
+    if (!focusId || issues.length === 0) return;
+    const hit = issues.find((i) => matchesFocus(i, focusId));
+    if (hit) setExpanded(hit.id);
+  }, [focusId, issues]);
+
   const visible = useMemo(
     () =>
       pool
-        .filter((i) => isVisible(i, filters))
+        .filter((i) => matchesFocus(i, focusId) || isVisible(i, filters))
         .sort(
           (a, b) =>
             // A close waiting to be signed off goes first, whatever else is on
             // screen: it is the one row that cannot wait for the user to think
             // of looking for it.
+            // The issue that was linked to goes first — the user pressed it.
+            Number(matchesFocus(b, focusId)) - Number(matchesFocus(a, focusId)) ||
             Number(isAwaitingApproval(b)) - Number(isAwaitingApproval(a)) ||
             OWNER_RANK[a.owner] - OWNER_RANK[b.owner] ||
             STATE_RANK[a.state] - STATE_RANK[b.state] ||
             b.updated_at.localeCompare(a.updated_at),
         ),
-    [pool, filters],
+    [pool, filters, focusId],
   );
 
   // Only sessions that actually hold an issue — a live session with nothing

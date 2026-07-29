@@ -2,6 +2,7 @@ import "./happydom.ts";
 import { describe, test, expect } from "bun:test";
 import {
   DEFAULT_FILTERS,
+  ISSUE_ID_RE,
   NO_SESSION,
   ownerMatches,
   sanitizeFilters,
@@ -123,5 +124,28 @@ describe("issue filters — naming a session", () => {
     // A trailing slash must not produce an empty label.
     expect(sessionLabel({ id: "s_3", name: null, cwd: "/a/b/" })).toBe("b");
     expect(sessionLabel({ id: "s_4", name: null, cwd: null })).toBe("s_4");
+  });
+});
+
+// Ids written in a message become links into the tracker. The pattern has to be
+// tight enough that placeholders in an explanation ("iss_xxx") do not become
+// links to nothing — which looks broken rather than illustrative — and loose
+// enough to catch the shortened form that gets written in prose.
+describe("issue ids in messages", () => {
+  test("matches real ids, full and shortened", () => {
+    expect(ISSUE_ID_RE.test("iss_ms5kq850_516a7f9936c503d13860dbd0")).toBe(true);
+    // Shortened in prose; the timestamp half is unique in practice and the
+    // tracker resolves it by prefix.
+    expect(ISSUE_ID_RE.test("iss_ms5kq850")).toBe(true);
+  });
+
+  test("does not match placeholders used when explaining the format", () => {
+    expect(ISSUE_ID_RE.test("iss_xxx")).toBe(false);
+    expect(ISSUE_ID_RE.test("iss_yyy")).toBe(false);
+    expect(ISSUE_ID_RE.test("iss_nope")).toBe(false);
+    expect(ISSUE_ID_RE.test("iss_")).toBe(false);
+    // Not an id at all — a code span of ordinary text must stay a code span.
+    expect(ISSUE_ID_RE.test("issue_ids")).toBe(false);
+    expect(ISSUE_ID_RE.test("bd_vlap7p27")).toBe(false);
   });
 });

@@ -9,6 +9,7 @@ import { MarkdownAnchor, urlTransform } from "./MarkdownAnchor.tsx";
 // `**bold**` and `_italic_` survive — one spelling each. Same call already made
 // for `~` via singleTilde:false; emphasis has no such option, hence the escape.
 import { escapeCodeHostileEmphasis } from "../utils/markdownText.ts";
+import { ISSUE_ID_RE, openIssueTracker } from "../utils/issues.ts";
 // @reusable-ui MDView — USE WHEN: rendering user- or CC-authored markdown text
 //   (GFM + CJK-aware bold/strikethrough). INSTEAD OF: raw text or
 //   dangerouslySetInnerHTML.
@@ -64,6 +65,32 @@ function MDViewImpl({
               <table {...props} />
             </div>
           ),
+          // An issue id in a code span becomes a link into the tracker. Written
+          // as a code span deliberately: the bare-text form turns up in
+          // sentences ABOUT the format, and linkifying those would make the
+          // convention impossible to document. CC is told this in the MCP
+          // instructions, so it writes ids knowing they become clickable —
+          // otherwise it sends titles and the user has to go hunting.
+          code: ({ node, className, children, ...props }) => {
+            const text = String(children ?? "");
+            if (!className && ISSUE_ID_RE.test(text)) {
+              return (
+                <button
+                  type="button"
+                  className="md-issue-link"
+                  onClick={() => openIssueTracker(text)}
+                  title={text}
+                >
+                  {text}
+                </button>
+              );
+            }
+            return (
+              <code className={className} {...props}>
+                {children}
+              </code>
+            );
+          },
           // Images are the single biggest thing a long board holds in memory,
           // and nothing about that is visible from the file sizes. A screenshot
           // costs width × height × 4 bytes once decoded, regardless of how well

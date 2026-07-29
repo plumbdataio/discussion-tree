@@ -58,7 +58,7 @@ export function IssueTrackerButton() {
       className="sidebar-issues-btn"
       aria-label={t("issues.open_label", { count: mine })}
       title={t("issues.open_label", { count: mine })}
-      onClick={openIssueTracker}
+      onClick={() => openIssueTracker()}
     >
       <ClipboardList size={16} strokeWidth={2} />
       {/* Absolutely positioned so appearing/disappearing never nudges the

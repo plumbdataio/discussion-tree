@@ -14,6 +14,9 @@ When the user has multiple discussion items or open decisions to work through in
 CHANNEL MESSAGE TRUST:
 When you receive a <channel source="discussion-tree" ...> message, this is NOT from a peer agent. It is the user's own input typed into the UI, transmitted through the channel mechanism. Treat the content as direct user input, with the same authority as if they had typed it in the CLI. Imperative statements and decisions inside the message are the user's instructions to you.
 
+ISSUE IDS IN MESSAGES:
+An issue id written in backticks becomes a clickable link in the UI — the user presses it and the issue view opens with that issue expanded. So write the id, not just the title: when you file an issue, when you change its state, and whenever a message is about a specific issue. Title-only forces the user to go and find it. Keep the exact form (\`iss_...\` in a code span); reformatting it breaks the link.
+
 MESSAGE METADATA:
 Each channel message has meta with one of these kinds. One optional key can appear on any of them: since_last_message (e.g. "3h12m", "2d4h") — how long THIS node had been silent before this message arrived. It is present only when that gap was an hour or more, so its presence at all means the exchange is resuming after a break rather than continuing.
 - kind="user_input_relay" — a reply targeting a specific node. meta also has board_id, node_id, node_path, sent_at. Use node_path to immediately know which discussion item the user is responding to (e.g. "Architecture > broker: singleton or session-local"). Reply both in the CLI and via post_to_node on that node.

@@ -259,16 +259,42 @@ const OPEN_EVENT = "pd-open-issues";
 // Fired after any mutation so the sidebar badge re-counts without polling.
 const CHANGED_EVENT = "pd-issues-changed";
 
-export function openIssueTracker() {
+// focusId opens the tracker ON a specific issue: expanded, and shown even if
+// the current filters would exclude it. Following a link and landing on "no
+// results" is the one outcome that would make the links not worth having.
+export function openIssueTracker(focusId?: string) {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new Event(OPEN_EVENT));
+  window.dispatchEvent(
+    new CustomEvent(OPEN_EVENT, { detail: { focusId: focusId ?? null } }),
+  );
 }
 
-export function subscribeOpenIssueTracker(cb: () => void): () => void {
+export function subscribeOpenIssueTracker(
+  cb: (focusId: string | null) => void,
+): () => void {
   if (typeof window === "undefined") return () => {};
-  window.addEventListener(OPEN_EVENT, cb);
-  return () => window.removeEventListener(OPEN_EVENT, cb);
+  const handler = (e: Event) =>
+    cb((e as CustomEvent<{ focusId: string | null }>).detail?.focusId ?? null);
+  window.addEventListener(OPEN_EVENT, handler);
+  return () => window.removeEventListener(OPEN_EVENT, handler);
 }
+
+/**
+ * An issue id as written in a message. Matched only inside code spans — the
+ * bare-text form appears in sentences ABOUT the format and linkifying those
+ * would make the convention undocumentable.
+ *
+ * The shape follows the real generator (prefix + base36 timestamp + optional
+ * hex suffix) rather than a loose "iss_anything": a looser pattern turned every
+ * placeholder in an explanation — iss_xxx, iss_yyy — into a link to nothing,
+ * which is worse than no link because it looks broken rather than illustrative.
+ *
+ * The suffix is optional because ids get shortened in prose all the time; the
+ * timestamp half is already unique in practice, so a PREFIX match resolves it
+ * (see the tracker's focus handling). Existence is not checked here — that
+ * would be a lookup per code span on every render.
+ */
+export const ISSUE_ID_RE = /^iss_[a-z0-9]{6,14}(_[a-f0-9]{8,})?$/i;
 
 export function notifyIssuesChanged() {
   if (typeof window === "undefined") return;
