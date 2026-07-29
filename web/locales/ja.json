@@ -514,7 +514,10 @@
     "priority_label": "優先度",
     "all_priorities": "全優先度",
     "chat_placeholder_to": "{{who}} に送る (Cmd/Ctrl+Enter で送信)",
-    "timeline_here": "この課題のスレッド"
+    "timeline_here": "この課題のスレッド",
+    "col_state": "担当・状態",
+    "col_title": "課題",
+    "col_updated": "更新"
   },
   "update": {
     "available": "新しいバージョンがあります",

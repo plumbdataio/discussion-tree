@@ -79,6 +79,12 @@ const STATE_RANK: Record<IssueState, number> = {
 const PRIORITY_RANK: Record<IssuePriority, number> = { high: 0, mid: 1, low: 2 };
 const priorityOf = (i: Issue): IssuePriority => i.priority ?? "mid";
 
+// Column sorting. "default" is the composite order the list opens in — a
+// separate key rather than a null, so pressing the leftmost header twice takes
+// you back to it instead of leaving the list in some other arbitrary order.
+type SortKey = "default" | "session" | "title" | "updated";
+type SortState = { key: SortKey; desc: boolean };
+
 type Draft = {
   id: string | null;
   title: string;
@@ -252,6 +258,7 @@ export function IssueTrackerModal() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Issue | null>(null);
   const [timelineOf, setTimelineOf] = useState<Issue | null>(null);
+  const [sort, setSort] = useState<SortState>({ key: "default", desc: false });
   const [focusId, setFocusId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Reset per editor session so the warning appears again for the next issue.
@@ -392,25 +399,40 @@ export function IssueTrackerModal() {
     if (hit) setExpanded(hit.id);
   }, [focusId, issues]);
 
-  const visible = useMemo(
-    () =>
-      pool
-        .filter((i) => matchesFocus(i, focusId) || isVisible(i, filters))
-        .sort(
-          (a, b) =>
-            // A close waiting to be signed off goes first, whatever else is on
-            // screen: it is the one row that cannot wait for the user to think
-            // of looking for it.
-            // The issue that was linked to goes first — the user pressed it.
-            Number(matchesFocus(b, focusId)) - Number(matchesFocus(a, focusId)) ||
-            Number(isAwaitingApproval(b)) - Number(isAwaitingApproval(a)) ||
-            OWNER_RANK[a.owner] - OWNER_RANK[b.owner] ||
-            PRIORITY_RANK[priorityOf(a)] - PRIORITY_RANK[priorityOf(b)] ||
-            STATE_RANK[a.state] - STATE_RANK[b.state] ||
-            b.updated_at.localeCompare(a.updated_at),
-        ),
-    [pool, filters, focusId],
-  );
+  const visible = useMemo(() => {
+    // The DEFAULT order, which is also what every explicit sort falls back to
+    // for ties: whose move it is, then how much it matters, then what it is
+    // waiting for, then recency.
+    const byDefault = (a: Issue, b: Issue) =>
+      OWNER_RANK[a.owner] - OWNER_RANK[b.owner] ||
+      PRIORITY_RANK[priorityOf(a)] - PRIORITY_RANK[priorityOf(b)] ||
+      STATE_RANK[a.state] - STATE_RANK[b.state] ||
+      b.updated_at.localeCompare(a.updated_at);
+
+    const byColumn: Record<SortKey, (a: Issue, b: Issue) => number> = {
+      default: byDefault,
+      session: (a, b) =>
+        (a.session_id ? (sessionNames.get(a.session_id) ?? "") : "").localeCompare(
+          b.session_id ? (sessionNames.get(b.session_id) ?? "") : "",
+        ) || byDefault(a, b),
+      title: (a, b) => a.title.localeCompare(b.title) || byDefault(a, b),
+      updated: (a, b) => b.updated_at.localeCompare(a.updated_at),
+    };
+
+    const cmp = byColumn[sort.key];
+    return pool
+      .filter((i) => matchesFocus(i, focusId) || isVisible(i, filters))
+      .sort(
+        (a, b) =>
+          // A close waiting to be signed off goes first, whatever else is on
+          // screen — including an explicit sort: it is the one row that cannot
+          // wait for the user to think of looking for it.
+          // The issue that was linked to goes first — the user pressed it.
+          Number(matchesFocus(b, focusId)) - Number(matchesFocus(a, focusId)) ||
+          Number(isAwaitingApproval(b)) - Number(isAwaitingApproval(a)) ||
+          (sort.desc ? -cmp(a, b) : cmp(a, b)),
+      );
+  }, [pool, filters, focusId, sort, sessionNames]);
 
   // Only sessions that actually hold an issue — a live session with nothing
   // filed against it is a row reading "0" in a list of a dozen, and narrowing
@@ -916,6 +938,41 @@ export function IssueTrackerModal() {
             </div>
           ) : view === "table" ? (
             <table className="issue-table">
+              {/* A header row, asked for on 2026-07-29 to get sorting — and it
+                  also answers a question the list could not: which time the
+                  right-hand column shows. The relative form ("3h ago") reads as
+                  a last-touched time only once something says so. */}
+              <thead>
+                <tr className="issue-head-row">
+                  {(
+                    [
+                      ["default", "issues.col_state"],
+                      ["session", "issues.session_label"],
+                      ["title", "issues.col_title"],
+                      ["updated", "issues.col_updated"],
+                    ] as [SortKey, string][]
+                  ).map(([key, label]) => (
+                    <th
+                      key={key}
+                      className={
+                        "issue-head-cell" + (sort.key === key ? " sorted" : "")
+                      }
+                      onClick={() =>
+                        setSort((cur) =>
+                          cur.key === key
+                            ? { key, desc: !cur.desc }
+                            : { key, desc: false },
+                        )
+                      }
+                    >
+                      {t(label)}
+                      <span className="issue-sort-caret" aria-hidden="true">
+                        {sort.key === key ? (sort.desc ? "▲" : "▼") : ""}
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
               <tbody>
                 {visible.map((i) => (
                   <React.Fragment key={i.id}>

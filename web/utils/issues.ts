@@ -209,10 +209,14 @@ export function fetchIssues(includeDeleted: boolean) {
   });
 }
 
+// actor:"user" is what makes the broker notify the session this is filed
+// against. Everything filed through this view is the user's, by definition —
+// the flag exists because create-issue is also the MCP tool CC files with, and
+// announcing CC's own issue back to CC would be noise.
 export function createIssue(fields: Partial<Issue>) {
   return callBroker<{ ok: boolean; issue?: Issue; error?: string }>(
     "/create-issue",
-    fields,
+    { ...fields, actor: "user" },
   );
 }
 

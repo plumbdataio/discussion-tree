@@ -273,7 +273,30 @@ export function handleCreateIssue(body: any):
       closedNow,
     ],
   );
-  return { ok: true, issue: selectIssue.get(id) as IssueRow };
+  const issue = selectIssue.get(id) as IssueRow;
+  // Filed BY the user, AT a session: tell that CC. Without this the issue sits
+  // in a list nobody is watching — the user writes it down precisely because
+  // they do not want to have to also say it, and the tracker is not something
+  // CC re-reads on its own. Only for user-filed rows: an issue CC filed itself
+  // needs no announcement back to CC.
+  if (body?.actor === "user" && issue.session_id) {
+    insertPending.run(
+      issue.session_id,
+      "", // no board — an issue does not live on one
+      "",
+      "",
+      `[discussion-tree] The user filed a new issue for you: ${issue.id} — "${issue.title}".\n\n` +
+        (issue.body ? `${issue.body}\n\n` : "") +
+        `It is ${issue.owner} / ${issue.state}` +
+        (issue.priority && issue.priority !== "mid"
+          ? ` / priority ${issue.priority}`
+          : "") +
+        `. Decide whether it changes what you are doing right now: a high-priority one usually should, and one filed while you are mid-task usually should not. Either way, say which — silence here reads as "did not see it". Talk about it on the issue's own thread (post_to_issue ${issue.id}), which is where they are looking.`,
+      now,
+      "issue_created",
+    );
+  }
+  return { ok: true, issue };
 }
 
 export function handleUpdateIssue(body: any):

@@ -539,3 +539,45 @@ describe("issues — declining a close", () => {
     expect(r.json.error).toContain("not closed");
   });
 });
+
+// Filed BY the user, AT a session: that CC has to hear about it. They write an
+// issue down precisely so they do not also have to say it, and CC does not
+// re-read the tracker on its own — so without this the row sits in a list
+// nobody is watching.
+describe("issues — a user-filed issue reaches the session it was filed at", () => {
+  const drain = async () =>
+    (
+      await post<{ messages: { text: string; kind?: string }[] }>(
+        `${broker.url}/poll-messages`,
+        { session_id: sessionId },
+      )
+    ).json.messages;
+
+  test("notifies on a user-filed issue, with what it needs to act", async () => {
+    await drain(); // start from empty
+    const r = await create({
+      title: "please look at the printer",
+      session_id: sessionId,
+      actor: "user",
+      priority: "high",
+    });
+    const msgs = await drain();
+    const note = msgs.find((m) => m.text.includes(r.issue.id));
+    expect(note).toBeTruthy();
+    expect(note!.text).toContain("please look at the printer");
+    // A priority worth interrupting for has to be IN the message — CC decides
+    // whether to switch tasks from this text alone.
+    expect(note!.text).toContain("high");
+  });
+
+  test("an issue CC filed itself is not announced back to CC", async () => {
+    await drain();
+    const r = await create({ title: "filed by cc", session_id: sessionId });
+    // Asserted as "nothing mentions THIS issue" rather than "the queue is
+    // empty": the queue is shared with everything else this session does, so an
+    // emptiness check would fail for reasons that have nothing to do with the
+    // behaviour under test.
+    const msgs = await drain();
+    expect(msgs.some((m) => m.text.includes(r.issue.id))).toBe(false);
+  });
+});

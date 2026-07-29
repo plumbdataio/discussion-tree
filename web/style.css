@@ -7888,3 +7888,39 @@ ul.maps li.current .sidebar-map-link {
   font-family: inherit;
   font-size: inherit;
 }
+
+/* ---- Issue table header --------------------------------------------------
+   Added with column sorting. Sticky because the list scrolls inside the modal
+   and a header that scrolls away takes the meaning of the columns with it. */
+.issue-head-row {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel);
+}
+.issue-head-cell {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  padding: 4px 8px 6px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.issue-head-cell:hover {
+  color: var(--text);
+}
+.issue-head-cell.sorted {
+  color: var(--accent);
+}
+/* Fixed width so the caret appearing does not shift the label — the arrow is
+   the one thing on this row that comes and goes. */
+.issue-sort-caret {
+  display: inline-block;
+  width: 1em;
+  margin-left: 3px;
+  font-size: 9px;
+}

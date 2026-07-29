@@ -514,7 +514,10 @@
     "priority_label": "Priority",
     "all_priorities": "Any priority",
     "chat_placeholder_to": "Write to {{who}} (Cmd/Ctrl+Enter to send)",
-    "timeline_here": "This issue's own thread"
+    "timeline_here": "This issue's own thread",
+    "col_state": "Owner / state",
+    "col_title": "Issue",
+    "col_updated": "Updated"
   },
   "update": {
     "available": "A newer version is available",
