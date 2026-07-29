@@ -489,7 +489,7 @@
     "timeline_less": "Collapse",
     "timeline_none_hint": "Nothing is linked to this issue yet. Links accumulate as it is discussed.",
     "approve": "Got it",
-    "approval_reopen": "Not done yet",
+    "approval_reopen": "Keep it open",
     "approval_lead": {
       "done": "CC marked this done",
       "dropped": "CC dropped this"

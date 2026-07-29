@@ -16,7 +16,7 @@
 // shown next to an issue — never the content of the view. Making the aggregate
 // the main event is exactly how the projection failed.
 
-import { db } from "./db.ts";
+import { db, insertPending } from "./db.ts";
 import { generateRandomId } from "./helpers.ts";
 
 // Who currently holds the ball. Split from `state` on purpose: a single status
@@ -316,6 +316,53 @@ export function handleApproveIssueClose(body: any):
     db.run("UPDATE issues SET close_approved_at = ? WHERE id = ?", [nowIso(), id]);
   }
   return { ok: true, issue: selectIssue.get(id) as IssueRow };
+}
+
+// The user declining a close CC made. Distinct from a plain state edit because
+// it has to REACH CC: "I think this is finished / no it isn't" is a confirmed
+// disagreement, and the whole flow exists to surface exactly that. Without a
+// push, the rejection is silent on CC's side and it goes on believing the work
+// is done — which is the failure the approval step was added to prevent,
+// surviving in the one branch nobody looked at.
+export function handleRejectIssueClose(body: any):
+  | { ok: true; issue: IssueRow; notified: boolean }
+  | { ok: false; error: string } {
+  const id = String(body?.issue_id ?? "");
+  const current = selectIssue.get(id) as IssueRow | undefined;
+  if (!current) return { ok: false, error: "issue not found" };
+  const isClosed = current.state === "done" || current.state === "dropped";
+  if (!isClosed) {
+    return { ok: false, error: "issue is not closed, so there is nothing to send back" };
+  }
+  const now = nowIso();
+  // Back to `doing`, not `todo`: being sent back means work remains on
+  // something that was actively being worked, and `todo` would read as "never
+  // started". closed_at and the approval both clear, so closing it again asks
+  // again rather than silently inheriting the old answer.
+  db.run(
+    "UPDATE issues SET state = 'doing', closed_at = NULL, close_approved_at = NULL, updated_at = ? WHERE id = ?",
+    [now, id],
+  );
+
+  let notified = false;
+  if (current.session_id) {
+    const text =
+      `[discussion-tree] The user did NOT accept your close of issue ${id} — "${current.title}".\n\n` +
+      `You considered this finished; they do not. That is a confirmed disagreement, not a status tweak to note and move past: something is left, and you cannot see what.\n\n` +
+      `Work out what remains from the issue's own conversation (get_issue_timeline ${id}) and from the boards it was discussed on. If that does not tell you, ASK the user. Asking is correct HERE — unlike closing, which you do without asking.\n\n` +
+      `The issue is back to "doing". Do not close it again until you know what was missing.`;
+    insertPending.run(
+      current.session_id,
+      "", // no board — an issue does not live on one
+      "",
+      "",
+      text,
+      now,
+      "issue_close_rejected",
+    );
+    notified = true;
+  }
+  return { ok: true, issue: selectIssue.get(id) as IssueRow, notified };
 }
 
 export function handleListIssues(body: any): {
@@ -834,6 +881,7 @@ export const routes = {
   "/list-issue-sessions": handleListIssueSessions,
   "/issue-timeline": handleIssueTimeline,
   "/approve-issue-close": handleApproveIssueClose,
+  "/reject-issue-close": handleRejectIssueClose,
   "/get-issue-filters": handleGetIssueFilters,
   "/set-issue-filters": handleSetIssueFilters,
 };

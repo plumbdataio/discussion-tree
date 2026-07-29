@@ -489,7 +489,7 @@
     "timeline_less": "折りたたむ",
     "timeline_none_hint": "この課題に紐づいた発言はまだありません。以後の投稿で貯まります。",
     "approve": "確認しました",
-    "approval_reopen": "まだ終わっていない",
+    "approval_reopen": "まだ「完了」にしない",
     "approval_lead": {
       "done": "CC が完了にしました",
       "dropped": "CC が取り下げました"

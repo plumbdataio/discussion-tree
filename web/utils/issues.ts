@@ -52,6 +52,15 @@ export function isAwaitingApproval(i: Issue): boolean {
   return (i.state === "done" || i.state === "dropped") && !i.close_approved_at;
 }
 
+// Declining a close CC made. Not just a state edit: the broker also pushes a
+// channel message to the CC that owns the issue, because "I think this is done
+// / no it isn't" is a disagreement that has to reach the other side.
+export function rejectIssueClose(id: string) {
+  return callBroker<{ ok: boolean; error?: string }>("/reject-issue-close", {
+    issue_id: id,
+  });
+}
+
 export function approveIssueClose(id: string) {
   return callBroker<{ ok: boolean; error?: string }>("/approve-issue-close", {
     issue_id: id,

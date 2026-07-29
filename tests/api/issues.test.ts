@@ -476,3 +476,66 @@ describe("issues — closing waits for the user", () => {
     expect(r.json.issue.close_approved_at).toBe(null);
   });
 });
+
+// Declining a close has to REACH CC. "I think this is finished / no it isn't"
+// is a confirmed disagreement, and an unannounced rejection leaves CC believing
+// the work is done — the exact failure the approval step exists to prevent,
+// surviving in the one branch nobody looked at.
+describe("issues — declining a close", () => {
+  test("sends the issue back to doing and queues a message for its CC", async () => {
+    // session_id matters here: it is how the broker knows which CC to tell.
+    const i = (await create({ title: "not actually finished", session_id: sessionId })).issue;
+    await post(`${broker.url}/update-issue`, { issue_id: i.id, state: "done" });
+
+    const r = await post<{
+      ok: boolean;
+      notified: boolean;
+      issue: { state: string; closed_at: string | null; close_approved_at: string | null };
+    }>(`${broker.url}/reject-issue-close`, { issue_id: i.id });
+
+    expect(r.json.ok).toBe(true);
+    // "doing", not "todo": work remains on something that was being worked.
+    expect(r.json.issue.state).toBe("doing");
+    expect(r.json.issue.closed_at).toBe(null);
+    // Cleared, so closing again asks again instead of inheriting the old answer.
+    expect(r.json.issue.close_approved_at).toBe(null);
+    expect(r.json.notified).toBe(true);
+
+    // The push is the point — it must be sitting in the queue for that session.
+    const polled = await post<{ messages: { kind: string; text: string }[] }>(
+      `${broker.url}/poll-messages`,
+      { session_id: sessionId },
+    );
+    const note = polled.json.messages.find((m) => m.kind === "issue_close_rejected");
+    expect(note).toBeTruthy();
+    expect(note!.text).toContain(i.id);
+    // It has to tell CC that asking is right here, since it cannot see what is
+    // missing — the opposite of the closing path, which must not ask.
+    expect(note!.text).toContain("ASK");
+  });
+
+  test("an issue with no session is sent back, but there is nobody to tell", async () => {
+    // Filed outside any session (or its session is gone). Sending it back is
+    // still right; the push simply has no addressee, and saying so beats
+    // pretending a notification went out.
+    const i = (await create({ title: "homeless issue" })).issue;
+    await post(`${broker.url}/update-issue`, { issue_id: i.id, state: "done" });
+    const r = await post<{ ok: boolean; notified: boolean; issue: { state: string } }>(
+      `${broker.url}/reject-issue-close`,
+      { issue_id: i.id },
+    );
+    expect(r.json.ok).toBe(true);
+    expect(r.json.issue.state).toBe("doing");
+    expect(r.json.notified).toBe(false);
+  });
+
+  test("declining something still open is refused", async () => {
+    const i = (await create({ title: "open already" })).issue;
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/reject-issue-close`,
+      { issue_id: i.id },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toContain("not closed");
+  });
+});

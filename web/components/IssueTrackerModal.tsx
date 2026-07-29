@@ -28,6 +28,7 @@ import {
   fetchIssues,
   loadFilters,
   approveIssueClose,
+  rejectIssueClose,
   isAwaitingApproval,
   isVisible,
   notifyIssuesChanged,
@@ -402,6 +403,16 @@ export function IssueTrackerModal() {
     afterMutation(filters.showDeleted);
   };
 
+  // Declining the close. Goes through its own endpoint rather than a state
+  // edit, because the broker has to notify the CC that closed it — an
+  // unannounced rejection leaves CC believing the work is finished, which is
+  // the exact failure this flow was added to prevent.
+  const sendBack = async (issue: Issue) => {
+    const r = await rejectIssueClose(issue.id);
+    if (!r.ok) setError(r.error ?? t("issues.error_generic"));
+    afterMutation(filters.showDeleted);
+  };
+
   // Changing owner/state straight from a row is the whole point of a ledger you
   // maintain, so it does not go through the editor.
   const quickSet = async (issue: Issue, patch: Partial<Issue>) => {
@@ -543,7 +554,7 @@ export function IssueTrackerModal() {
           className="issue-approval-reopen"
           onClick={(e) => {
             e.stopPropagation();
-            void quickSet(i, { state: "todo" });
+            void sendBack(i);
           }}
         >
           {t("issues.approval_reopen")}
