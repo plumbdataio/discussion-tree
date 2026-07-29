@@ -74,18 +74,49 @@ export function sanitizeFilters(raw: unknown): IssueFilters {
       )
     : DEFAULT_FILTERS.states;
   return {
-    // An empty array would render an empty list with no hint why, so treat
-    // "nothing selected" as "no filter on this axis".
-    owners: owners.length ? owners : [...ISSUE_OWNERS],
-    states: states.length ? states : [...ISSUE_STATES],
-    // Unlike owners/states this one is legitimately empty = unfiltered, so it
-    // is kept as-is rather than widened.
+    // Empty means unfiltered on every axis — kept as-is rather than widened
+    // here. Widening on read used to paper over the view treating an empty
+    // owners array as "owner is in the empty set", which showed nothing: saving
+    // and reloading silently repaired it, so the bug only appeared once "clear
+    // this axis" became an explicit action in the dropdown. The view now reads
+    // empty the same way on all three axes, so this no longer compensates.
+    owners,
+    states,
     sessionIds: Array.isArray(f.sessionIds)
       ? f.sessionIds.filter((s): s is string => typeof s === "string")
       : [],
     q: typeof f.q === "string" ? f.q : "",
     showDeleted: f.showDeleted === true,
   };
+}
+
+// Issues filed against no session at all are rare but real (raised before a
+// session existed, or deliberately detached). Without a value standing for them
+// they would vanish the moment any session was picked, with nothing on screen
+// to say why.
+export const NO_SESSION = "__none__";
+
+// EMPTY MEANS UNFILTERED — the one rule these three share, and the reason they
+// live here as functions rather than inline in the view. Selecting nothing is a
+// request to stop narrowing, not a request for rows whose owner is in the empty
+// set. Session read it that way and the other two did not, so clearing an axis
+// emptied the entire list (2026-07-29); sanitizeFilters widening empties on
+// read had been hiding it, since saving and reloading repaired the state.
+//
+// Kept as three predicates rather than one: each count in the filter bar is
+// taken with its OWN axis left out, so a chip never reads 0 merely because it
+// is switched off.
+export function ownerMatches(i: Issue, f: IssueFilters): boolean {
+  return f.owners.length === 0 || f.owners.includes(i.owner);
+}
+export function stateMatches(i: Issue, f: IssueFilters): boolean {
+  return f.states.length === 0 || f.states.includes(i.state);
+}
+export function sessionMatches(i: Issue, f: IssueFilters): boolean {
+  return (
+    f.sessionIds.length === 0 ||
+    f.sessionIds.includes(i.session_id ?? NO_SESSION)
+  );
 }
 
 async function callBroker<T>(path: string, body: unknown): Promise<T> {

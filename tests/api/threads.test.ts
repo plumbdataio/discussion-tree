@@ -39,6 +39,7 @@ async function fetchThreads() {
 describe("threads", () => {
   test("/post-to-node appends a CC message and bumps status to discussing", async () => {
     const r = await post<{ ok: boolean }>(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: boardId,
       node_id: "i1",
       message: "Hello from CC",
@@ -62,6 +63,7 @@ describe("threads", () => {
 
   test("/post-to-node appends a status_change system entry on transition", async () => {
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: boardId,
       node_id: "i1",
       message: "Decision",
@@ -166,6 +168,7 @@ describe("threads", () => {
   test("/mark-thread-items-read flips read_at on listed CC messages", async () => {
     // Generate a CC message to mark unread, then mark it read.
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: boardId,
       node_id: "i1",
       message: "unread CC",
@@ -193,12 +196,14 @@ describe("threads", () => {
   test("/mark-board-read flips every unread CC item on the board", async () => {
     // Drop two new unread CC posts, then mark-board-read.
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: boardId,
       node_id: "i1",
       message: "u1",
       status: "discussing",
     });
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: boardId,
       node_id: "i1",
       message: "u2",

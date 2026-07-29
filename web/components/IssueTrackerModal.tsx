@@ -20,15 +20,19 @@ import {
   DEFAULT_FILTERS,
   ISSUE_OWNERS,
   ISSUE_STATES,
+  NO_SESSION,
   createIssue,
   deleteIssue,
   fetchIssueSessions,
   fetchIssues,
   loadFilters,
   notifyIssuesChanged,
+  ownerMatches,
   restoreIssue,
   sanitizeFilters,
   saveFilters,
+  sessionMatches,
+  stateMatches,
   subscribeOpenIssueTracker,
   updateIssue,
   type Issue,
@@ -65,12 +69,6 @@ type Draft = {
   state: IssueState;
   sessionId: string | null;
 };
-
-// Issues filed against no session at all are rare but real (anything raised
-// before a session existed, or deliberately detached). Without a value standing
-// for them they would vanish the moment any session was picked, with nothing on
-// screen to say why — the same silent-hiding this view was built to avoid.
-const NO_SESSION = "__none__";
 
 const emptyDraft = (sessionId: string | null): Draft => ({
   id: null,
@@ -293,56 +291,45 @@ export function IssueTrackerModal() {
     );
   }, [issues, filters.q]);
 
-  const inSessions = useCallback(
-    (i: Issue) =>
-      filters.sessionIds.length === 0 ||
-      filters.sessionIds.includes(i.session_id ?? NO_SESSION),
-    [filters.sessionIds],
-  );
+  // Empty means unfiltered on every axis — see the predicates in utils/issues.
+  const inSessions = useCallback((i: Issue) => sessionMatches(i, filters), [filters]);
+  const inOwners = useCallback((i: Issue) => ownerMatches(i, filters), [filters]);
+  const inStates = useCallback((i: Issue) => stateMatches(i, filters), [filters]);
 
   const ownerCounts = useMemo(() => {
     const c: Record<string, number> = { user: 0, cc: 0, external: 0 };
-    for (const i of pool) {
-      if (filters.states.includes(i.state) && inSessions(i)) c[i.owner]++;
-    }
+    for (const i of pool) if (inStates(i) && inSessions(i)) c[i.owner]++;
     return c;
-  }, [pool, filters.states, inSessions]);
+  }, [pool, inStates, inSessions]);
 
   const stateCounts = useMemo(() => {
     const c: Record<string, number> = { todo: 0, doing: 0, done: 0, dropped: 0 };
-    for (const i of pool) {
-      if (filters.owners.includes(i.owner) && inSessions(i)) c[i.state]++;
-    }
+    for (const i of pool) if (inOwners(i) && inSessions(i)) c[i.state]++;
     return c;
-  }, [pool, filters.owners, inSessions]);
+  }, [pool, inOwners, inSessions]);
 
   const sessionCounts = useMemo(() => {
     const c: Record<string, number> = {};
     for (const i of pool) {
-      if (filters.owners.includes(i.owner) && filters.states.includes(i.state)) {
+      if (inOwners(i) && inStates(i)) {
         const key = i.session_id ?? NO_SESSION;
         c[key] = (c[key] ?? 0) + 1;
       }
     }
     return c;
-  }, [pool, filters.owners, filters.states]);
+  }, [pool, inOwners, inStates]);
 
   const visible = useMemo(
     () =>
       pool
-        .filter(
-          (i) =>
-            filters.owners.includes(i.owner) &&
-            filters.states.includes(i.state) &&
-            inSessions(i),
-        )
+        .filter((i) => inOwners(i) && inStates(i) && inSessions(i))
         .sort(
           (a, b) =>
             OWNER_RANK[a.owner] - OWNER_RANK[b.owner] ||
             STATE_RANK[a.state] - STATE_RANK[b.state] ||
             b.updated_at.localeCompare(a.updated_at),
         ),
-    [pool, filters.owners, filters.states, inSessions],
+    [pool, inOwners, inStates, inSessions],
   );
 
   // Only sessions that actually hold an issue — a live session with nothing
@@ -791,7 +778,9 @@ export function IssueTrackerModal() {
             </table>
           ) : (
             <div className="issue-board">
-              {ISSUE_STATES.filter((s) => filters.states.includes(s)).map((s) => (
+              {ISSUE_STATES.filter(
+                (s) => filters.states.length === 0 || filters.states.includes(s),
+              ).map((s) => (
                 <div key={s} className={`issue-col state-${s}`}>
                   <div className="issue-col-head">
                     {t(`issues.state.${s}`)}

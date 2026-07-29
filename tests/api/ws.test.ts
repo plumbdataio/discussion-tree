@@ -80,6 +80,7 @@ describe("websocket broadcasts", () => {
     const msgs = await captureWsMessages(broker.port, boardId, async () => {
       await new Promise((r) => setTimeout(r, 50)); // let the WS settle
       await post(`${broker.url}/post-to-node`, {
+        issue_ids: [],
         board_id: boardId,
         node_id: "i1",
         message: "via ws",

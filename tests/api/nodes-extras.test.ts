@@ -225,12 +225,14 @@ describe("/api/board view shape", () => {
   test("threads keyed by node_id, each entry sorted ascending by id", async () => {
     // Seed two cc messages on the same node and verify order.
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: boardId,
       node_id: "I2A",
       message: "first",
       status: "discussing",
     });
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: boardId,
       node_id: "I2A",
       message: "second",

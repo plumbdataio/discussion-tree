@@ -333,6 +333,7 @@ describe("board auto-completion (checklist fully resolved)", () => {
     const bid = c.json.board_id;
     // Give the node a conversation thread.
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: bid,
       node_id: "conv",
       message: "a message",

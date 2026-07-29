@@ -101,6 +101,7 @@ describe("concern is not a discussion target", () => {
     const r = await post<{ ok: boolean; error?: string }>(
       `${broker.url}/post-to-node`,
       {
+        issue_ids: [],
         board_id: id,
         node_id: "c1",
         message: "should be rejected",
@@ -116,6 +117,7 @@ describe("concern is not a discussion target", () => {
     const r = await post<{ ok: boolean; error?: string }>(
       `${broker.url}/post-to-node`,
       {
+        issue_ids: [],
         board_id: id,
         node_id: "ghost",
         message: "x",
@@ -131,6 +133,7 @@ describe("concern is not a discussion target", () => {
     const r = await post<{ ok: boolean; error?: string }>(
       `${broker.url}/post-to-node`,
       {
+        issue_ids: [],
         board_id: id,
         node_id: "i1",
         message: "a normal post",

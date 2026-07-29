@@ -410,7 +410,28 @@ export function handleRestoreIssue(body: any):
 export function validateIssueIds(issueIds: unknown):
   | { ok: true; ids: string[] }
   | { ok: false; error: string } {
-  if (issueIds === undefined || issueIds === null) return { ok: true, ids: [] };
+  // Omission is rejected, not defaulted. The point of the required parameter is
+  // that posting forces the question "does this belong to an issue?" to be
+  // answered — and a default answers it for you, silently and always the same
+  // way. `[]` is a real answer and stays valid.
+  //
+  // The broker was deliberately lenient here until 2026-07-29: the MCP schema
+  // already forced the decision, but sessions still running an older tool list
+  // physically could not send the field, and rejecting them would have killed
+  // every post they made. Tightened once all live MCP servers were confirmed
+  // restarted (measured with `ps`, not assumed). The one process left on the
+  // old code is an orphan whose parent CC has exited, so it never posts.
+  if (issueIds === undefined || issueIds === null) {
+    return {
+      ok: false,
+      error:
+        "issue_ids is required — nothing was posted. Pass the ids of the " +
+        "issues this message belongs to, or [] if it belongs to none. Every " +
+        "post records this so an issue's conversation can be read as one " +
+        "timeline later (get_issue_timeline); a message posted without it is " +
+        "invisible to that view and nobody finds out it is missing.",
+    };
+  }
   if (!Array.isArray(issueIds)) {
     return { ok: false, error: "issue_ids must be an array (use [] for none)" };
   }
@@ -459,7 +480,18 @@ export function handleLinkIssueMessage(body: any):
   | { ok: false; error: string } {
   const messageId = Number(body?.message_id ?? body?.thread_item_id);
   if (!Number.isFinite(messageId)) return { ok: false, error: "message_id required" };
-  const checked = validateIssueIds(body?.issue_ids);
+  // Checked here rather than leaning on validateIssueIds' message, which is
+  // written for the posting path ("nothing was posted") and would misdescribe
+  // what happened on this one.
+  if (body?.issue_ids === undefined || body?.issue_ids === null) {
+    return {
+      ok: false,
+      error:
+        "issue_ids required — pass the issues to attach to this message, " +
+        "or use unlink_issue_id to detach one.",
+    };
+  }
+  const checked = validateIssueIds(body.issue_ids);
   if (!checked.ok) return { ok: false, error: checked.error };
   return { ok: true, linked: linkMessageToIssues(messageId, checked.ids) };
 }

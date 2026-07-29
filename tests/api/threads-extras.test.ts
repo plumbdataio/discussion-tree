@@ -43,6 +43,7 @@ async function fetchView() {
 describe("post-to-node — status changes and timeline shape", () => {
   test("post-to-node persists a cc thread item before the status_change row", async () => {
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: boardId,
       node_id: "ti1",
       message: "hello",
@@ -63,6 +64,7 @@ describe("post-to-node — status changes and timeline shape", () => {
     // Re-status to a new value — the diff text should include the previous
     // status and the next one separated by colons.
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: boardId,
       node_id: "ti1",
       message: "promote",
@@ -83,6 +85,7 @@ describe("post-to-node — status changes and timeline shape", () => {
   test("post-to-node with no-change status emits a thread item but no status_change row", async () => {
     // First post moves to "discussing".
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: boardId,
       node_id: "ti1",
       message: "first",
@@ -94,6 +97,7 @@ describe("post-to-node — status changes and timeline shape", () => {
     ).length;
 
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: boardId,
       node_id: "ti1",
       message: "same",
@@ -114,6 +118,7 @@ describe("post-to-node — status changes and timeline shape", () => {
       status: "pending",
     });
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: boardId,
       node_id: "ti1",
       message: "no status sent",
@@ -222,6 +227,7 @@ describe("mark-thread-items-read / mark-board-read", () => {
   test("mark-board-read flips read_at on every cc-authored thread item", async () => {
     // Seed: one CC message on a node.
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: boardId,
       node_id: "ti1",
       message: "to be read",

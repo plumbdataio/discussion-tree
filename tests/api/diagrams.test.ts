@@ -199,6 +199,7 @@ describe("diagrams — chat", () => {
   test("/post-diagram-chat appends a CC message to the chat thread", async () => {
     const id = await createDiagram("Chat target");
     const r = await post<{ ok: boolean }>(`${broker.url}/post-diagram-chat`, {
+      issue_ids: [],
       diagram_id: id,
       message: "I updated the diagram.",
     });
@@ -469,6 +470,7 @@ describe("diagrams — the Stop-hook nag covers diagram chat", () => {
     await userSays(id, "why is this edge dashed?");
     expect((await unanswered()).count).toBe(1);
     await post(`${broker.url}/post-diagram-chat`, {
+      issue_ids: [],
       diagram_id: id,
       message: "It marks an async hop.",
     });
@@ -479,6 +481,7 @@ describe("diagrams — the Stop-hook nag covers diagram chat", () => {
     const id = await createDiagram("Empty post");
     await userSays(id, "why is this edge dashed?");
     await post(`${broker.url}/post-diagram-chat`, {
+      issue_ids: [],
       diagram_id: id,
       message: "   ",
     });

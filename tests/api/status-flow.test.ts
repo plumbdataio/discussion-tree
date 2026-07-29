@@ -115,6 +115,7 @@ describe("node status mutations broadcast and recompute board status", () => {
   test("post-to-node status broadcast lands in the timeline", async () => {
     const { boardId, itemId } = await newSingleItemBoard("ptb");
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: boardId,
       node_id: itemId,
       message: "hi",

@@ -189,9 +189,22 @@ if (BIND_HOST !== "127.0.0.1" && BIND_HOST !== "localhost") {
   );
 }
 
+// Hot module reloading is OFF by default, which is the opposite of what a dev
+// server usually wants — because this is not one. The broker serves the app the
+// user works in all day, and Bun's HMR client reloads their page every time a
+// file under web/ is touched. With an agent editing that directory, the page
+// they are reading reloads under them repeatedly — reported 2026-07-29 as
+// happening too often to get any work done.
+//
+// Nothing is lost by default: a web/ change already needs a broker restart to
+// be picked up in practice, so the reload was pure interruption. Set DT_HMR=1
+// when you are the only one looking at the page and want live reloads back.
+const HMR = process.env.DT_HMR === "1";
+
 const server = Bun.serve({
   port: PORT,
   hostname: BIND_HOST,
+  development: { hmr: HMR },
   routes: {
     "/": indexHtml,
     "/board/:id": indexHtml,

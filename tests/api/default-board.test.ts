@@ -108,6 +108,7 @@ describe("default board structure lock", () => {
 
   test("/post-to-node is allowed on the default board", async () => {
     const r = await post<{ ok: boolean }>(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: defaultBoardId,
       node_id: "main",
       message: "hello from CC",

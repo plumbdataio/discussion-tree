@@ -65,6 +65,7 @@ describe("dead-session husk filtering", () => {
     await attachCC(broker.url, s);
     const bid = await defaultBoardId(s);
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: bid,
       node_id: "main",
       message: "a real conversation happened here",

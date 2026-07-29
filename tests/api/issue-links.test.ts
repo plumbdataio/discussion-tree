@@ -142,10 +142,25 @@ describe("issue links — attached by the post itself", () => {
     expect(r.error).toContain("restore");
   });
 
-  test("omitting the field entirely still posts", async () => {
-    // The MCP schema is what forces the caller to decide; the broker stays
-    // lenient so a session running an older tool list keeps working.
+  test("omitting the field is refused, and the refusal says what to send", async () => {
+    // Inverted on 2026-07-29. The broker used to default a missing field to
+    // "no links" so that sessions running an older tool list — which physically
+    // could not send it — kept working. Once every live MCP server had been
+    // restarted (measured, not assumed) that reason was gone, and a default is
+    // exactly what the required parameter exists to prevent: it answers "does
+    // this belong to an issue?" for you, silently and always the same way.
+    const before = await countMessages();
     const r = await postTo(undefined);
+    expect(r.ok).toBe(false);
+    expect((r as unknown as { error: string }).error).toContain("issue_ids is required");
+    // The refusal has to be actionable: [] is a legitimate answer and saying so
+    // is what turns the error into one corrected retry.
+    expect((r as unknown as { error: string }).error).toContain("[]");
+    expect(await countMessages()).toBe(before);
+  });
+
+  test("an explicit empty array is still a valid answer", async () => {
+    const r = await postTo([]);
     expect(r.ok).toBe(true);
     expect(await linksOf(r.message_id)).toEqual([]);
   });

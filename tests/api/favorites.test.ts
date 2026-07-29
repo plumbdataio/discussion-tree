@@ -28,6 +28,7 @@ async function seedPinnableMessage(brokerUrl: string, sessionId: string) {
   });
   const boardId = board.json.board_id;
   await post(`${brokerUrl}/post-to-node`, {
+    issue_ids: [],
     board_id: boardId,
     node_id: "i1",
     message: "pin me",
@@ -152,6 +153,7 @@ describe("favorites (anchors)", () => {
     );
     // Second pinnable message on the same node.
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: boardId,
       node_id: "i1",
       message: "second",

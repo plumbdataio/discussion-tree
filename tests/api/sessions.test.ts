@@ -228,6 +228,7 @@ describe("sessions", () => {
 
     // A status-only post (empty message) must NOT clear i1.
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: board.json.board_id,
       node_id: "i1",
       message: "",
@@ -243,6 +244,7 @@ describe("sessions", () => {
 
     // A real reply to i1 clears ONLY i1 → i2 still outstanding.
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: board.json.board_id,
       node_id: "i1",
       message: "ack i1",
@@ -257,6 +259,7 @@ describe("sessions", () => {
 
     // Reply to i2 → empty set.
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: board.json.board_id,
       node_id: "i2",
       message: "ack i2",
@@ -307,6 +310,7 @@ describe("sessions", () => {
 
     // The CC's summary reply to a structure request goes to that same log node.
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: board.json.board_id,
       node_id: logNodeId,
       message: "done: added a concern about X",
@@ -361,6 +365,7 @@ describe("sessions", () => {
 
     // CC bundled reply → counter = 0.
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: board.json.board_id,
       node_id: "i1",
       message: "ack",
@@ -440,6 +445,7 @@ describe("sessions", () => {
     // A reply zeroes the count directly (1→0, no intervening get-unanswered at
     // count 0) — this must also clear the streak fields.
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: board.json.board_id,
       node_id: "i1",
       message: "ack",

@@ -66,6 +66,7 @@ beforeAll(async () => {
   // Seed a thread on auth-jwt — for thread search + truncation tests.
   for (let i = 0; i < 25; i++) {
     await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: boardA1,
       node_id: nodeWithThread,
       message: `reply ${i}: auth discussion message body`,

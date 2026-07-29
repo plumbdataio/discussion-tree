@@ -284,7 +284,7 @@ describe("maps — messages + chat delivery", () => {
     const n = await addNode(mapId, { title: "n" });
     const r = await post<{ ok: boolean; message_id: number }>(
       `${broker.url}/map-post`,
-      { map_id: mapId, node_id: n, message: "hi from cc" },
+      { map_id: mapId, node_id: n, message: "hi from cc", issue_ids: [] },
     );
     expect(r.json.ok).toBe(true);
     expect(typeof r.json.message_id).toBe("number");
@@ -297,6 +297,7 @@ describe("maps — messages + chat delivery", () => {
   test("/map-post into the general chat (__general__)", async () => {
     const mapId = await createMap("general");
     const r = await post<{ ok: boolean }>(`${broker.url}/map-post`, {
+      issue_ids: [],
       map_id: mapId,
       message: "whole-map note",
     });
@@ -430,6 +431,7 @@ describe("maps — list + search", () => {
       context: "contains UNIQUEWORD inside",
     });
     await post(`${broker.url}/map-post`, {
+      issue_ids: [],
       map_id: mapId,
       message: "a message with ANOTHERWORD",
     });
@@ -466,6 +468,7 @@ describe("maps — list + search", () => {
     const mapId = await createMap("sidebar-map");
     await addNode(mapId, { title: "n" });
     await post(`${broker.url}/map-post`, {
+      issue_ids: [],
       map_id: mapId,
       message: "unread cc msg",
     });
@@ -493,6 +496,7 @@ describe("maps — list + search", () => {
     const mapId = await createMap("markread");
     await addNode(mapId, { title: "n" });
     const posted = await post<{ message_id: number }>(`${broker.url}/map-post`, {
+      issue_ids: [],
       map_id: mapId,
       message: "unread cc message",
     });
@@ -749,6 +753,7 @@ describe("maps — checklist nodes", () => {
     const mapId = await createMap("cl guard map");
     const nodeId = await addNode(mapId, { title: "has a thread" });
     await post(`${broker.url}/map-post`, {
+      issue_ids: [],
       map_id: mapId,
       node_id: nodeId,
       message: "a CC note",
@@ -1145,6 +1150,7 @@ describe("maps — the Stop-hook nag covers per-node threads (not general chat)"
     await userSays(mapId, n, "SQS or a Redis list?");
     expect((await unanswered()).count).toBe(1);
     await post(`${broker.url}/map-post`, {
+      issue_ids: [],
       map_id: mapId,
       node_id: n,
       message: "SQS — we already run it.",
@@ -1157,6 +1163,7 @@ describe("maps — the Stop-hook nag covers per-node threads (not general chat)"
     const n = await addNode(mapId, { title: "Auth model", kind: "question" });
     await userSays(mapId, n, "session or token?");
     await post(`${broker.url}/map-post`, {
+      issue_ids: [],
       map_id: mapId,
       node_id: n,
       message: "   ",
@@ -1180,6 +1187,7 @@ describe("maps — the Stop-hook nag covers per-node threads (not general chat)"
     await userSays(mapId, n, "by tenant or by region?");
     expect((await unanswered()).count).toBe(1);
     await post(`${broker.url}/map-post`, {
+      issue_ids: [],
       map_id: mapId,
       node_id: "__general__",
       message: "unrelated note in the general chat",

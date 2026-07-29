@@ -96,6 +96,7 @@ describe("checklist sources", () => {
     const posted = await post<{ ok: boolean; message_id: number }>(
       `${broker.url}/post-to-node`,
       {
+        issue_ids: [],
         board_id: boardId,
         node_id: "dec",
         message: "the decisive message",

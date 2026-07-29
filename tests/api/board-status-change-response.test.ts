@@ -111,6 +111,7 @@ describe("board_status_changed in mutation responses", () => {
       ok: boolean;
       board_status_changed?: { from: string; to: string };
     }>(`${broker.url}/post-to-node`, {
+      issue_ids: [],
       board_id: id,
       node_id: "i1",
       message: "decided",

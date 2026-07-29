@@ -46,6 +46,7 @@ describe("message id surface", () => {
     const r = await post<{ ok: boolean; message_id?: number }>(
       `${broker.url}/post-to-node`,
       {
+        issue_ids: [],
         board_id: boardId,
         node_id: "i1",
         message: "cc-post-with-id",
