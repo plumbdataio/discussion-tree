@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { ClipboardList } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
+  isAwaitingApproval,
   fetchIssues,
   openIssueTracker,
   subscribeIssuesChanged,
@@ -27,7 +28,12 @@ export function IssueTrackerButton() {
       .then((r) =>
         setMine(
           (r.issues ?? []).filter(
-            (i) => i.owner === "user" && (i.state === "todo" || i.state === "doing"),
+            (i) =>
+              // A close waiting to be signed off is on the user's plate too —
+              // it is closed, so the owner/state test alone would miss exactly
+              // the rows that need them.
+              isAwaitingApproval(i) ||
+              (i.owner === "user" && (i.state === "todo" || i.state === "doing")),
           ).length,
         ),
       )

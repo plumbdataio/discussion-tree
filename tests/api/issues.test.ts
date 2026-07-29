@@ -385,3 +385,94 @@ describe("issues — which session an issue is filed under", () => {
     expect(afterOwnerEdit.json.issue.session_id).toBe(to);
   });
 });
+
+// Closing needs the user's sign-off. Not bookkeeping: with the work delegated
+// end to end, nothing is ever handed back, so nothing registers as finished.
+// The approval is that moment — which is why a CC-closed issue stays visible in
+// the default view until it is acknowledged.
+describe("issues — closing waits for the user", () => {
+  test("CC closing leaves the issue awaiting sign-off", async () => {
+    const i = (await create({ title: "cc finishes this" })).issue;
+    const closed = await post<{ issue: Issue & { close_approved_at: string | null } }>(
+      `${broker.url}/update-issue`,
+      { issue_id: i.id, state: "done" },
+    );
+    expect(closed.json.issue.state).toBe("done");
+    expect(closed.json.issue.close_approved_at).toBe(null);
+
+    // ...and it does NOT drop out of the default list, which is the one view
+    // the user actually opens. Hiding it behind include_closed would bury the
+    // only rows that need them.
+    const list = await post<{ issues: Issue[] }>(`${broker.url}/list-issues`, {});
+    expect(list.json.issues.map((x) => x.id)).toContain(i.id);
+  });
+
+  test("the user closing it needs no sign-off", async () => {
+    const i = (await create({ title: "user finishes this" })).issue;
+    const closed = await post<{ issue: Issue & { close_approved_at: string | null } }>(
+      `${broker.url}/update-issue`,
+      { issue_id: i.id, state: "done", actor: "user" },
+    );
+    expect(closed.json.issue.close_approved_at).not.toBe(null);
+    // Already acknowledged, so it leaves the default view like any closed row.
+    const list = await post<{ issues: Issue[] }>(`${broker.url}/list-issues`, {});
+    expect(list.json.issues.map((x) => x.id)).not.toContain(i.id);
+  });
+
+  test("approving is idempotent and clears it from the default view", async () => {
+    const i = (await create({ title: "approve me" })).issue;
+    await post(`${broker.url}/update-issue`, { issue_id: i.id, state: "done" });
+
+    const a1 = await post<{ ok: boolean; issue: Issue & { close_approved_at: string } }>(
+      `${broker.url}/approve-issue-close`,
+      { issue_id: i.id },
+    );
+    expect(a1.json.ok).toBe(true);
+    const stamp = a1.json.issue.close_approved_at;
+    expect(stamp).not.toBe(null);
+
+    // A double-click must not move the timestamp or error.
+    const a2 = await post<{ ok: boolean; issue: { close_approved_at: string } }>(
+      `${broker.url}/approve-issue-close`,
+      { issue_id: i.id },
+    );
+    expect(a2.json.ok).toBe(true);
+    expect(a2.json.issue.close_approved_at).toBe(stamp);
+
+    const list = await post<{ issues: Issue[] }>(`${broker.url}/list-issues`, {});
+    expect(list.json.issues.map((x) => x.id)).not.toContain(i.id);
+  });
+
+  test("reopening clears the sign-off, so closing again asks anew", async () => {
+    const i = (await create({ title: "reopened" })).issue;
+    await post(`${broker.url}/update-issue`, { issue_id: i.id, state: "done" });
+    await post(`${broker.url}/approve-issue-close`, { issue_id: i.id });
+    await post(`${broker.url}/update-issue`, { issue_id: i.id, state: "todo" });
+
+    const again = await post<{ issue: { close_approved_at: string | null } }>(
+      `${broker.url}/update-issue`,
+      { issue_id: i.id, state: "done" },
+    );
+    expect(again.json.issue.close_approved_at).toBe(null);
+  });
+
+  test("approving something still open is refused", async () => {
+    const i = (await create({ title: "still open" })).issue;
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/approve-issue-close`,
+      { issue_id: i.id },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toContain("not closed");
+  });
+
+  test("dropping is a close too, and needs the same sign-off", async () => {
+    const i = (await create({ title: "dropped by cc" })).issue;
+    const r = await post<{ issue: { state: string; close_approved_at: string | null } }>(
+      `${broker.url}/update-issue`,
+      { issue_id: i.id, state: "dropped" },
+    );
+    expect(r.json.issue.state).toBe("dropped");
+    expect(r.json.issue.close_approved_at).toBe(null);
+  });
+});

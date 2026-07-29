@@ -32,7 +32,31 @@ export type Issue = {
   deleted_at?: string | null;
   /** Messages attached to this issue. 0 = nothing linked yet, not an error. */
   link_count?: number;
+  /**
+   * When the user acknowledged the close. NULL on a closed issue means CC
+   * finished it and the user has not seen that yet.
+   */
+  close_approved_at?: string | null;
 };
+
+/**
+ * Closed by CC, not yet acknowledged.
+ *
+ * These are shown regardless of every filter and sorted to the top. That is
+ * deliberate: the point of the sign-off is not bookkeeping, it is the moment
+ * where "that one is done" registers for someone who delegated the work end to
+ * end and would otherwise never be handed anything back. A row that only shows
+ * up under the right filter combination cannot do that.
+ */
+export function isAwaitingApproval(i: Issue): boolean {
+  return (i.state === "done" || i.state === "dropped") && !i.close_approved_at;
+}
+
+export function approveIssueClose(id: string) {
+  return callBroker<{ ok: boolean; error?: string }>("/approve-issue-close", {
+    issue_id: id,
+  });
+}
 
 export type IssueSession = {
   id: string;
@@ -121,6 +145,17 @@ export function sessionMatches(i: Issue, f: IssueFilters): boolean {
   );
 }
 
+/**
+ * Should this row be on screen? All three axes, EXCEPT that a close awaiting
+ * sign-off is never filtered out — the default view is owner=user + not-done,
+ * which is exactly the combination that would hide a CC-closed issue, i.e. the
+ * only rows that need the user.
+ */
+export function isVisible(i: Issue, f: IssueFilters): boolean {
+  if (isAwaitingApproval(i)) return true;
+  return ownerMatches(i, f) && stateMatches(i, f) && sessionMatches(i, f);
+}
+
 async function callBroker<T>(path: string, body: unknown): Promise<T> {
   const r = await fetch(path, {
     method: "POST",
@@ -148,10 +183,14 @@ export function createIssue(fields: Partial<Issue>) {
   );
 }
 
+// actor:"user" marks every edit made from this UI. It matters for exactly one
+// thing: a close the user performs is already known to them and needs no
+// sign-off, whereas a close CC performs does. MCP calls omit it and are treated
+// as CC.
 export function updateIssue(id: string, fields: Partial<Issue>) {
   return callBroker<{ ok: boolean; issue?: Issue; error?: string }>(
     "/update-issue",
-    { issue_id: id, ...fields },
+    { issue_id: id, actor: "user", ...fields },
   );
 }
 

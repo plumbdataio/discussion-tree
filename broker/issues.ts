@@ -53,6 +53,36 @@ db.run("CREATE INDEX IF NOT EXISTS idx_issues_state ON issues(state)");
 safeAlterIssues("ALTER TABLE issues ADD COLUMN deleted_at TEXT");
 db.run("CREATE INDEX IF NOT EXISTS idx_issues_session ON issues(session_id)");
 
+// CLOSING NEEDS THE USER'S SIGN-OFF.
+//
+// Set when the close was acknowledged by the user; NULL on a closed issue means
+// CC finished it and the user has not seen that yet. Two problems it solves,
+// and the second is the important one:
+//
+//  - What CC considers finished and what the user considers finished can drift
+//    apart silently.
+//  - With the work delegated end to end, the user never gets the moment where
+//    "that one is done" registers. Nothing is ever handed back, so nothing is
+//    ever remembered as complete. The approval IS that moment — which is why
+//    the pending row shows what was done, rather than being a bare button.
+//
+// Deliberately NOT a new `state`: owner × state is a deliberate 2-axis model
+// (see the tracker's design notes) and a `pending_close` value would collapse
+// "what is happening to this" with "who has to act next".
+{
+  const fresh = safeAlterIssues("ALTER TABLE issues ADD COLUMN close_approved_at TEXT");
+  if (fresh) {
+    // One-time backfill, run only in the migration that adds the column: every
+    // issue closed before this existed is treated as already acknowledged.
+    // Asking for 23 retroactive approvals would be pure clicking — the moment
+    // those were finished has passed, and re-approving them now would not put
+    // anything back into anyone's memory.
+    db.run(
+      "UPDATE issues SET close_approved_at = closed_at WHERE closed_at IS NOT NULL",
+    );
+  }
+}
+
 // Which MESSAGES belong to which issue. The point is not a "jump to the board"
 // link — it is being able to read one issue's conversation as a single timeline,
 // no matter which board, map or diagram each part of it happened on.
@@ -113,11 +143,16 @@ db.run(`
   )
 `);
 
-function safeAlterIssues(sql: string): void {
+// Returns true when the column was actually added, i.e. this process ran the
+// migration — the only moment a one-time backfill may run. Re-running a
+// backfill on every boot would keep overwriting rows that have since changed.
+function safeAlterIssues(sql: string): boolean {
   try {
     db.run(sql);
+    return true;
   } catch {
     /* column already present — the migration is idempotent by design */
+    return false;
   }
 }
 
@@ -131,6 +166,9 @@ export type IssueRow = {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  // NULL on a closed issue = CC closed it and the user has not acknowledged
+  // that yet. See the migration above for why this is a column and not a state.
+  close_approved_at?: string | null;
   // Only present on list reads (joined from sessions), and null once the
   // originating session row is gone.
   session_name?: string | null;
@@ -170,9 +208,15 @@ export function handleCreateIssue(body: any):
 
   const now = nowIso();
   const id = generateRandomId("iss");
+  // Filed already-closed needs no sign-off: that is a record of something that
+  // was finished before the issue existed (a migration, a stock-take), not work
+  // being handed over. The approval exists for the TRANSITION — an issue that
+  // was open and is now closed — and asking about dozens of historical rows
+  // would bury the handful that mean something.
+  const closedNow = state === "done" || state === "dropped" ? now : null;
   db.run(
-    `INSERT INTO issues (id, title, body, owner, state, session_id, created_at, updated_at, closed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO issues (id, title, body, owner, state, session_id, created_at, updated_at, closed_at, close_approved_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       title,
@@ -182,7 +226,8 @@ export function handleCreateIssue(body: any):
       body?.session_id ? String(body.session_id) : null,
       now,
       now,
-      state === "done" || state === "dropped" ? now : null,
+      closedNow,
+      closedNow,
     ],
   );
   return { ok: true, issue: selectIssue.get(id) as IssueRow };
@@ -239,11 +284,37 @@ export function handleUpdateIssue(body: any):
   if (isClosed !== wasClosed) {
     sets.push("closed_at = ?");
     args.push(isClosed ? now : null);
+    // Who is closing it decides whether it needs signing off. A close the user
+    // performs is self-evidently known to them; a close CC performs is not, and
+    // that gap is the entire point of the column. Reopening clears it, so a
+    // second close asks again.
+    sets.push("close_approved_at = ?");
+    args.push(isClosed && body?.actor === "user" ? now : null);
   }
   sets.push("updated_at = ?");
   args.push(now);
   args.push(id);
   db.run(`UPDATE issues SET ${sets.join(", ")} WHERE id = ?`, args);
+  return { ok: true, issue: selectIssue.get(id) as IssueRow };
+}
+
+// The user signing off on a close CC made. Separate endpoint rather than an
+// update flag: it is the one write that only the user can perform, and giving
+// it its own name keeps that visible at every call site.
+export function handleApproveIssueClose(body: any):
+  | { ok: true; issue: IssueRow }
+  | { ok: false; error: string } {
+  const id = String(body?.issue_id ?? "");
+  const current = selectIssue.get(id) as IssueRow | undefined;
+  if (!current) return { ok: false, error: "issue not found" };
+  const isClosed = current.state === "done" || current.state === "dropped";
+  if (!isClosed) {
+    return { ok: false, error: "issue is not closed, so there is nothing to approve" };
+  }
+  // Idempotent: approving twice is a double-click, not an error.
+  if (!current.close_approved_at) {
+    db.run("UPDATE issues SET close_approved_at = ? WHERE id = ?", [nowIso(), id]);
+  }
   return { ok: true, issue: selectIssue.get(id) as IssueRow };
 }
 
@@ -277,8 +348,15 @@ export function handleListIssues(body: any): {
   }
   // Default view = what is actually outstanding. Closed issues are opt-in, so
   // the list answers "what is on my plate" without a filter dance every time.
+  //
+  // A close still awaiting sign-off is an exception: it IS outstanding, just on
+  // the user's side rather than CC's. Hiding it behind "include closed" would
+  // put the one thing that needs their attention in the one view they never
+  // open.
   if (!state && body?.include_closed !== true) {
-    where.push("i.state NOT IN ('done', 'dropped')");
+    where.push(
+      "(i.state NOT IN ('done', 'dropped') OR i.close_approved_at IS NULL)",
+    );
   }
   // Deleted rows are opt-in too, so the UI can offer a bin to restore from.
   // Without a way to see them, a logical delete is a physical one as far as the
@@ -755,6 +833,7 @@ export const routes = {
   "/restore-issue": handleRestoreIssue,
   "/list-issue-sessions": handleListIssueSessions,
   "/issue-timeline": handleIssueTimeline,
+  "/approve-issue-close": handleApproveIssueClose,
   "/get-issue-filters": handleGetIssueFilters,
   "/set-issue-filters": handleSetIssueFilters,
 };

@@ -2041,13 +2041,29 @@ export async function dispatchToolCall(
 
       case "update_issue": {
         ensureSession();
-        const res = await brokerFetch<{ ok: boolean; error?: string; issue?: { id: string; owner: string; state: string } }>(
-          "/update-issue",
-          args as Record<string, unknown>,
-        );
+        const res = await brokerFetch<{
+          ok: boolean;
+          error?: string;
+          issue?: {
+            id: string;
+            owner: string;
+            state: string;
+            close_approved_at?: string | null;
+          };
+        }>("/update-issue", args as Record<string, unknown>);
         if (!res.ok || !res.issue) return textResult(res.error ?? "update_issue failed", true);
+        // Closing is a request, not a fact, until the user acknowledges it —
+        // say so rather than reporting a clean "done". Do NOT turn this into a
+        // question back to the user: the whole point is that closing stays a
+        // one-step action here and the sign-off happens in their own UI, on
+        // their own schedule.
+        const closed = res.issue.state === "done" || res.issue.state === "dropped";
+        const suffix =
+          closed && !res.issue.close_approved_at
+            ? " — awaiting the user's sign-off, which they give in the issue view. Nothing more to do here; do not ask them about it."
+            : "";
         return textResult(
-          `Issue ${res.issue.id} now ${res.issue.owner} / ${res.issue.state}.`,
+          `Issue ${res.issue.id} now ${res.issue.owner} / ${res.issue.state}.${suffix}`,
         );
       }
 

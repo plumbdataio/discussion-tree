@@ -7,6 +7,7 @@ import {
   Table2,
   Columns3,
   Search,
+  Check,
   MessagesSquare,
   X,
 } from "lucide-react";
@@ -26,6 +27,9 @@ import {
   fetchIssueSessions,
   fetchIssues,
   loadFilters,
+  approveIssueClose,
+  isAwaitingApproval,
+  isVisible,
   notifyIssuesChanged,
   ownerMatches,
   restoreIssue,
@@ -322,14 +326,18 @@ export function IssueTrackerModal() {
   const visible = useMemo(
     () =>
       pool
-        .filter((i) => inOwners(i) && inStates(i) && inSessions(i))
+        .filter((i) => isVisible(i, filters))
         .sort(
           (a, b) =>
+            // A close waiting to be signed off goes first, whatever else is on
+            // screen: it is the one row that cannot wait for the user to think
+            // of looking for it.
+            Number(isAwaitingApproval(b)) - Number(isAwaitingApproval(a)) ||
             OWNER_RANK[a.owner] - OWNER_RANK[b.owner] ||
             STATE_RANK[a.state] - STATE_RANK[b.state] ||
             b.updated_at.localeCompare(a.updated_at),
         ),
-    [pool, inOwners, inStates, inSessions],
+    [pool, filters],
   );
 
   // Only sessions that actually hold an issue — a live session with nothing
@@ -382,6 +390,15 @@ export function IssueTrackerModal() {
     }
     setError(null);
     setDraft(null);
+    afterMutation(filters.showDeleted);
+  };
+
+  // Signing off on a close CC made. One click, no confirmation dialog: the
+  // reading happens above the button (the summary is on screen), so a modal
+  // asking "are you sure" would add a step without adding a thought.
+  const approve = async (issue: Issue) => {
+    const r = await approveIssueClose(issue.id);
+    if (!r.ok) setError(r.error ?? t("issues.error_generic"));
     afterMutation(filters.showDeleted);
   };
 
@@ -488,6 +505,49 @@ export function IssueTrackerModal() {
             </button>
           </>
         )}
+      </div>
+    </div>
+  );
+
+  // WHAT the approval is for, above the button that grants it.
+  //
+  // The sign-off exists so the user registers that something finished — with
+  // the work delegated end to end, nothing is ever handed back and nothing is
+  // remembered as complete. A bare "Approve" button would be signed blind and
+  // would record consent without producing the memory, so the issue's own
+  // account of what was done is on screen, clamped to a few lines.
+  const renderApproval = (i: Issue) => (
+    <div className="issue-approval">
+      <div className="issue-approval-head">
+        <Check size={13} strokeWidth={2.5} />
+        {t(`issues.approval_lead.${i.state === "dropped" ? "dropped" : "done"}`)}
+      </div>
+      {i.body ? (
+        <MDView className="issue-approval-body" text={i.body} />
+      ) : (
+        <div className="issue-body-empty">{t("issues.no_body")}</div>
+      )}
+      <div className="issue-approval-actions">
+        <button
+          type="button"
+          className="issue-approve"
+          onClick={(e) => {
+            e.stopPropagation();
+            void approve(i);
+          }}
+        >
+          {t("issues.approve")}
+        </button>
+        <button
+          type="button"
+          className="issue-approval-reopen"
+          onClick={(e) => {
+            e.stopPropagation();
+            void quickSet(i, { state: "todo" });
+          }}
+        >
+          {t("issues.approval_reopen")}
+        </button>
       </div>
     </div>
   );
@@ -747,6 +807,7 @@ export function IssueTrackerModal() {
                       className={
                         "issue-row" +
                         (i.deleted_at ? " deleted" : "") +
+                        (isAwaitingApproval(i) ? " awaiting" : "") +
                         (expanded === i.id ? " expanded" : "")
                       }
                       onClick={() => setExpanded(expanded === i.id ? null : i.id)}
@@ -776,9 +837,17 @@ export function IssueTrackerModal() {
                         {ago(i.updated_at)}
                       </td>
                     </tr>
+                    {isAwaitingApproval(i) && expanded !== i.id && (
+                      <tr className="issue-detail-row approval">
+                        <td colSpan={4}>{renderApproval(i)}</td>
+                      </tr>
+                    )}
                     {expanded === i.id && (
                       <tr className="issue-detail-row">
-                        <td colSpan={4}>{renderRowBody(i)}</td>
+                        <td colSpan={4}>
+                          {isAwaitingApproval(i) && renderApproval(i)}
+                          {renderRowBody(i)}
+                        </td>
                       </tr>
                     )}
                   </React.Fragment>
@@ -804,7 +873,9 @@ export function IssueTrackerModal() {
                         <div
                           key={i.id}
                           className={
-                            "issue-card" + (i.deleted_at ? " deleted" : "")
+                            "issue-card" +
+                            (i.deleted_at ? " deleted" : "") +
+                            (isAwaitingApproval(i) ? " awaiting" : "")
                           }
                           onClick={() =>
                             setExpanded(expanded === i.id ? null : i.id)
@@ -829,6 +900,7 @@ export function IssueTrackerModal() {
                             </span>
                           </div>
                           <div className="issue-card-title">{i.title}</div>
+                          {isAwaitingApproval(i) && renderApproval(i)}
                           {expanded === i.id && renderRowBody(i)}
                         </div>
                       ))}

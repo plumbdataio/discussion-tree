@@ -7567,3 +7567,85 @@ ul.maps li.current .sidebar-map-link {
 .issue-timeline-open:disabled:hover {
   border-color: var(--border);
 }
+
+/* A close CC made, waiting for the user to acknowledge it.
+   Deliberately not a separate "pending approval" section: a second box is
+   ceremony, and the user asked for something between that and a row nobody
+   notices. So it is the same table, with the row wearing a different face and
+   pinned to the top regardless of every filter. */
+.issue-row.awaiting {
+  background: #f0fdf4;
+}
+.issue-row.awaiting:hover {
+  background: #dcfce7;
+}
+.issue-row.awaiting td:first-child {
+  box-shadow: inset 3px 0 0 #22c55e;
+}
+.issue-detail-row.approval td {
+  background: #f0fdf4;
+}
+.issue-approval {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 0 4px;
+}
+.issue-approval-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #15803d;
+}
+/* Clamped: enough to remember what it was, not so much that the button falls
+   off screen behind a wall of text. */
+.issue-approval-body {
+  font-size: 12.5px;
+  line-height: 1.55;
+  max-height: 5.5em;
+  overflow: hidden;
+  color: var(--text);
+}
+.issue-approval-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.issue-approve {
+  padding: 4px 14px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid #16a34a;
+  border-radius: 6px;
+  background: #16a34a;
+  color: #fff;
+  cursor: pointer;
+}
+.issue-approval-reopen {
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+.issue-card.awaiting {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+:root[data-theme="dark"] .issue-row.awaiting,
+:root[data-theme="dark"] .issue-detail-row.approval td,
+:root[data-theme="dark"] .issue-card.awaiting {
+  background: #0d2818;
+}
+:root[data-theme="dark"] .issue-row.awaiting:hover {
+  background: #12331f;
+}
+:root[data-theme="dark"] .issue-approval-head {
+  color: #86efac;
+}
