@@ -3311,6 +3311,44 @@ body.concern-resizing * {
   color: #166534;
   border: 1px solid #86efac;
 }
+/* "A newer frontend is being served." Blue rather than the warning yellow: it
+   is an offer, not a problem, and it stays until acted on — a colour that reads
+   as an alarm would wear badly over a session.
+
+   TOP, not bottom, precisely because it stays: the composer is pinned to the
+   bottom of every surface, so a permanent pill down there covers the one thing
+   the user cannot scroll out of the way (measured: it overlapped the textarea
+   by 28px). The thread behind it CAN be scrolled, so the top edge is the only
+   place a persistent message costs nothing. The connection banner keeps the
+   bottom — it is transient, and the two never fight for the same spot. */
+.connection-banner.update {
+  top: 71px;
+  bottom: auto;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+  animation: update-banner-in 160ms ease-out;
+}
+@keyframes update-banner-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .connection-banner.update {
+    animation: none;
+  }
+}
+:root[data-theme="dark"] .connection-banner.update {
+  background: #172554;
+  color: #bfdbfe;
+  border-color: #1d4ed8;
+}
 .connection-banner-message {
   flex: 0 1 auto;
 }

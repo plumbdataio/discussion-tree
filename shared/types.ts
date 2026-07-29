@@ -348,6 +348,10 @@ export interface PendingMessage {
   // delivery (user_input_relay only) — surfaced to CC as channel meta
   // message_id. NULL for structure-requests / plain notes.
   thread_item_id?: number | null;
+  // When this node last carried a real exchange, before this message. Computed
+  // in the pending query (broker/db.ts); the poller turns a long enough gap
+  // into channel meta `since_last_message`. NULL when the node is brand new.
+  prev_message_at?: string | null;
 }
 
 // Broker request/response types.

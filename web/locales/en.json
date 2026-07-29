@@ -487,5 +487,10 @@
     },
     "timeline_more": "Show all",
     "timeline_less": "Collapse"
+  },
+  "update": {
+    "available": "A newer version is available",
+    "reload": "Reload",
+    "reload_title": "Load the latest UI. Unsent drafts are kept."
   }
 }

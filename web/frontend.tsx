@@ -5,6 +5,7 @@ import { AnchorButton } from "./components/AnchorButton.tsx";
 import { AppShell } from "./components/AppShell.tsx";
 import { BoardApp } from "./components/BoardApp.tsx";
 import { ConnectionBanner } from "./components/ConnectionBanner.tsx";
+import { UpdateBanner } from "./components/UpdateBanner.tsx";
 import { GearButton } from "./components/GearButton.tsx";
 import { GlobalBanner } from "./components/GlobalBanner.tsx";
 import { MapView } from "./components/MapView.tsx";
@@ -101,6 +102,7 @@ function App() {
     <>
       <GlobalBanner />
       <ConnectionBanner />
+      <UpdateBanner />
       <AppShell
         currentBoardId={boardId}
         currentMapId={mapId}

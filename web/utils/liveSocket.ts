@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { announceOutdated, noteBuildId } from "./appUpdate.ts";
 
 // @reusable-ui useLiveSocket — USE WHEN a page needs the broker's live
 // WebSocket feed (/ws/<channel>) INSTEAD OF calling `new WebSocket(...)`
@@ -191,6 +192,14 @@ export function useLiveSocket({
           msg = JSON.parse(ev.data as string);
         } catch {
           /* non-JSON frame — ignore */
+        }
+        // The broker's opening frame carries the build id of the frontend it
+        // serves. Handled here rather than in each page's onMessage: every
+        // page has a socket, none of them care about it, and one of them
+        // forgetting to wire it up would silently disable the whole mechanism.
+        if (msg?.type === "hello") {
+          if (noteBuildId(msg.build_id)) announceOutdated();
+          return;
         }
         if (msg != null) onMessageRef.current?.(msg, ev);
       };

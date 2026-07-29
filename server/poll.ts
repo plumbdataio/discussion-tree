@@ -8,6 +8,7 @@ import type { CliVerbosity, PollMessagesResponse } from "../shared/types.ts";
 import { brokerFetch } from "./broker-client.ts";
 import { BROKER_FETCH_TIMEOUT_MS, BROKER_URL } from "./config.ts";
 import { log } from "./log.ts";
+import { gapSince } from "./message-gap.ts";
 import { getSessionId } from "./state.ts";
 
 // Overlap guard: the poll fires every POLL_INTERVAL_MS (1s), but a single drain
@@ -181,6 +182,9 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
       if (verbosityNote && reminderParts.length > 0) {
         reminderParts.push(verbosityNote);
       }
+      // How long this node had been quiet. Null unless the silence is long
+      // enough that the surrounding context is likely stale.
+      const gap = gapSince((msg as any).prev_message_at, msg.created_at);
       const content =
         reminderParts.length > 0
           ? `${msg.text}\n\n---\n${reminderParts.join("\n\n")}`
@@ -205,6 +209,10 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
             node_id: msg.node_id,
             node_path: msg.node_path,
             sent_at: msg.created_at,
+            // Only present when this node had been quiet for a while — see
+            // server/message-gap.ts for why silence is invisible to CC
+            // otherwise, and why reporting every gap would defeat the point.
+            ...(gap ? { since_last_message: gap } : {}),
             ...(msg.thread_item_id != null
               ? { message_id: String(msg.thread_item_id) }
               : {}),

@@ -736,8 +736,28 @@ export const selectFavoriteThreadItemIdsBySession = db.prepare(
 export const insertPending = db.prepare(
   `INSERT INTO pending_messages (session_id, board_id, node_id, node_path, text, created_at, kind) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 );
+// prev_message_at = when this node last had a real exchange, before this
+// message. CC has no clock and does not read timestamps on its own, so a long
+// silence is invisible to it — it answers a message from three hours ago with
+// the context of three hours ago. The poller turns this into a `since_last
+// _message` only when the gap is big enough to matter (server/poll.ts); the
+// value is computed here because the row history lives here.
+//
+// Scoped to the same node on purpose: "how long since we last spoke HERE" is
+// what decides whether the surrounding thread needs re-reading, whereas a
+// board-wide or session-wide gap says nothing about this conversation. Covered
+// by idx_thread_items_board_node.
 export const selectPending = db.prepare(
-  `SELECT * FROM pending_messages WHERE session_id = ? AND delivered = 0 AND cancelled = 0 ORDER BY created_at`,
+  `SELECT pm.*,
+          (SELECT MAX(t.created_at) FROM thread_items t
+            WHERE t.board_id = pm.board_id
+              AND t.node_id = pm.node_id
+              AND t.source IN ('user', 'cc')
+              AND (pm.thread_item_id IS NULL OR t.id < pm.thread_item_id)
+          ) AS prev_message_at
+     FROM pending_messages pm
+    WHERE pm.session_id = ? AND pm.delivered = 0 AND pm.cancelled = 0
+    ORDER BY pm.created_at`,
 );
 export const markDelivered = db.prepare(
   `UPDATE pending_messages SET delivered = 1 WHERE id = ?`,

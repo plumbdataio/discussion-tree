@@ -262,3 +262,153 @@ describe("poll-messages basics", () => {
     expect(r2.json.messages.length).toBe(0);
   });
 });
+
+// The gap a message arrives after. CC has no clock and does not compare
+// timestamps on its own, so a reply landing after a long silence is answered
+// with stale context unless the silence is stated. The broker computes the
+// "when did this node last speak" half; server/message-gap.ts decides whether
+// it is worth reporting (see tests/unit/message-gap.test.ts).
+describe("pending messages carry when the node last spoke", () => {
+  test("prev_message_at is the previous exchange ON THIS NODE, not board-wide", async () => {
+    const b = await post<{ board_id: string }>(`${broker.url}/create-board`, {
+      session_id: sessionId,
+      structure: {
+        title: "gap",
+        concerns: [
+          {
+            id: "c1",
+            title: "C1",
+            items: [
+              { id: "i1", title: "Item 1" },
+              { id: "i2", title: "Item 2" },
+            ],
+          },
+        ],
+      },
+    });
+    const gapBoard = b.json.board_id;
+    const view = await get<{ nodes: { id: string; title: string }[] }>(
+      `${broker.url}/api/board/${gapBoard}`,
+    );
+    const n1 = view.json.nodes.find((n) => n.title === "Item 1")!.id;
+    const n2 = view.json.nodes.find((n) => n.title === "Item 2")!.id;
+
+    // An exchange on the OTHER node must not count as this node speaking.
+    await post(`${broker.url}/post-to-node`, {
+      issue_ids: [],
+      session_id: sessionId,
+      board_id: gapBoard,
+      node_id: n2,
+      message: "on the other item",
+      status: "discussing",
+    });
+    const mine = await post<{ message_id: number }>(
+      `${broker.url}/post-to-node`,
+      {
+        issue_ids: [],
+        session_id: sessionId,
+        board_id: gapBoard,
+        node_id: n1,
+        message: "on this item",
+        status: "discussing",
+      },
+    );
+
+    const submitP = post(`${broker.url}/submit-answer`, {
+      board_id: gapBoard,
+      node_id: n1,
+      text: "user replies later",
+    });
+    await new Promise((r) => setTimeout(r, 80));
+    const polled = await post<{
+      messages: { node_id: string; prev_message_at: string | null }[];
+    }>(`${broker.url}/poll-messages`, { session_id: sessionId });
+    await submitP;
+
+    const row = polled.json.messages.find((m) => m.node_id === n1);
+    expect(row).toBeTruthy();
+    // Points at the reply on n1, not at the later one on n2.
+    const items = await get<{
+      threads: Record<string, { id: number; created_at: string }[]>;
+    }>(`${broker.url}/api/board/${gapBoard}`);
+    const onN1 = items.json.threads[n1].find((t) => t.id === mine.json.message_id);
+    expect(row!.prev_message_at).toBe(onN1!.created_at);
+  });
+
+  test("the first message on a node reports no previous one", async () => {
+    const b = await post<{ board_id: string }>(`${broker.url}/create-board`, {
+      session_id: sessionId,
+      structure: {
+        title: "gap-fresh",
+        concerns: [{ id: "c1", title: "C1", items: [{ id: "i1", title: "Item 1" }] }],
+      },
+    });
+    const freshBoard = b.json.board_id;
+    const view = await get<{ nodes: { id: string; kind: string }[] }>(
+      `${broker.url}/api/board/${freshBoard}`,
+    );
+    const node = view.json.nodes.find((n) => n.kind === "item")!.id;
+
+    const submitP = post(`${broker.url}/submit-answer`, {
+      board_id: freshBoard,
+      node_id: node,
+      text: "first thing said here",
+    });
+    await new Promise((r) => setTimeout(r, 80));
+    const polled = await post<{
+      messages: { node_id: string; prev_message_at: string | null }[];
+    }>(`${broker.url}/poll-messages`, { session_id: sessionId });
+    await submitP;
+
+    const row = polled.json.messages.find((m) => m.node_id === node);
+    expect(row).toBeTruthy();
+    // NULL, not a gap measured from the epoch.
+    expect(row!.prev_message_at).toBe(null);
+  });
+});
+
+// The fingerprint of the frontend a broker process serves. It exists so a page
+// can tell it is running an older bundle than the broker now has — the check
+// that replaced HMR. Restarting the broker without touching web/ must NOT look
+// like a new frontend, or every restart would nag about an update that is not
+// there.
+describe("web build id", () => {
+  test("depends on web/ content, not on the process", async () => {
+    const { computeWebBuildId } = await import("../../broker/web-build-id.ts");
+    const { mkdtempSync, writeFileSync, utimesSync, rmSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+
+    const dir = mkdtempSync(join(tmpdir(), "dt-web-"));
+    try {
+      writeFileSync(join(dir, "style.css"), "body{}");
+      const first = computeWebBuildId(dir);
+      // Same bytes, same mtime — a plain restart.
+      expect(computeWebBuildId(dir)).toBe(first);
+
+      // An edit changes it.
+      writeFileSync(join(dir, "style.css"), "body{color:red}");
+      expect(computeWebBuildId(dir)).not.toBe(first);
+
+      // A file that never reaches the bundle does not.
+      const before = computeWebBuildId(dir);
+      writeFileSync(join(dir, "notes.md"), "scratch");
+      expect(computeWebBuildId(dir)).toBe(before);
+
+      // Touching without editing counts: bundlers key off mtime too, and a
+      // false positive here costs one reload while a false negative leaves the
+      // user staring at a stale build.
+      const later = new Date(Date.now() + 60_000);
+      utimesSync(join(dir, "style.css"), later, later);
+      expect(computeWebBuildId(dir)).not.toBe(before);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("an unreadable directory degrades to a constant rather than throwing", async () => {
+    const { computeWebBuildId } = await import("../../broker/web-build-id.ts");
+    // Starting the broker must never fail because web/ moved.
+    expect(computeWebBuildId("/nonexistent/web/dir")).toBe("unknown");
+  });
+});

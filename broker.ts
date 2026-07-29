@@ -45,6 +45,7 @@ import {
 } from "./broker/tmux-integration.ts";
 import { initPower, routes as powerRoutes } from "./broker/power.ts";
 import { routes as readsRoutes } from "./broker/reads.ts";
+import { WEB_BUILD_ID } from "./broker/web-build-id.ts";
 import { routes as contextUsageRoutes } from "./broker/context-usage.ts";
 import {
   cleanStaleSessions,
@@ -319,6 +320,15 @@ const server = Bun.serve({
     open(ws) {
       const { boardId } = ws.data as { boardId: string };
       subscribe(boardId, ws);
+      // Tell the client which frontend this process serves. It remembers the
+      // first value it sees; a reconnect carrying a DIFFERENT one means its own
+      // bundle is stale (see broker/web-build-id.ts). Sent on open rather than
+      // fetched, so it costs nothing and cannot be forgotten.
+      try {
+        ws.send(JSON.stringify({ type: "hello", build_id: WEB_BUILD_ID }));
+      } catch {
+        /* socket died between accept and first send — nothing to do */
+      }
     },
     close(ws) {
       const { boardId } = ws.data as { boardId: string };

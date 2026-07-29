@@ -487,5 +487,10 @@
     },
     "timeline_more": "全文を表示",
     "timeline_less": "折りたたむ"
+  },
+  "update": {
+    "available": "新しいバージョンがあります",
+    "reload": "再読み込み",
+    "reload_title": "最新のUIを読み込みます。書きかけの下書きは保持されます"
   }
 }
