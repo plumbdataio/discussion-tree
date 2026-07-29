@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 // MCP-server side configuration. Mirrors broker/config.ts in spirit, but
 // only carries the values server.ts itself needs (port for talking to the
 // broker, polling cadences, the broker script path for auto-spawn).
@@ -54,4 +56,12 @@ export const BROKER_FETCH_TIMEOUT_MS = 20_000;
 export const BROKER_RESPAWN_AFTER_FAILS = 3;
 
 // Resolved relative to this file so the auto-spawn works regardless of cwd.
-export const BROKER_SCRIPT = new URL("../broker.ts", import.meta.url).pathname;
+// fileURLToPath, NOT .pathname: on Windows the latter yields "/C:/Users/..."
+// with a leading slash, which Bun.spawn cannot resolve as a module path — so
+// the auto-spawn fails there and nothing says why. Identical on POSIX.
+//
+// This fix lived only as an uncommitted edit on the Windows machine, which
+// meant every checkout there needed re-patching by hand. It belongs upstream.
+export const BROKER_SCRIPT = fileURLToPath(
+  new URL("../broker.ts", import.meta.url),
+);
