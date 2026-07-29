@@ -93,11 +93,27 @@ export const clearSessionCompactingStmt = db.prepare(
 // knowing dt's internal cc_session_id (see /heartbeat-cc-pid). Unique among
 // alive sessions (live PIDs aren't reused).
 safeAlter("ALTER TABLE sessions ADD COLUMN cc_pid INTEGER");
+// Running on ANOTHER machine and talking to this broker over the network. Only
+// liveness cares: cleanStaleSessions asks the OS about a pid, which for a remote
+// session either finds nothing (sweeping away a session that is alive, after
+// which the user cannot send it anything) or finds an unrelated local process
+// (a dead session that never leaves). Remote rows are judged by heartbeat.
+//
+// Declared HERE, above the statements that filter on it: bun:sqlite compiles a
+// prepared statement immediately, so one written before the ALTER throws
+// "no such column" at import and the broker never starts.
+safeAlter("ALTER TABLE sessions ADD COLUMN is_remote INTEGER NOT NULL DEFAULT 0");
 export const setSessionCcPid = db.prepare(
   "UPDATE sessions SET cc_pid = ? WHERE id = ?",
 );
+// Remote sessions are excluded for the same reason their pid cannot be used for
+// liveness: the number identifies a process on ANOTHER machine's table, so it
+// can collide with an unrelated local CC. The caller is a sibling MCP server
+// under the same CC, which by definition runs on the same machine as the
+// session it means — so a remote row is never the right answer here, and
+// matching one would light the "working" spinner on somebody else's session.
 export const selectAliveSessionByCcPid = db.prepare(
-  "SELECT id FROM sessions WHERE cc_pid = ? AND alive = 1 ORDER BY last_seen DESC LIMIT 1",
+  "SELECT id FROM sessions WHERE cc_pid = ? AND alive = 1 AND COALESCE(is_remote, 0) = 0 ORDER BY last_seen DESC LIMIT 1",
 );
 
 // History of args the user has sent with a WebUI CLI command (e.g. the /compact
@@ -377,12 +393,6 @@ safeAlter("ALTER TABLE pending_messages ADD COLUMN pushed_at TEXT");
 // When this session last finished compacting. Written by /session-compacting-done
 // and read by the link-review ritual, which defaults to "everything since then".
 safeAlter("ALTER TABLE sessions ADD COLUMN last_compact_at TEXT");
-// Running on ANOTHER machine and talking to this broker over the network. Only
-// liveness cares: cleanStaleSessions asks the OS about a pid, which for a remote
-// session either finds nothing (sweeping away a session that is alive, after
-// which the user cannot send it anything) or finds an unrelated local process
-// (a dead session that never leaves). Remote rows are judged by heartbeat.
-safeAlter("ALTER TABLE sessions ADD COLUMN is_remote INTEGER NOT NULL DEFAULT 0");
 
 // Foreign-key indexes for the core tables. These were missing entirely — every
 // table above had only its PRIMARY KEY — and the omission is invisible until

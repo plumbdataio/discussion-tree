@@ -76,3 +76,40 @@ describe("remote sessions — liveness comes from the heartbeat", () => {
     expect(await aliveIds()).toContain(remote);
   });
 });
+
+// cc_pid has the same problem as pid, one step removed: a sibling MCP server
+// under the same CC pings /heartbeat-cc-pid to light this session's "working"
+// spinner. A remote session's cc_pid names a process on another machine, so it
+// can collide with an unrelated local CC — and the spinner would appear on the
+// wrong session.
+describe("remote sessions — cc_pid lookups stay local", () => {
+  test("a remote row is not resolved by a sibling's cc_pid", async () => {
+    const shared = 424242;
+    await post(`${broker.url}/register`, {
+      pid: 999_998,
+      cwd: "C:\\Users\\pekehata\\work",
+      cc_pid: shared,
+      remote: true,
+    });
+    // Only the remote session carries this cc_pid, and a sibling MCP server
+    // asking about it is BY DEFINITION on this machine — so the honest answer
+    // is "no such session", not the remote one. Resolving it would light the
+    // working spinner on a session the caller has nothing to do with.
+    const miss = await post<{ ok: boolean }>(
+      `${broker.url}/heartbeat-cc-pid`,
+      { cc_pid: shared },
+    );
+    expect(miss.json.ok).toBe(false);
+
+    // With a local session on the same cc_pid, that one answers.
+    await post(`${broker.url}/register`, {
+      pid: process.pid,
+      cwd: "/tmp/pd-test",
+      cc_pid: shared,
+    });
+    const hit = await post<{ ok: boolean }>(`${broker.url}/heartbeat-cc-pid`, {
+      cc_pid: shared,
+    });
+    expect(hit.json.ok).toBe(true);
+  });
+});
