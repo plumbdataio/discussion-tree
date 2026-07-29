@@ -22,13 +22,25 @@ const writeHint = (h: Record<string, unknown>) => {
   fs.writeFileSync(f, JSON.stringify(h));
   return f;
 };
+// Write a hint under an ARBITRARY filename, not <ppid>.json — stands for the
+// Windows case where the hook ran through a wrapper and named the file after the
+// wrapper's PID (or 1), not Claude Code's.
+const writeHintNamed = (name: string, h: Record<string, unknown>) => {
+  const dir = path.dirname(hintFilePath());
+  fs.mkdirSync(dir, { recursive: true });
+  const f = path.join(dir, name);
+  fs.writeFileSync(f, JSON.stringify(h));
+  return f;
+};
 const nowSec = () => Math.floor(Date.now() / 1000);
 
 afterEach(() => {
+  // Clear the whole cc-sessions dir: tests now write hints under several names,
+  // and a leftover would leak into the next test's cwd-fallback scan.
   try {
-    fs.rmSync(hintFilePath());
+    fs.rmSync(path.dirname(hintFilePath()), { recursive: true, force: true });
   } catch {
-    /* not every test writes one */
+    /* nothing written */
   }
 });
 
@@ -72,6 +84,60 @@ describe("auto-attach hint", () => {
 
   test("no file means no hint", () => {
     expect(readHintCcId()).toBeNull();
+  });
+});
+
+// Windows: Claude Code runs the SessionStart hook through a wrapper, so the
+// hook's PID is that wrapper — it writes <wrapper>.json (or 1.json), NEVER
+// <CC-pid>.json. Only this MCP server is CC's direct child, so the by-PID lookup
+// finds nothing and the session never binds. Observed on pd-002 2026-07-30. The
+// fix: fall back to the most-recent hint written for OUR cwd.
+describe("auto-attach hint — cwd fallback (hook PID != server PID)", () => {
+  test("binds by cwd when no file is named for our PID", () => {
+    writeHintNamed("hook-wrapper.json", {
+      cc_session_id: "cc-win",
+      cwd: process.cwd(),
+      written_at: nowSec(),
+    });
+    expect(fs.existsSync(hintFilePath())).toBe(false);
+    expect(readHintCcId()).toBe("cc-win");
+  });
+
+  test("picks the most recent hint for this cwd", () => {
+    writeHintNamed("old-hook.json", {
+      cc_session_id: "cc-old",
+      cwd: process.cwd(),
+      written_at: nowSec() - 100,
+    });
+    writeHintNamed("new-hook.json", {
+      cc_session_id: "cc-new",
+      cwd: process.cwd(),
+      written_at: nowSec(),
+    });
+    expect(readHintCcId()).toBe("cc-new");
+  });
+
+  test("never binds to a hint written for a different cwd", () => {
+    writeHintNamed("other-cwd.json", {
+      cc_session_id: "cc-elsewhere",
+      cwd: "/some/other/dir",
+      written_at: nowSec(),
+    });
+    expect(readHintCcId()).toBeNull();
+  });
+
+  test("the PID-named file still wins when it is valid", () => {
+    writeHint({
+      cc_session_id: "cc-direct",
+      cwd: process.cwd(),
+      written_at: nowSec(),
+    });
+    writeHintNamed("some-wrapper.json", {
+      cc_session_id: "cc-fallback",
+      cwd: process.cwd(),
+      written_at: nowSec(),
+    });
+    expect(readHintCcId()).toBe("cc-direct");
   });
 });
 

@@ -46,35 +46,68 @@ export function hintFilePath(): string {
 // is very unlikely to land on a card still inside the window.
 const HINT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
-export function readHintCcId(): string | null {
-  const file = hintFilePath();
-  if (!fs.existsSync(file)) return null;
+type Hint = { cc_session_id?: string; cwd?: string; written_at?: number };
+
+// Parse one hint file, applying only the age check — a stale card is never ours
+// no matter how we found it. Returns null on missing / malformed / expired.
+function parseHintFile(file: string): Hint | null {
   try {
-    const raw = fs.readFileSync(file, "utf8");
-    const parsed = JSON.parse(raw) as {
-      cc_session_id?: string;
-      cwd?: string;
-      written_at?: number;
-    };
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as Hint;
     if (!parsed.cc_session_id) return null;
-    // PID reuse guard. The hook records CC's cwd, and this server runs with the
-    // same one — a card written by a different CC that happened to hold this PID
-    // will almost always disagree.
-    if (parsed.cwd && parsed.cwd !== process.cwd()) {
-      log(`Ignoring hint for pid ${process.ppid}: cwd mismatch`);
-      return null;
-    }
     if (
       typeof parsed.written_at === "number" &&
       Date.now() - parsed.written_at * 1000 > HINT_MAX_AGE_MS
     ) {
-      log(`Ignoring hint for pid ${process.ppid}: older than the max age`);
       return null;
     }
-    return parsed.cc_session_id;
+    return parsed;
   } catch {
     return null;
   }
+}
+
+export function readHintCcId(): string | null {
+  // Fast path: the file named by our parent PID. On macOS / Linux the hook's
+  // $PPID and this server's process.ppid are both Claude Code, so the filename
+  // agrees; the cwd guard then just rejects a card left by a recycled PID.
+  const file = hintFilePath();
+  const direct = fs.existsSync(file) ? parseHintFile(file) : null;
+  if (direct?.cc_session_id) {
+    if (direct.cwd && direct.cwd !== process.cwd()) {
+      log(`Ignoring hint for pid ${process.ppid}: cwd mismatch`);
+    } else {
+      return direct.cc_session_id;
+    }
+  }
+  // Fallback: match by CWD. On Windows the hook does NOT share our PID — Claude
+  // Code runs it through a wrapper, so its $PPID / process.ppid is that wrapper
+  // (or 1, from bash mis-reading $PPID) and it writes <wrapper>.json, never
+  // <CC-pid>.json; only THIS MCP server is CC's direct child. So the by-PID
+  // lookup finds nothing and the session never binds — observed on pd-002
+  // 2026-07-30 (the hook wrote 26540.json / 1.json while this server's ppid was
+  // 14988). The hint still records CC's cwd, which is ours, so the most-recent
+  // hint written for this working directory is this CC's.
+  return readHintByCwd();
+}
+
+// The most-recent hint whose recorded cwd is ours — the same cwd the fast path
+// trusts as its PID-reuse guard, used here as the primary key instead of the PID.
+function readHintByCwd(): string | null {
+  const dir = path.dirname(hintFilePath());
+  let files: string[];
+  try {
+    files = fs.readdirSync(dir);
+  } catch {
+    return null;
+  }
+  let best: Hint | null = null;
+  for (const name of files) {
+    if (!name.endsWith(".json")) continue;
+    const h = parseHintFile(path.join(dir, name));
+    if (!h?.cc_session_id || h.cwd !== process.cwd()) continue;
+    if (!best || (h.written_at ?? 0) > (best.written_at ?? 0)) best = h;
+  }
+  return best?.cc_session_id ?? null;
 }
 
 // The CC process's tmux pane/socket, read from THIS process's env — the MCP
