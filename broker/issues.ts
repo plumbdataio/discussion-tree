@@ -506,11 +506,14 @@ export function handleListIssues(body: any): {
   // a reply written on an issue is invisible until the row is expanded by hand.
   // The node id of an issue-chat thread IS the issue id (see issue-chat.ts),
   // which is why this needs no join back through the board.
+  //
+  // There is deliberately no chat_count beside it: the row shows link_count
+  // (everything said about this issue, anywhere), and a second number for
+  // "…of which this many were said here" is a distinction the reader has no
+  // use for. It existed while reading and writing were two buttons.
   const sql =
     "SELECT i.*, s.name AS session_name, s.cwd AS session_cwd," +
     " (SELECT COUNT(*) FROM issue_links l WHERE l.issue_id = i.id) AS link_count," +
-    " (SELECT COUNT(*) FROM thread_items t JOIN boards b ON b.id = t.board_id" +
-    "   WHERE b.is_issue_chat = 1 AND t.node_id = i.id) AS chat_count," +
     " (SELECT COUNT(*) FROM thread_items t JOIN boards b ON b.id = t.board_id" +
     "   WHERE b.is_issue_chat = 1 AND t.node_id = i.id" +
     "     AND t.source = 'cc' AND t.read_at IS NULL) AS chat_unread" +
@@ -714,19 +717,34 @@ export function resolveIssueId(given: string): string | null | typeof AMBIGUOUS 
 // An id is unreadable to the user — they said as much: "there is basically
 // nothing I can judge from an id alone" — so a link that shows one is a link
 // they cannot decide whether to follow.
+const ISSUE_TITLES_LIMIT = 200;
+
 export function handleIssueTitles(body: any): {
   ok: true;
   titles: Record<string, { id: string; title: string; state: string }>;
+  truncated?: boolean;
+  note?: string;
 } {
   const given = Array.isArray(body?.ids) ? body.ids : [];
   const titles: Record<string, { id: string; title: string; state: string }> = {};
-  for (const raw of given.slice(0, 200)) {
+  // Bounded, and SAYS SO when it bounds. A cap that stays quiet is how a caller
+  // concludes "these ids do not resolve" from "I stopped looking" — the exact
+  // shape that made another session decide its links were all up to date.
+  for (const raw of given.slice(0, ISSUE_TITLES_LIMIT)) {
     const key = String(raw ?? "").trim();
     if (!key || titles[key]) continue;
     const resolved = resolveIssueId(key);
     if (!resolved || resolved === AMBIGUOUS) continue;
     const row = selectIssue.get(resolved) as IssueRow | undefined;
     if (row) titles[key] = { id: row.id, title: row.title, state: row.state };
+  }
+  if (given.length > ISSUE_TITLES_LIMIT) {
+    return {
+      ok: true,
+      titles,
+      truncated: true,
+      note: `Only the first ${ISSUE_TITLES_LIMIT} of ${given.length} ids were looked up; the rest have no entry here and will render as written. Ask for them in another call.`,
+    };
   }
   return { ok: true, titles };
 }

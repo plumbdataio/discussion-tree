@@ -375,3 +375,25 @@ describe("issue ids — the shortened form is the written form", () => {
     expect(r.json.titles["iss_nope"]).toBeUndefined();
   });
 });
+
+// "No silent caps" is a rule this codebase learned the hard way: another
+// session read a truncated review window and concluded its links were all up to
+// date. Every bounded read says so.
+describe("issue titles — the cap announces itself", () => {
+  test("says what it dropped when asked for more than it will look up", async () => {
+    const ids = Array.from({ length: 250 }, (_, i) => `iss_none${i}`);
+    const r = await post<{ truncated?: boolean; note?: string }>(
+      `${broker.url}/issue-titles`,
+      { ids },
+    );
+    expect(r.json.truncated).toBe(true);
+    expect(r.json.note).toContain("250");
+  });
+
+  test("stays quiet when nothing was dropped", async () => {
+    const r = await post<{ truncated?: boolean }>(`${broker.url}/issue-titles`, {
+      ids: ["iss_nope"],
+    });
+    expect(r.json.truncated).toBeUndefined();
+  });
+});

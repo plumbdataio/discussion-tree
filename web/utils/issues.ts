@@ -52,8 +52,6 @@ export type Issue = {
   deleted_at?: string | null;
   /** Messages attached to this issue. 0 = nothing linked yet, not an error. */
   link_count?: number;
-  /** Messages on this issue's own thread; 0 means no conversation exists yet. */
-  chat_count?: number;
   /** Unread CC messages on that thread — what makes a reply visible in the list. */
   chat_unread?: number;
   /**

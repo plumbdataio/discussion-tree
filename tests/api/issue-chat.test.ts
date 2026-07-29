@@ -192,17 +192,24 @@ describe("issue chat — messages link themselves", () => {
     expect(links).toContain(other);
   });
 
-  test("the tracker can see how many messages a thread holds", async () => {
+  test("the tracker counts the conversation, and what is unread in it", async () => {
     const id = await mkIssue("counted");
     await ccPost(id, "one");
     await ccPost(id, "two");
-    const list = await post<{
-      issues: { id: string; chat_count: number; link_count: number }[];
-    }>(`${broker.url}/list-issues`, { include_closed: true });
-    const row = list.json.issues.find((i) => i.id === id)!;
-    // Two messages, plus the status_change the first post writes.
-    expect(row.chat_count).toBeGreaterThanOrEqual(2);
-    expect(row.link_count).toBe(2);
+    const row = async () =>
+      (
+        await post<{
+          issues: { id: string; link_count: number; chat_unread: number }[];
+        }>(`${broker.url}/list-issues`, { include_closed: true })
+      ).json.issues.find((i) => i.id === id)!;
+
+    // link_count is what the row shows: everything said about this issue,
+    // anywhere. There is deliberately no second "…of which this many were said
+    // here" number — that distinction is no use to the reader.
+    expect((await row()).link_count).toBe(2);
+    // Unread is separate, and is what makes a reply visible without opening the
+    // row.
+    expect((await row()).chat_unread).toBe(2);
   });
 });
 

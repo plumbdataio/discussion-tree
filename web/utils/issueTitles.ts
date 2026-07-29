@@ -81,9 +81,3 @@ export function useIssueBrief(id: string): IssueBrief | null {
   }, [id]);
   return cache.get(id) ?? null;
 }
-
-/** Test seam: drop everything remembered so far. */
-export function resetIssueTitleCache() {
-  cache.clear();
-  pending.clear();
-}
