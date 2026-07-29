@@ -1,3 +1,20 @@
+// fetch() only rejects on a NETWORK failure — a 4xx/5xx resolves, so a bare
+// .catch() sees nothing when the SERVER refused. Every caller that acts on
+// success (an optimistic UI update, a "done" toast) has to know the difference,
+// and three of them did not: a settings toggle stayed flipped after the broker
+// rejected it, a map edge stayed drawn after the write failed, and undo said
+// "restored" over a restore that never happened. Found by codex, 2026-07-29.
+//
+// Wrap the response so "it worked" means the server said so.
+export async function okOrThrow(res: Promise<Response>): Promise<Response> {
+  const r = await res;
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    throw new Error(`${r.status} ${body.slice(0, 200)}`);
+  }
+  return r;
+}
+
 export function postSubmitAnswer(
   boardId: string,
   nodeId: string,

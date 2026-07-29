@@ -415,7 +415,9 @@
       "note": "Note",
       "selection": "Selection",
       "checklist": "Checklist"
-    }
+    },
+    "connect_failed": "線を引けませんでした",
+    "undo_failed": "元に戻せませんでした"
   },
   "issues": {
     "title": "課題",

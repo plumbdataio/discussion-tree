@@ -415,7 +415,9 @@
       "note": "Note",
       "selection": "Selection",
       "checklist": "Checklist"
-    }
+    },
+    "connect_failed": "Could not draw that connection",
+    "undo_failed": "Could not undo that"
   },
   "issues": {
     "title": "Issues",

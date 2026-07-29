@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { SlidersHorizontal } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { postSetBoardAutoStatus } from "../utils/api.ts";
+import { okOrThrow, postSetBoardAutoStatus } from "../utils/api.ts";
 import { Toggle } from "./Toggle.tsx";
 
 // Board-view header control (a sliders icon, distinct from the per-status
@@ -69,7 +69,11 @@ export function BoardSettingsPanel({
 
   const onToggleAuto = (next: boolean) => {
     setAutoOn(next); // optimistic; revert on failure
-    postSetBoardAutoStatus(boardId, next).catch(() => setAutoOn(!next));
+    // okOrThrow, not a bare .catch(): a 4xx/5xx RESOLVES, so without it the
+    // toggle stayed flipped while the broker had refused the change.
+    okOrThrow(postSetBoardAutoStatus(boardId, next)).catch(() =>
+      setAutoOn(!next),
+    );
   };
 
   return (

@@ -65,6 +65,7 @@ import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useDocumentTitle } from "../utils/useDocumentTitle.ts";
 import { useLiveSocket } from "../utils/liveSocket.ts";
 import {
+  okOrThrow,
   extractImageFiles,
   postMapAddFrame,
   postMapChat,
@@ -549,9 +550,38 @@ export function MapView({ mapId }: { mapId: string }) {
           },
         ]),
       );
-      postMapConnect(mapId, params.source, params.target).catch(() => {});
+      // A 4xx/5xx RESOLVES, so a bare .catch() left the optimistic edge on
+      // screen after the write was refused — the line stayed until a reload
+      // silently removed it. okOrThrow makes the failure a failure; the edge
+      // comes back off and the user is told.
+      okOrThrow(postMapConnect(mapId, params.source, params.target)).catch(
+        () => {
+          setRfEdges((es) =>
+            es.filter(
+              (e) => e.id !== `tmp-${params.source}-${params.target}`,
+            ),
+          );
+          showToast(t("map.connect_failed"));
+        },
+      );
     },
-    [mapId],
+    [mapId, t],
+  );
+
+  // Say "restored" / "undone" only once the writes have actually landed.
+  //
+  // Every branch used to show its toast synchronously and swallow the promise,
+  // so a refused restore told the user their node was back while it stayed
+  // deleted — and a 4xx/5xx does not even reject, so the .catch() saw nothing
+  // either. The one thing an undo must never do is lie about having worked.
+  const announceUndo = useCallback(
+    (jobs: Promise<Response>[], okMessage: string) => {
+      Promise.all(jobs.map((j) => okOrThrow(j)))
+        .then(() => fetchMap())
+        .then(() => showToast(okMessage, "ok"))
+        .catch(() => showToast(t("map.undo_failed")));
+    },
+    [fetchMap, t],
   );
 
   // Drag an edge's endpoint to a different node = reconnect: drop the
@@ -574,7 +604,7 @@ export function MapView({ mapId }: { mapId: string }) {
       const i = undoStack.current.indexOf(entry);
       if (i >= 0) undoStack.current.splice(i, 1);
       if (entry.kind === "delete") {
-        const jobs: Promise<unknown>[] = [];
+        const jobs: Promise<Response>[] = [];
         if (entry.nodeIds.length || entry.edgeIds.length) {
           jobs.push(
             postMapRestore(mapId, {
@@ -586,40 +616,39 @@ export function MapView({ mapId }: { mapId: string }) {
         for (const id of entry.frameIds) {
           jobs.push(postMapRestoreFrame(mapId, id));
         }
-        Promise.all(jobs)
-          .then(() => fetchMap())
-          .catch(() => {});
-        showToast(t("map.restored"), "ok");
+        announceUndo(jobs, t("map.restored"));
         return;
       }
       if (entry.kind === "frame-add") {
-        postMapDeleteFrame(mapId, entry.frameId)
-          .then(() => fetchMap())
-          .catch(() => {});
-        showToast(t("map.undone"), "ok");
+        announceUndo(
+          [postMapDeleteFrame(mapId, entry.frameId)],
+          t("map.undone"),
+        );
         return;
       }
       if (entry.kind === "node-geom") {
-        postMapMoveNode(
-          mapId,
-          entry.nodeId,
-          entry.prev.x,
-          entry.prev.y,
-          entry.prev.w,
-          entry.prev.h,
-        )
-          .then(() => fetchMap())
-          .catch(() => {});
-        showToast(t("map.undone"), "ok");
+        announceUndo(
+          [
+            postMapMoveNode(
+              mapId,
+              entry.nodeId,
+              entry.prev.x,
+              entry.prev.y,
+              entry.prev.w,
+              entry.prev.h,
+            ),
+          ],
+          t("map.undone"),
+        );
         return;
       }
       // frame-update
-      postMapUpdateFrame(mapId, entry.frameId, entry.prev)
-        .then(() => fetchMap())
-        .catch(() => {});
-      showToast(t("map.undone"), "ok");
+      announceUndo(
+        [postMapUpdateFrame(mapId, entry.frameId, entry.prev)],
+        t("map.undone"),
+      );
     },
-    [mapId, fetchMap, t],
+    [mapId, announceUndo, t],
   );
 
   // Add a grouping frame at the current viewport centre. User-only (the AI
