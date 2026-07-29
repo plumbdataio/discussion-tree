@@ -110,7 +110,27 @@ export function ensureIssueChatNode(
   if (!issue) return { ok: false, error: "issue not found" };
 
   const existing = findIssueChatNode(issueId);
-  if (existing) return { ok: true, location: existing, created: false };
+  if (existing) {
+    // ...unless the issue has since been re-filed under a different session.
+    // Delivery follows the BOARD's owner, so a thread left behind on the old
+    // session's board would send the user's next message to the CC that no
+    // longer holds this issue — while the composer, which reads the issue's
+    // session, says it is going to the new one. What is shown and where it
+    // actually goes diverging is the exact failure this design was already
+    // corrected for once.
+    const owner = db
+      .prepare("SELECT session_id FROM boards WHERE id = ?")
+      .get(existing.board_id) as { session_id: string } | undefined;
+    if (!issue.session_id || owner?.session_id === issue.session_id) {
+      return { ok: true, location: existing, created: false };
+    }
+    // Move the whole thread rather than starting a fresh one: the conversation
+    // belongs to the issue, so it goes where the issue goes. Anything else
+    // leaves the history reachable only through the timeline.
+    const moved = moveIssueChatNode(issue, existing);
+    if (!moved.ok) return moved;
+    return { ok: true, location: moved.location, created: false };
+  }
 
   // No session means there is nobody to deliver to. Rather than picking one and
   // sending the message to a CC that has never heard of this issue, say so —
@@ -130,32 +150,7 @@ export function ensureIssueChatNode(
   }
 
   const now = new Date().toISOString();
-  let boardId = (
-    db
-      .prepare(
-        "SELECT id FROM boards WHERE session_id = ? AND is_issue_chat = 1 LIMIT 1",
-      )
-      .get(issue.session_id) as { id: string } | undefined
-  )?.id;
-
-  if (!boardId) {
-    boardId = generateId("bd");
-    db.run(
-      "INSERT INTO boards (id, title, session_id, created_at, is_issue_chat) VALUES (?, ?, ?, ?, 1)",
-      [boardId, BOARD_TITLE, issue.session_id, now],
-    );
-    insertNode.run(
-      boardId,
-      CONCERN_ID,
-      null,
-      "concern",
-      CONCERN_TITLE,
-      "",
-      "pending",
-      0,
-      now,
-    );
-  }
+  const boardId = ensureIssueChatBoard(issue.session_id, now);
 
   // A node deleted by hand is still in the table (deletion is logical), and its
   // id is fixed as the issue id — so re-inserting would hit the primary key and
@@ -198,6 +193,88 @@ export function ensureIssueChatNode(
   );
 
   return { ok: true, location: { board_id: boardId, node_id: issueId }, created: true };
+}
+
+// Re-home an existing conversation onto the board of the issue's CURRENT
+// session. Called only when those have drifted apart (update_issue can move an
+// issue to another session long after the thread was created).
+//
+// The thread rows are rewritten rather than copied: issue_links point at
+// thread_items by id, so the timeline keeps working untouched, and there is
+// never a moment where the same message exists twice.
+function moveIssueChatNode(
+  issue: IssueBrief,
+  from: IssueChatLocation,
+):
+  | { ok: true; location: IssueChatLocation }
+  | { ok: false; error: string } {
+  if (!issue.session_id) {
+    return { ok: false, error: "issue has no session to move the thread to" };
+  }
+  const session = db
+    .prepare("SELECT id FROM sessions WHERE id = ?")
+    .get(issue.session_id) as { id: string } | undefined;
+  if (!session) {
+    return { ok: false, error: "the session this issue belongs to is gone" };
+  }
+
+  const now = new Date().toISOString();
+  const target = ensureIssueChatBoard(issue.session_id, now);
+
+  db.transaction(() => {
+    insertNode.run(
+      target,
+      issue.id,
+      CONCERN_ID,
+      "item",
+      issue.title,
+      "",
+      "pending",
+      0,
+      now,
+    );
+    db.run(
+      "UPDATE thread_items SET board_id = ? WHERE board_id = ? AND node_id = ?",
+      [target, from.board_id, issue.id],
+    );
+    // Soft-delete, in line with the rest of dt: the row is gone from every view
+    // but nothing about it is destroyed.
+    db.run(
+      "UPDATE nodes SET deleted_at = ? WHERE board_id = ? AND id = ?",
+      [now, from.board_id, issue.id],
+    );
+  })();
+
+  return { ok: true, location: { board_id: target, node_id: issue.id } };
+}
+
+// The session's issue-conversation board, created on demand.
+function ensureIssueChatBoard(sessionId: string, now: string): string {
+  const existing = (
+    db
+      .prepare(
+        "SELECT id FROM boards WHERE session_id = ? AND is_issue_chat = 1 LIMIT 1",
+      )
+      .get(sessionId) as { id: string } | undefined
+  )?.id;
+  if (existing) return existing;
+  const boardId = generateId("bd");
+  db.run(
+    "INSERT INTO boards (id, title, session_id, created_at, is_issue_chat) VALUES (?, ?, ?, ?, 1)",
+    [boardId, BOARD_TITLE, sessionId, now],
+  );
+  insertNode.run(
+    boardId,
+    CONCERN_ID,
+    null,
+    "concern",
+    CONCERN_TITLE,
+    "",
+    "pending",
+    0,
+    now,
+  );
+  return boardId;
 }
 
 // Keep the node's title in step with the issue's. The node title is what the

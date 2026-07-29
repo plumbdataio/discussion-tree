@@ -354,3 +354,54 @@ describe("issue timeline — also says where to write", () => {
     expect(tl.json.messages).toEqual([]);
   });
 });
+
+// Both found by codex reviewing this day's commits, after my own pass over the
+// same diff missed them.
+describe("issues — a thread follows its issue to another session", () => {
+  test("re-filing an issue moves its conversation, history and all", async () => {
+    const id = await mkIssue("starts here");
+    const first = await ccPost(id, "said before the move");
+    const before = first.json.location!.board_id;
+
+    await post(`${broker.url}/update-issue`, {
+      issue_id: id,
+      session_id: otherSessionId,
+    });
+    const after = await ccPost(id, "said after the move");
+
+    // Delivery follows the BOARD's owner, so a thread left behind would send
+    // the user's next message to the CC that no longer holds this issue —
+    // while the composer, reading the issue's session, says otherwise.
+    expect(after.json.location!.board_id).not.toBe(before);
+    // And the history came with it — the conversation belongs to the issue, so
+    // it goes where the issue goes. Leaving it behind would make the earlier
+    // half reachable only through the timeline.
+    const items = (await chat(id)).json.items.map((m) => m.text);
+    expect(items).toContain("said before the move");
+    expect(items).toContain("said after the move");
+  });
+});
+
+describe("issues — priority actually filters", () => {
+  test("asking for one priority does not return the others", async () => {
+    const hot = await mkIssue("burning");
+    await post(`${broker.url}/update-issue`, { issue_id: hot, priority: "high" });
+    const cold = await mkIssue("someday");
+    await post(`${broker.url}/update-issue`, { issue_id: cold, priority: "low" });
+
+    const high = await post<{ issues: { id: string }[] }>(
+      `${broker.url}/list-issues`,
+      { priority: "high" },
+    );
+    const ids = high.json.issues.map((i) => i.id);
+    expect(ids).toContain(hot);
+    expect(ids).not.toContain(cold);
+    // Issues filed before priority existed default to mid, and must not vanish
+    // from an unfiltered read.
+    const all = await post<{ issues: { id: string }[] }>(
+      `${broker.url}/list-issues`,
+      {},
+    );
+    expect(all.json.issues.map((i) => i.id)).toContain(cold);
+  });
+});

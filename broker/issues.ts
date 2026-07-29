@@ -460,6 +460,15 @@ export function handleListIssues(body: any): {
     where.push("i.state = ?");
     args.push(state);
   }
+  // A filter the MCP schema advertises has to actually narrow. This one was
+  // added to the tool definition and NOT here, so `priority: "high"` came back
+  // with low and mid mixed in — a filter that silently does nothing is worse
+  // than no filter, because the caller trusts the result.
+  const priority = coercePriority(body?.priority);
+  if (priority) {
+    where.push("COALESCE(i.priority, 'mid') = ?");
+    args.push(priority);
+  }
   if (body?.session_id) {
     where.push("i.session_id = ?");
     args.push(String(body.session_id));
