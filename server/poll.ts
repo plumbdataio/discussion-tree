@@ -10,7 +10,8 @@ import { BROKER_FETCH_TIMEOUT_MS, BROKER_URL } from "./config.ts";
 import { log } from "./log.ts";
 import { gapSince } from "./message-gap.ts";
 import { getSessionId } from "./state.ts";
-import { UPLOADS_MOUNT, rewriteUploadPaths } from "./upload-paths.ts";
+import { rewriteUploadPaths } from "./upload-paths.ts";
+import { BROKER_IS_REMOTE } from "./config.ts";
 
 // Overlap guard: the poll fires every POLL_INTERVAL_MS (1s), but a single drain
 // can take up to BROKER_FETCH_TIMEOUT_MS when the broker is wedged. Skipping a
@@ -186,10 +187,10 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
       // How long this node had been quiet. Null unless the silence is long
       // enough that the surrounding context is likely stale.
       const gap = gapSince((msg as any).prev_message_at, msg.created_at);
-      // Attachment paths are written from the BROKER's filesystem; when that is
-      // another machine, point them at wherever its uploads directory is
-      // mounted here. No-op on the same machine.
-      const body = rewriteUploadPaths(msg.text, UPLOADS_MOUNT);
+      // Attachment paths are written from the BROKER's filesystem. On this
+      // machine Read opens them directly; from another machine they do not
+      // exist, so they become a get_image call instead. No-op when local.
+      const body = rewriteUploadPaths(msg.text, BROKER_IS_REMOTE);
       const content =
         reminderParts.length > 0
           ? `${body}\n\n---\n${reminderParts.join("\n\n")}`

@@ -10,7 +10,7 @@
 // just unpacks them and POSTs to the broker.
 
 import type { CreateBoardResponse } from "../shared/types.ts";
-import { brokerFetch } from "./broker-client.ts";
+import { brokerFetch, fetchImage } from "./broker-client.ts";
 import { ensureSession } from "./state.ts";
 
 export const TOOLS = [
@@ -957,6 +957,22 @@ export const TOOLS = [
     },
   },
   {
+    name: "get_image",
+    description:
+      "Look at an image attached to a message, when the message gives you a get_image(...) call instead of a file path. That happens when this session's broker is on another machine: the path in the message belongs to THAT machine's disk, so Read cannot open it. This fetches the bytes from the broker and hands them back as an image, writing nothing to disk. Attachments are part of what the user said — look before replying, exactly as you would with a local path.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        url: {
+          type: "string" as const,
+          description:
+            "The /uploads/... path from the message. A full http(s) URL to the same broker also works.",
+        },
+      },
+      required: ["url"],
+    },
+  },
+  {
     name: "post_to_issue",
     description:
       "Say something ON an issue — its own thread, which the user reads from the issue tracker. Use it when the thing you want to say is about one issue rather than about what you are doing right now: a question that has to be answered before the work can move, a finding, a proposal for how to proceed. The thread is created on the first post, so an issue nobody has discussed does not carry an empty one. The message is linked to this issue automatically (issue_ids is only for a second issue it also touches). Replies come back as an ordinary channel message on that node — answer those with post_to_node, not with this.",
@@ -1224,10 +1240,16 @@ function boardStatusChangeNote(
 }
 
 // Returns a value compatible with the CallToolRequestSchema response shape.
+// Text for almost everything; get_image hands back image content, which is why
+// this is a union rather than the shape textResult happens to produce.
+type ToolResult =
+  | ReturnType<typeof textResult>
+  | { content: { type: "image"; data: string; mimeType: string }[] };
+
 export async function dispatchToolCall(
   name: string,
   args: any,
-): Promise<ReturnType<typeof textResult>> {
+): Promise<ToolResult> {
   try {
     switch (name) {
       case "create_board": {
@@ -2085,6 +2107,24 @@ export async function dispatchToolCall(
         return textResult(
           JSON.stringify({ issue: res.issue, messages }, null, 2),
         );
+      }
+
+      case "get_image": {
+        ensureSession();
+        const a = args as { url: string };
+        const img = await fetchImage(a.url);
+        if (!img.ok) return textResult(img.error, true);
+        // The image IS the answer, so it goes back as image content rather than
+        // being described. MCP carries this natively; dt simply never used it.
+        return {
+          content: [
+            {
+              type: "image" as const,
+              data: img.data,
+              mimeType: img.mimeType,
+            },
+          ],
+        };
       }
 
       case "post_to_issue": {

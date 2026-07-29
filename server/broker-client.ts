@@ -30,6 +30,64 @@ export async function brokerFetch<T>(
   return res.json() as Promise<T>;
 }
 
+// Fetch an uploaded image AS BYTES, for the tool that hands it straight to the
+// model. Deliberately not brokerFetch: that one posts JSON and parses JSON, and
+// what comes back here is a PNG.
+//
+// Base64 is what MCP's image content carries, so the encode happens here rather
+// than a temp file happening anywhere.
+export async function fetchImage(
+  urlOrPath: string,
+): Promise<
+  { ok: true; data: string; mimeType: string } | { ok: false; error: string }
+> {
+  const raw = String(urlOrPath ?? "").trim();
+  if (!raw) return { ok: false, error: "url required" };
+  // Accept either the /uploads/... path from a message or a full URL to the
+  // same broker; anything else is refused rather than fetched, so this cannot
+  // be turned into a general-purpose fetcher.
+  let url: string;
+  if (raw.startsWith("/uploads/")) {
+    url = `${BROKER_URL}${raw}`;
+  } else if (raw.startsWith(BROKER_URL) && raw.includes("/uploads/")) {
+    url = raw;
+  } else {
+    return {
+      ok: false,
+      error:
+        "get_image only reads this broker's uploads — pass the /uploads/... path exactly as it appears in the message",
+    };
+  }
+
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(BROKER_FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      return { ok: false, error: `image not available (${res.status})` };
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    const mimeType =
+      res.headers.get("content-type") ?? guessImageMime(url);
+    return { ok: true, data: buf.toString("base64"), mimeType };
+  } catch (e) {
+    return {
+      ok: false,
+      error: `could not reach the broker for this image: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+    };
+  }
+}
+
+function guessImageMime(url: string): string {
+  const ext = url.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "gif") return "image/gif";
+  if (ext === "webp") return "image/webp";
+  return "image/png";
+}
+
 export async function isBrokerAlive(): Promise<boolean> {
   try {
     const res = await fetch(`${BROKER_URL}/health`, {
