@@ -44,3 +44,25 @@ describe("upload paths — seeing an attachment from another machine", () => {
     expect(rewriteUploadPaths(once, true)).toBe(once);
   });
 });
+
+// The shape of the replacement matters, not just the fact of it. The first cut
+// left the tool call wedged inside the markdown link
+// (`[image] [get_image("…")](/uploads/…)`), which reads as neither one thing
+// nor the other — caught by the user pasting a real message.
+describe("upload paths — the replacement reads as one instruction", () => {
+  test("the whole image line becomes the call, link and all", () => {
+    const out = rewriteUploadPaths(
+      "[image] [/Users/pekehata/.discussion-tree/uploads/bd_x/i.png](/uploads/bd_x/i.png)",
+      true,
+    );
+    expect(out).toBe('[image] get_image("/uploads/bd_x/i.png")');
+  });
+
+  test("a bare path with no link around it still gets rewritten", () => {
+    const out = rewriteUploadPaths(
+      "see /Users/pekehata/.discussion-tree/uploads/bd_x/i.png for the error",
+      true,
+    );
+    expect(out).toBe('see get_image("/uploads/bd_x/i.png") for the error');
+  });
+});
