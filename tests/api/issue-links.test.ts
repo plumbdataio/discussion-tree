@@ -319,3 +319,59 @@ describe("issue list — how much conversation is attached", () => {
     expect(await countOf()).toBe(0);
   });
 });
+
+// Ids get written in their SHORTENED form — the timestamp half alone
+// ("iss_ms5kq850"). That is what CC types in prose and what the UI turns into a
+// link, so the same system that taught everyone to write it that way then
+// rejected it at the one moment it mattered. Resolve by prefix; refuse rather
+// than guess when a prefix matches more than one issue.
+describe("issue ids — the shortened form is the written form", () => {
+  test("a prefix links the same as the full id", async () => {
+    const full = await mkIssue("linked by prefix");
+    const short = full.slice(0, "iss_".length + 8);
+    expect(short.length).toBeLessThan(full.length);
+    const r = await post<{ ok: boolean; message_id?: number; error?: string }>(
+      `${broker.url}/post-to-node`,
+      {
+        board_id: boardId,
+        node_id: nodeId,
+        message: "written with the short form",
+        status: "discussing",
+        issue_ids: [short],
+      },
+    );
+    expect(r.json.ok).toBe(true);
+    // Stored against the FULL id, so the timeline finds it either way.
+    expect(await linksOf(r.json.message_id!)).toContain(full);
+  });
+
+  test("an ambiguous prefix is refused, and says so", async () => {
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/post-to-node`,
+      {
+        board_id: boardId,
+        node_id: nodeId,
+        message: "too little of the id",
+        status: "discussing",
+        issue_ids: ["iss_"],
+      },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toMatch(/ambiguous/i);
+  });
+
+  test("titles come back keyed by whatever form was asked for", async () => {
+    const full = await mkIssue("has a readable name");
+    const short = full.slice(0, "iss_".length + 8);
+    const r = await post<{
+      titles: Record<string, { id: string; title: string }>;
+    }>(`${broker.url}/issue-titles`, { ids: [short, "iss_nope"] });
+    // The user cannot judge anything from an id, so the UI shows this instead.
+    expect(r.json.titles[short].title).toBe("has a readable name");
+    expect(r.json.titles[short].id).toBe(full);
+    // An id that resolves to nothing simply has no entry — the text keeps
+    // rendering as written, which is what a placeholder in a sentence ABOUT
+    // the format needs.
+    expect(r.json.titles["iss_nope"]).toBeUndefined();
+  });
+});

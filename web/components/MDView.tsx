@@ -9,7 +9,8 @@ import { MarkdownAnchor, urlTransform } from "./MarkdownAnchor.tsx";
 // `**bold**` and `_italic_` survive — one spelling each. Same call already made
 // for `~` via singleTilde:false; emphasis has no such option, hence the escape.
 import { escapeCodeHostileEmphasis } from "../utils/markdownText.ts";
-import { ISSUE_ID_RE, openIssueTracker } from "../utils/issues.ts";
+import { ISSUE_ID_RE } from "../utils/issues.ts";
+import { IssueIdLink } from "./IssueIdLink.tsx";
 // @reusable-ui MDView — USE WHEN: rendering user- or CC-authored markdown text
 //   (GFM + CJK-aware bold/strikethrough). INSTEAD OF: raw text or
 //   dangerouslySetInnerHTML.
@@ -74,16 +75,10 @@ function MDViewImpl({
           code: ({ node, className, children, ...props }) => {
             const text = String(children ?? "");
             if (!className && ISSUE_ID_RE.test(text)) {
-              return (
-                <button
-                  type="button"
-                  className="md-issue-link"
-                  onClick={() => openIssueTracker(text)}
-                  title={text}
-                >
-                  {text}
-                </button>
-              );
+              // Rendered by its own component because resolving the id to a
+              // title takes a hook, and this component map is rebuilt on every
+              // render — a hook here would lose its state each time.
+              return <IssueIdLink id={text} />;
             }
             return (
               <code className={className} {...props}>

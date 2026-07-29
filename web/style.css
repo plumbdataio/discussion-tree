@@ -7881,3 +7881,10 @@ ul.maps li.current .sidebar-map-link {
 .issue-timeline-path.here span:first-child {
   color: var(--accent);
 }
+/* Once the id has resolved to a title, it is prose, not an identifier — the
+   monospace face was there to say "this is an id" and now says the wrong
+   thing. */
+.md-issue-link.resolved {
+  font-family: inherit;
+  font-size: inherit;
+}

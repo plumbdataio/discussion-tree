@@ -636,11 +636,22 @@ export function validateIssueIds(issueIds: unknown):
   }
   const ids: string[] = [];
   const unknown: string[] = [];
+  const ambiguous: string[] = [];
   for (const raw of issueIds) {
-    const id = String(raw ?? "").trim();
-    if (!id) continue;
-    if (selectIssue.get(id)) ids.push(id);
-    else unknown.push(id);
+    const given = String(raw ?? "").trim();
+    if (!given) continue;
+    const resolved = resolveIssueId(given);
+    if (resolved === AMBIGUOUS) ambiguous.push(given);
+    else if (resolved) ids.push(resolved);
+    else unknown.push(given);
+  }
+  if (ambiguous.length) {
+    return {
+      ok: false,
+      error:
+        `ambiguous issue_ids: ${ambiguous.join(", ")} — nothing was posted. ` +
+        "More than one issue starts with that prefix; pass more of the id.",
+    };
   }
   if (unknown.length) {
     return {
@@ -652,6 +663,49 @@ export function validateIssueIds(issueIds: unknown):
     };
   }
   return { ok: true, ids };
+}
+
+// Ids are routinely written in their shortened form — the timestamp half alone
+// ("iss_ms5kq850"), which is what the UI linkifies and what CC types in prose.
+// Requiring the full id here meant the shortened form was rejected at the one
+// moment it mattered, by the same system that had just taught everyone to write
+// it that way. Resolve by prefix, and refuse rather than guess when a prefix
+// matches more than one issue.
+export const AMBIGUOUS = Symbol("ambiguous issue id");
+
+export function resolveIssueId(given: string): string | null | typeof AMBIGUOUS {
+  const id = given.trim();
+  if (!id) return null;
+  if (selectIssue.get(id)) return id;
+  const matches = db
+    .prepare(
+      "SELECT id FROM issues WHERE id LIKE ? || '%' AND deleted_at IS NULL LIMIT 2",
+    )
+    .all(id) as { id: string }[];
+  if (matches.length === 1) return matches[0].id;
+  if (matches.length > 1) return AMBIGUOUS;
+  return null;
+}
+
+// Titles for ids seen in message text, so the UI can show what an id MEANS.
+// An id is unreadable to the user — they said as much: "there is basically
+// nothing I can judge from an id alone" — so a link that shows one is a link
+// they cannot decide whether to follow.
+export function handleIssueTitles(body: any): {
+  ok: true;
+  titles: Record<string, { id: string; title: string; state: string }>;
+} {
+  const given = Array.isArray(body?.ids) ? body.ids : [];
+  const titles: Record<string, { id: string; title: string; state: string }> = {};
+  for (const raw of given.slice(0, 200)) {
+    const key = String(raw ?? "").trim();
+    if (!key || titles[key]) continue;
+    const resolved = resolveIssueId(key);
+    if (!resolved || resolved === AMBIGUOUS) continue;
+    const row = selectIssue.get(resolved) as IssueRow | undefined;
+    if (row) titles[key] = { id: row.id, title: row.title, state: row.state };
+  }
+  return { ok: true, titles };
 }
 
 // Write the links for a just-posted message. Called from the post handlers
@@ -1019,6 +1073,7 @@ export const routes = {
   "/restore-issue": handleRestoreIssue,
   "/list-issue-sessions": handleListIssueSessions,
   "/issue-timeline": handleIssueTimeline,
+  "/issue-titles": handleIssueTitles,
   "/approve-issue-close": handleApproveIssueClose,
   "/reject-issue-close": handleRejectIssueClose,
   "/get-issue-filters": handleGetIssueFilters,
