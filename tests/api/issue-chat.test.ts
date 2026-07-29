@@ -370,28 +370,43 @@ describe("issue timeline — also says where to write", () => {
 
 // Both found by codex reviewing this day's commits, after my own pass over the
 // same diff missed them.
-describe("issues — a thread follows its issue to another session", () => {
-  test("re-filing an issue moves its conversation, history and all", async () => {
+// Re-filing an issue under another session. Delivery follows the BOARD's owner,
+// so the next message must go to the CC that holds the issue NOW — not to the
+// one that held it when the thread started.
+//
+// The earlier conversation stays where it was said. Moving it was implemented
+// and removed the same day (the user's call): the timeline gathers messages
+// through issue_links, which cross boards by design, so rewriting rows buys
+// nothing and a failed rewrite would damage the conversation itself.
+describe("issues — a re-filed issue is talked to on its new session's board", () => {
+  test("a new thread starts there, and the old messages stay readable", async () => {
     const id = await mkIssue("starts here");
-    const first = await ccPost(id, "said before the move");
+    const first = await ccPost(id, "said before the hand-off");
     const before = first.json.location!.board_id;
 
     await post(`${broker.url}/update-issue`, {
       issue_id: id,
       session_id: otherSessionId,
     });
-    const after = await ccPost(id, "said after the move");
-
-    // Delivery follows the BOARD's owner, so a thread left behind would send
-    // the user's next message to the CC that no longer holds this issue —
-    // while the composer, reading the issue's session, says otherwise.
+    const after = await ccPost(id, "said after the hand-off");
     expect(after.json.location!.board_id).not.toBe(before);
-    // And the history came with it — the conversation belongs to the issue, so
-    // it goes where the issue goes. Leaving it behind would make the earlier
-    // half reachable only through the timeline.
-    const items = (await chat(id)).json.items.map((m) => m.text);
-    expect(items).toContain("said before the move");
-    expect(items).toContain("said after the move");
+
+    // The whole conversation is still readable in one place — via the links,
+    // which is what they are for.
+    const tl = await post<{ messages: { text: string }[] }>(
+      `${broker.url}/issue-timeline`,
+      { issue_id: id },
+    );
+    const texts = tl.json.messages.map((m) => m.text);
+    expect(texts).toContain("said before the hand-off");
+    expect(texts).toContain("said after the hand-off");
+
+    // And nothing was rewritten: the earlier message is still on the board it
+    // was said on.
+    const older = await post<{
+      messages: { path: string; text: string }[];
+    }>(`${broker.url}/issue-timeline`, { issue_id: id });
+    expect(older.json.messages.length).toBeGreaterThanOrEqual(2);
   });
 });
 
