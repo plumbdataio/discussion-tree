@@ -129,11 +129,19 @@ function OwnerStateChip({
     };
   }, [open]);
 
+  // TWO pills, not one. A single "owner / state" pill took its colour from the
+  // owner alone, so the state — the half that changes as work progresses — was
+  // black text on the same background whatever it said. Splitting them lets
+  // each axis carry its own colour, which is the only way state reads at a
+  // glance in a list sorted by owner.
   const chip = (
-    <span className={`issue-chip owner-${issue.owner} state-${issue.state}`}>
-      <span className="issue-chip-owner">{t(`issues.owner.${issue.owner}`)}</span>
-      <span className="issue-chip-sep">/</span>
-      <span className="issue-chip-state">{t(`issues.state.${issue.state}`)}</span>
+    <span className="issue-chips">
+      <span className={`issue-chip owner-${issue.owner}`}>
+        {t(`issues.owner.${issue.owner}`)}
+      </span>
+      <span className={`issue-chip state-${issue.state}`}>
+        {t(`issues.state.${issue.state}`)}
+      </span>
     </span>
   );
   if (!onSet) return chip;
@@ -201,6 +209,8 @@ export function IssueTrackerModal() {
   const [confirmDelete, setConfirmDelete] = useState<Issue | null>(null);
   const [timelineOf, setTimelineOf] = useState<Issue | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Reset per editor session so the warning appears again for the next issue.
+  const [sessionWarned, setSessionWarned] = useState(false);
 
   const refetch = useCallback(
     (includeDeleted: boolean) => {
@@ -373,6 +383,15 @@ export function IssueTrackerModal() {
     const title = draft.title.trim();
     if (!title) {
       setError(t("issues.error_title_required"));
+      return;
+    }
+    // Filing against no session is allowed but almost never intended: nobody is
+    // notified, and the issue cannot be found by the session filter later. Warn
+    // once and let a second press through, rather than blocking a case that may
+    // turn out to have a use.
+    if (!draft.id && !draft.sessionId && !sessionWarned) {
+      setSessionWarned(true);
+      setError(t("issues.warn_no_session"));
       return;
     }
     const fields = {
@@ -635,6 +654,7 @@ export function IssueTrackerModal() {
                 // wrong session before.
                 const only =
                   filters.sessionIds.length === 1 ? filters.sessionIds[0] : null;
+                setSessionWarned(false);
                 setDraft(emptyDraft(only === NO_SESSION ? null : only));
               }}
             >

@@ -7649,3 +7649,48 @@ ul.maps li.current .sidebar-map-link {
 :root[data-theme="dark"] .issue-approval-head {
   color: #86efac;
 }
+
+/* Owner and state as SEPARATE pills. A single combined pill took its colour
+   from the owner alone, leaving the state — the half that moves as work
+   progresses — visually identical whatever it said. */
+.issue-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.issue-chip.state-todo {
+  background: var(--panel);
+  border-color: var(--border-strong);
+  color: var(--muted);
+}
+.issue-chip.state-doing {
+  background: #fef3c7;
+  border-color: #fbbf24;
+  color: #92400e;
+}
+.issue-chip.state-done {
+  background: #dcfce7;
+  border-color: #4ade80;
+  color: #166534;
+}
+.issue-chip.state-dropped {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--muted);
+  text-decoration: line-through;
+}
+:root[data-theme="dark"] .issue-chip.state-doing {
+  background: #3a2f10;
+  border-color: #a16207;
+  color: #fcd34d;
+}
+:root[data-theme="dark"] .issue-chip.state-done {
+  background: #12331f;
+  border-color: #15803d;
+  color: #86efac;
+}
+/* (a) The expanded body sat right up against the row above it. */
+.issue-detail-row td {
+  padding-top: 10px;
+}

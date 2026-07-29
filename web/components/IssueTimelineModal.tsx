@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, CornerUpRight, MessagesSquare } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -41,10 +41,14 @@ function surfacePath(m: IssueTimelineMessage): string | null {
   }
 }
 
-// One entry. Long messages are clipped by default: the point of the view is to
-// SCAN a decision's conversation, and a single 900-word post filling the
-// viewport turns a 25-message thread back into something you have to page
-// through. Only messages that actually overflow get the control.
+// One entry, shown in full.
+//
+// An earlier cut clamped long messages to ~9 lines with a "show all" toggle,
+// on the reasoning that 19 of 25 messages were long enough to fill the viewport
+// alone. The user rejected it outright: expanding them one by one to read a
+// conversation is worse than scrolling past them, and a "expand everything"
+// button would just be the same chore behind one more click. Reading is what
+// this view is for — so it reads.
 function TimelineMessage({
   m,
   fmt,
@@ -55,18 +59,6 @@ function TimelineMessage({
   onGo: (m: IssueTimelineMessage) => void;
 }) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
-  const [clipped, setClipped] = useState(false);
-  const bodyRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const el = bodyRef.current;
-    if (!el) return;
-    // Measured rather than guessed from text length: markdown height depends on
-    // tables, code blocks and lists, not character count.
-    setClipped(el.scrollHeight > el.clientHeight + 4);
-  }, [m.text]);
-
   return (
     <div className={`issue-timeline-msg source-${m.source}`}>
       <div className="issue-timeline-msg-head">
@@ -86,21 +78,7 @@ function TimelineMessage({
           </button>
         )}
       </div>
-      <div
-        ref={bodyRef}
-        className={"issue-timeline-body-wrap" + (expanded ? " expanded" : "")}
-      >
-        <MDView className="issue-timeline-body" text={m.text} />
-      </div>
-      {clipped && (
-        <button
-          type="button"
-          className="issue-timeline-more"
-          onClick={() => setExpanded((v) => !v)}
-        >
-          {expanded ? t("issues.timeline_less") : t("issues.timeline_more")}
-        </button>
-      )}
+      <MDView className="issue-timeline-body" text={m.text} />
     </div>
   );
 }

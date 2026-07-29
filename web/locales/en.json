@@ -493,7 +493,8 @@
     "approval_lead": {
       "done": "CC marked this done",
       "dropped": "CC dropped this"
-    }
+    },
+    "warn_no_session": "No session selected. Nobody will be notified and the session filter will not find this issue. Press Create again to file it anyway."
   },
   "update": {
     "available": "A newer version is available",
