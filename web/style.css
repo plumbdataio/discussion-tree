@@ -7548,3 +7548,22 @@ ul.maps li.current .sidebar-map-link {
     max-width: 150px;
   }
 }
+
+/* Count of linked messages, on the button that opens the conversation. Shown
+   even at zero: "0" says the issue has not been discussed anywhere yet, which
+   is a fact about the issue — hiding it made the empty timeline look broken. */
+.issue-timeline-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--muted);
+}
+.issue-timeline-open:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.issue-timeline-open:disabled:hover {
+  border-color: var(--border);
+}

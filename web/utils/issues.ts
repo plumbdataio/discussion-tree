@@ -30,6 +30,8 @@ export type Issue = {
   updated_at: string;
   closed_at: string | null;
   deleted_at?: string | null;
+  /** Messages attached to this issue. 0 = nothing linked yet, not an error. */
+  link_count?: number;
 };
 
 export type IssueSession = {

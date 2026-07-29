@@ -276,3 +276,46 @@ describe("issue timeline — one conversation across every surface", () => {
     expect(tl.json.error).toContain("not found");
   });
 });
+
+// The list has to say how much conversation an issue has BEFORE it is opened.
+// Without it the UI could only offer "read the conversation" and discover on
+// click that there was none — which is what shipped, and read as a broken
+// feature rather than as an issue nobody had linked yet. Most issues genuinely
+// have zero: they predate the linking machinery, or belong to another
+// session's CC who links their own posts.
+describe("issue list — how much conversation is attached", () => {
+  test("link_count rides along with each row", async () => {
+    const quiet = await mkIssue("nothing linked to this one");
+    const busy = await mkIssue("this one gets talked about");
+    await postTo([busy]);
+    await postTo([busy]);
+
+    const list = await post<{
+      issues: { id: string; link_count: number }[];
+    }>(`${broker.url}/list-issues`, { include_closed: true });
+
+    const byId = new Map(list.json.issues.map((i) => [i.id, i.link_count]));
+    expect(byId.get(busy)).toBe(2);
+    // Zero, not undefined — the UI renders it, so it has to be a number.
+    expect(byId.get(quiet)).toBe(0);
+  });
+
+  test("unlinking is reflected, so the count cannot drift upward forever", async () => {
+    const issue = await mkIssue("linked then unlinked");
+    const posted = await postTo([issue]);
+    const countOf = async () =>
+      (
+        await post<{ issues: { id: string; link_count: number }[] }>(
+          `${broker.url}/list-issues`,
+          { include_closed: true },
+        )
+      ).json.issues.find((i) => i.id === issue)!.link_count;
+
+    expect(await countOf()).toBe(1);
+    await post(`${broker.url}/unlink-issue-message`, {
+      message_id: posted.message_id,
+      issue_id: issue,
+    });
+    expect(await countOf()).toBe(0);
+  });
+});

@@ -486,7 +486,8 @@
       "cc": "CC"
     },
     "timeline_more": "全文を表示",
-    "timeline_less": "折りたたむ"
+    "timeline_less": "折りたたむ",
+    "timeline_none_hint": "この課題に紐づいた発言はまだありません。以後の投稿で貯まります。"
   },
   "update": {
     "available": "新しいバージョンがあります",

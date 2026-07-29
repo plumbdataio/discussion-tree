@@ -290,8 +290,15 @@ export function handleListIssues(body: any): {
   );
   // session_name comes along so the cross-session view can say WHICH session an
   // issue came from without a second round-trip per row.
+  //
+  // link_count too: without it the UI can only offer "read the conversation"
+  // and discover on click that there isn't one — which is what happened, and
+  // reads as a broken feature rather than as an issue nobody has linked yet.
+  // Cheap: issue_links is keyed on (issue_id, thread_item_id), so this is an
+  // index lookup per row on a table of tens.
   const sql =
-    "SELECT i.*, s.name AS session_name, s.cwd AS session_cwd" +
+    "SELECT i.*, s.name AS session_name, s.cwd AS session_cwd," +
+    " (SELECT COUNT(*) FROM issue_links l WHERE l.issue_id = i.id) AS link_count" +
     " FROM issues i LEFT JOIN sessions s ON s.id = i.session_id" +
     (where.length ? ` WHERE ${where.join(" AND ")}` : "") +
     // Oldest-updated first would bury fresh work; newest-updated first matches

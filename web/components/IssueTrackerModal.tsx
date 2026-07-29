@@ -434,13 +434,22 @@ export function IssueTrackerModal() {
           {i.closed_at ? ` · ${t("issues.closed")} ${fmt(i.closed_at)}` : ""}
         </span>
         {/* The reason links are collected at all: read the whole conversation
-            for this issue in one column, wherever it happened. */}
+            for this issue in one column, wherever it happened.
+
+            The count is on the button, not discovered after opening: most
+            issues predate the linking machinery or belong to another session's
+            CC, so an unconditional "read the conversation" led straight to an
+            empty modal and read as a broken feature. A number also shows the
+            links accumulating, which is the thing worth watching. */}
         <button
           type="button"
           className="issue-timeline-open"
+          disabled={!i.link_count}
+          title={i.link_count ? undefined : t("issues.timeline_none_hint")}
           onClick={() => setTimelineOf(i)}
         >
           <MessagesSquare size={13} strokeWidth={2} /> {t("issues.timeline")}
+          <span className="issue-timeline-count">{i.link_count ?? 0}</span>
         </button>
         {i.deleted_at ? (
           <button

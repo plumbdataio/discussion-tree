@@ -486,7 +486,8 @@
       "cc": "CC"
     },
     "timeline_more": "Show all",
-    "timeline_less": "Collapse"
+    "timeline_less": "Collapse",
+    "timeline_none_hint": "Nothing is linked to this issue yet. Links accumulate as it is discussed."
   },
   "update": {
     "available": "A newer version is available",
