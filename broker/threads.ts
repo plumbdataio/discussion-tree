@@ -29,6 +29,7 @@ import {
 } from "./db.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
 import { linkMessageToIssues, validateIssueIds } from "./issues.ts";
+import { issueOfChatNode } from "./issue-chat.ts";
 import { getCliVerbosity } from "./cli-verbosity.ts";
 import { onBoardSettled, onNodeSettled } from "./checklist.ts";
 import { SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
@@ -131,6 +132,14 @@ export function handlePostToNode(body: any) {
   // silently dropped one loses the link for good and tells nobody.
   const links = validateIssueIds(body.issue_ids);
   if (!links.ok) return { ok: false, error: links.error };
+  // Posting on an issue's own thread implies the link (see handlePollMessages
+  // for the user-side counterpart). Union rather than replace: a reply here can
+  // still be about a second issue, and that link is the caller's to add.
+  const chatIssue = issueOfChatNode(body.board_id, body.node_id);
+  const linkIds =
+    chatIssue && !links.ids.includes(chatIssue)
+      ? [...links.ids, chatIssue]
+      : links.ids;
 
   // 1. CC message goes in first so it appears before any status_change in
   //    the timeline. Keep its row id — returned as message_id so the caller
@@ -146,7 +155,7 @@ export function handlePostToNode(body: any) {
   // Link in the same call that posts. A second round-trip ("now link it") is a
   // place the link can be forgotten, and forgetting is the whole failure mode
   // this feature exists to fight.
-  linkMessageToIssues(messageId, links.ids);
+  linkMessageToIssues(messageId, linkIds);
 
   // 2. Status update + transition log (only when the status actually changed).
   let statusChanged = false;
@@ -428,6 +437,12 @@ export function handlePollMessages(body: any) {
       );
       m.thread_item_id = Number(r.lastInsertRowid);
       setPendingThreadItem.run(m.thread_item_id, m.id);
+      // A message written on an issue's own thread belongs to that issue by
+      // construction, so link it here rather than relying on anyone to say so.
+      // This is the one place the user's own messages can be linked without
+      // asking them to — everywhere else it takes CC noticing after the fact.
+      const chatIssue = issueOfChatNode(m.board_id, m.node_id);
+      if (chatIssue) linkMessageToIssues(m.thread_item_id, [chatIssue]);
     }
     markDelivered.run(m.id);
   }

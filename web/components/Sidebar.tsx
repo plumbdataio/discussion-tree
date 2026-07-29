@@ -36,6 +36,7 @@ import {
 } from "../utils/settings.ts";
 import { useTmuxIntegration } from "../utils/tmuxIntegration.ts";
 import { openScheduledList } from "../utils/scheduledList.ts";
+import { boardTitle } from "../utils/boardTitle.ts";
 
 // Module-scope cache so Sidebar remounts during SPA navigation don't show a
 // "Loading…" flash — the previous fetch result is reused as initial state
@@ -465,7 +466,7 @@ function SessionItem({
                           strokeWidth={1.75}
                         />
                       )}
-                      {isDefault ? t("default_board.title") : b.title}
+                      {boardTitle(b, t)}
                     </span>
                     {/* needs-reply takes visual priority over the status
                         badge — it's an actionable flag, not just metadata. */}

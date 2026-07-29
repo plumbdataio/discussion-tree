@@ -562,7 +562,7 @@ export function handleListSessions() {
   const buildItem = (s: SessionRow) => {
     const activeBoards = db
       .prepare(
-        "SELECT id, title, closed, status, is_default FROM boards WHERE session_id = ? AND archived = 0 ORDER BY is_default DESC, created_at",
+        "SELECT id, title, closed, status, is_default, is_issue_chat FROM boards WHERE session_id = ? AND archived = 0 ORDER BY is_default DESC, created_at",
       )
       .all(s.id) as {
       id: string;

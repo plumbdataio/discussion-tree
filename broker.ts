@@ -34,6 +34,7 @@ import {
 import { routes as mapChecklistRoutes } from "./broker/map-checklist.ts";
 import { getBoardView } from "./broker/helpers.ts";
 import { routes as issuesRoutes } from "./broker/issues.ts";
+import { routes as issueChatRoutes } from "./broker/issue-chat-routes.ts";
 import { routes as nodesRoutes } from "./broker/nodes.ts";
 import {
   initCliVerbosity,
@@ -136,6 +137,7 @@ const POST_ROUTES: Record<string, RouteHandler> = {
   ...scheduledMessagesRoutes,
   ...spawnRoutes,
   ...issuesRoutes,
+  ...issueChatRoutes,
 };
 
 // Routes that drive tmux (spawn a session, or inject a command into a live CC

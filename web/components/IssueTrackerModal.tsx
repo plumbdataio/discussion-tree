@@ -9,6 +9,7 @@ import {
   Search,
   Check,
   MessagesSquare,
+  MessageSquare,
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -17,6 +18,7 @@ import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { MultiSelectDropdown } from "./MultiSelectDropdown.tsx";
 import { IssueTimelineModal } from "./IssueTimelineModal.tsx";
+import { IssueChatModal } from "./IssueChatModal.tsx";
 import {
   DEFAULT_FILTERS,
   ISSUE_OWNERS,
@@ -214,6 +216,7 @@ export function IssueTrackerModal() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Issue | null>(null);
   const [timelineOf, setTimelineOf] = useState<Issue | null>(null);
+  const [chatOf, setChatOf] = useState<Issue | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Reset per editor session so the warning appears again for the next issue.
@@ -510,6 +513,24 @@ export function IssueTrackerModal() {
             CC, so an unconditional "read the conversation" led straight to an
             empty modal and read as a broken feature. A number also shows the
             links accumulating, which is the thing worth watching. */}
+        {/* Talking ON the issue. Separate from the timeline button next to it,
+            and the distinction is the point: the timeline GATHERS what was said
+            about this issue wherever it happened, this opens the one thread
+            made for saying it. Never disabled — an issue with no conversation
+            is exactly the one worth starting. */}
+        <button
+          type="button"
+          className={
+            "issue-chat-open" + (i.chat_unread ? " has-unread" : "")
+          }
+          onClick={() => setChatOf(i)}
+          title={t("issues.chat_hint")}
+        >
+          <MessageSquare size={13} strokeWidth={2} /> {t("issues.chat")}
+          {(i.chat_count ?? 0) > 0 && (
+            <span className="issue-chat-count">{i.chat_count}</span>
+          )}
+        </button>
         <button
           type="button"
           className="issue-timeline-open"
@@ -968,6 +989,20 @@ export function IssueTrackerModal() {
           <IssueTimelineModal
             issue={timelineOf}
             onClose={() => setTimelineOf(null)}
+            onJump={() => setOpen(false)}
+          />
+        )}
+
+        {chatOf && (
+          <IssueChatModal
+            issue={chatOf}
+            onClose={() => {
+              setChatOf(null);
+              // The counts on the row (messages, unread) just changed — and the
+              // first message also created the thread, so a stale list would go
+              // on saying there is none.
+              refetch(filters.showDeleted);
+            }}
             onJump={() => setOpen(false)}
           />
         )}

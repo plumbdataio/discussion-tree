@@ -944,6 +944,40 @@ export const TOOLS = [
     },
   },
   {
+    name: "post_to_issue",
+    description:
+      "Say something ON an issue — its own thread, which the user reads from the issue tracker. Use it when the thing you want to say is about one issue rather than about what you are doing right now: a question that has to be answered before the work can move, a finding, a proposal for how to proceed. The thread is created on the first post, so an issue nobody has discussed does not carry an empty one. The message is linked to this issue automatically (issue_ids is only for a second issue it also touches). Replies come back as an ordinary channel message on that node — answer those with post_to_node, not with this.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        issue_id: { type: "string" as const },
+        message: { type: "string" as const },
+        status: {
+          type: "string" as const,
+          enum: [
+            "pending",
+            "discussing",
+            "resolved",
+            "agreed",
+            "adopted",
+            "rejected",
+            "needs-reply",
+            "done",
+          ],
+          description:
+            "Status of the thread afterwards. Use needs-reply ONLY when you cannot proceed without an answer.",
+        },
+        issue_ids: {
+          type: "array" as const,
+          items: { type: "string" as const },
+          description:
+            "Other issues this message also belongs to. The issue you are posting on is linked for you.",
+        },
+      },
+      required: ["issue_id", "message", "status"],
+    },
+  },
+  {
     name: "link_message_to_issues",
     description:
       "Attach an already-posted message to one or more issues, or detach it. Posting normally carries its own links, so this is for fixing things up afterwards — most often during the review ritual. Pass issue_ids to add; pass unlink_issue_id to remove one.",
@@ -2019,6 +2053,28 @@ export async function dispatchToolCall(
             : res.messages;
         return textResult(
           JSON.stringify({ issue: res.issue, messages }, null, 2),
+        );
+      }
+
+      case "post_to_issue": {
+        ensureSession();
+        const a = args as {
+          issue_id: string;
+          message: string;
+          status?: string;
+          issue_ids?: string[];
+        };
+        const res = await brokerFetch<{
+          ok: boolean;
+          error?: string;
+          message_id?: number;
+          location?: { board_id: string; node_id: string };
+        }>("/issue-chat-post", a);
+        if (!res.ok) return textResult(res.error ?? "post failed", true);
+        return textResult(
+          `Posted on issue ${a.issue_id} (message_id=${res.message_id}). ` +
+            `The user sees it in the issue tracker; their reply arrives as a ` +
+            `channel message on board ${res.location?.board_id}, node ${res.location?.node_id}.`,
         );
       }
 

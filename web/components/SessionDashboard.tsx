@@ -12,6 +12,7 @@ import { ContextMeter } from "./ContextMeter.tsx";
 import { EditableSessionName } from "./EditableSessionName.tsx";
 import { normalizeBoardStatus } from "../utils/constants.ts";
 import { useDocumentTitle } from "../utils/useDocumentTitle.ts";
+import { boardTitle } from "../utils/boardTitle.ts";
 
 export function SessionDashboard({ sessionId }: { sessionId: string }) {
   const { t } = useTranslation();
@@ -162,7 +163,7 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
                 <a href={"/board/" + b.id} className="board-card">
                   <div className="card-header">
                     <h3 className="card-title">
-                      {b.is_default ? t("default_board.title") : b.title}
+                      {boardTitle(b, t)}
                     </h3>
                     <span className="board-status-pill">
                       <span className="board-status-dot" />

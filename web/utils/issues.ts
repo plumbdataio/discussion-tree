@@ -32,6 +32,10 @@ export type Issue = {
   deleted_at?: string | null;
   /** Messages attached to this issue. 0 = nothing linked yet, not an error. */
   link_count?: number;
+  /** Messages on this issue's own thread; 0 means no conversation exists yet. */
+  chat_count?: number;
+  /** Unread CC messages on that thread — what makes a reply visible in the list. */
+  chat_unread?: number;
   /**
    * When the user acknowledged the close. NULL on a closed issue means CC
    * finished it and the user has not seen that yet.
@@ -235,6 +239,43 @@ export function fetchIssueTimeline(issueId: string) {
     issue?: Issue;
     messages: IssueTimelineMessage[];
   }>("/issue-timeline", { issue_id: issueId });
+}
+
+// A message on an issue's OWN thread. Distinct from IssueTimelineMessage: the
+// timeline gathers what was said about an issue wherever it happened, this is
+// the one place made for saying it.
+export type IssueChatItem = {
+  id: number;
+  source: "user" | "cc" | "system" | string;
+  text: string;
+  created_at: string;
+  read_at: string | null;
+};
+
+export type IssueChatLocation = { board_id: string; node_id: string };
+
+// location is null until somebody writes — an issue nobody has discussed has no
+// board and no node, on purpose. The session comes back either way so the
+// composer can say who would receive the message, and whether they are alive.
+export function fetchIssueChat(issueId: string) {
+  return callBroker<{
+    ok: boolean;
+    error?: string;
+    location: IssueChatLocation | null;
+    session: IssueSession | null;
+    items: IssueChatItem[];
+  }>("/issue-chat", { issue_id: issueId });
+}
+
+// Blocks until the CC actually picks the message up (the shared user-submission
+// path), so "nobody is listening" surfaces here as it does on any board.
+export function submitIssueChat(issueId: string, text: string) {
+  return callBroker<{
+    ok: boolean;
+    error?: string;
+    reason?: "no_recipient" | "timeout";
+    location?: IssueChatLocation;
+  }>("/issue-chat-submit", { issue_id: issueId, text });
 }
 
 export function fetchIssueSessions() {

@@ -57,7 +57,7 @@ export function handleListBoards(body: {
   const filter = resolveScopeFilter(body.session_id, scope);
   const rows = db
     .prepare(
-      `SELECT b.id, b.title, b.status, b.is_default, b.archived,
+      `SELECT b.id, b.title, b.status, b.is_default, b.is_issue_chat, b.archived,
               b.session_id, s.name AS session_name,
               (SELECT COUNT(*) FROM nodes n
                 WHERE n.board_id = b.id AND n.kind = 'concern'

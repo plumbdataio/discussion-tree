@@ -38,6 +38,7 @@ import { openScheduledList } from "../utils/scheduledList.ts";
 import { translateError } from "../utils/errors.ts";
 import { buildTree } from "../utils/tree.ts";
 import { useDocumentTitle } from "../utils/useDocumentTitle.ts";
+import { boardTitle } from "../utils/boardTitle.ts";
 
 // boardId is passed as a prop (not read from the URL internally) so this
 // component does NOT need a `key` to re-mount on navigation. All data
@@ -358,11 +359,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   // Shared hook — same format on every page.
   useDocumentTitle([
     data?.owner_session_name,
-    data
-      ? data.board.is_default
-        ? t("default_board.title")
-        : data.board.title
-      : undefined,
+    data ? boardTitle(data.board, t) : undefined,
   ]);
 
   // Clear any pending flash timer on unmount / board switch so a fired timer
@@ -639,7 +636,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           {t("header.back_to_session")}
         </a>
         <h1>
-          {data.board.is_default ? t("default_board.title") : data.board.title}
+          {boardTitle(data.board, t)}
         </h1>
         {Boolean(data.board.closed) && (
           <span className="closed-badge" title={t("header.board_meta_closed")}>

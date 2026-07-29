@@ -256,6 +256,14 @@ safeAlter(
 safeAlter(
   "ALTER TABLE boards ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0",
 );
+// Each session gets at most one issue-conversation board, created lazily the
+// first time somebody writes on one of its issues (broker/issue-chat.ts). The
+// column lives here rather than next to that code because issue queries join
+// against it — a migration that only ran when the chat module happened to be
+// imported would make those queries fail depending on load order.
+safeAlter(
+  "ALTER TABLE boards ADD COLUMN is_issue_chat INTEGER NOT NULL DEFAULT 0",
+);
 // Per-board opt-out of the automatic board-status rollup (recomputeBoardStatus).
 // On (default 1) the board status auto-derives from its item nodes
 // (discussing → settled → completed). Off (0) freezes the status at whatever the

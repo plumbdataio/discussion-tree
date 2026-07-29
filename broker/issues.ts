@@ -18,6 +18,7 @@
 
 import { db, insertPending } from "./db.ts";
 import { generateRandomId } from "./helpers.ts";
+import { syncIssueChatTitle } from "./issue-chat.ts";
 
 // Who currently holds the ball. Split from `state` on purpose: a single status
 // enum with "blocked" in it loses the subject — "blocked" cannot say whether it
@@ -295,7 +296,12 @@ export function handleUpdateIssue(body: any):
   args.push(now);
   args.push(id);
   db.run(`UPDATE issues SET ${sets.join(", ")} WHERE id = ?`, args);
-  return { ok: true, issue: selectIssue.get(id) as IssueRow };
+  const updated = selectIssue.get(id) as IssueRow;
+  // The conversation node carries the issue's title, and that node is what the
+  // board and the sidebar show — leaving the old wording there makes a renamed
+  // issue read as a different one.
+  if (body?.title !== undefined) syncIssueChatTitle(id, updated.title);
+  return { ok: true, issue: updated };
 }
 
 // The user signing off on a close CC made. Separate endpoint rather than an
@@ -421,9 +427,20 @@ export function handleListIssues(body: any): {
   // reads as a broken feature rather than as an issue nobody has linked yet.
   // Cheap: issue_links is keyed on (issue_id, thread_item_id), so this is an
   // index lookup per row on a table of tens.
+  //
+  // chat_unread: how many messages on THIS issue's own thread the user has not
+  // read. The conversation is opened from the tracker, so without a count here
+  // a reply written on an issue is invisible until the row is expanded by hand.
+  // The node id of an issue-chat thread IS the issue id (see issue-chat.ts),
+  // which is why this needs no join back through the board.
   const sql =
     "SELECT i.*, s.name AS session_name, s.cwd AS session_cwd," +
-    " (SELECT COUNT(*) FROM issue_links l WHERE l.issue_id = i.id) AS link_count" +
+    " (SELECT COUNT(*) FROM issue_links l WHERE l.issue_id = i.id) AS link_count," +
+    " (SELECT COUNT(*) FROM thread_items t JOIN boards b ON b.id = t.board_id" +
+    "   WHERE b.is_issue_chat = 1 AND t.node_id = i.id) AS chat_count," +
+    " (SELECT COUNT(*) FROM thread_items t JOIN boards b ON b.id = t.board_id" +
+    "   WHERE b.is_issue_chat = 1 AND t.node_id = i.id" +
+    "     AND t.source = 'cc' AND t.read_at IS NULL) AS chat_unread" +
     " FROM issues i LEFT JOIN sessions s ON s.id = i.session_id" +
     (where.length ? ` WHERE ${where.join(" AND ")}` : "") +
     // Oldest-updated first would bury fresh work; newest-updated first matches

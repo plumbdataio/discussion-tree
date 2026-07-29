@@ -7713,3 +7713,186 @@ ul.maps li.current .sidebar-map-link {
   border-color: var(--accent);
   text-decoration: underline;
 }
+
+/* ---- Issue conversation (talking ON an issue) ----------------------------
+   Layered over the tracker exactly like the timeline, so the list stays behind
+   it — the point of this surface is to write while still looking at the issue.
+   Blue accent against the timeline's amber: one is for reading what was said
+   elsewhere, the other for saying something here. */
+.issue-chat-backdrop {
+  z-index: 1010;
+}
+.issue-chat-modal {
+  max-width: min(820px, 92vw);
+  height: min(760px, 84vh);
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+  border-left-color: #3b82f6;
+}
+.issue-chat-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-right: 28px;
+}
+.issue-chat-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 15px;
+  min-width: 0;
+}
+.issue-chat-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex: none;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.issue-chat-open-board {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  font: inherit;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.issue-chat-open-board:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.issue-chat-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.issue-chat-empty {
+  padding: 18px 4px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.issue-chat-msg {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.issue-chat-msg.source-user {
+  background: var(--user);
+  border-color: var(--user-border);
+}
+.issue-chat-msg-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.issue-chat-who {
+  font-weight: 700;
+}
+.issue-chat-at {
+  font-variant-numeric: tabular-nums;
+}
+.issue-chat-body {
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.issue-chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex: none;
+}
+/* ResizableTextarea wraps its <textarea> in a span (that is where the resize
+   handle is anchored), so the flex child here is the WRAPPER — putting flex:1
+   on the textarea itself leaves it at its default width with the rest of the
+   row empty, which is exactly how it first rendered. */
+.issue-chat-composer .answer-input-wrap {
+  flex: 1;
+  min-width: 0;
+}
+/* At or below ResizableTextarea's MIN_H, or its handle cannot drag the box
+   back down. */
+.issue-chat-input {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+.issue-chat-send {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  /* Without this the label wraps one character per line the moment the row is
+     tight — the button is 2 CJK characters wide and looked vertical. */
+  white-space: nowrap;
+  gap: 5px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 12.5px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+.issue-chat-send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* The row's button. Never disabled — unlike the timeline's, whose count can
+   legitimately be zero forever, an issue with no conversation is exactly the
+   one worth starting. */
+.issue-chat-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.issue-chat-open:hover {
+  border-color: var(--accent);
+}
+.issue-chat-open.has-unread {
+  border-color: var(--accent);
+  font-weight: 700;
+}
+.issue-chat-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--muted);
+}
+.issue-chat-open.has-unread .issue-chat-count {
+  background: var(--accent);
+  color: #fff;
+}

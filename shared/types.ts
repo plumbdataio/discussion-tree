@@ -83,6 +83,8 @@ export interface Board {
   closed: number;
   archived?: number;
   is_default?: number;
+  /** Lazily-created board holding one conversation node per issue. */
+  is_issue_chat?: number;
   status?: BoardStatus;
   // 1 (default) = board status auto-derives from node rollup; 0 = frozen
   // (user/CC-controlled) so a status-tracking board doesn't auto-settle.
@@ -514,6 +516,7 @@ export interface BoardListItem {
   status: BoardStatus;
   stats: BoardStats;
   is_default?: number;
+  is_issue_chat?: number;
   unread_count?: number;
 }
 
