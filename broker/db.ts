@@ -377,6 +377,12 @@ safeAlter("ALTER TABLE pending_messages ADD COLUMN pushed_at TEXT");
 // When this session last finished compacting. Written by /session-compacting-done
 // and read by the link-review ritual, which defaults to "everything since then".
 safeAlter("ALTER TABLE sessions ADD COLUMN last_compact_at TEXT");
+// Running on ANOTHER machine and talking to this broker over the network. Only
+// liveness cares: cleanStaleSessions asks the OS about a pid, which for a remote
+// session either finds nothing (sweeping away a session that is alive, after
+// which the user cannot send it anything) or finds an unrelated local process
+// (a dead session that never leaves). Remote rows are judged by heartbeat.
+safeAlter("ALTER TABLE sessions ADD COLUMN is_remote INTEGER NOT NULL DEFAULT 0");
 
 // Foreign-key indexes for the core tables. These were missing entirely — every
 // table above had only its PRIMARY KEY — and the omission is invisible until

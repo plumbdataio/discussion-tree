@@ -23,6 +23,7 @@ import {
   BROKER_RESPAWN_AFTER_FAILS,
   HEARTBEAT_INTERVAL_MS,
   POLL_INTERVAL_MS,
+  BROKER_IS_REMOTE,
 } from "./server/config.ts";
 import { INSTRUCTIONS } from "./server/instructions.ts";
 import { log } from "./server/log.ts";
@@ -119,6 +120,10 @@ async function main() {
     // (e.g. claude-peers) shares this ppid, so it can mark this session working
     // via /heartbeat-cc-pid without knowing our cc_session_id.
     cc_pid: process.ppid,
+    // Says "my pid is not in your process table" — the broker otherwise sweeps
+    // this session away as dead within 30 seconds, after which the user cannot
+    // send it anything.
+    remote: BROKER_IS_REMOTE,
   });
   setSessionId(reg.session_id);
   log(`Registered as session ${reg.session_id} (cwd: ${myCwd})`);

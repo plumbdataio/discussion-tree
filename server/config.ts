@@ -6,7 +6,28 @@ export const BROKER_PORT = parseInt(
   process.env.DISCUSSION_TREE_PORT ?? "7898",
   10,
 );
-export const BROKER_URL = `http://127.0.0.1:${BROKER_PORT}`;
+
+// Which broker this MCP server talks to. Loopback by default — the broker is a
+// per-machine singleton and that is the only case with no network in it.
+//
+// DISCUSSION_TREE_BROKER_URL points a CC on ANOTHER machine at a broker running
+// here, so that session appears in the UI like a local one: same boards, same
+// delivery, same channel messages. The broker already does not care where a
+// request came from; what stopped it was this constant and the auto-spawn
+// below. Set the broker's own DISCUSSION_TREE_BIND to something reachable
+// (Tailscale) — that side has NO authentication, so whatever can reach the port
+// can drive every tool.
+export const BROKER_URL = (
+  process.env.DISCUSSION_TREE_BROKER_URL ?? `http://127.0.0.1:${BROKER_PORT}`
+).replace(/\/+$/, "");
+
+// A remote broker is somebody else's process: it is not ours to start, and
+// spawning a LOCAL one on this machine would be worse than failing — the
+// session would quietly attach to an empty second broker and none of its boards
+// would be where the user is looking.
+export const BROKER_IS_REMOTE = !/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|$)/i.test(
+  BROKER_URL,
+);
 
 // How often we drain pending_messages from the broker. 1Hz is the contract
 // /submit-answer's 8s timeout was tuned against — bumping this would change

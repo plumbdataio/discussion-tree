@@ -4,6 +4,7 @@
 
 import {
   BROKER_FETCH_TIMEOUT_MS,
+  BROKER_IS_REMOTE,
   BROKER_SCRIPT,
   BROKER_URL,
 } from "./config.ts";
@@ -44,6 +45,17 @@ export async function ensureBroker(): Promise<void> {
   if (await isBrokerAlive()) {
     log("Broker already running");
     return;
+  }
+
+  // A remote broker is not ours to start. Spawning a local one here would be
+  // worse than failing: this session would attach to a second, empty broker
+  // and every board it creates would be invisible to the user, who is looking
+  // at the other machine.
+  if (BROKER_IS_REMOTE) {
+    throw new Error(
+      `Broker at ${BROKER_URL} is not reachable, and it is not on this machine so it cannot be started from here. ` +
+        "Check that it is running, that DISCUSSION_TREE_BIND lets it accept non-loopback connections, and that the network between the two machines is up.",
+    );
   }
 
   log("Starting broker daemon...");

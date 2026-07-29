@@ -29,6 +29,7 @@ import { ensureDefaultBoard } from "./default-board.ts";
 import { generateId } from "./helpers.ts";
 import { onSessionsChanged } from "./power.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
+import { REMOTE_SESSION_TIMEOUT_MS } from "./config.ts";
 
 // Board / map ids owned by the given (about-to-be-reclaimed) sessions. Collected
 // BEFORE the reclaim UPDATE moves them, so afterwards we can nudge any open
@@ -58,6 +59,16 @@ export function handleRegister(body: any) {
   const id = generateId("s");
   const now = new Date().toISOString();
   insertSession.run(id, body.pid, body.cwd, now, now);
+  // A session running on ANOTHER machine, talking to this broker over the
+  // network. It matters for exactly one thing: liveness. The sweep below asks
+  // the OS whether a pid is still running, and a remote pid means nothing here
+  // — it is either absent (the session gets swept away while perfectly alive,
+  // and then the user cannot send it anything) or, worse, matches an unrelated
+  // local process (a dead session that never goes away). Remote sessions are
+  // judged by their heartbeat instead.
+  if (body.remote === true) {
+    db.run("UPDATE sessions SET is_remote = 1 WHERE id = ?", [id]);
+  }
   // cc_pid = the owning Claude Code process's PID (the dt MCP server's
   // process.ppid). A sibling MCP server under the same CC (e.g. claude-peers)
   // can mark this session working via /heartbeat-cc-pid using only this shared
@@ -674,13 +685,34 @@ export function handleListSessions() {
 // attach.
 export function cleanStaleSessions() {
   const sessions = db
-    .query("SELECT id, pid FROM sessions WHERE alive = 1")
-    .all() as { id: string; pid: number }[];
+    .query(
+      "SELECT id, pid, is_remote, last_seen FROM sessions WHERE alive = 1",
+    )
+    .all() as {
+    id: string;
+    pid: number;
+    is_remote: number;
+    last_seen: string;
+  }[];
+  const staleBefore = Date.now() - REMOTE_SESSION_TIMEOUT_MS;
   let changed = false;
   for (const s of sessions) {
-    try {
-      process.kill(s.pid, 0);
-    } catch {
+    let dead: boolean;
+    if (s.is_remote) {
+      // Its pid belongs to another machine's process table, so asking this OS
+      // about it answers a different question. The heartbeat is the only signal
+      // that actually crosses the network.
+      const seen = Date.parse(s.last_seen);
+      dead = Number.isFinite(seen) && seen < staleBefore;
+    } else {
+      try {
+        process.kill(s.pid, 0);
+        dead = false;
+      } catch {
+        dead = true;
+      }
+    }
+    if (dead) {
       db.run("UPDATE sessions SET alive = 0 WHERE id = ?", [s.id]);
       changed = true;
     }

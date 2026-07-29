@@ -10,6 +10,7 @@ import { BROKER_FETCH_TIMEOUT_MS, BROKER_URL } from "./config.ts";
 import { log } from "./log.ts";
 import { gapSince } from "./message-gap.ts";
 import { getSessionId } from "./state.ts";
+import { UPLOADS_MOUNT, rewriteUploadPaths } from "./upload-paths.ts";
 
 // Overlap guard: the poll fires every POLL_INTERVAL_MS (1s), but a single drain
 // can take up to BROKER_FETCH_TIMEOUT_MS when the broker is wedged. Skipping a
@@ -185,10 +186,14 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
       // How long this node had been quiet. Null unless the silence is long
       // enough that the surrounding context is likely stale.
       const gap = gapSince((msg as any).prev_message_at, msg.created_at);
+      // Attachment paths are written from the BROKER's filesystem; when that is
+      // another machine, point them at wherever its uploads directory is
+      // mounted here. No-op on the same machine.
+      const body = rewriteUploadPaths(msg.text, UPLOADS_MOUNT);
       const content =
         reminderParts.length > 0
-          ? `${msg.text}\n\n---\n${reminderParts.join("\n\n")}`
-          : msg.text;
+          ? `${body}\n\n---\n${reminderParts.join("\n\n")}`
+          : body;
       try {
         await mcp.notification({
         method: "notifications/claude/channel",

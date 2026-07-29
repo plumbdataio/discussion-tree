@@ -67,6 +67,17 @@ export const STALE_SESSION_SWEEP_MS = parseInt(
   10,
 );
 
+// How long a REMOTE session (a CC on another machine, talking to this broker
+// over the network) may go without a heartbeat before it is treated as gone.
+// Its pid means nothing on this machine, so the heartbeat is the only signal
+// that crosses; at one every 15s, this tolerates three missed beats — enough
+// that a laptop lid or a Tailscale reconnect does not evict a live session,
+// short enough that a genuinely dead one stops being offered as a recipient.
+export const REMOTE_SESSION_TIMEOUT_MS = parseInt(
+  process.env.DISCUSSION_TREE_REMOTE_TIMEOUT_MS ?? "60000",
+  10,
+);
+
 // Side-effect: ensure HOME_DIR and the DB's parent dir exist before
 // bun:sqlite touches the file. mkdir is idempotent (recursive).
 fs.mkdirSync(HOME_DIR, { recursive: true });
