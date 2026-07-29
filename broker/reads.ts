@@ -22,19 +22,15 @@ function resolveScopeFilter(
   // currently-live work — searching all dead sessions would drown the LLM
   // in stale context).
   //
-  // The issue-conversation container is excluded HERE rather than per query, so
-  // a query added later inherits it. It was hidden from list_boards on
-  // 2026-07-29 and search_boards immediately let it back in — CC searching for
-  // a phrase found the container, its neighbouring issues' nodes and their
-  // messages, which is precisely the "one issue reads as a tree of unrelated
-  // siblings" failure the hiding exists to prevent. Reachable by id; never
-  // offered.
-  const hidden = "COALESCE(b.is_issue_chat, 0) = 0";
+  // An issue's conversation board is an ORDINARY board (2026-07-29 redesign) and
+  // is listed / searched like any other — nothing is filtered out here. The MCP
+  // instructions carry the one thing worth saying: a node found on such a board
+  // is one issue's serial thread, and its neighbours are unrelated.
   if (scope === "all") {
-    return { sql: `s.alive = 1 AND ${hidden}`, params: [] };
+    return { sql: "s.alive = 1", params: [] };
   }
   return {
-    sql: `s.alive = 1 AND s.id = ? AND ${hidden}`,
+    sql: "s.alive = 1 AND s.id = ?",
     params: [sessionId],
   };
 }
@@ -66,7 +62,7 @@ export function handleListBoards(body: {
   const filter = resolveScopeFilter(body.session_id, scope);
   const rows = db
     .prepare(
-      `SELECT b.id, b.title, b.status, b.is_default, b.is_issue_chat, b.archived,
+      `SELECT b.id, b.title, b.status, b.is_default, b.archived,
               b.session_id, s.name AS session_name,
               (SELECT COUNT(*) FROM nodes n
                 WHERE n.board_id = b.id AND n.kind = 'concern'

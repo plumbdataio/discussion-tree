@@ -573,11 +573,12 @@ export function handleListSessions() {
   const buildItem = (s: SessionRow) => {
     const activeBoards = db
       .prepare(
-        // is_issue_chat is excluded, not just flagged: the sidebar is the main
-        // way a board is treated AS a board, and an issue's conversation is
-        // meant to be reached from the issue. See broker/reads.ts for why the
-        // container stays out of sight on both sides.
-        "SELECT id, title, closed, status, is_default, is_issue_chat FROM boards WHERE session_id = ? AND archived = 0 AND COALESCE(is_issue_chat, 0) = 0 ORDER BY is_default DESC, created_at",
+        // An issue's conversation board is an ordinary board (2026-07-29
+        // redesign) and is listed in the sidebar like any other — reached both
+        // from the issue and from here. Hiding it meant a reply written there
+        // raised no unread dot, which is the failure this surface exists to
+        // prevent.
+        "SELECT id, title, closed, status, is_default FROM boards WHERE session_id = ? AND archived = 0 ORDER BY is_default DESC, created_at",
       )
       .all(s.id) as {
       id: string;

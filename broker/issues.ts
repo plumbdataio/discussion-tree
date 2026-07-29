@@ -114,6 +114,42 @@ safeAlterIssues("ALTER TABLE issues ADD COLUMN priority TEXT NOT NULL DEFAULT 'm
   }
 }
 
+// WHERE AN ISSUE'S CONVERSATION LIVES (redesigned 2026-07-29).
+//
+// chat_board_id / chat_node_id point at the ordinary board + node that hold this
+// issue's thread; both null until the first message. Looking the thread up
+// THROUGH the issue (rather than searching boards for the issue id) is what lets
+// two boards safely carry the same issue id — the pointer says which one is
+// real. See broker/issue-chat.ts.
+{
+  const fresh = safeAlterIssues("ALTER TABLE issues ADD COLUMN chat_board_id TEXT");
+  safeAlterIssues("ALTER TABLE issues ADD COLUMN chat_node_id TEXT");
+  if (fresh) {
+    // Migrate the pre-redesign shape: a single hidden is_issue_chat board with
+    // one node per issue (node id = the issue id). Point each such issue at its
+    // existing node so the conversation carries straight over and the board just
+    // becomes an ordinary visible one — NOTHING moves (the user's rule). Then
+    // retire the flag: it now drives no behaviour, so everything reads 0.
+    db.run(
+      `UPDATE issues
+          SET chat_board_id = (
+                SELECT n.board_id FROM nodes n
+                  JOIN boards b ON b.id = n.board_id
+                 WHERE b.is_issue_chat = 1 AND n.id = issues.id
+                   AND n.deleted_at IS NULL
+                 LIMIT 1),
+              chat_node_id = issues.id
+        WHERE chat_board_id IS NULL
+          AND EXISTS (
+                SELECT 1 FROM nodes n
+                  JOIN boards b ON b.id = n.board_id
+                 WHERE b.is_issue_chat = 1 AND n.id = issues.id
+                   AND n.deleted_at IS NULL)`,
+    );
+    db.run("UPDATE boards SET is_issue_chat = 0 WHERE is_issue_chat = 1");
+  }
+}
+
 // Which MESSAGES belong to which issue. The point is not a "jump to the board"
 // link — it is being able to read one issue's conversation as a single timeline,
 // no matter which board, map or diagram each part of it happened on.
@@ -206,6 +242,10 @@ export type IssueRow = {
   session_name?: string | null;
   session_cwd?: string | null;
   deleted_at?: string | null;
+  // Pointer to this issue's conversation (an ordinary board + node), null until
+  // the first message. See broker/issue-chat.ts.
+  chat_board_id?: string | null;
+  chat_node_id?: string | null;
 };
 
 const selectIssue = db.prepare(
@@ -513,8 +553,9 @@ export function handleListIssues(body: any): {
   // chat_unread: how many messages on THIS issue's own thread the user has not
   // read. The conversation is opened from the tracker, so without a count here
   // a reply written on an issue is invisible until the row is expanded by hand.
-  // The node id of an issue-chat thread IS the issue id (see issue-chat.ts),
-  // which is why this needs no join back through the board.
+  // The thread lives at the issue's own chat_board_id / chat_node_id pointer
+  // (see issue-chat.ts), so the count reads straight off those — no join back
+  // through the board, and a null pointer simply matches nothing (count 0).
   //
   // There is deliberately no chat_count beside it: the row shows link_count
   // (everything said about this issue, anywhere), and a second number for
@@ -523,8 +564,8 @@ export function handleListIssues(body: any): {
   const sql =
     "SELECT i.*, s.name AS session_name, s.cwd AS session_cwd," +
     " (SELECT COUNT(*) FROM issue_links l WHERE l.issue_id = i.id) AS link_count," +
-    " (SELECT COUNT(*) FROM thread_items t JOIN boards b ON b.id = t.board_id" +
-    "   WHERE b.is_issue_chat = 1 AND t.node_id = i.id" +
+    " (SELECT COUNT(*) FROM thread_items t" +
+    "   WHERE t.board_id = i.chat_board_id AND t.node_id = i.chat_node_id" +
     "     AND t.source = 'cc' AND t.read_at IS NULL) AS chat_unread" +
     " FROM issues i LEFT JOIN sessions s ON s.id = i.session_id" +
     (where.length ? ` WHERE ${where.join(" AND ")}` : "") +
@@ -827,7 +868,6 @@ const LOCATION_JOINS = `
 
 const LOCATION_COLUMNS = `
          COALESCE(b.title, mp.title, dg.title) AS container_title,
-         COALESCE(b.is_issue_chat, 0) AS container_is_issue_chat,
          COALESCE(n.title, mn.title) AS node_title,
          CASE WHEN b.id IS NOT NULL THEN 'board'
               WHEN mp.id IS NOT NULL THEN 'map'
@@ -841,7 +881,6 @@ type LocationRow = {
   board_id: string;
   node_id: string;
   container_title: string | null;
-  container_is_issue_chat?: number;
   node_title: string | null;
   surface: string;
 };
@@ -851,12 +890,6 @@ type LocationRow = {
 const GENERAL_NODES = new Set(["__chat__", "__general__", "main", "default"]);
 
 function locationPath(r: LocationRow): string {
-  // An issue's own thread is named by the ISSUE, not by the container holding
-  // every issue's thread. That container is hidden from the sidebar and from
-  // list_boards on purpose (it is not a board to work in), and printing its
-  // name here would put it back in front of the reader for no gain — the node
-  // title already is the issue's title.
-  if (r.container_is_issue_chat && r.node_title) return r.node_title;
   const container = r.container_title ?? r.board_id;
   if (r.node_title) return `${container} > ${r.node_title}`;
   if (GENERAL_NODES.has(r.node_id)) return container;

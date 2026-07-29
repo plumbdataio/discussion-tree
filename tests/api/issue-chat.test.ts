@@ -8,17 +8,20 @@ import {
   type BrokerHandle,
 } from "../harness/broker-harness.ts";
 
-// Talking ON an issue: each issue gets a thread of its own, on a board that is
-// created the first time somebody writes.
+// Talking ON an issue: each issue gets a conversation of its own, on an ORDINARY
+// board created the first time somebody writes (2026-07-29 redesign — dt board
+// bd_vlap7p27, five rounds with the user).
 //
-// The two rules worth protecting, both from the design discussion on
-// 2026-07-29:
+// The rules worth protecting:
 //   - NOTHING exists until somebody writes. An issue nobody has discussed must
 //     not leave an empty board and node behind.
-//   - The board is keyed by the issue's SESSION. A single global board would
-//     hand every issue's conversation to whichever CC happened to own it, so a
-//     message about another session's issue would be delivered to the wrong CC
-//     and the right one would never hear about it.
+//   - The conversation lives on an ordinary tree board (one concern / one node
+//     to start), found THROUGH the issue's own pointer (chat_board_id /
+//     chat_node_id) — never by searching boards for the issue id, so two boards
+//     carrying the same id can never be confused.
+//   - That board is listed / searched / logged like any other. It used to be
+//     hidden; hiding it meant a reply raised no unread dot, the exact failure the
+//     surface exists to prevent.
 //
 // Plus the thing the whole link machinery exists for: a message written here is
 // attached to its issue without anybody saying so.
@@ -87,41 +90,41 @@ describe("issue chat — nothing exists until somebody writes", () => {
     // Reading is what the tracker does on every render — it must not leave a
     // board behind.
     await chat(id);
-    const boards = await post<{ boards: { id: string }[] }>(
+    const boards = await post<{ boards: { id: string; title: string }[] }>(
       `${broker.url}/list-boards`,
-      { session_id: sessionId },
+      { session_id: sessionId, scope: "all" },
     );
-    const titles = await Promise.all(
-      boards.json.boards.map((b) =>
-        get<{ title: string }>(`${broker.url}/api/board/${b.id}`).then(
-          (r) => r.json.title,
-        ),
-      ),
+    // A created board would carry the issue's own title; none was created.
+    expect(boards.json.boards.map((b) => b.title)).not.toContain(
+      "nobody has said anything",
     );
-    expect(titles).not.toContain("Issue conversations");
   });
 
-  test("the first message creates the board and the node", async () => {
+  test("the first message creates the board and a node", async () => {
     const id = await mkIssue("worth discussing");
     const posted = await ccPost(id, "here is what I found");
     expect(posted.json.ok).toBe(true);
-    expect(posted.json.location?.node_id).toBe(id);
+    expect(posted.json.location?.board_id).toBeTruthy();
+    expect(posted.json.location?.node_id).toBeTruthy();
+    // The node id is an ordinary generated id, NOT the issue id — the issue
+    // holds a pointer TO it; we never search boards by issue id.
+    expect(posted.json.location?.node_id).not.toBe(id);
 
     const after = await chat(id);
     expect(after.json.location?.board_id).toBe(posted.json.location!.board_id);
     expect(after.json.items.map((m) => m.text)).toContain("here is what I found");
   });
 
-  test("a second issue lands on the same board, as its own node", async () => {
+  test("a second issue gets its own board", async () => {
     const a = await mkIssue("first topic");
     const b = await mkIssue("second topic");
     const pa = await ccPost(a, "about A");
     const pb = await ccPost(b, "about B");
-    expect(pb.json.location?.board_id).toBe(pa.json.location!.board_id);
-    expect(pb.json.location?.node_id).not.toBe(pa.json.location!.node_id);
+    // Each issue gets a dedicated board now — no shared container.
+    expect(pb.json.location?.board_id).not.toBe(pa.json.location!.board_id);
 
-    // Each thread holds only its own conversation. (status_change rows ride
-    // the same table and are filtered out by the view.)
+    // Each thread holds only its own conversation. (status_change rows ride the
+    // same table and are filtered out by the view.)
     const ca = await chat(a);
     expect(
       ca.json.items.filter((m) => m.source !== "system").map((m) => m.text),
@@ -129,54 +132,37 @@ describe("issue chat — nothing exists until somebody writes", () => {
   });
 });
 
-describe("issue chat — the board belongs to the issue's session", () => {
+describe("issue chat — an ordinary board on the issue's session", () => {
   test("another session's issue gets its own board", async () => {
     const mine = await mkIssue("mine");
     const theirs = await mkIssue("theirs", otherSessionId);
     const pm = await ccPost(mine, "mine");
     const pt = await ccPost(theirs, "theirs");
     expect(pt.json.location?.board_id).not.toBe(pm.json.location!.board_id);
-
-    // Which session it belongs to is what decides who a reply reaches — see
-    // the delivery test below, which is the honest check for that.
   });
 
-  test("the container never shows up as a board", async () => {
-    const id = await mkIssue("hidden container");
+  test("the conversation board is listed and logged like any other", async () => {
+    const id = await mkIssue("an ordinary board");
     const posted = await ccPost(id, "somewhere");
-    // Structurally a board, deliberately not presented as one: listing it made
-    // CC read one issue's neighbours as context for another, while the user
-    // was reading a single serial thread (their objection, 2026-07-29).
-    const boards = await post<{ boards: { id: string }[] }>(
+    const boardId = posted.json.location!.board_id;
+
+    // Listed, not hidden (the 2026-07-29 redesign: a reply here has to raise an
+    // unread dot, which a hidden board could not).
+    const boards = await post<{ boards: { id: string; title: string }[] }>(
       `${broker.url}/list-boards`,
       { session_id: sessionId, scope: "all" },
     );
-    expect(boards.json.boards.map((b) => b.id)).not.toContain(
-      posted.json.location!.board_id,
-    );
-    // Still reachable by id, or the "go to where this was said" jump would
-    // land nowhere.
-    const view = await get<{
-      board: { title: string };
-      nodes: { id: string; is_log?: number }[];
-    }>(`${broker.url}/api/board/${posted.json.location!.board_id}`);
-    expect(view.json.board.title).toBe("Issue conversations");
-    // And no board-log concern grows on it: its shape is owned by the tracker,
-    // so there are no structure changes to audit.
-    expect(view.json.nodes.some((n) => n.is_log)).toBe(false);
-  });
+    const listed = boards.json.boards.find((b) => b.id === boardId);
+    expect(listed).toBeTruthy();
+    // Carries the issue's own title, not a shared container name.
+    expect(listed!.title).toBe("an ordinary board");
 
-  test("searching does not surface it either", async () => {
-    const id = await mkIssue("searchable");
-    await ccPost(id, "a distinctive phrase nobody else wrote: xyzzy42");
-    // Hiding it from list_boards but not from search let CC find the container
-    // by text, along with the neighbouring issues' nodes — the same "one issue
-    // reads as a tree of unrelated siblings" failure, through another door.
-    const r = await post<{ matches: { board_id: string }[] }>(
-      `${broker.url}/search-boards`,
-      { session_id: sessionId, scope: "all", q: "xyzzy42" },
+    // Ordinary in every other way — a board-log concern grows on it on first
+    // view, exactly as it would on any board.
+    const view = await get<{ nodes: { is_log?: number }[] }>(
+      `${broker.url}/api/board/${boardId}`,
     );
-    expect(r.json.matches ?? []).toEqual([]);
+    expect(view.json.nodes.some((n) => n.is_log)).toBe(true);
   });
 
   test("an issue with no session says so rather than picking one", async () => {
@@ -221,7 +207,7 @@ describe("issue chat — messages link themselves", () => {
     // here" number — that distinction is no use to the reader.
     expect((await row()).link_count).toBe(2);
     // Unread is separate, and is what makes a reply visible without opening the
-    // row.
+    // row. Read straight off the issue's chat_board_id / chat_node_id pointer.
     expect((await row()).chat_unread).toBe(2);
   });
 });
@@ -242,8 +228,13 @@ describe("issue chat — the user's own message", () => {
     }>(`${broker.url}/poll-messages`, { session_id: sessionId });
     await submitP;
 
-    // Delivered to this session, on this issue's own node...
-    const mine = drained.json.messages.filter((m) => m.node_id === id);
+    // Where the issue's thread now lives...
+    const loc = (await chat(id)).json.location!;
+    expect(loc).toBeTruthy();
+    // ...is where the message was delivered, on this session.
+    const mine = drained.json.messages.filter(
+      (m) => m.board_id === loc.board_id && m.node_id === loc.node_id,
+    );
     expect(mine.length).toBe(1);
     // ...and attached to the issue. This is the ONLY path where the user's own
     // messages get linked without CC noticing after the fact.
@@ -258,32 +249,38 @@ describe("issue chat — the node follows the issue", () => {
   test("a thread deleted by hand comes back with its history", async () => {
     const id = await mkIssue("deleted then resumed");
     const posted = await ccPost(id, "before the delete");
+    const loc = posted.json.location!;
     await post(`${broker.url}/delete-node`, {
-      board_id: posted.json.location!.board_id,
-      node_id: id,
+      board_id: loc.board_id,
+      node_id: loc.node_id,
     });
-    // Deletion is logical and the node id is fixed as the issue id, so a naive
-    // re-insert would collide on the primary key and the conversation would be
-    // dead for good.
+    // Deletion is logical, and the issue still points at that (now-deleted)
+    // node. Re-posting un-deletes it rather than orphaning the earlier
+    // conversation under a node nobody can reach.
     const again = await ccPost(id, "after the delete");
     expect(again.json.ok).toBe(true);
+    expect(again.json.location!.node_id).toBe(loc.node_id);
     const items = (await chat(id)).json.items.map((m) => m.text);
     expect(items).toContain("before the delete");
     expect(items).toContain("after the delete");
   });
 
-  test("renaming the issue renames its thread", async () => {
+  test("renaming the issue renames its thread and its board", async () => {
     const id = await mkIssue("original name");
     const posted = await ccPost(id, "started");
+    const loc = posted.json.location!;
     await post(`${broker.url}/update-issue`, {
       issue_id: id,
       title: "a much better name",
     });
-    const view = await get<{ nodes: { id: string; title: string }[] }>(
-      `${broker.url}/api/board/${posted.json.location!.board_id}`,
-    );
-    const node = view.json.nodes.find((n) => n.id === id)!;
+    const view = await get<{
+      board: { title: string };
+      nodes: { id: string; title: string }[];
+    }>(`${broker.url}/api/board/${loc.board_id}`);
+    const node = view.json.nodes.find((n) => n.id === loc.node_id)!;
     expect(node.title).toBe("a much better name");
+    // The board is dedicated to this one issue, so its sidebar title tracks too.
+    expect(view.json.board.title).toBe("a much better name");
   });
 });
 
@@ -368,45 +365,36 @@ describe("issue timeline — also says where to write", () => {
   });
 });
 
-// Both found by codex reviewing this day's commits, after my own pass over the
-// same diff missed them.
-// Re-filing an issue under another session. Delivery follows the BOARD's owner,
-// so the next message must go to the CC that holds the issue NOW — not to the
-// one that held it when the thread started.
+// Re-filing an issue under another session. The issue points at ONE board (its
+// chat_board_id); re-filing does NOT move that pointer, so the conversation
+// stays on the board it started on rather than being rebuilt somewhere new.
 //
-// The earlier conversation stays where it was said. Moving it was implemented
-// and removed the same day (the user's call): the timeline gathers messages
-// through issue_links, which cross boards by design, so rewriting rows buys
-// nothing and a failed rewrite would damage the conversation itself.
-describe("issues — a re-filed issue is talked to on its new session's board", () => {
-  test("a new thread starts there, and the old messages stay readable", async () => {
+// (Delivery still follows that board's owner — so a re-filed issue's next
+// message reaches the original session, the known open edge flagged on the
+// re-agree board 2026-07-29. Left unresolved here on purpose; the point of this
+// test is that nothing MOVES.)
+describe("issues — re-filing keeps the one conversation, without moving it", () => {
+  test("the same board is reused, and the whole thread stays readable", async () => {
     const id = await mkIssue("starts here");
-    const first = await ccPost(id, "said before the hand-off");
+    const first = await ccPost(id, "said before the re-file");
     const before = first.json.location!.board_id;
 
     await post(`${broker.url}/update-issue`, {
       issue_id: id,
       session_id: otherSessionId,
     });
-    const after = await ccPost(id, "said after the hand-off");
-    expect(after.json.location!.board_id).not.toBe(before);
+    const after = await ccPost(id, "said after the re-file");
+    // Same board — the pointer did not move.
+    expect(after.json.location!.board_id).toBe(before);
 
-    // The whole conversation is still readable in one place — via the links,
-    // which is what they are for.
+    // One continuous conversation, read in one place via the links.
     const tl = await post<{ messages: { text: string }[] }>(
       `${broker.url}/issue-timeline`,
       { issue_id: id },
     );
     const texts = tl.json.messages.map((m) => m.text);
-    expect(texts).toContain("said before the hand-off");
-    expect(texts).toContain("said after the hand-off");
-
-    // And nothing was rewritten: the earlier message is still on the board it
-    // was said on.
-    const older = await post<{
-      messages: { path: string; text: string }[];
-    }>(`${broker.url}/issue-timeline`, { issue_id: id });
-    expect(older.json.messages.length).toBeGreaterThanOrEqual(2);
+    expect(texts).toContain("said before the re-file");
+    expect(texts).toContain("said after the re-file");
   });
 });
 
