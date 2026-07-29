@@ -825,6 +825,17 @@ async function sendToPane(
   pane: string,
   text: string,
 ): Promise<void> {
+  // Clear whatever is already on the prompt line first. Reported 2026-07-29:
+  // a command arrived as "9;37M/compact …" — the tail of a mouse-report escape
+  // sequence was sitting in the input, and the paste landed after it, so CC
+  // received a line that was not a slash command at all.
+  //
+  // C-u (kill to start of line) rather than C-c: interrupting is not a text
+  // operation, and if CC happens to be mid-turn, C-c cancels that turn — the
+  // fix would then be worse than the leftover it cleans up. C-u touches only
+  // the line being edited, so on an idle prompt it does exactly what is wanted
+  // and on a busy one it does nothing.
+  await runTmux([...base, "send-keys", "-t", pane, "C-u"]);
   const buf = `dt-cli-send-${++cliSendSeq}`;
   await runTmux([...base, "load-buffer", "-b", buf, "-"], text);
   await runTmux([...base, "paste-buffer", "-t", pane, "-b", buf, "-p", "-d"]);
