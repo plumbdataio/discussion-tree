@@ -181,3 +181,58 @@ describe("review — what it returns", () => {
     expect(r.messages).toEqual([]);
   });
 });
+
+// Hitting the limit must be visible. Rows come back oldest-first, so a silent
+// cap hides the RECENT end — exactly what a review is for — and the caller sees
+// a full-looking list with no sign anything was dropped. Reported 2026-07-29 by
+// another session, which got 800 rows from June and concluded there was nothing
+// recent left to link.
+describe("review — reaching the limit", () => {
+  test("says so, and says the missing part is the recent end", async () => {
+    for (let i = 0; i < 6; i++) {
+      say(`2026-08-0${i + 1}T00:00:00.000Z`, "cc", `capped ${i}`);
+    }
+    const r = await review({
+      from: "2026-08-01T00:00:00.000Z",
+      to: "2026-08-31T00:00:00.000Z",
+      limit: 3,
+    });
+    expect(r.total).toBe(3);
+    expect((r as unknown as { truncated?: boolean }).truncated).toBe(true);
+    const note = (r as unknown as { note?: string }).note ?? "";
+    // Actionable, not just a flag: the caller has to know which end is missing
+    // and what to do next. With a window, the overflow is the LATER part.
+    expect(note).toContain("START of the window");
+    expect(note).toContain("from");
+  });
+
+  test("with NO window, the newest are returned — still in reading order", async () => {
+    // The failure this replaces: taking the oldest answered a question nobody
+    // asked, and hid the recent end that "what have I not linked lately" is
+    // entirely about.
+    db.run("UPDATE sessions SET last_compact_at = NULL WHERE id = ?", [sessionId]);
+    for (let i = 0; i < 5; i++) {
+      say(`2026-09-0${i + 1}T00:00:00.000Z`, "cc", `recent ${i}`);
+    }
+    const r = await review({ limit: 2 });
+    expect(r.total).toBe(2);
+    // The two NEWEST rows in the whole history...
+    expect(r.messages.map((m) => m.head)).toEqual(["recent 3", "recent 4"]);
+    // ...but still oldest-first on the page, because it is read top to bottom.
+    expect(r.messages[0].at < r.messages[1].at).toBe(true);
+    expect((r as unknown as { note?: string }).note).toContain("MOST RECENT");
+    db.run("UPDATE sessions SET last_compact_at = ? WHERE id = ?", [
+      "2026-03-08T00:00:00.000Z",
+      sessionId,
+    ]);
+  });
+
+  test("a window that fits says nothing extra", async () => {
+    const r = await review({
+      from: "2026-08-01T00:00:00.000Z",
+      to: "2026-08-31T00:00:00.000Z",
+      limit: 500,
+    });
+    expect((r as unknown as { truncated?: boolean }).truncated).toBeUndefined();
+  });
+});

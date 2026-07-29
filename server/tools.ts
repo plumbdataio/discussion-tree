@@ -902,7 +902,7 @@ export const TOOLS = [
         from: {
           type: "string" as const,
           description:
-            "ISO time, inclusive. Defaults to when this session last finished compacting — you cannot see that boundary yourself, so leave it out unless you want a different window.",
+            "ISO time, inclusive. Defaults to when this session last finished compacting — you cannot see that boundary yourself, so leave it out unless you want a different window. With no window at all (no boundary recorded either), you get the MOST RECENT unlinked messages rather than the oldest.",
         },
         to: {
           type: "string" as const,
@@ -916,6 +916,11 @@ export const TOOLS = [
         head_chars: {
           type: "number" as const,
           description: "Characters of each message to return (default 60).",
+        },
+        limit: {
+          type: "number" as const,
+          description:
+            "Max messages (default 100). If the result says it was truncated, link what you got and call again — linked messages drop out, so repeating the call is how you page through.",
         },
       },
       required: [],

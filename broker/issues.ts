@@ -755,6 +755,8 @@ export function handleReviewMessageLinks(body: any): {
   from: string | null;
   to: string | null;
   total: number;
+  truncated?: boolean;
+  note?: string;
   messages: unknown[];
 } {
   // Hooks only know the CC-side session id, so accept either.
@@ -773,7 +775,7 @@ export function handleReviewMessageLinks(body: any): {
     10,
     Math.min(500, Number(body?.head_chars) || 60),
   );
-  const limit = Math.max(1, Math.min(2000, Number(body?.limit) || 800));
+  const limit = Math.max(1, Math.min(2000, Number(body?.limit) || 100));
   // Default the window to "since this session last finished compacting" so the
   // caller never has to know its own compact boundary — it can't see one from
   // in here.
@@ -826,7 +828,7 @@ export function handleReviewMessageLinks(body: any): {
          FROM thread_items t
          ${LOCATION_JOINS}
         WHERE ${where.join(" AND ")}
-        ORDER BY t.created_at
+        ORDER BY t.created_at ${from ? "ASC" : "DESC"}
         LIMIT ${limit}`,
     )
     .all(...args) as (LocationRow & {
@@ -851,11 +853,42 @@ export function handleReviewMessageLinks(body: any): {
     byItem.set(l.thread_item_id, cur);
   }
 
+  // WHICH END GETS DROPPED depends on whether a window was given, and getting
+  // that backwards is worse than the cap itself.
+  //
+  // With a window ("review what was just compacted"), reading starts at the
+  // beginning, so the query takes the oldest and any overflow is at the far
+  // end — reachable by moving `from` forward.
+  //
+  // WITHOUT one, the caller means "what have I not linked lately". Taking the
+  // oldest there answers a question nobody asked and hides the recent end
+  // entirely: reported 2026-07-29 by another session that got 800 rows from
+  // June and concluded nothing recent needed linking. So the query takes the
+  // NEWEST and the rows are flipped back to reading order below.
+  //
+  // Either way the cap is announced. No pagination cursor: this endpoint only
+  // returns UNLINKED messages, so linking some makes them disappear from the
+  // next call — calling again is the page turn.
+  const truncated = rows.length >= limit;
+  if (!from) rows.reverse();
   return {
     ok: true,
     from,
     to,
     total: rows.length,
+    ...(truncated
+      ? {
+          truncated: true,
+          note: from
+            ? `Stopped at the limit of ${limit}, taken from the START of the ` +
+              `window — the later part is NOT included. Link these (they drop ` +
+              `out of the next call) or move 'from' forward.`
+            : `Stopped at the limit of ${limit}. With no window given these are ` +
+              `the MOST RECENT unlinked messages; older ones are not included. ` +
+              `Link these (they drop out of the next call), or pass 'from'/'to' ` +
+              `to review a specific period.`,
+        }
+      : {}),
     messages: rows.map((r) => ({
       id: r.id,
       source: r.source,
