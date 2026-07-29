@@ -454,8 +454,11 @@
       "external": "External"
     },
     "state": {
-      "todo": "To do",
+      "todo": "To start",
       "doing": "In progress",
+      "waiting_decision": "Awaiting a decision",
+      "waiting_reply": "Awaiting a reply",
+      "waiting_timing": "Awaiting the right time",
       "done": "Done",
       "dropped": "Dropped"
     },
@@ -471,7 +474,7 @@
     "ago_day": "{{n}}d ago",
     "time_hint": "updated {{updated}} · created {{created}}",
     "timeline": "Conversation",
-    "timeline_count": "{{n}} message(s)",
+    "timeline_count": "{{n}} messages",
     "timeline_empty": "Nothing is linked to this issue yet.",
     "timeline_jump": "Go there",
     "timeline_jump_hint": "Open where this was said",
@@ -495,19 +498,23 @@
       "dropped": "CC dropped this"
     },
     "warn_no_session": "No session selected. Nobody will be notified and the session filter will not find this issue. Press Create again to file it anyway.",
-    "chat": "Talk",
-    "chat_hint": "Talk about this issue right here",
-    "chat_with": "Talking to {{who}}",
     "chat_no_session": "This issue is not filed under a session, so there is nobody to send to",
-    "chat_empty": "No conversation yet. The first message creates this thread.",
-    "chat_placeholder": "Write about this issue (Cmd/Ctrl+Enter to send)",
     "chat_send": "Send",
     "chat_sending": "Sending…",
     "chat_no_recipient": "The CC that owns this issue is not running, so it was not delivered.",
     "chat_timeout": "Sent, but the CC has not picked it up yet.",
     "chat_open_board": "Open on the board",
     "chat_open_board_hint": "This conversation is also an ordinary board node",
-    "chat_board_title": "Issue conversations"
+    "chat_board_title": "Issue conversations",
+    "priority": {
+      "low": "Priority: low",
+      "mid": "Priority: medium",
+      "high": "Priority: high"
+    },
+    "priority_label": "Priority",
+    "all_priorities": "Any priority",
+    "chat_placeholder_to": "Write to {{who}} (Cmd/Ctrl+Enter to send)",
+    "timeline_here": "This issue's own thread"
   },
   "update": {
     "available": "A newer version is available",

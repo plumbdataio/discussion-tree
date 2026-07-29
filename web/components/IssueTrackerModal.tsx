@@ -9,7 +9,6 @@ import {
   Search,
   Check,
   MessagesSquare,
-  MessageSquare,
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -18,10 +17,10 @@ import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { MultiSelectDropdown } from "./MultiSelectDropdown.tsx";
 import { IssueTimelineModal } from "./IssueTimelineModal.tsx";
-import { IssueChatModal } from "./IssueChatModal.tsx";
 import {
   DEFAULT_FILTERS,
   ISSUE_OWNERS,
+  ISSUE_PRIORITIES,
   ISSUE_STATES,
   NO_SESSION,
   createIssue,
@@ -45,6 +44,7 @@ import {
   type Issue,
   type IssueFilters,
   type IssueOwner,
+  type IssuePriority,
   type IssueSession,
   type IssueState,
 } from "../utils/issues.ts";
@@ -61,12 +61,23 @@ import {
 // Owner sorts before recency so the user's own pile stays at the top even when
 // CC has just touched something.
 const OWNER_RANK: Record<IssueOwner, number> = { user: 0, cc: 1, external: 2 };
+// Within one owner: what is moving, then what could move, then what is stuck
+// on something, then what is over.
 const STATE_RANK: Record<IssueState, number> = {
   doing: 0,
   todo: 1,
-  done: 2,
-  dropped: 3,
+  waiting_decision: 2,
+  waiting_reply: 3,
+  waiting_timing: 4,
+  done: 5,
+  dropped: 6,
 };
+// Priority outranks state: "needs doing now" should not sit below something
+// merely in progress. It is deliberately BELOW owner — the first question is
+// still whose move it is, because a high-priority issue waiting on someone else
+// is not the user's next action.
+const PRIORITY_RANK: Record<IssuePriority, number> = { high: 0, mid: 1, low: 2 };
+const priorityOf = (i: Issue): IssuePriority => i.priority ?? "mid";
 
 type Draft = {
   id: string | null;
@@ -74,6 +85,7 @@ type Draft = {
   body: string;
   owner: IssueOwner;
   state: IssueState;
+  priority: IssuePriority;
   sessionId: string | null;
 };
 
@@ -89,6 +101,7 @@ const emptyDraft = (sessionId: string | null): Draft => ({
   body: "",
   owner: "cc",
   state: "todo",
+  priority: "mid",
   sessionId,
 });
 
@@ -142,6 +155,11 @@ function OwnerStateChip({
   // black text on the same background whatever it said. Splitting them lets
   // each axis carry its own colour, which is the only way state reads at a
   // glance in a list sorted by owner.
+  //
+  // Priority is a THIRD pill for the same reason: it answers a different
+  // question ("how much does this matter") from the state ("what is it waiting
+  // for"), and the user's diagnosis of why priority never stuck in other
+  // trackers was exactly that one column was made to carry both.
   const chip = (
     <span className="issue-chips">
       <span className={`issue-chip owner-${issue.owner}`}>
@@ -149,6 +167,9 @@ function OwnerStateChip({
       </span>
       <span className={`issue-chip state-${issue.state}`}>
         {t(`issues.state.${issue.state}`)}
+      </span>
+      <span className={`issue-chip priority-${issue.priority ?? "mid"}`}>
+        {t(`issues.priority.${issue.priority ?? "mid"}`)}
       </span>
     </span>
   );
@@ -197,6 +218,21 @@ function OwnerStateChip({
               </button>
             ))}
           </div>
+          <div className="issue-chip-menu-row">
+            <span className="issue-chip-menu-label">
+              {t("issues.priority_label")}
+            </span>
+            {ISSUE_PRIORITIES.map((p) => (
+              <button
+                key={p}
+                type="button"
+                className={`issue-seg priority-${p}${(issue.priority ?? "mid") === p ? " on" : ""}`}
+                onClick={() => onSet({ priority: p })}
+              >
+                {t(`issues.priority.${p}`)}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </span>
@@ -216,7 +252,6 @@ export function IssueTrackerModal() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Issue | null>(null);
   const [timelineOf, setTimelineOf] = useState<Issue | null>(null);
-  const [chatOf, setChatOf] = useState<Issue | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Reset per editor session so the warning appears again for the next issue.
@@ -370,6 +405,7 @@ export function IssueTrackerModal() {
             Number(matchesFocus(b, focusId)) - Number(matchesFocus(a, focusId)) ||
             Number(isAwaitingApproval(b)) - Number(isAwaitingApproval(a)) ||
             OWNER_RANK[a.owner] - OWNER_RANK[b.owner] ||
+            PRIORITY_RANK[priorityOf(a)] - PRIORITY_RANK[priorityOf(b)] ||
             STATE_RANK[a.state] - STATE_RANK[b.state] ||
             b.updated_at.localeCompare(a.updated_at),
         ),
@@ -424,6 +460,7 @@ export function IssueTrackerModal() {
       body: draft.body,
       owner: draft.owner,
       state: draft.state,
+      priority: draft.priority,
       session_id: draft.sessionId,
     };
     const r = draft.id
@@ -513,29 +550,16 @@ export function IssueTrackerModal() {
             CC, so an unconditional "read the conversation" led straight to an
             empty modal and read as a broken feature. A number also shows the
             links accumulating, which is the thing worth watching. */}
-        {/* Talking ON the issue. Separate from the timeline button next to it,
-            and the distinction is the point: the timeline GATHERS what was said
-            about this issue wherever it happened, this opens the one thread
-            made for saying it. Never disabled — an issue with no conversation
-            is exactly the one worth starting. */}
+        {/* ONE button, because reading this issue's conversation and adding to
+            it are one activity — two ("talk" / "read") made the user choose
+            between them every time (their call, 2026-07-29). Never disabled:
+            a count of 0 used to mean "nothing to read", but now it also means
+            "nowhere to write yet", which is exactly when this gets pressed. */}
         <button
           type="button"
           className={
-            "issue-chat-open" + (i.chat_unread ? " has-unread" : "")
+            "issue-timeline-open" + (i.chat_unread ? " has-unread" : "")
           }
-          onClick={() => setChatOf(i)}
-          title={t("issues.chat_hint")}
-        >
-          <MessageSquare size={13} strokeWidth={2} /> {t("issues.chat")}
-          {(i.chat_count ?? 0) > 0 && (
-            <span className="issue-chat-count">{i.chat_count}</span>
-          )}
-        </button>
-        <button
-          type="button"
-          className="issue-timeline-open"
-          disabled={!i.link_count}
-          title={i.link_count ? undefined : t("issues.timeline_none_hint")}
           onClick={() => setTimelineOf(i)}
         >
           <MessagesSquare size={13} strokeWidth={2} /> {t("issues.timeline")}
@@ -563,6 +587,7 @@ export function IssueTrackerModal() {
                   body: i.body,
                   owner: i.owner,
                   state: i.state,
+                  priority: i.priority ?? "mid",
                   sessionId: i.session_id,
                 })
               }
@@ -844,6 +869,23 @@ export function IssueTrackerModal() {
                   </option>
                 ))}
               </select>
+              <select
+                className="issue-select"
+                value={draft.priority}
+                aria-label={t("issues.priority_label")}
+                onChange={(e) =>
+                  setDraft(
+                    (d) =>
+                      d && { ...d, priority: e.target.value as IssuePriority },
+                  )
+                }
+              >
+                {ISSUE_PRIORITIES.map((p) => (
+                  <option key={p} value={p}>
+                    {t(`issues.priority.${p}`)}
+                  </option>
+                ))}
+              </select>
               {sessionPicker(draft.sessionId, (id) =>
                 setDraft((d) => d && { ...d, sessionId: id }),
               )}
@@ -988,19 +1030,11 @@ export function IssueTrackerModal() {
         {timelineOf && (
           <IssueTimelineModal
             issue={timelineOf}
-            onClose={() => setTimelineOf(null)}
-            onJump={() => setOpen(false)}
-          />
-        )}
-
-        {chatOf && (
-          <IssueChatModal
-            issue={chatOf}
             onClose={() => {
-              setChatOf(null);
-              // The counts on the row (messages, unread) just changed — and the
-              // first message also created the thread, so a stale list would go
-              // on saying there is none.
+              setTimelineOf(null);
+              // The counts on the row (linked messages, unread) change as soon
+              // as anything is written here, and the first message also creates
+              // the thread — a stale list would go on saying there is none.
               refetch(filters.showDeleted);
             }}
             onJump={() => setOpen(false)}

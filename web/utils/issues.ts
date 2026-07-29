@@ -8,14 +8,33 @@
 // compatible. (Full rationale: auto-memory project_issue_tracker_invariants.)
 
 export const ISSUE_OWNERS = ["user", "cc", "external"] as const;
-export const ISSUE_STATES = ["todo", "doing", "done", "dropped"] as const;
+export const ISSUE_STATES = [
+  "todo",
+  "doing",
+  "waiting_decision",
+  "waiting_reply",
+  "waiting_timing",
+  "done",
+  "dropped",
+] as const;
+// How much it matters, kept separate from what it is waiting for — see the
+// broker's copy of this list for why one column could not carry both.
+export const ISSUE_PRIORITIES = ["low", "mid", "high"] as const;
 export type IssueOwner = (typeof ISSUE_OWNERS)[number];
 export type IssueState = (typeof ISSUE_STATES)[number];
+export type IssuePriority = (typeof ISSUE_PRIORITIES)[number];
 
 // The two axes are independent on purpose: `owner` says who holds the ball and
 // `state` says what is happening to it. Collapsing them into one status enum is
-// what loses the subject ("blocked" cannot say blocked on whom).
-export const OPEN_STATES: IssueState[] = ["todo", "doing"];
+// what loses the subject ("blocked" cannot say blocked on whom) — which is also
+// why the waiting states name what is awaited and never who.
+export const OPEN_STATES: IssueState[] = [
+  "todo",
+  "doing",
+  "waiting_decision",
+  "waiting_reply",
+  "waiting_timing",
+];
 
 export type Issue = {
   id: string;
@@ -23,6 +42,7 @@ export type Issue = {
   body: string;
   owner: IssueOwner;
   state: IssueState;
+  priority?: IssuePriority;
   session_id: string | null;
   session_name?: string | null;
   session_cwd?: string | null;
@@ -219,6 +239,9 @@ export function restoreIssue(id: string) {
   });
 }
 
+// Where an issue's own thread lives, once it exists.
+export type IssueChatLocation = { board_id: string; node_id: string };
+
 // One message in an issue's timeline. `surface` says which of the three kinds
 // of container it was said in, which is what decides where a click goes.
 export type IssueTimelineMessage = {
@@ -226,45 +249,28 @@ export type IssueTimelineMessage = {
   source: "user" | "cc" | string;
   at: string;
   text: string;
+  read_at?: string | null;
   surface: "board" | "map" | "diagram" | "unknown";
   container_id: string;
   node_id: string;
   path: string;
+  /** Said on this issue's own thread, i.e. where the composer writes. */
+  on_issue_thread?: boolean;
 };
 
+// One call answers both halves of the view: what has been said about this issue
+// anywhere, and where a new message would go. They were briefly two endpoints
+// and two modals — reading and writing turned out to be one activity, and
+// splitting them made the user choose between two buttons every time.
 export function fetchIssueTimeline(issueId: string) {
   return callBroker<{
     ok: boolean;
     error?: string;
     issue?: Issue;
     messages: IssueTimelineMessage[];
-  }>("/issue-timeline", { issue_id: issueId });
-}
-
-// A message on an issue's OWN thread. Distinct from IssueTimelineMessage: the
-// timeline gathers what was said about an issue wherever it happened, this is
-// the one place made for saying it.
-export type IssueChatItem = {
-  id: number;
-  source: "user" | "cc" | "system" | string;
-  text: string;
-  created_at: string;
-  read_at: string | null;
-};
-
-export type IssueChatLocation = { board_id: string; node_id: string };
-
-// location is null until somebody writes — an issue nobody has discussed has no
-// board and no node, on purpose. The session comes back either way so the
-// composer can say who would receive the message, and whether they are alive.
-export function fetchIssueChat(issueId: string) {
-  return callBroker<{
-    ok: boolean;
-    error?: string;
     location: IssueChatLocation | null;
     session: IssueSession | null;
-    items: IssueChatItem[];
-  }>("/issue-chat", { issue_id: issueId });
+  }>("/issue-timeline", { issue_id: issueId });
 }
 
 // Blocks until the CC actually picks the message up (the shared user-submission

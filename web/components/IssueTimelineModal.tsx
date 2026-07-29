@@ -1,21 +1,39 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, CornerUpRight, MessagesSquare } from "lucide-react";
+import { X, CornerUpRight, MessagesSquare, Send } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MDView } from "./MDView.tsx";
+import { ResizableTextarea } from "./ResizableTextarea.tsx";
+import { useLiveSocket } from "../utils/liveSocket.ts";
 import { jumpToAnchor } from "../utils/anchorJump.ts";
 import { navigate } from "../utils/router.ts";
 import {
   fetchIssueTimeline,
+  submitIssueChat,
   type Issue,
+  type IssueChatLocation,
+  type IssueSession,
   type IssueTimelineMessage,
 } from "../utils/issues.ts";
 
-// WHY THIS EXISTS. Links were never collected so a row could be clicked — they
-// were collected so one decision's conversation could be read as a single
-// column, no matter which board, map or diagram each part of it happened on.
-// This is that column; everything else about the link machinery is upstream of
-// it.
+// ONE ISSUE'S CONVERSATION — read it here, and continue it here.
+//
+// Links were never collected so a row could be clicked; they were collected so
+// one decision's conversation could be read as a single column, no matter which
+// board, map or diagram each part of it happened on. This is that column.
+//
+// The composer at the bottom was added on 2026-07-29, replacing a second modal
+// that did only the writing. The user's argument for merging: reading what was
+// said and saying the next thing are ONE activity, and two buttons ("talk" /
+// "read the conversation") make you decide between them every single time. In
+// the merged form the dedicated board is, in their words, a virtual board —
+// part of this view rather than a place you have to know about.
+//
+// What is written here goes to the issue's own thread (created by the first
+// message) and comes straight back into this timeline, because posting there
+// links to the issue by construction. Messages said ELSEWHERE still need CC to
+// attach them — merging the views does not change that, and nothing here should
+// imply otherwise.
 //
 // Rendered over the tracker rather than replacing it: the list stays visible
 // behind, so "back to the ledger" is Escape and not a navigation.
@@ -94,21 +112,60 @@ export function IssueTimelineModal({
 }) {
   const { t } = useTranslation();
   const [messages, setMessages] = useState<IssueTimelineMessage[] | null>(null);
+  const [location, setLocation] = useState<IssueChatLocation | null>(null);
+  const [session, setSession] = useState<IssueSession | null>(null);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  const load = useCallback(
+    (markRead: boolean) =>
+      fetchIssueTimeline(issue.id)
+        .then((r) => {
+          if (!r.ok) {
+            setError(r.error ?? t("issues.error_generic"));
+            return;
+          }
+          setMessages(r.messages ?? []);
+          setLocation(r.location);
+          setSession(r.session);
+          if (!markRead) return;
+          // Reading the conversation IS reading it — but only the part written
+          // HERE. Marking messages on other boards read would clear their
+          // unread dots without the user having seen them in place.
+          const unread = (r.messages ?? [])
+            .filter((m) => m.on_issue_thread && m.source === "cc" && !m.read_at)
+            .map((m) => m.id);
+          if (unread.length === 0) return;
+          fetch("/mark-thread-items-read", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ thread_item_ids: unread }),
+          }).catch(() => {
+            /* network blip — the row stays unread, which is recoverable */
+          });
+        })
+        .catch(() => setError(t("issues.error_generic"))),
+    [issue.id, t],
+  );
 
   useEffect(() => {
-    let live = true;
-    fetchIssueTimeline(issue.id)
-      .then((r) => {
-        if (!live) return;
-        if (!r.ok) setError(r.error ?? t("issues.error_generic"));
-        else setMessages(r.messages ?? []);
-      })
-      .catch(() => live && setError(t("issues.error_generic")));
-    return () => {
-      live = false;
-    };
-  }, [issue.id, t]);
+    void load(true);
+  }, [load]);
+
+  // Live, not polled: a reply written by CC has to appear while the user is
+  // looking at it, and dt's rule is to be pushed to rather than to ask. The
+  // channel is the issue's own board — which does not exist until the first
+  // message, so this subscribes only once there is something to listen to.
+  const onFrame = useCallback(() => {
+    void load(true);
+  }, [load]);
+  useLiveSocket({
+    channel: location ? location.board_id : null,
+    onMessage: onFrame,
+    onResync: onFrame,
+  });
 
   // Capture Escape so it closes the timeline and leaves the tracker open,
   // rather than both at once.
@@ -136,6 +193,40 @@ export function IssueTimelineModal({
       navigate(path);
     }
   };
+
+  const send = async () => {
+    const text = draft.trim();
+    if (!text || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      const r = await submitIssueChat(issue.id, text);
+      if (!r.ok) {
+        // no_recipient / timeout come back from the shared submit path; the
+        // draft is deliberately kept so nothing typed is lost.
+        setError(
+          r.reason === "no_recipient"
+            ? t("issues.chat_no_recipient")
+            : r.reason === "timeout"
+              ? t("issues.chat_timeout")
+              : (r.error ?? t("issues.error_generic")),
+        );
+      } else {
+        setDraft("");
+      }
+      await load(false);
+    } catch {
+      setError(t("issues.error_generic"));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // Keep the newest message in view as the conversation grows.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages?.length]);
 
   const fmt = (iso: string) =>
     new Date(iso).toLocaleString([], {
@@ -169,12 +260,37 @@ export function IssueTimelineModal({
             {messages
               ? t("issues.timeline_count", { n: messages.length })
               : t("sidebar.loading")}
+            {/* The issue's own thread is an ordinary board node, so it can be
+                opened in place — worth surfacing, because everything else in dt
+                works there and a conversation readable only inside a modal is a
+                dead end. */}
+            {location && (
+              <button
+                type="button"
+                className="issue-chat-open-board"
+                onClick={() => {
+                  onClose();
+                  onJump();
+                  // Anchoring on the last message here is what scrolls the
+                  // board to this issue's node.
+                  const last = (messages ?? [])
+                    .filter((m) => m.on_issue_thread)
+                    .pop();
+                  if (last) jumpToAnchor(location.board_id, last.id);
+                  else navigate(`/board/${location.board_id}`);
+                }}
+                title={t("issues.chat_open_board_hint")}
+              >
+                <CornerUpRight size={12} strokeWidth={2} />
+                {t("issues.chat_open_board")}
+              </button>
+            )}
           </span>
         </div>
 
         {error && <div className="modal-error">{error}</div>}
 
-        <div className="issue-timeline-scroll">
+        <div className="issue-timeline-scroll" ref={scrollRef}>
           {messages && messages.length === 0 && (
             <div className="issue-empty">{t("issues.timeline_empty")}</div>
           )}
@@ -186,17 +302,62 @@ export function IssueTimelineModal({
             return (
               <React.Fragment key={m.id}>
                 {showPath && (
-                  <div className="issue-timeline-path">
-                    <span>{m.path}</span>
-                    <span className={`issue-timeline-surface ${m.surface}`}>
-                      {t(`issues.surface.${m.surface}`)}
+                  <div
+                    className={
+                      "issue-timeline-path" + (m.on_issue_thread ? " here" : "")
+                    }
+                  >
+                    {/* Said on this issue's own thread. Named for what it is
+                        rather than by its container's path: the container is
+                        hidden everywhere else, and printing "Issue
+                        conversations > <this issue>" would both re-introduce it
+                        and repeat the title already at the top of the modal. */}
+                    <span>
+                      {m.on_issue_thread ? t("issues.timeline_here") : m.path}
                     </span>
+                    {!m.on_issue_thread && (
+                      <span className={`issue-timeline-surface ${m.surface}`}>
+                        {t(`issues.surface.${m.surface}`)}
+                      </span>
+                    )}
                   </div>
                 )}
                 <TimelineMessage m={m} fmt={fmt} onGo={go} />
               </React.Fragment>
             );
           })}
+        </div>
+
+        <div className="issue-chat-composer">
+          <ResizableTextarea
+            className="issue-chat-input"
+            value={draft}
+            placeholder={
+              session
+                ? t("issues.chat_placeholder_to", {
+                    who: session.name ?? session.cwd ?? session.id,
+                  })
+                : t("issues.chat_no_session")
+            }
+            disabled={!session}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              // Same chord as every other composer in dt.
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                void send();
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="issue-chat-send"
+            disabled={!draft.trim() || sending || !session}
+            onClick={() => void send()}
+          >
+            <Send size={14} strokeWidth={2} />
+            {sending ? t("issues.chat_sending") : t("issues.chat_send")}
+          </button>
         </div>
       </div>
     </div>,

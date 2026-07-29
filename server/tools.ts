@@ -884,8 +884,21 @@ export const TOOLS = [
         },
         state: {
           type: "string" as const,
-          enum: ["todo", "doing", "done", "dropped"],
-          description: "Default todo. Use done to record something already finished.",
+          enum: [
+            "todo",
+            "doing",
+            "waiting_decision",
+            "waiting_reply",
+            "waiting_timing",
+            "done",
+            "dropped",
+          ],
+          description: "Default todo (shown as \"waiting to start\"). The three waiting_* values say what is being waited FOR; who is waited ON is `owner`. Use done to record something already finished.",
+        },
+        priority: {
+          type: "string" as const,
+          enum: ["low", "mid", "high"],
+          description: "How much it matters, independent of whether it can move: low = fine to leave indefinitely, mid (default) = want to but not now, high = needs doing now.",
         },
         session_id: { type: "string" as const, description: "Owning session; defaults to yours." },
       },
@@ -997,7 +1010,7 @@ export const TOOLS = [
   {
     name: "update_issue",
     description:
-      "Change an issue's title / body / owner / state. Keeping this current is YOUR job — move it to state=doing when you start, owner=user the moment you hand the ball back (and say so in your reply), state=done when it is verifiably finished. A tracker nobody updates is worse than none, because it looks authoritative while lying.",
+      "Change an issue's title / body / owner / state / priority. Keeping this current is YOUR job — move it to state=doing when you start, owner=user the moment you hand the ball back (and say so in your reply), state=done when it is verifiably finished. When work stops because something is awaited, say which: waiting_decision (a call has to be made), waiting_reply (somebody owes an answer), waiting_timing (nothing to do until a moment arrives) — with owner naming who that is. A tracker nobody updates is worse than none, because it looks authoritative while lying.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -1005,7 +1018,16 @@ export const TOOLS = [
         title: { type: "string" as const },
         body: { type: "string" as const },
         owner: { type: "string" as const, enum: ["user", "cc", "external"] },
-        state: { type: "string" as const, enum: ["todo", "doing", "done", "dropped"] },
+        state: { type: "string" as const, enum: [
+            "todo",
+            "doing",
+            "waiting_decision",
+            "waiting_reply",
+            "waiting_timing",
+            "done",
+            "dropped",
+          ] },
+        priority: { type: "string" as const, enum: ["low", "mid", "high"] },
       },
       required: ["issue_id"],
     },
@@ -1018,7 +1040,16 @@ export const TOOLS = [
       type: "object" as const,
       properties: {
         owner: { type: "string" as const, enum: ["user", "cc", "external"] },
-        state: { type: "string" as const, enum: ["todo", "doing", "done", "dropped"] },
+        state: { type: "string" as const, enum: [
+            "todo",
+            "doing",
+            "waiting_decision",
+            "waiting_reply",
+            "waiting_timing",
+            "done",
+            "dropped",
+          ] },
+        priority: { type: "string" as const, enum: ["low", "mid", "high"] },
         session_id: { type: "string" as const },
         include_closed: { type: "boolean" as const, description: "Include done / dropped." },
       },

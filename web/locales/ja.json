@@ -454,8 +454,11 @@
       "external": "外部"
     },
     "state": {
-      "todo": "未着手",
+      "todo": "着手待ち",
       "doing": "進行中",
+      "waiting_decision": "判断待ち",
+      "waiting_reply": "返事待ち",
+      "waiting_timing": "タイミング待ち",
       "done": "完了",
       "dropped": "取り下げ"
     },
@@ -470,8 +473,8 @@
     "ago_hour": "{{n}}時間前",
     "ago_day": "{{n}}日前",
     "time_hint": "更新 {{updated}} ・ 作成 {{created}}",
-    "timeline": "会話を見る",
-    "timeline_count": "{{n}}件の発言",
+    "timeline": "会話",
+    "timeline_count": "{{n}}件",
     "timeline_empty": "この課題に紐づいた発言はまだありません。",
     "timeline_jump": "元の場所へ",
     "timeline_jump_hint": "この発言があった場所を開きます",
@@ -495,19 +498,23 @@
       "dropped": "CC が取り下げました"
     },
     "warn_no_session": "セッションが未指定です。担当セッションに通知が行かず、セッションで絞り込んでも出てきません。このままで良ければもう一度「作成」を押してください。",
-    "chat": "会話する",
-    "chat_hint": "この課題について、ここで直接やり取りします",
-    "chat_with": "{{who}} と会話します",
     "chat_no_session": "この課題はどのセッションにも属していないため、送り先がありません",
-    "chat_empty": "まだ会話がありません。最初の投稿でこのスレッドが作られます。",
-    "chat_placeholder": "この課題について書く (Cmd/Ctrl+Enter で送信)",
     "chat_send": "送信",
     "chat_sending": "送信中…",
     "chat_no_recipient": "送り先の CC が動いていないため届きませんでした。",
     "chat_timeout": "送信しましたが、CC がまだ受け取っていません。",
     "chat_open_board": "ボードで開く",
     "chat_open_board_hint": "この会話はボード上のノードとしても開けます",
-    "chat_board_title": "課題の会話"
+    "chat_board_title": "課題の会話",
+    "priority": {
+      "low": "優先 低",
+      "mid": "優先 中",
+      "high": "優先 高"
+    },
+    "priority_label": "優先度",
+    "all_priorities": "全優先度",
+    "chat_placeholder_to": "{{who}} に送る (Cmd/Ctrl+Enter で送信)",
+    "timeline_here": "この課題のスレッド"
   },
   "update": {
     "available": "新しいバージョンがあります",

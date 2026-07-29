@@ -33,10 +33,17 @@ export interface BoardLogIds {
 export function ensureBoardLogNode(boardId: string): BoardLogIds | null {
   // Default boards never get a log node — their structure is fixed.
   const board = db
-    .prepare("SELECT is_default FROM boards WHERE id = ?")
-    .get(boardId) as { is_default: number } | undefined;
+    .prepare("SELECT is_default, is_issue_chat FROM boards WHERE id = ?")
+    .get(boardId) as
+    | { is_default: number; is_issue_chat: number }
+    | undefined;
   if (!board) return null;
   if (board.is_default) return null;
+  // Same reasoning for the issue-conversation container: its shape is owned by
+  // the tracker (one node per issue, created on first message), so there are no
+  // structure changes to audit — and a log concern here would be one more thing
+  // making it look like a board to work in.
+  if (board.is_issue_chat) return null;
 
   const existingConcern = db
     .prepare(

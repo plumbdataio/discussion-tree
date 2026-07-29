@@ -18,7 +18,7 @@
 
 import { db, insertPending } from "./db.ts";
 import { generateRandomId } from "./helpers.ts";
-import { syncIssueChatTitle } from "./issue-chat.ts";
+import { findIssueChatNode, syncIssueChatTitle } from "./issue-chat.ts";
 
 // Who currently holds the ball. Split from `state` on purpose: a single status
 // enum with "blocked" in it loses the subject — "blocked" cannot say whether it
@@ -26,12 +26,39 @@ import { syncIssueChatTitle } from "./issue-chat.ts";
 // work. Two orthogonal axes read unambiguously in every combination
 // (user+todo = waiting on the user; user+doing = the user is working on it).
 export const ISSUE_OWNERS = ["user", "cc", "external"] as const;
-export const ISSUE_STATES = ["todo", "doing", "done", "dropped"] as const;
+// `todo` is shown as "waiting to start", which is what it means next to the
+// three waiting states below — "not started" read as neglect.
+//
+// The three waiting states say WHAT is being waited for, never WHO: the subject
+// stays on `owner`. That is what keeps this from becoming the `blocked` value
+// the tracker deliberately does not have — "blocked" cannot say blocked on
+// whom, so it strands work nobody is holding. Read together they are
+// unambiguous: user+waiting_decision = the user has to decide;
+// external+waiting_reply = somebody outside owes an answer; cc+waiting_timing =
+// CC picks it up when the moment comes.
+export const ISSUE_STATES = [
+  "todo",
+  "doing",
+  "waiting_decision",
+  "waiting_reply",
+  "waiting_timing",
+  "done",
+  "dropped",
+] as const;
+// How much it matters, kept SEPARATE from what it is waiting for. The user has
+// tried low/mid/high in other trackers and it never stuck, and the diagnosis was
+// that one column was carrying both "how much does this matter" and "can it
+// move right now" — so a thing that mattered but was stuck had no honest value.
+// Splitting them is what makes low/mid/high answerable here.
+//   low = fine to leave indefinitely / mid = want to, but not now / high = now
+export const ISSUE_PRIORITIES = ["low", "mid", "high"] as const;
 export type IssueOwner = (typeof ISSUE_OWNERS)[number];
 export type IssueState = (typeof ISSUE_STATES)[number];
+export type IssuePriority = (typeof ISSUE_PRIORITIES)[number];
 
 const OWNER_SET = new Set<string>(ISSUE_OWNERS);
 const STATE_SET = new Set<string>(ISSUE_STATES);
+const PRIORITY_SET = new Set<string>(ISSUE_PRIORITIES);
 
 db.run(`
   CREATE TABLE IF NOT EXISTS issues (
@@ -53,6 +80,9 @@ db.run("CREATE INDEX IF NOT EXISTS idx_issues_state ON issues(state)");
 // path filters deleted_at IS NULL.
 safeAlterIssues("ALTER TABLE issues ADD COLUMN deleted_at TEXT");
 db.run("CREATE INDEX IF NOT EXISTS idx_issues_session ON issues(session_id)");
+// Everything filed before this column existed defaults to mid, which is the
+// honest value: nobody had said how much it mattered.
+safeAlterIssues("ALTER TABLE issues ADD COLUMN priority TEXT NOT NULL DEFAULT 'mid'");
 
 // CLOSING NEEDS THE USER'S SIGN-OFF.
 //
@@ -163,6 +193,7 @@ export type IssueRow = {
   body: string;
   owner: IssueOwner;
   state: IssueState;
+  priority: IssuePriority;
   session_id: string | null;
   created_at: string;
   updated_at: string;
@@ -196,6 +227,11 @@ function coerceOwner(v: unknown): IssueOwner | null {
 function coerceState(v: unknown): IssueState | null {
   return typeof v === "string" && STATE_SET.has(v) ? (v as IssueState) : null;
 }
+function coercePriority(v: unknown): IssuePriority | null {
+  return typeof v === "string" && PRIORITY_SET.has(v)
+    ? (v as IssuePriority)
+    : null;
+}
 
 export function handleCreateIssue(body: any):
   | { ok: true; issue: IssueRow }
@@ -206,6 +242,11 @@ export function handleCreateIssue(body: any):
   if (!owner) return { ok: false, error: `owner must be one of ${ISSUE_OWNERS.join(" / ")}` };
   const state = body?.state === undefined ? "todo" : coerceState(body.state);
   if (!state) return { ok: false, error: `state must be one of ${ISSUE_STATES.join(" / ")}` };
+  const priority =
+    body?.priority === undefined ? "mid" : coercePriority(body.priority);
+  if (!priority) {
+    return { ok: false, error: `priority must be one of ${ISSUE_PRIORITIES.join(" / ")}` };
+  }
 
   const now = nowIso();
   const id = generateRandomId("iss");
@@ -216,14 +257,15 @@ export function handleCreateIssue(body: any):
   // would bury the handful that mean something.
   const closedNow = state === "done" || state === "dropped" ? now : null;
   db.run(
-    `INSERT INTO issues (id, title, body, owner, state, session_id, created_at, updated_at, closed_at, close_approved_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO issues (id, title, body, owner, state, priority, session_id, created_at, updated_at, closed_at, close_approved_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       title,
       String(body?.body ?? ""),
       owner,
       state,
+      priority,
       body?.session_id ? String(body.session_id) : null,
       now,
       now,
@@ -265,6 +307,14 @@ export function handleUpdateIssue(body: any):
   if (body?.session_id !== undefined) {
     sets.push("session_id = ?");
     args.push(body.session_id ? String(body.session_id) : null);
+  }
+  if (body?.priority !== undefined) {
+    const priority = coercePriority(body.priority);
+    if (!priority) {
+      return { ok: false, error: `priority must be one of ${ISSUE_PRIORITIES.join(" / ")}` };
+    }
+    sets.push("priority = ?");
+    args.push(priority);
   }
   let nextState: IssueState = current.state;
   if (body?.state !== undefined) {
@@ -673,6 +723,7 @@ const LOCATION_JOINS = `
 
 const LOCATION_COLUMNS = `
          COALESCE(b.title, mp.title, dg.title) AS container_title,
+         COALESCE(b.is_issue_chat, 0) AS container_is_issue_chat,
          COALESCE(n.title, mn.title) AS node_title,
          CASE WHEN b.id IS NOT NULL THEN 'board'
               WHEN mp.id IS NOT NULL THEN 'map'
@@ -686,6 +737,7 @@ type LocationRow = {
   board_id: string;
   node_id: string;
   container_title: string | null;
+  container_is_issue_chat?: number;
   node_title: string | null;
   surface: string;
 };
@@ -695,6 +747,12 @@ type LocationRow = {
 const GENERAL_NODES = new Set(["__chat__", "__general__", "main", "default"]);
 
 function locationPath(r: LocationRow): string {
+  // An issue's own thread is named by the ISSUE, not by the container holding
+  // every issue's thread. That container is hidden from the sidebar and from
+  // list_boards on purpose (it is not a board to work in), and printing its
+  // name here would put it back in front of the reader for no gain — the node
+  // title already is the issue's title.
+  if (r.container_is_issue_chat && r.node_title) return r.node_title;
   const container = r.container_title ?? r.board_id;
   if (r.node_title) return `${container} > ${r.node_title}`;
   if (GENERAL_NODES.has(r.node_id)) return container;
@@ -713,6 +771,17 @@ export function handleIssueTimeline(body: any):
       ok: true;
       issue: IssueRow;
       messages: unknown[];
+      // Where a NEW message would go. null until somebody writes — the thread
+      // is created by the first post, not by looking.
+      location: { board_id: string; node_id: string } | null;
+      // Who a new message would reach, so the composer can say so (and say
+      // when nobody would).
+      session: {
+        id: string;
+        name: string | null;
+        cwd: string | null;
+        alive: number;
+      } | null;
     }
   | { ok: false; error: string } {
   const issueId = String(body?.issue_id ?? "");
@@ -722,7 +791,7 @@ export function handleIssueTimeline(body: any):
   const rows = db
     .prepare(
       `SELECT t.id, t.board_id, t.node_id, t.source, t.text, t.created_at,
-              ${LOCATION_COLUMNS}
+              t.read_at, ${LOCATION_COLUMNS}
          FROM issue_links l
          JOIN thread_items t ON t.id = l.thread_item_id
          ${LOCATION_JOINS}
@@ -734,20 +803,40 @@ export function handleIssueTimeline(body: any):
     source: string;
     text: string;
     created_at: string;
+    read_at: string | null;
   })[];
+
+  const location = findIssueChatNode(issueId);
+  const session = issue.session_id
+    ? ((db
+        .prepare("SELECT id, name, cwd, alive FROM sessions WHERE id = ?")
+        .get(issue.session_id) as {
+        id: string;
+        name: string | null;
+        cwd: string | null;
+        alive: number;
+      } | null) ?? null)
+    : null;
 
   return {
     ok: true,
     issue,
+    location,
+    session,
     messages: rows.map((r) => ({
       id: r.id,
       source: r.source,
       at: r.created_at,
       text: r.text,
+      read_at: r.read_at,
       surface: r.surface,
       container_id: r.board_id,
       node_id: r.node_id,
       path: locationPath(r),
+      // Said HERE rather than gathered from elsewhere: the composer writes to
+      // this thread, so these are the ones a reader can expect to answer.
+      on_issue_thread: !!location && r.board_id === location.board_id &&
+        r.node_id === location.node_id,
     })),
   };
 }

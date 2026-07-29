@@ -137,15 +137,33 @@ describe("issue chat — the board belongs to the issue's session", () => {
     const pt = await ccPost(theirs, "theirs");
     expect(pt.json.location?.board_id).not.toBe(pm.json.location!.board_id);
 
-    // And it is filed under THAT session, which is what decides who a reply
-    // gets delivered to.
+    // Which session it belongs to is what decides who a reply reaches — see
+    // the delivery test below, which is the honest check for that.
+  });
+
+  test("the container never shows up as a board", async () => {
+    const id = await mkIssue("hidden container");
+    const posted = await ccPost(id, "somewhere");
+    // Structurally a board, deliberately not presented as one: listing it made
+    // CC read one issue's neighbours as context for another, while the user
+    // was reading a single serial thread (their objection, 2026-07-29).
     const boards = await post<{ boards: { id: string }[] }>(
       `${broker.url}/list-boards`,
-      { session_id: otherSessionId },
+      { session_id: sessionId, scope: "all" },
     );
-    expect(boards.json.boards.map((b) => b.id)).toContain(
-      pt.json.location!.board_id,
+    expect(boards.json.boards.map((b) => b.id)).not.toContain(
+      posted.json.location!.board_id,
     );
+    // Still reachable by id, or the "go to where this was said" jump would
+    // land nowhere.
+    const view = await get<{
+      board: { title: string };
+      nodes: { id: string; is_log?: number }[];
+    }>(`${broker.url}/api/board/${posted.json.location!.board_id}`);
+    expect(view.json.board.title).toBe("Issue conversations");
+    // And no board-log concern grows on it: its shape is owned by the tracker,
+    // so there are no structure changes to audit.
+    expect(view.json.nodes.some((n) => n.is_log)).toBe(false);
   });
 
   test("an issue with no session says so rather than picking one", async () => {
@@ -246,5 +264,86 @@ describe("issue chat — the node follows the issue", () => {
     );
     const node = view.json.nodes.find((n) => n.id === id)!;
     expect(node.title).toBe("a much better name");
+  });
+});
+
+// The tracker gained a third axis on 2026-07-29: `priority` (how much it
+// matters) alongside `state` (what it is waiting for). The user had tried
+// low/mid/high in other trackers and it never stuck; the diagnosis was that one
+// column was carrying both questions, so a thing that mattered but was stuck
+// had no honest value. These pin that they stay separate — and that the waiting
+// states never say WHO, which is `owner`'s job (the tracker deliberately has no
+// `blocked`).
+describe("issues — priority and the waiting states", () => {
+  test("priority defaults to mid and is independent of state", async () => {
+    const r = await post<{ issue: { id: string; priority: string; state: string } }>(
+      `${broker.url}/create-issue`,
+      { title: "unrated", session_id: sessionId },
+    );
+    expect(r.json.issue.priority).toBe("mid");
+
+    const up = await post<{ issue: { priority: string; state: string } }>(
+      `${broker.url}/update-issue`,
+      { issue_id: r.json.issue.id, priority: "high", state: "waiting_decision" },
+    );
+    // High priority AND stuck on a decision is the combination low/mid/high
+    // alone could not express.
+    expect(up.json.issue.priority).toBe("high");
+    expect(up.json.issue.state).toBe("waiting_decision");
+  });
+
+  test("a bad priority is refused, not silently defaulted", async () => {
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/create-issue`,
+      { title: "typo", priority: "urgent", session_id: sessionId },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toMatch(/priority/i);
+  });
+
+  test("waiting is not closed — it stays in the default list", async () => {
+    const id = await mkIssue("waiting on an answer");
+    await post(`${broker.url}/update-issue`, {
+      issue_id: id,
+      state: "waiting_reply",
+      owner: "external",
+    });
+    const open = await post<{ issues: { id: string }[] }>(
+      `${broker.url}/list-issues`,
+      {},
+    );
+    expect(open.json.issues.map((i) => i.id)).toContain(id);
+  });
+});
+
+// Reading an issue's conversation and adding to it are one view, so one call
+// has to answer both — where the messages are AND where a new one would go.
+describe("issue timeline — also says where to write", () => {
+  test("carries the composer's target and recipient", async () => {
+    const id = await mkIssue("timeline carries the target");
+    const posted = await ccPost(id, "said on the issue thread");
+    const tl = await post<{
+      ok: boolean;
+      location: { board_id: string; node_id: string } | null;
+      session: { id: string } | null;
+      messages: { id: number; on_issue_thread?: boolean; read_at?: string | null }[];
+    }>(`${broker.url}/issue-timeline`, { issue_id: id });
+
+    expect(tl.json.location?.board_id).toBe(posted.json.location!.board_id);
+    expect(tl.json.session?.id).toBe(sessionId);
+    // Messages said HERE are distinguishable from ones gathered elsewhere —
+    // marking the latter read would clear dots the user never saw in place.
+    const mine = tl.json.messages.find((m) => m.id === posted.json.message_id);
+    expect(mine?.on_issue_thread).toBe(true);
+  });
+
+  test("an issue with no conversation says so without creating one", async () => {
+    const id = await mkIssue("never discussed");
+    const tl = await post<{ ok: boolean; location: unknown; messages: unknown[] }>(
+      `${broker.url}/issue-timeline`,
+      { issue_id: id },
+    );
+    expect(tl.json.location).toBeNull();
+    expect(tl.json.messages).toEqual([]);
   });
 });
