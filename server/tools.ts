@@ -2139,22 +2139,13 @@ export async function dispatchToolCall(
           ok: boolean;
           error?: string;
           message_id?: number;
-          created?: boolean;
           location?: { board_id: string; node_id: string };
         }>("/issue-chat-post", a);
         if (!res.ok) return textResult(res.error ?? "post failed", true);
-        const where = `board ${res.location?.board_id}, node ${res.location?.node_id}`;
         return textResult(
-          res.created
-            ? `Issue ${a.issue_id} had no conversation board yet, so I created one ` +
-                `and posted your message there (${where}, message_id=${res.message_id}). ` +
-                `The user reads it in the issue tracker. From here on, keep talking on ` +
-                `this issue by calling post_to_issue again (it reuses this board) — or ` +
-                `post_to_node on ${where} once their reply gives you the node. You never ` +
-                `create or link a board yourself; post_to_issue is the whole workflow.`
-            : `Posted on issue ${a.issue_id} (message_id=${res.message_id}). The user ` +
-                `sees it in the issue tracker; their reply arrives as a channel message ` +
-                `on ${where}.`,
+          `Posted on issue ${a.issue_id} (message_id=${res.message_id}). ` +
+            `The user sees it in the issue tracker; their reply arrives as a ` +
+            `channel message on board ${res.location?.board_id}, node ${res.location?.node_id}.`,
         );
       }
 

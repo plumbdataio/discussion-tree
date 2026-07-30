@@ -115,9 +115,7 @@ export function handlePostIssueChat(body: any): unknown {
     // an issue-chat node); extra ids are for a reply that also touches another.
     issue_ids: Array.isArray(body?.issue_ids) ? body.issue_ids : [],
   });
-  // created rides back so the MCP tool can tell CC "there was no board, I made
-  // one" on the very first post — the moment the workflow needs explaining.
-  return { ...(result as object), location: ensured.location, created: ensured.created };
+  return { ...(result as object), location: ensured.location };
 }
 
 export const routes = {
