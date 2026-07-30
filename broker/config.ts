@@ -18,6 +18,7 @@ export const PORT = parseInt(
 // stock Windows shells (would land us at "undefined/.discussion-tree").
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { HEARTBEAT_INTERVAL_MS } from "../shared/config.ts";
 export const HOME_DIR =
   process.env.DISCUSSION_TREE_HOME ?? join(homedir(), ".discussion-tree");
 
@@ -60,23 +61,29 @@ export const SUBMIT_DELIVERY_TIMEOUT_MS = 8_000;
 export const AUTO_ACTIVITY_TIMEOUT_MS = 60_000;
 
 // How often broker.ts re-checks every alive session's PID and soft-deletes
-// rows whose process is gone. Default 30s; tests override to ~100ms via
-// the env var so they can observe the soft-delete deterministically.
+// rows whose process is gone. Runs about once per heartbeat interval so a
+// remote session that stopped beating is noticed promptly (the timeout below is
+// what decides "gone"; this is just how often we look). Tests override to
+// ~100ms via the env var so they can observe the soft-delete deterministically.
 export const STALE_SESSION_SWEEP_MS = parseInt(
-  process.env.DISCUSSION_TREE_STALE_SWEEP_MS ?? "30000",
+  process.env.DISCUSSION_TREE_STALE_SWEEP_MS ?? "10000",
   10,
 );
 
-// How long a REMOTE session (a CC on another machine, talking to this broker
-// over the network) may go without a heartbeat before it is treated as gone.
-// Its pid means nothing on this machine, so the heartbeat is the only signal
-// that crosses; at one every 15s, this tolerates three missed beats — enough
-// that a laptop lid or a Tailscale reconnect does not evict a live session,
-// short enough that a genuinely dead one stops being offered as a recipient.
-export const REMOTE_SESSION_TIMEOUT_MS = parseInt(
-  process.env.DISCUSSION_TREE_REMOTE_TIMEOUT_MS ?? "60000",
-  10,
-);
+// A REMOTE session (a CC on another machine, talking to this broker over the
+// network) is judged dead by MISSED HEARTBEATS, not an absolute clock: its pid
+// means nothing on this machine, so the heartbeat is the only signal that
+// crosses. Tolerate REMOTE_MISS_LIMIT missed beats before evicting — enough that
+// a brief laptop lid or Tailscale reconnect does not evict a live session (and
+// even if one is evicted, it self-recovers on its next beat — see
+// handleHeartbeat), short enough that a genuinely gone one stops being offered
+// as a recipient. Sized off HEARTBEAT_INTERVAL_MS so the window scales with the
+// beat rate instead of drifting when it changes.
+export const REMOTE_MISS_LIMIT = 3;
+export const REMOTE_SESSION_TIMEOUT_MS = process.env
+  .DISCUSSION_TREE_REMOTE_TIMEOUT_MS
+  ? parseInt(process.env.DISCUSSION_TREE_REMOTE_TIMEOUT_MS, 10)
+  : HEARTBEAT_INTERVAL_MS * REMOTE_MISS_LIMIT;
 
 // Side-effect: ensure HOME_DIR and the DB's parent dir exist before
 // bun:sqlite touches the file. mkdir is idempotent (recursive).

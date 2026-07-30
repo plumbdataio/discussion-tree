@@ -67,6 +67,18 @@ describe("remote sessions — liveness comes from the heartbeat", () => {
     expect(await aliveIds()).not.toContain(remote);
   });
 
+  test("a swept remote session revives on its next heartbeat", async () => {
+    const remote = await register(true);
+    // Miss enough beats to be swept (a brief network drop / laptop sleep).
+    await new Promise((r) => setTimeout(r, 700));
+    expect(await aliveIds()).not.toContain(remote);
+    // The CC comes back and beats again — proof of life. It must RETURN, not
+    // stay dead until a full CC restart: that self-recovery is what makes a
+    // short remote timeout safe, since a brief drop then heals itself.
+    await post(`${broker.url}/heartbeat`, { session_id: remote });
+    expect(await aliveIds()).toContain(remote);
+  });
+
   test("beating keeps it alive across sweeps", async () => {
     const remote = await register(true);
     for (let i = 0; i < 4; i++) {

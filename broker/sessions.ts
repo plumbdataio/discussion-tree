@@ -81,7 +81,26 @@ export function handleRegister(body: any) {
 }
 
 export function handleHeartbeat(body: any) {
-  updateSessionSeen.run(new Date().toISOString(), body.session_id);
+  const now = new Date().toISOString();
+  // A heartbeat is proof of life. If the stale-sweep had already soft-deleted
+  // this session — a remote CC that missed a few beats over a brief network drop
+  // and then came back — REVIVE it here, on the very next beat. Without this it
+  // would stay alive=0 (off the sidebar, unreachable as a recipient) until CC
+  // restarted, which is exactly what would make the short remote timeout
+  // dangerous. The alive=0 guard nudges the sidebar only on the revive
+  // transition, not on every routine beat. Safe: a cleanly-unregistered or
+  // orphaned server stops beating, so nothing gets spuriously resurrected.
+  const revived =
+    db
+      .prepare(
+        "UPDATE sessions SET last_seen = ?, alive = 1 WHERE id = ? AND alive = 0",
+      )
+      .run(now, body.session_id).changes > 0;
+  if (revived) {
+    onSessionsChanged();
+  } else {
+    updateSessionSeen.run(now, body.session_id);
+  }
   // Mirror back the cc_session_id binding so the MCP server can run a
   // cheap self-healing check on every heartbeat — if it sees null here
   // (= auto-attach never made it through) it knows to retry. Single

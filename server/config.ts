@@ -35,9 +35,10 @@ export const BROKER_IS_REMOTE = !/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:
 // /submit-answer's 8s timeout was tuned against — bumping this would change
 // the perceived submit latency.
 export const POLL_INTERVAL_MS = 1000;
-// Just keeps the session row's last_seen fresh so cleanStaleSessions doesn't
-// soft-delete us.
-export const HEARTBEAT_INTERVAL_MS = 15_000;
+// Keeps the session row's last_seen fresh so cleanStaleSessions doesn't
+// soft-delete us. Defined in shared/config.ts because the broker sizes its
+// remote-liveness window off the same interval — they must not drift.
+export { HEARTBEAT_INTERVAL_MS } from "../shared/config.ts";
 
 // Hard ceiling on any single broker HTTP call. Broker ops are loopback SQLite
 // reads/writes (sub-100ms normally), so this only ever trips when the broker is
