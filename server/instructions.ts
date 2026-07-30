@@ -2,6 +2,17 @@
 // MCP `instructions` payload — the long system message Claude Code reads when
 // it loads this server. Kept in its own file so server.ts entry stays
 // readable; nothing else imports it.
+//
+// ★ KEEP THIS SMALL. Claude Code SILENTLY TRUNCATES the combined MCP-instructions
+// block at ~4KB across ALL configured servers (anthropics/claude-code#43474) — so
+// with a sibling server present (e.g. claude-peers), only the first few KB of this
+// string ever reaches the model; everything past the cut is invisible, no warning.
+// This file is already FAR over that, so its tail (and, when the budget is tight,
+// even early sections like the issue-id backtick rule) does not arrive. Do NOT add
+// guidance here to patch a "CC didn't know X" gap — it just pushes more off the
+// end. Put detail behind a TOOL the agent calls on demand (the `bd onboard`
+// pattern) and keep this a tiny bootstrap. See issue iss_ms77rl1m. (This comment
+// is source-only and is NOT part of the delivered payload string.)
 
 export const INSTRUCTIONS = `You are connected to discussion-tree-mcp.
 
