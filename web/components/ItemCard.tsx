@@ -18,6 +18,7 @@ import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useAnyPreviewModalOpen } from "../utils/previewModalLock.ts";
 import { useSettings } from "../utils/settings.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
+import { LIVE_REGION_COUNT } from "../utils/estimateMessageHeight.ts";
 
 export function ItemCard({
   node,
@@ -246,13 +247,18 @@ export function ItemCard({
             <MDView text={tentativeText} />
           </div>
         )}
-        {[...myThread].reverse().map((it) => (
+        {/* Reversed: index 0 is the newest row (visual bottom under
+            column-reverse). Deep-history rows past the live region opt into
+            content-visibility:auto; most node threads are short enough that
+            nothing is contained. */}
+        {[...myThread].reverse().map((it, i) => (
           <ThreadMessage
             key={it.id}
             item={it}
             boardId={node.board_id}
             nodeId={node.id}
             sessionId={ownerSessionId}
+            contained={i >= LIVE_REGION_COUNT}
             onExpand={openExpandedMsg}
           />
         ))}

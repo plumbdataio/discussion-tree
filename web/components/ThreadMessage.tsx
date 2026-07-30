@@ -7,6 +7,7 @@ import { renderSystemMessage } from "./SystemMessage.tsx";
 import { showToast } from "./Toast.tsx";
 import { formatThreadTimestamp } from "../utils/format.ts";
 import { toggleFavorite, useFavorited } from "../utils/favorites.ts";
+import { estimateMessageHeight } from "../utils/estimateMessageHeight.ts";
 
 // One rendered .thread-msg row, factored out and memoized so a parent
 // re-render (e.g. every textarea keystroke updating draft state) doesn't
@@ -26,6 +27,7 @@ function ThreadMessageImpl({
   sessionId,
   enableAnchor = true,
   compact = false,
+  contained = false,
   onExpand,
 }: {
   item: ThreadItem;
@@ -38,6 +40,14 @@ function ThreadMessageImpl({
   // "no bookmark / no timestamp / no status" requirement). Defaults off, so
   // every existing board call site is unchanged.
   compact?: boolean;
+  // Deep-history rows (older than the live region near the bottom) opt into
+  // `content-visibility: auto` so the browser skips their layout + paint while
+  // off-screen — the whole point of this component's memoization plus the
+  // containment is to keep a 3k-message thread cheap without dropping any row
+  // from the DOM (Ctrl+F must still find them). The live edge is passed
+  // `contained={false}` so recoil can never touch the rows the user actively
+  // reads. See estimateMessageHeight.ts for why the seed errs tall.
+  contained?: boolean;
   onExpand: (item: ThreadItem) => void;
 }) {
   const { t } = useTranslation();
@@ -46,12 +56,26 @@ function ThreadMessageImpl({
   // can't be pinned and the comparator skips re-renders anyway.
   const isPinned = useFavorited(item.id);
 
+  // When contained, enable `content-visibility: auto` (via the class) and seed
+  // `contain-intrinsic-size` with the `auto` keyword: the browser reuses each
+  // row's LAST REAL rendered height as the estimate after first paint, so
+  // scrolling back over already-seen history reuses an EXACT size — no
+  // estimate->real swap at the viewport edge, no recoil. The px seed only
+  // biases the very first reveal of a never-yet-painted row.
+  const containClass = contained ? " cv-contained" : "";
+  const containStyle: React.CSSProperties | undefined = contained
+    ? { containIntrinsicSize: `auto ${estimateMessageHeight(item.text)}px` }
+    : undefined;
+
   if (item.source === "system") {
     // A cli_command marker (e.g. "cli_command:/compact") renders as a distinct
     // pale-green "system command" chip rather than the muted status-change line.
     const isCommand = item.text.startsWith("cli_command:");
     return (
-      <div className={`thread-msg from-system${isCommand ? " is-command" : ""}`}>
+      <div
+        className={`thread-msg from-system${isCommand ? " is-command" : ""}${containClass}`}
+        style={containStyle}
+      >
         {renderSystemMessage(item.text)}
       </div>
     );
@@ -77,7 +101,8 @@ function ThreadMessageImpl({
 
   return (
     <div
-      className={`thread-msg from-${item.source}${isUnread ? " unread" : ""}${isPinned ? " is-pinned" : ""}`}
+      className={`thread-msg from-${item.source}${isUnread ? " unread" : ""}${isPinned ? " is-pinned" : ""}${containClass}`}
+      style={containStyle}
       data-unread-id={isUnread ? item.id : undefined}
       data-thread-item-id={item.id}
     >
@@ -135,5 +160,9 @@ export const ThreadMessage = React.memo(
     prev.sessionId === next.sessionId &&
     prev.enableAnchor === next.enableAnchor &&
     prev.compact === next.compact &&
+    // A new message shifts older rows across the live-region boundary, flipping
+    // their `contained` state — must re-render so the containment attaches /
+    // detaches. Only the one boundary-crossing row re-renders.
+    prev.contained === next.contained &&
     prev.onExpand === next.onExpand,
 );

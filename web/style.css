@@ -2805,18 +2805,46 @@ body.concern-resizing * {
   border-radius: 4px;
 }
 
-/* NOTE: content-visibility:auto was tried here as a perf win for very long
-   default-board threads (skip paint/layout for off-screen rows), with
-   contain-intrinsic-size giving a height estimate. It read as "safe" under
-   column-reverse + overflow-anchor:none on the assumption that the
-   estimated→real height swap stays off-screen — but it does NOT: when the
-   user scrolls UP to read history, each previously-skipped row swaps its
-   100px estimate for its REAL height exactly as it crosses INTO the viewport,
-   shoving the content under the user's eyes ("scroll fights back" — reported
-   2026-06-10, very visible once the thread is huge). Removed: a smooth read
-   of the backlog beats the off-screen paint savings here. If a future thread
-   gets pathologically long, virtualize properly (windowing) rather than
-   re-introducing this. */
+/* content-visibility:auto — recoil-safe re-attempt (2026-07-31), after the
+   June 2026 version was removed for "scroll fights back".
+   ─────────────────────────────────────────────────────────────────────────
+   Goal: on a 3k-message thread, keep EVERY row in the DOM (Ctrl+F must find
+   them — a DOM-removal cap was tried and rejected) but let Blink SKIP
+   layout+paint for off-screen rows, releasing their memory + cutting re-render.
+
+   WHY THE JUNE VERSION RECOILED: it put content-visibility:auto + a FIXED
+   contain-intrinsic-size (~100px) on EVERY row. Under column-reverse +
+   overflow-anchor:none, scrolling UP made each previously-skipped row swap its
+   wrong 100px estimate for its real (taller) height exactly as it crossed INTO
+   view — shoving content under the reader's eyes. Root cause = a WRONG, FIXED
+   estimate corrected at the viewport edge.
+
+   WHY THIS ONE CAN'T RECOIL (four safeguards, all required):
+   1. `contain-intrinsic-size: auto <len>` — the `auto` KEYWORD makes the
+      browser REMEMBER each row's last real rendered size and reuse it as the
+      estimate after first paint. Scrolling back over already-seen history (the
+      common case) reuses an EXACT size → no estimate→real swap → no recoil.
+   2. The `<len>` seed is a per-message estimate from text length (see
+      estimateMessageHeight.ts), erring TALL, so even a never-yet-painted deep
+      row's first reveal is a small nudge, not a 100px→800px jump.
+   3. Containment is applied to DEEP HISTORY ONLY. The newest LIVE_REGION_COUNT
+      rows at the bottom — the live edge the user actively reads, where recoil
+      hurt most — render with NO containment (the class is only added for
+      index >= threshold in DefaultBoardLayout / ItemCard). Any residual
+      correction is confined to rarely-scrolled history.
+   4. overflow-anchor stays OFF and column-reverse is unchanged; the seed's
+      tall bias means residual corrections settle content DOWNWARD (away from
+      the eye), the harmless direction.
+   The class is attached per-row by ThreadMessage; this rule only bites where
+   that component sets `contained`. */
+.thread-msg.cv-contained {
+  content-visibility: auto;
+  /* Fallback only — ThreadMessage sets `contain-intrinsic-size: auto <est>px`
+     inline per message. Kept with the `auto` keyword so even this fallback
+     remembers the real size after first paint (never a fixed estimate that
+     could recoil). */
+  contain-intrinsic-size: auto 120px;
+}
 
 /* Per-board node-status filter — small trigger chip in the board
    header that opens a popover with one checkbox per NodeStatus.

@@ -15,6 +15,7 @@ import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useAnyPreviewModalOpen } from "../utils/previewModalLock.ts";
 import { useSettings } from "../utils/settings.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
+import { LIVE_REGION_COUNT } from "../utils/estimateMessageHeight.ts";
 
 // Default conversation board: a single fixed item, no concern column / no
 // items-row chrome. The whole main pane becomes one tall thread with a
@@ -215,13 +216,17 @@ export function DefaultBoardLayout({
             <MDView text={tentativeText} />
           </div>
         )}
-        {[...myThread].reverse().map((it) => (
+        {/* Reversed: index 0 is the newest row (visual bottom under
+            column-reverse). The newest LIVE_REGION_COUNT rows render normally;
+            older "deep history" rows opt into content-visibility:auto. */}
+        {[...myThread].reverse().map((it, i) => (
           <ThreadMessage
             key={it.id}
             item={it}
             boardId={data.board.id}
             nodeId={node.id}
             sessionId={ownerSessionId}
+            contained={i >= LIVE_REGION_COUNT}
             onExpand={openExpandedMsg}
           />
         ))}
