@@ -7599,19 +7599,27 @@ ul.maps li.current .sidebar-map-link {
   font-weight: 700;
   color: #15803d;
 }
-/* Clamped: enough to remember what it was, not so much that the button falls
-   off screen behind a wall of text. */
+/* Scrollable, not clipped: the user has to be able to read the WHOLE account of
+   what was done before signing off — clamping it to a few lines and hiding the
+   rest defeated the point (they were being asked to approve something they
+   could not fully see). Cap the height so a long summary can't push the buttons
+   off screen, and let the body scroll inside that cap; the buttons stay put
+   below it, always visible. */
 .issue-approval-body {
   font-size: 12.5px;
   line-height: 1.55;
-  max-height: 5.5em;
-  overflow: hidden;
+  max-height: 40vh;
+  overflow-y: auto;
+  padding-right: 4px;
   color: var(--text);
 }
 .issue-approval-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* Separated from the (now scrollable) body so it reads as a distinct footer
+     rather than text that ran into buttons. */
+  padding-top: 2px;
 }
 .issue-approve {
   padding: 4px 14px;
