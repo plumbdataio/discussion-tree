@@ -7595,9 +7595,31 @@ ul.maps li.current .sidebar-map-link {
   display: flex;
   align-items: center;
   gap: 5px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
   font-size: 11.5px;
   font-weight: 700;
   color: #15803d;
+  cursor: pointer;
+  text-align: left;
+}
+.issue-approval-head:hover {
+  opacity: 0.75;
+}
+.issue-approval-caret {
+  flex: none;
+  transition: transform 0.12s ease;
+}
+.issue-approval.open .issue-approval-caret {
+  transform: rotate(90deg);
+}
+/* Collapsed = just the lead line; drop the body's bottom padding so a stack of
+   pending sign-offs reads as tight one-liners rather than fat empty cards. */
+.issue-approval.collapsed {
+  padding-bottom: 0;
 }
 /* Scrollable, not clipped: the user has to be able to read the WHOLE account of
    what was done before signing off — clamping it to a few lines and hiding the

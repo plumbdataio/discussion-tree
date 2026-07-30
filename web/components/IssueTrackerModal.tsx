@@ -8,6 +8,7 @@ import {
   Columns3,
   Search,
   Check,
+  ChevronRight,
   MessagesSquare,
   X,
 } from "lucide-react";
@@ -256,6 +257,10 @@ export function IssueTrackerModal() {
   const [view, setView] = useState<"table" | "board">("table");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Which awaiting-approval cards are open. Empty = all collapsed (the default),
+  // so a stack of sign-offs stays scannable; the summary + conversation sit one
+  // click away inside each card. Independent of `expanded` (the row detail).
+  const [openApprovals, setOpenApprovals] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<Issue | null>(null);
   const [timelineOf, setTimelineOf] = useState<Issue | null>(null);
   const [sort, setSort] = useState<SortState>({ key: "default", desc: false });
@@ -433,6 +438,17 @@ export function IssueTrackerModal() {
           (sort.desc ? -cmp(a, b) : cmp(a, b)),
       );
   }, [pool, filters, focusId, sort, sessionNames]);
+
+  // Fold one awaiting-approval card. No "open all" control: the per-card fold is
+  // enough and opening every sign-off at once has essentially no use (the user's
+  // call, 2026-07-30, after seeing the first cut).
+  const toggleApproval = (id: string) =>
+    setOpenApprovals((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   // Only sessions that actually hold an issue — a live session with nothing
   // filed against it is a row reading "0" in a list of a dozen, and narrowing
@@ -636,41 +652,86 @@ export function IssueTrackerModal() {
   // remembered as complete. A bare "Approve" button would be signed blind and
   // would record consent without producing the memory, so the issue's own
   // account of what was done is on screen, clamped to a few lines.
-  const renderApproval = (i: Issue) => (
-    <div className="issue-approval">
-      <div className="issue-approval-head">
-        <Check size={13} strokeWidth={2.5} />
-        {t(`issues.approval_lead.${i.state === "dropped" ? "dropped" : "done"}`)}
-      </div>
-      {i.body ? (
-        <MDView className="issue-approval-body" text={i.body} />
-      ) : (
-        <div className="issue-body-empty">{t("issues.no_body")}</div>
-      )}
-      <div className="issue-approval-actions">
+  const renderApproval = (i: Issue) => {
+    const open = openApprovals.has(i.id);
+    return (
+      <div className={"issue-approval" + (open ? " open" : " collapsed")}>
+        {/* The lead IS the toggle: collapsed by default so a stack of pending
+            sign-offs stays scannable, expanded to read the account and act.
+            stopPropagation so opening the card never also toggles the row. */}
         <button
           type="button"
-          className="issue-approve"
+          className="issue-approval-head"
+          aria-expanded={open}
           onClick={(e) => {
             e.stopPropagation();
-            void approve(i);
+            toggleApproval(i.id);
           }}
         >
-          {t("issues.approve")}
+          <ChevronRight
+            className="issue-approval-caret"
+            size={13}
+            strokeWidth={2.5}
+            aria-hidden="true"
+          />
+          <Check size={13} strokeWidth={2.5} />
+          {t(
+            `issues.approval_lead.${i.state === "dropped" ? "dropped" : "done"}`,
+          )}
         </button>
-        <button
-          type="button"
-          className="issue-approval-reopen"
-          onClick={(e) => {
-            e.stopPropagation();
-            void sendBack(i);
-          }}
-        >
-          {t("issues.approval_reopen")}
-        </button>
+        {open && (
+          <>
+            {i.body ? (
+              <MDView className="issue-approval-body" text={i.body} />
+            ) : (
+              <div className="issue-body-empty">{t("issues.no_body")}</div>
+            )}
+            <div className="issue-approval-actions">
+              {/* Read or continue the conversation before signing off — deciding
+                  whether a close is right sometimes takes a back-and-forth.
+                  Opening it (and posting there) does NOT move the issue out of
+                  awaiting-approval; it stays here until you approve or send back. */}
+              <button
+                type="button"
+                className={
+                  "issue-timeline-open" + (i.chat_unread ? " has-unread" : "")
+                }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setTimelineOf(i);
+                }}
+              >
+                <MessagesSquare size={13} strokeWidth={2} />{" "}
+                {t("issues.timeline")}
+                <span className="issue-timeline-count">{i.link_count ?? 0}</span>
+              </button>
+              <span className="grow" />
+              <button
+                type="button"
+                className="issue-approve"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void approve(i);
+                }}
+              >
+                {t("issues.approve")}
+              </button>
+              <button
+                type="button"
+                className="issue-approval-reopen"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void sendBack(i);
+                }}
+              >
+                {t("issues.approval_reopen")}
+              </button>
+            </div>
+          </>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   const sessionPicker = (
     value: string | null,

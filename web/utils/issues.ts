@@ -64,11 +64,12 @@ export type Issue = {
 /**
  * Closed by CC, not yet acknowledged.
  *
- * These are shown regardless of every filter and sorted to the top. That is
- * deliberate: the point of the sign-off is not bookkeeping, it is the moment
- * where "that one is done" registers for someone who delegated the work end to
- * end and would otherwise never be handed anything back. A row that only shows
- * up under the right filter combination cannot do that.
+ * These ignore the owner and state filters and sort to the top — see isVisible
+ * for why (and why the session filter still applies). The point of the sign-off
+ * is not bookkeeping, it is the moment where "that one is done" registers for
+ * someone who delegated the work end to end and would otherwise never be handed
+ * anything back. A row that only shows up under the right owner/state filter
+ * combination cannot do that.
  */
 export function isAwaitingApproval(i: Issue): boolean {
   return (i.state === "done" || i.state === "dropped") && !i.close_approved_at;
@@ -178,12 +179,16 @@ export function sessionMatches(i: Issue, f: IssueFilters): boolean {
 
 /**
  * Should this row be on screen? All three axes, EXCEPT that a close awaiting
- * sign-off is never filtered out — the default view is owner=user + not-done,
- * which is exactly the combination that would hide a CC-closed issue, i.e. the
- * only rows that need the user.
+ * sign-off ignores the owner and state axes — the default view is owner=user +
+ * not-done, which is exactly the combination that would hide a CC-closed issue,
+ * i.e. the only rows that need the user. It STILL obeys the session filter,
+ * though (asked for 2026-07-30): a sign-off from session B has no business
+ * sitting on top of session A's list, and its disappearing act after you send
+ * it back — the below-list is session-filtered, so it can't reappear there —
+ * read as a bug. Keeping the session axis makes the top and the rest agree.
  */
 export function isVisible(i: Issue, f: IssueFilters): boolean {
-  if (isAwaitingApproval(i)) return true;
+  if (isAwaitingApproval(i)) return sessionMatches(i, f);
   return ownerMatches(i, f) && stateMatches(i, f) && sessionMatches(i, f);
 }
 

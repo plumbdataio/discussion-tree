@@ -4,6 +4,8 @@ import {
   DEFAULT_FILTERS,
   ISSUE_ID_RE,
   NO_SESSION,
+  isAwaitingApproval,
+  isVisible,
   ownerMatches,
   sanitizeFilters,
   sessionMatches,
@@ -113,6 +115,67 @@ describe("issue filters — empty means unfiltered on every axis", () => {
     expect(sessionMatches(orphan, empty)).toBe(true);
     expect(sessionMatches(orphan, { ...empty, sessionIds: ["s_1"] })).toBe(false);
     expect(sessionMatches(orphan, { ...empty, sessionIds: [NO_SESSION] })).toBe(true);
+  });
+});
+
+// A close awaiting sign-off jumps the owner and state filters (the default view
+// is owner=user + not-done, which is exactly what would hide a CC-closed issue),
+// but it must still obey the SESSION filter — a sign-off from another session
+// has no business on top of the one you are looking at (asked for 2026-07-30).
+describe("issue filters — a close awaiting sign-off", () => {
+  const mk = (
+    owner: Issue["owner"],
+    state: Issue["state"],
+    session_id: string | null,
+  ): Issue => ({
+    id: "iss_x",
+    title: "t",
+    body: "",
+    owner,
+    state,
+    session_id,
+    created_at: "2026-07-30T00:00:00.000Z",
+    updated_at: "2026-07-30T00:00:00.000Z",
+    closed_at: null,
+  });
+  const empty: IssueFilters = {
+    owners: [],
+    states: [],
+    sessionIds: [],
+    q: "",
+    showDeleted: false,
+  };
+  // owner=cc + state=done + not yet approved = the row that needs the user.
+  const pending = mk("cc", "done", "s_1");
+
+  test("it really is awaiting approval", () => {
+    expect(isAwaitingApproval(pending)).toBe(true);
+    // Once acknowledged it is an ordinary closed row again.
+    expect(isAwaitingApproval({ ...pending, close_approved_at: "x" })).toBe(false);
+  });
+
+  test("owner and state filters do not hide it", () => {
+    // The default opening view — owner=user, not-done — would otherwise bury it.
+    expect(isVisible(pending, { ...empty, owners: ["user"] })).toBe(true);
+    expect(isVisible(pending, { ...empty, states: ["todo", "doing"] })).toBe(true);
+  });
+
+  test("but the session filter does", () => {
+    // Its own session keeps it; another session drops it, so session A's list
+    // never wears session B's sign-off on top.
+    expect(isVisible(pending, { ...empty, sessionIds: ["s_1"] })).toBe(true);
+    expect(isVisible(pending, { ...empty, sessionIds: ["s_2"] })).toBe(false);
+    // A no-session sign-off follows the same rule the rest of the list does.
+    const orphan = mk("cc", "dropped", null);
+    expect(isVisible(orphan, { ...empty, sessionIds: ["s_1"] })).toBe(false);
+    expect(isVisible(orphan, { ...empty, sessionIds: [NO_SESSION] })).toBe(true);
+  });
+
+  test("an ordinary row still needs all three axes", () => {
+    const openRow = mk("cc", "doing", "s_1");
+    expect(isVisible(openRow, { ...empty, owners: ["user"] })).toBe(false);
+    expect(isVisible(openRow, { ...empty, sessionIds: ["s_2"] })).toBe(false);
+    expect(isVisible(openRow, empty)).toBe(true);
   });
 });
 
