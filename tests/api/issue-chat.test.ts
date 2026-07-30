@@ -52,6 +52,7 @@ const ccPost = (issueId: string, message: string, extra = {}) =>
     ok: boolean;
     error?: string;
     message_id?: number;
+    created?: boolean;
     location?: { board_id: string; node_id: string };
   }>(`${broker.url}/issue-chat-post`, {
     issue_id: issueId,
@@ -113,6 +114,16 @@ describe("issue chat — nothing exists until somebody writes", () => {
     const after = await chat(id);
     expect(after.json.location?.board_id).toBe(posted.json.location!.board_id);
     expect(after.json.items.map((m) => m.text)).toContain("here is what I found");
+  });
+
+  test("the first post reports it created the board; a later one does not", async () => {
+    // The MCP tool turns created=true into "there was no board, I made one — post
+    // here from now on", the one moment the workflow needs explaining.
+    const id = await mkIssue("first post announces creation");
+    const first = await ccPost(id, "opening the conversation");
+    expect(first.json.created).toBe(true);
+    const second = await ccPost(id, "following up");
+    expect(second.json.created).toBe(false);
   });
 
   test("a second issue gets its own board", async () => {
