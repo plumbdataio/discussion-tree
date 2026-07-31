@@ -350,6 +350,22 @@ export function subscribeOpenIssueTracker(
  */
 export const ISSUE_ID_RE = /^iss_[a-z0-9]{6,14}(_[a-f0-9]{8,})?$/i;
 
+/**
+ * A board id as written in a message, matched by the raw-text linkifier so a
+ * bare `bd_...` in prose links to /board/<id> (see rehypeLinkifyIds).
+ *
+ * Same tightness discipline as ISSUE_ID_RE, for the same reason: placeholders
+ * in an explanation ("bd_xxx", "bd_yyy", "bd_...") must not turn into links to
+ * nothing. The guard is the LENGTH — every real board id is 8 base36 chars
+ * (the legacy short form) or 32 hex chars (`generateId("bd")`), while the
+ * placeholders people write are 3-4 chars, so a floor of 8 rejects them.
+ *
+ * Existence is deliberately NOT checked (the user approved linking bd_ without
+ * verifying): a shortened 32-hex id written in prose may 404, which is accepted
+ * — the /board route resolves by exact id, not prefix.
+ */
+export const BD_ID_RE = /^bd_[a-z0-9]{8,32}$/i;
+
 export function notifyIssuesChanged() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(CHANGED_EVENT));

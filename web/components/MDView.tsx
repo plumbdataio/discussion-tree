@@ -11,6 +11,12 @@ import { MarkdownAnchor, urlTransform } from "./MarkdownAnchor.tsx";
 import { escapeCodeHostileEmphasis } from "../utils/markdownText.ts";
 import { ISSUE_ID_RE } from "../utils/issues.ts";
 import { IssueIdLink } from "./IssueIdLink.tsx";
+// Linkifies RAW (un-backticked) iss_/bd_ ids in message text. People kept
+// forgetting the backticks, so bare ids in prose stayed dead — a component
+// override can't rewrite a plain text node, so this walks the hast instead.
+// The same tight patterns as the code-span path keep placeholders (iss_xxx)
+// from becoming dead links.
+import { rehypeLinkifyIds } from "../utils/rehypeLinkifyIds.ts";
 // @reusable-ui MDView — USE WHEN: rendering user- or CC-authored markdown text
 //   (GFM + CJK-aware bold/strikethrough). INSTEAD OF: raw text or
 //   dangerouslySetInnerHTML.
@@ -54,9 +60,22 @@ function MDViewImpl({
           [remarkCjkFriendlyGfmStrikethrough, { singleTilde: false }],
           remarkBreaks,
         ]}
+        rehypePlugins={[rehypeLinkifyIds]}
         urlTransform={urlTransform}
         components={{
-          a: ({ node, ...props }) => <MarkdownAnchor {...props} />,
+          a: ({ node, ...props }) => {
+            // A raw bd_ id (or a hand-written /board/ link) points at an
+            // in-app board route. Render it as a plain anchor so the app's
+            // global click-interceptor does a same-tab SPA navigation — the
+            // same behaviour as the sidebar's board links — rather than
+            // MarkdownAnchor's target=_blank, which full-reloads the SPA in a
+            // new tab. Everything else stays on MarkdownAnchor.
+            const href = typeof props.href === "string" ? props.href : "";
+            if (href.startsWith("/board/")) {
+              return <a {...props} className="md-board-link" />;
+            }
+            return <MarkdownAnchor {...props} />;
+          },
           // remark-gfm parses tables into a bare <table>. dt's columns are
           // narrow, so wrap it in a horizontally-scrollable box (with a
           // scroll-shadow hint) instead of letting a wide table blow out the

@@ -1,6 +1,7 @@
 import "./happydom.ts";
 import { describe, test, expect } from "bun:test";
 import {
+  BD_ID_RE,
   DEFAULT_FILTERS,
   ISSUE_ID_RE,
   NO_SESSION,
@@ -210,5 +211,33 @@ describe("issue ids in messages", () => {
     // Not an id at all — a code span of ordinary text must stay a code span.
     expect(ISSUE_ID_RE.test("issue_ids")).toBe(false);
     expect(ISSUE_ID_RE.test("bd_vlap7p27")).toBe(false);
+  });
+});
+
+// Board ids get the same raw-text linkify treatment as issue ids, with the same
+// tightness discipline: a real board id is 8 base36 chars (the legacy short
+// form) or 32 hex chars (generateId("bd")), and the floor of 8 is what keeps
+// the placeholders people write ("bd_xxx") from becoming dead links.
+describe("board ids in messages", () => {
+  test("matches real board ids, short and full", () => {
+    // Legacy 8-char base36 (a real, resolvable id).
+    expect(BD_ID_RE.test("bd_vlap7p27")).toBe(true);
+    expect(BD_ID_RE.test("bd_0a2h3qjm")).toBe(true);
+    // Full 32-hex form from generateId("bd").
+    expect(BD_ID_RE.test("bd_00ae8dc01fc1004e37e469794d6797ec")).toBe(true);
+    // A shortened 32-hex id written in prose — accepted; may 404, which the
+    // user signed off on (no existence check).
+    expect(BD_ID_RE.test("bd_a1c660ba")).toBe(true);
+  });
+
+  test("does not match placeholders or non-ids", () => {
+    expect(BD_ID_RE.test("bd_xxx")).toBe(false);
+    expect(BD_ID_RE.test("bd_yyy")).toBe(false);
+    expect(BD_ID_RE.test("bd_todo")).toBe(false);
+    expect(BD_ID_RE.test("bd_")).toBe(false);
+    // An issue id is not a board id.
+    expect(BD_ID_RE.test("iss_ms5kq850")).toBe(false);
+    // Over the 32-char ceiling — no real id is this long.
+    expect(BD_ID_RE.test("bd_00ae8dc01fc1004e37e469794d6797ecab")).toBe(false);
   });
 });
