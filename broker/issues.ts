@@ -210,6 +210,39 @@ db.run(`
   )
 `);
 
+// FREE-TEXT TAGS on an issue (many-to-many). A side table rather than a column
+// because an issue carries several, they are added and removed independently,
+// and the filter needs "which tags exist" cheaply. PRIMARY KEY (issue_id, tag)
+// makes a tag unique within one issue at the DB level, so a double-add is a
+// no-op instead of a duplicate chip; the tag index backs the filter's
+// "tags actually in use" scan.
+//
+// Created BEFORE the prepared statements that read it: bun:sqlite compiles a
+// statement at prepare time, so one written above a missing table throws
+// "no such table" at import and the broker never starts.
+db.run(`
+  CREATE TABLE IF NOT EXISTS issue_tags (
+    issue_id  TEXT NOT NULL,
+    tag       TEXT NOT NULL,
+    PRIMARY KEY (issue_id, tag)
+  )
+`);
+db.run("CREATE INDEX IF NOT EXISTS idx_issue_tags_tag ON issue_tags(tag)");
+
+// Longest a single tag may be. Kept short on purpose — a tag is a label, not a
+// note; anything longer belongs in the title or body.
+export const TAG_MAX_LEN = 20;
+
+const deleteIssueTagsStmt = db.prepare(
+  "DELETE FROM issue_tags WHERE issue_id = ?",
+);
+const insertIssueTagStmt = db.prepare(
+  "INSERT OR IGNORE INTO issue_tags (issue_id, tag) VALUES (?, ?)",
+);
+const selectIssueTagsStmt = db.prepare(
+  "SELECT tag FROM issue_tags WHERE issue_id = ? ORDER BY tag",
+);
+
 // Returns true when the column was actually added, i.e. this process ran the
 // migration — the only moment a one-time backfill may run. Re-running a
 // backfill on every boot would keep overwriting rows that have since changed.
@@ -246,6 +279,9 @@ export type IssueRow = {
   // the first message. See broker/issue-chat.ts.
   chat_board_id?: string | null;
   chat_node_id?: string | null;
+  // Free-text tags, present on create / update / get / list reads. Loaded from
+  // the issue_tags side table rather than being a column here.
+  tags?: string[];
 };
 
 const selectIssue = db.prepare(
@@ -273,6 +309,82 @@ function coercePriority(v: unknown): IssuePriority | null {
     : null;
 }
 
+// Clean the desired tag set for an issue: trim each, drop empties, reject any
+// over TAG_MAX_LEN, dedupe. The array is the FULL set (create sets it, update
+// replaces it), so this is the one gate every tag passes through.
+//
+// Over-length is REJECTED with a clear error, not truncated: a silently cut
+// tag reads as a different label than the one meant, and two callers trimming
+// the same long string to different lengths would never match for the filter.
+// Absence (null/undefined) is not an error — it means "no tags", used by create.
+function normalizeTags(raw: unknown):
+  | { ok: true; tags: string[] }
+  | { ok: false; error: string } {
+  if (raw === null || raw === undefined) return { ok: true, tags: [] };
+  if (!Array.isArray(raw)) {
+    return { ok: false, error: "tags must be an array of strings" };
+  }
+  const seen = new Set<string>();
+  const tags: string[] = [];
+  for (const item of raw) {
+    const tag = String(item ?? "").trim();
+    if (!tag) continue;
+    if (tag.length > TAG_MAX_LEN) {
+      return {
+        ok: false,
+        error: `tag "${tag}" is too long (max ${TAG_MAX_LEN} characters)`,
+      };
+    }
+    if (seen.has(tag)) continue;
+    seen.add(tag);
+    tags.push(tag);
+  }
+  return { ok: true, tags };
+}
+
+function tagsFor(issueId: string): string[] {
+  return (selectIssueTagsStmt.all(issueId) as { tag: string }[]).map(
+    (r) => r.tag,
+  );
+}
+
+// Attach an issue's tags to the row the API returns, so the UI renders chips
+// without a second round-trip per issue.
+function withTags(issue: IssueRow): IssueRow {
+  return { ...issue, tags: tagsFor(issue.id) };
+}
+
+// Replace an issue's whole tag set. Delete-then-insert rather than diffing: the
+// set is tiny and the caller always sends the full desired set, so a diff would
+// be more code for no gain.
+function setIssueTags(issueId: string, tags: string[]): void {
+  deleteIssueTagsStmt.run(issueId);
+  for (const tag of tags) insertIssueTagStmt.run(issueId, tag);
+}
+
+// Batch-load tags for a whole list of issues in ONE query and attach them, so a
+// list read stays a fixed number of round-trips instead of one per row.
+function attachTagsToList(issues: IssueRow[]): IssueRow[] {
+  if (issues.length === 0) return issues;
+  const rows = db
+    .prepare(
+      "SELECT issue_id, tag FROM issue_tags" +
+        " WHERE issue_id IN (SELECT value FROM json_each(?)) ORDER BY tag",
+    )
+    .all(JSON.stringify(issues.map((i) => i.id))) as {
+    issue_id: string;
+    tag: string;
+  }[];
+  const byId = new Map<string, string[]>();
+  for (const r of rows) {
+    const cur = byId.get(r.issue_id) ?? [];
+    cur.push(r.tag);
+    byId.set(r.issue_id, cur);
+  }
+  for (const i of issues) i.tags = byId.get(i.id) ?? [];
+  return issues;
+}
+
 export function handleCreateIssue(body: any):
   | { ok: true; issue: IssueRow }
   | { ok: false; error: string } {
@@ -287,6 +399,10 @@ export function handleCreateIssue(body: any):
   if (!priority) {
     return { ok: false, error: `priority must be one of ${ISSUE_PRIORITIES.join(" / ")}` };
   }
+  // Validated BEFORE the INSERT so a bad tag rejects the whole create, exactly
+  // like a bad enum does — a half-written row with no tags would be worse.
+  const tags = normalizeTags(body?.tags);
+  if (!tags.ok) return { ok: false, error: tags.error };
 
   const now = nowIso();
   const id = generateRandomId("iss");
@@ -313,7 +429,8 @@ export function handleCreateIssue(body: any):
       closedNow,
     ],
   );
-  const issue = selectIssue.get(id) as IssueRow;
+  if (tags.tags.length) setIssueTags(id, tags.tags);
+  const issue = withTags(selectIssue.get(id) as IssueRow);
   // Filed BY the user, AT a session: tell that CC. Without this the issue sits
   // in a list nobody is watching — the user writes it down precisely because
   // they do not want to have to also say it, and the tracker is not something
@@ -345,6 +462,14 @@ export function handleUpdateIssue(body: any):
   const id = String(body?.issue_id ?? body?.id ?? "");
   const current = selectIssue.get(id) as IssueRow | undefined;
   if (!current) return { ok: false, error: "issue not found" };
+
+  // tags is the FULL desired set — update replaces it. Validated up front so an
+  // invalid tag rejects the whole edit before any column is written. null =
+  // "not provided", which leaves the existing tags alone (an omitted field is
+  // untouched, the same rule session_id follows).
+  const tagsResult = body?.tags === undefined ? null : normalizeTags(body.tags);
+  if (tagsResult && !tagsResult.ok) return { ok: false, error: tagsResult.error };
+  const nextTags = tagsResult && tagsResult.ok ? tagsResult.tags : null;
 
   const sets: string[] = [];
   const args: (string | null)[] = [];
@@ -387,7 +512,11 @@ export function handleUpdateIssue(body: any):
     sets.push("state = ?");
     args.push(state);
   }
-  if (sets.length === 0) return { ok: true, issue: current };
+  // Nothing to write at all — no columns AND no tag change. A tag-only edit
+  // falls through so it still runs (and bumps updated_at below).
+  if (sets.length === 0 && nextTags === null) {
+    return { ok: true, issue: withTags(current) };
+  }
 
   // closed_at tracks the CLOSED/OPEN edge, not every write: stamp it when the
   // issue first lands on done/dropped, clear it if it reopens. Without the edge
@@ -409,7 +538,8 @@ export function handleUpdateIssue(body: any):
   args.push(now);
   args.push(id);
   db.run(`UPDATE issues SET ${sets.join(", ")} WHERE id = ?`, args);
-  const updated = selectIssue.get(id) as IssueRow;
+  if (nextTags !== null) setIssueTags(id, nextTags);
+  const updated = withTags(selectIssue.get(id) as IssueRow);
   // The conversation node carries the issue's title, and that node is what the
   // board and the sidebar show — leaving the old wording there makes a renamed
   // issue read as a different one.
@@ -513,6 +643,18 @@ export function handleListIssues(body: any): {
     where.push("i.session_id = ?");
     args.push(String(body.session_id));
   }
+  // Tag filter, OR semantics: an issue matches if it carries ANY of the given
+  // tags — the same "match any selected" rule the session axis uses, so the MCP
+  // list and the browser filter narrow identically. Empty / absent = no filter.
+  if (Array.isArray(body?.tags) && body.tags.length) {
+    const tags = body.tags.map((tExpr: unknown) => String(tExpr));
+    where.push(
+      `EXISTS (SELECT 1 FROM issue_tags it WHERE it.issue_id = i.id AND it.tag IN (${tags
+        .map(() => "?")
+        .join(", ")}))`,
+    );
+    args.push(...tags);
+  }
   // Reverse lookup: which issues does this message belong to. Used when
   // rendering a thread, and by the timeline view in the other direction.
   if (body?.linked_to_message !== undefined) {
@@ -572,7 +714,10 @@ export function handleListIssues(body: any): {
     // Oldest-updated first would bury fresh work; newest-updated first matches
     // how the user scans the list.
     " ORDER BY i.updated_at DESC";
-  return { ok: true, issues: db.prepare(sql).all(...args) as IssueRow[] };
+  return {
+    ok: true,
+    issues: attachTagsToList(db.prepare(sql).all(...args) as IssueRow[]),
+  };
 }
 
 // The sessions an issue may be filed under. Deliberately NOT /api/sessions:
@@ -641,7 +786,9 @@ export function handleGetIssue(body: any):
   const issue = selectIssue.get(String(body?.issue_id ?? body?.id ?? "")) as
     | IssueRow
     | undefined;
-  return issue ? { ok: true, issue } : { ok: false, error: "issue not found" };
+  return issue
+    ? { ok: true, issue: withTags(issue) }
+    : { ok: false, error: "issue not found" };
 }
 
 export function handleDeleteIssue(body: any):

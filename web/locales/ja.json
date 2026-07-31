@@ -519,7 +519,11 @@
     "timeline_here": "この課題のスレッド",
     "col_state": "担当・状態",
     "col_title": "課題",
-    "col_updated": "更新"
+    "col_updated": "更新",
+    "tags_label": "タグ",
+    "all_tags": "全タグ",
+    "tag_placeholder": "タグを追加",
+    "tag_remove": "タグ {{tag}} を外す"
   },
   "update": {
     "available": "新しいバージョンがあります",

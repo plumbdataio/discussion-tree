@@ -41,7 +41,9 @@ import {
   sessionMatches,
   stateMatches,
   subscribeOpenIssueTracker,
+  tagMatches,
   updateIssue,
+  TAG_MAX_LEN,
   type Issue,
   type IssueFilters,
   type IssueOwner,
@@ -94,6 +96,7 @@ type Draft = {
   state: IssueState;
   priority: IssuePriority;
   sessionId: string | null;
+  tags: string[];
 };
 
 // Ids are routinely shortened in prose ("iss_ms5kq850"), so a link carries a
@@ -110,7 +113,66 @@ const emptyDraft = (sessionId: string | null): Draft => ({
   state: "todo",
   priority: "mid",
   sessionId,
+  tags: [],
 });
+
+// A row of removable tag chips plus an input to add more. Kept local to the
+// tracker: it is the only tag editor there is, and the add/remove logic (trim,
+// dedupe, cap length) is specific to how tags are validated. The full set it
+// produces is what update_issue replaces, so add and remove both go through the
+// one save path.
+function TagEditor({
+  tags,
+  onChange,
+}: {
+  tags: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const { t } = useTranslation();
+  const [input, setInput] = useState("");
+  const add = () => {
+    const v = input.trim().slice(0, TAG_MAX_LEN);
+    if (v && !tags.includes(v)) onChange([...tags, v]);
+    setInput("");
+  };
+  return (
+    <div className="issue-tag-editor">
+      {tags.map((tag) => (
+        <span key={tag} className="issue-tag removable">
+          {tag}
+          <button
+            type="button"
+            className="issue-tag-remove"
+            aria-label={t("issues.tag_remove", { tag })}
+            onClick={() => onChange(tags.filter((x) => x !== tag))}
+          >
+            <X size={11} strokeWidth={2.5} />
+          </button>
+        </span>
+      ))}
+      <input
+        type="text"
+        className="issue-tag-input"
+        name="issue-tag"
+        value={input}
+        maxLength={TAG_MAX_LEN}
+        placeholder={t("issues.tag_placeholder")}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          // Enter or comma commits a tag; Backspace on an empty box removes the
+          // last one, so the whole editor is reachable without the mouse.
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            add();
+          } else if (e.key === "Backspace" && !input && tags.length) {
+            onChange(tags.slice(0, -1));
+          }
+        }}
+        onBlur={add}
+      />
+    </div>
+  );
+}
 
 // A session is named by whoever set it; fall back to the last path segment of
 // its cwd, which is what the sidebar shows for unnamed ones.
@@ -373,29 +435,43 @@ export function IssueTrackerModal() {
   const inSessions = useCallback((i: Issue) => sessionMatches(i, filters), [filters]);
   const inOwners = useCallback((i: Issue) => ownerMatches(i, filters), [filters]);
   const inStates = useCallback((i: Issue) => stateMatches(i, filters), [filters]);
+  const inTags = useCallback((i: Issue) => tagMatches(i, filters), [filters]);
 
   const ownerCounts = useMemo(() => {
     const c: Record<string, number> = { user: 0, cc: 0, external: 0 };
-    for (const i of pool) if (inStates(i) && inSessions(i)) c[i.owner]++;
+    for (const i of pool) if (inStates(i) && inSessions(i) && inTags(i)) c[i.owner]++;
     return c;
-  }, [pool, inStates, inSessions]);
+  }, [pool, inStates, inSessions, inTags]);
 
   const stateCounts = useMemo(() => {
     const c: Record<string, number> = { todo: 0, doing: 0, done: 0, dropped: 0 };
-    for (const i of pool) if (inOwners(i) && inSessions(i)) c[i.state]++;
+    for (const i of pool) if (inOwners(i) && inSessions(i) && inTags(i)) c[i.state]++;
     return c;
-  }, [pool, inOwners, inSessions]);
+  }, [pool, inOwners, inSessions, inTags]);
 
   const sessionCounts = useMemo(() => {
     const c: Record<string, number> = {};
     for (const i of pool) {
-      if (inOwners(i) && inStates(i)) {
+      if (inOwners(i) && inStates(i) && inTags(i)) {
         const key = i.session_id ?? NO_SESSION;
         c[key] = (c[key] ?? 0) + 1;
       }
     }
     return c;
-  }, [pool, inOwners, inStates]);
+  }, [pool, inOwners, inStates, inTags]);
+
+  // Counted with the tag axis itself left out (like every other chip), so a tag
+  // never reads 0 merely because it is switched off — its number says what
+  // turning it on would reveal.
+  const tagCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const i of pool) {
+      if (inOwners(i) && inStates(i) && inSessions(i)) {
+        for (const tag of i.tags ?? []) c[tag] = (c[tag] ?? 0) + 1;
+      }
+    }
+    return c;
+  }, [pool, inOwners, inStates, inSessions]);
 
   // Expand whatever the link resolved to, once the rows are in hand.
   useEffect(() => {
@@ -472,6 +548,17 @@ export function IssueTrackerModal() {
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   }, [sessions, issues, sessionCounts, sessionNames, filters.sessionIds, t]);
 
+  // The tags actually in use across the loaded issues, most-used first. Anything
+  // currently selected stays listed even at zero, or the filter could not be
+  // undone once the last matching issue is retagged away.
+  const tagOptions = useMemo(() => {
+    const inUse = new Set<string>();
+    for (const i of issues) for (const tag of i.tags ?? []) inUse.add(tag);
+    return [...new Set([...inUse, ...filters.tags])]
+      .map((tag) => ({ value: tag, label: tag, count: tagCounts[tag] ?? 0 }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [issues, tagCounts, filters.tags]);
+
   const afterMutation = (includeDeleted: boolean) => {
     refetch(includeDeleted);
     notifyIssuesChanged();
@@ -500,6 +587,9 @@ export function IssueTrackerModal() {
       state: draft.state,
       priority: draft.priority,
       session_id: draft.sessionId,
+      // The full desired set — the broker replaces the issue's tags with it, so
+      // adds and removes made in the editor both land through this one save.
+      tags: draft.tags,
     };
     const r = draft.id
       ? await updateIssue(draft.id, fields)
@@ -567,6 +657,21 @@ export function IssueTrackerModal() {
   const timeHint = (i: Issue) =>
     t("issues.time_hint", { updated: fmt(i.updated_at), created: fmt(i.created_at) });
 
+  // Right-aligned tag chips that SHARE the title column's width — the title
+  // takes the space it needs and the chips sit at the far right of the same
+  // cell (no separate column). Returns null when untagged so the layout is
+  // unchanged for the common case.
+  const renderTags = (i: Issue) =>
+    (i.tags?.length ?? 0) > 0 ? (
+      <span className="issue-tags">
+        {i.tags!.map((tag) => (
+          <span key={tag} className="issue-tag">
+            {tag}
+          </span>
+        ))}
+      </span>
+    ) : null;
+
   const renderRowBody = (i: Issue) => (
     <div className="issue-row-detail">
       {i.body ? (
@@ -627,6 +732,7 @@ export function IssueTrackerModal() {
                   state: i.state,
                   priority: i.priority ?? "mid",
                   sessionId: i.session_id,
+                  tags: i.tags ?? [],
                 })
               }
             >
@@ -851,6 +957,18 @@ export function IssueTrackerModal() {
             onChange={(next) => setFilters((f) => ({ ...f, sessionIds: next }))}
             options={sessionOptions}
           />
+          {/* Only shown once at least one issue is tagged — an empty tag axis is
+              a dropdown that can only ever say "no tags", which is noise. */}
+          {tagOptions.length > 0 && (
+            <MultiSelectDropdown
+              className="ms-tags"
+              label={t("issues.tags_label")}
+              allLabel={t("issues.all_tags")}
+              selected={filters.tags}
+              onChange={(next) => setFilters((f) => ({ ...f, tags: next }))}
+              options={tagOptions}
+            />
+          )}
           <label className="issue-search">
             <Search size={13} strokeWidth={2} />
             <input
@@ -918,6 +1036,10 @@ export function IssueTrackerModal() {
                   void submitDraft();
                 }
               }}
+            />
+            <TagEditor
+              tags={draft.tags}
+              onChange={(next) => setDraft((d) => d && { ...d, tags: next })}
             />
             <div className="issue-editor-actions">
               <select
@@ -1060,12 +1182,15 @@ export function IssueTrackerModal() {
                         {i.session_id ? sessionNames.get(i.session_id) ?? "" : ""}
                       </td>
                       <td className="issue-cell-title">
-                        {i.title}
-                        {i.deleted_at && (
-                          <span className="issue-deleted-tag">
-                            {t("issues.deleted")}
-                          </span>
-                        )}
+                        <span className="issue-title-text">
+                          {i.title}
+                          {i.deleted_at && (
+                            <span className="issue-deleted-tag">
+                              {t("issues.deleted")}
+                            </span>
+                          )}
+                        </span>
+                        {renderTags(i)}
                       </td>
                       <td className="issue-cell-updated" title={timeHint(i)}>
                         {ago(i.updated_at)}
@@ -1133,7 +1258,10 @@ export function IssueTrackerModal() {
                                 : ""}
                             </span>
                           </div>
-                          <div className="issue-card-title">{i.title}</div>
+                          <div className="issue-card-title">
+                            <span className="issue-title-text">{i.title}</span>
+                            {renderTags(i)}
+                          </div>
                           {isAwaitingApproval(i) && renderApproval(i)}
                           {expanded === i.id && renderRowBody(i)}
                         </div>

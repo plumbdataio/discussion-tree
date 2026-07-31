@@ -519,7 +519,11 @@
     "timeline_here": "This issue's own thread",
     "col_state": "Owner / state",
     "col_title": "Issue",
-    "col_updated": "Updated"
+    "col_updated": "Updated",
+    "tags_label": "Tags",
+    "all_tags": "All tags",
+    "tag_placeholder": "Add a tag",
+    "tag_remove": "Remove tag {{tag}}"
   },
   "update": {
     "available": "A newer version is available",

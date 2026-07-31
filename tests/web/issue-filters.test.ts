@@ -11,6 +11,7 @@ import {
   sanitizeFilters,
   sessionMatches,
   stateMatches,
+  tagMatches,
   type Issue,
   type IssueFilters,
 } from "../../web/utils/issues.ts";
@@ -63,6 +64,79 @@ describe("issue filters — reading back what was stored", () => {
     expect(f.sessionIds).toEqual([]);
     expect(f.owners).toEqual(["user"]);
   });
+
+  test("tags read back as a string array; a pre-tags blob widens to every tag", () => {
+    // Same shape and same rules as sessionIds: strings survive, junk drops, and
+    // a blob saved before tags existed simply has none — which reads as "every
+    // tag", not as a broken filter.
+    expect(sanitizeFilters({}).tags).toEqual([]);
+    expect(DEFAULT_FILTERS.tags).toEqual([]);
+    expect(sanitizeFilters({ tags: ["a", 3, "b", null] }).tags).toEqual(["a", "b"]);
+    expect(sanitizeFilters({ tags: 42 }).tags).toEqual([]);
+  });
+});
+
+// The tag axis follows the session axis exactly: empty = every tag, otherwise
+// the issue matches if it carries ANY selected tag (OR). An awaiting-approval
+// row obeys it too, so a closed issue from outside the tag slice does not sit on
+// top of a tag-scoped list.
+describe("issue filters — the tag axis", () => {
+  const mk = (tags: string[], over: Partial<Issue> = {}): Issue => ({
+    id: "iss_t",
+    title: "t",
+    body: "",
+    owner: "cc",
+    state: "doing",
+    session_id: "s_1",
+    created_at: "2026-08-01T00:00:00.000Z",
+    updated_at: "2026-08-01T00:00:00.000Z",
+    closed_at: null,
+    tags,
+    ...over,
+  });
+  const empty: IssueFilters = {
+    owners: [],
+    states: [],
+    sessionIds: [],
+    tags: [],
+    q: "",
+    showDeleted: false,
+  };
+
+  test("empty selection matches everything, including an untagged issue", () => {
+    expect(tagMatches(mk(["ui"]), empty)).toBe(true);
+    expect(tagMatches(mk([]), empty)).toBe(true);
+    // tags may be absent entirely on an older row.
+    expect(tagMatches(mk([] as string[], { tags: undefined }), empty)).toBe(true);
+  });
+
+  test("a non-empty selection matches on ANY overlap (OR)", () => {
+    const i = mk(["ui", "perf"]);
+    expect(tagMatches(i, { ...empty, tags: ["perf"] })).toBe(true);
+    expect(tagMatches(i, { ...empty, tags: ["bug"] })).toBe(false);
+    // Any one of several selected tags is enough.
+    expect(tagMatches(i, { ...empty, tags: ["bug", "ui"] })).toBe(true);
+    // An untagged issue drops out the moment a tag is required.
+    expect(tagMatches(mk([]), { ...empty, tags: ["ui"] })).toBe(false);
+  });
+
+  test("isVisible applies tags alongside the other axes", () => {
+    const i = mk(["ui"]);
+    expect(isVisible(i, { ...empty, tags: ["ui"] })).toBe(true);
+    expect(isVisible(i, { ...empty, tags: ["bug"] })).toBe(false);
+  });
+
+  test("a close awaiting sign-off obeys the tag filter", () => {
+    // owner=cc + done + not approved = awaiting; it jumps owner/state but still
+    // obeys session — and, the same way, tags.
+    const pending = mk(["ui"], { owner: "cc", state: "done", close_approved_at: null });
+    expect(isAwaitingApproval(pending)).toBe(true);
+    // Default (no tag selected) still shows it.
+    expect(isVisible(pending, empty)).toBe(true);
+    // Scoped to its own tag: shown. Scoped to another: hidden.
+    expect(isVisible(pending, { ...empty, tags: ["ui"] })).toBe(true);
+    expect(isVisible(pending, { ...empty, tags: ["perf"] })).toBe(false);
+  });
 });
 
 // The rule that broke on 2026-07-29: session read an empty selection as "no
@@ -90,6 +164,7 @@ describe("issue filters — empty means unfiltered on every axis", () => {
     owners: [],
     states: [],
     sessionIds: [],
+    tags: [],
     q: "",
     showDeleted: false,
   };
@@ -143,6 +218,7 @@ describe("issue filters — a close awaiting sign-off", () => {
     owners: [],
     states: [],
     sessionIds: [],
+    tags: [],
     q: "",
     showDeleted: false,
   };

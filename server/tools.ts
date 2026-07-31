@@ -901,6 +901,11 @@ export const TOOLS = [
           description: "How much it matters, independent of whether it can move: low = fine to leave indefinitely, mid (default) = want to but not now, high = needs doing now.",
         },
         session_id: { type: "string" as const, description: "Owning session; defaults to yours." },
+        tags: {
+          type: "array" as const,
+          items: { type: "string" as const },
+          description: "Free-text labels, max 20 chars each, deduped. Optional.",
+        },
       },
       required: ["title"],
     },
@@ -1044,6 +1049,12 @@ export const TOOLS = [
             "dropped",
           ] },
         priority: { type: "string" as const, enum: ["low", "mid", "high"] },
+        tags: {
+          type: "array" as const,
+          items: { type: "string" as const },
+          description:
+            "The FULL desired tag set (max 20 chars each) — this REPLACES the issue's tags, so include the ones to keep. Omit to leave them unchanged; pass [] to clear.",
+        },
       },
       required: ["issue_id"],
     },
@@ -1067,6 +1078,11 @@ export const TOOLS = [
           ] },
         priority: { type: "string" as const, enum: ["low", "mid", "high"] },
         session_id: { type: "string" as const },
+        tags: {
+          type: "array" as const,
+          items: { type: "string" as const },
+          description: "Keep only issues carrying ANY of these tags.",
+        },
         include_closed: { type: "boolean" as const, description: "Include done / dropped." },
       },
     },

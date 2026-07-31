@@ -59,7 +59,13 @@ export type Issue = {
    * finished it and the user has not seen that yet.
    */
   close_approved_at?: string | null;
+  /** Free-text labels. Absent/[] = untagged. */
+  tags?: string[];
 };
+
+// Longest a single tag may be — mirrors the broker's TAG_MAX_LEN. The editor
+// caps input at this length so the reject path is only ever hit by the API.
+export const TAG_MAX_LEN = 20;
 
 /**
  * Closed by CC, not yet acknowledged.
@@ -104,6 +110,9 @@ export type IssueFilters = {
   // Multi-select because the sessions worth looking at together are rarely one
   // (a repo and its sibling tooling repo, say) and never all.
   sessionIds: string[];
+  // Empty means "every tag", same convention as the other axes. An issue
+  // matches if it carries ANY selected tag (OR, like the session axis).
+  tags: string[];
   q: string;
   showDeleted: boolean;
 };
@@ -115,6 +124,7 @@ export const DEFAULT_FILTERS: IssueFilters = {
   owners: ["user"],
   states: [...OPEN_STATES],
   sessionIds: [],
+  tags: [],
   q: "",
   showDeleted: false,
 };
@@ -142,6 +152,11 @@ export function sanitizeFilters(raw: unknown): IssueFilters {
     states,
     sessionIds: Array.isArray(f.sessionIds)
       ? f.sessionIds.filter((s): s is string => typeof s === "string")
+      : [],
+    // Same shape as sessionIds: an array of strings, empty = unfiltered. A blob
+    // saved before tags existed simply has none, which reads as "every tag".
+    tags: Array.isArray(f.tags)
+      ? f.tags.filter((t): t is string => typeof t === "string")
       : [],
     q: typeof f.q === "string" ? f.q : "",
     showDeleted: f.showDeleted === true,
@@ -176,6 +191,13 @@ export function sessionMatches(i: Issue, f: IssueFilters): boolean {
     f.sessionIds.includes(i.session_id ?? NO_SESSION)
   );
 }
+// OR semantics, like the session axis: the issue matches if it carries ANY of
+// the selected tags. Empty selection = no filter.
+export function tagMatches(i: Issue, f: IssueFilters): boolean {
+  if (f.tags.length === 0) return true;
+  const tags = i.tags ?? [];
+  return f.tags.some((t) => tags.includes(t));
+}
 
 /**
  * Should this row be on screen? All three axes, EXCEPT that a close awaiting
@@ -186,10 +208,21 @@ export function sessionMatches(i: Issue, f: IssueFilters): boolean {
  * sitting on top of session A's list, and its disappearing act after you send
  * it back — the below-list is session-filtered, so it can't reappear there —
  * read as a bug. Keeping the session axis makes the top and the rest agree.
+ *
+ * The tag axis is treated exactly like the session axis here: a sign-off obeys
+ * it too. Both are the user's own way of narrowing to a slice of work; when the
+ * list is scoped to one, a closed issue from OUTSIDE that slice sitting on top
+ * would be the same out-of-place row the session rule exists to prevent. By
+ * default (no tag selected) this filters nothing, so a sign-off still shows.
  */
 export function isVisible(i: Issue, f: IssueFilters): boolean {
-  if (isAwaitingApproval(i)) return sessionMatches(i, f);
-  return ownerMatches(i, f) && stateMatches(i, f) && sessionMatches(i, f);
+  if (isAwaitingApproval(i)) return sessionMatches(i, f) && tagMatches(i, f);
+  return (
+    ownerMatches(i, f) &&
+    stateMatches(i, f) &&
+    sessionMatches(i, f) &&
+    tagMatches(i, f)
+  );
 }
 
 async function callBroker<T>(path: string, body: unknown): Promise<T> {

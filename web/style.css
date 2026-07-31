@@ -6915,6 +6915,44 @@ ul.maps li.current .sidebar-map-link {
   flex: 1;
 }
 
+/* Tag editor in the draft: existing tags as removable chips, then an input that
+   commits on Enter / comma / blur. */
+.issue-tag-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.issue-tag.removable {
+  padding-right: 3px;
+}
+.issue-tag-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.65;
+  border-radius: 50%;
+}
+.issue-tag-remove:hover {
+  opacity: 1;
+}
+.issue-tag-input {
+  flex: 1 1 120px;
+  min-width: 120px;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+}
+
 /* MultiSelectDropdown — see web/components/MultiSelectDropdown.tsx */
 .ms-wrap {
   position: relative;
@@ -7179,7 +7217,7 @@ ul.maps li.current .sidebar-map-link {
 .issue-row.expanded {
   background: var(--bg);
 }
-.issue-row.deleted .issue-cell-title {
+.issue-row.deleted .issue-title-text {
   text-decoration: line-through;
   opacity: 0.6;
 }
@@ -7191,9 +7229,43 @@ ul.maps li.current .sidebar-map-link {
   width: 1%;
   white-space: nowrap;
 }
+/* Title + its tags share this one cell (no separate tag column): the title
+   takes the space it needs on the left and the tag chips sit right-aligned at
+   the far end of the same cell. */
 .issue-cell-title {
   color: var(--text);
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.issue-title-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* Right-aligned, wrapping down if there are many, and capped so a long tag list
+   can never crowd the title out entirely. */
+.issue-tags {
+  flex: 0 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: 45%;
+}
+.issue-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 9px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid transparent;
 }
 .issue-deleted-tag {
   margin-left: 8px;
@@ -7517,6 +7589,19 @@ ul.maps li.current .sidebar-map-link {
   font-weight: 500;
   color: var(--text);
   line-height: 1.45;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+.issue-card-title .issue-title-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* In a narrow card the tags wrap onto their own line under the title rather
+   than being clamped to a fraction of the width. */
+.issue-card-title .issue-tags {
+  max-width: 100%;
 }
 
 :root[data-theme="dark"] .issue-chip.owner-user {
