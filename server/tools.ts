@@ -11,13 +11,23 @@
 
 import type { CreateBoardResponse } from "../shared/types.ts";
 import { brokerFetch, fetchImage } from "./broker-client.ts";
+import { ONBOARD_GUIDE } from "./onboard-guide.ts";
 import { ensureSession } from "./state.ts";
 
 export const TOOLS = [
   {
+    name: "onboard",
+    description:
+      "Read this FIRST before doing any discussion-tree work — the full guide to boards, issues, maps, diagrams, and channel messages, plus how to work well here. The delivered server instructions are only a bootstrap (the client truncates them), so this tool returns the real manual. No arguments; call it once per session and read what it returns before creating anything or replying to a channel message.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+    },
+  },
+  {
     name: "create_board",
     description:
-      "Create a discussion board with concerns and items as a JSON tree. Returns the URL to share with the user. STRUCTURE RULE (critical): a CONCERN is a category header with NO reply thread — the user cannot answer it. Every question / option / decision you want a reply on MUST be an ITEM under a concern (items are the only nodes with a reply thread). Never write the discussion into a concern and leave it without items — the user would see a header with nothing to answer. Every concern needs at least one item. TITLE STYLE: short titles (<40 chars), one consistent grammar across siblings, no redundant board/concern prefix on child items — see NODE / CONCERN TITLE FORMATTING in the server instructions.",
+      "Create a discussion board with concerns and items as a JSON tree. Returns the URL to share with the user. BE PROACTIVE: when 2+ distinct decision points / design choices / open questions arise in one exchange, default to OFFERING a structured board (with proposed concerns/items) rather than burying parallel discussions in a single CLI thread — and when the user has clearly opted into using dt for the current work, just CREATE it and share the URL without a 'shall I?' round-trip. Boards are cheap and reversible (close_board), so an unused one costs far less than serial CLI discussion; the WAITING RULE's caution about heavy changes does NOT apply to board creation. STRUCTURE RULE (critical): a CONCERN is a category header with NO reply thread — the user cannot answer it. Every question / option / decision you want a reply on MUST be an ITEM under a concern (items are the only nodes with a reply thread). Never write the discussion into a concern and leave it without items — the user would see a header with nothing to answer. Every concern needs at least one item. TITLE STYLE: short titles (<40 chars), one consistent grammar across siblings, no redundant board/concern prefix on child items — see NODE / CONCERN TITLE FORMATTING in the onboard guide.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -57,7 +67,7 @@ export const TOOLS = [
   {
     name: "add_concern",
     description:
-      "Add a top-level concern (a CATEGORY HEADER — not repliable) to an existing board, together with its items. A concern only groups items; the user can only reply on ITEMS, so always give the concern at least one item (put every question / decision in an item, never in the concern itself). NOTE: the default conversation board (the auto-created 'Conversation' board, one per cc_session_id) has a FIXED structure of one concern + one item; add_concern / add_item / move_node / reorder_node / delete_node all REJECT it. If a user message on the default board needs structured option-evaluation, create_board a NEW board for it instead of trying to grow the default board. TITLE STYLE: short (<40 chars), no redundant board/concern prefix, match sibling grammar — see NODE / CONCERN TITLE FORMATTING in the server instructions.",
+      "Add a top-level concern (a CATEGORY HEADER — not repliable) to an existing board, together with its items. A concern only groups items; the user can only reply on ITEMS, so always give the concern at least one item (put every question / decision in an item, never in the concern itself). NOTE: the default conversation board (the auto-created 'Conversation' board, one per cc_session_id) has a FIXED structure of one concern + one item; add_concern / add_item / move_node / reorder_node / delete_node all REJECT it. If a user message on the default board needs structured option-evaluation, create_board a NEW board for it instead of trying to grow the default board. TITLE STYLE: short (<40 chars), no redundant board/concern prefix, match sibling grammar — see NODE / CONCERN TITLE FORMATTING in the onboard guide.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -79,7 +89,7 @@ export const TOOLS = [
   {
     name: "add_item",
     description:
-      "Add a DISCUSSION item under a concern. Boards are intentionally 2-level (concern → items) — sub-items are not supported. If a topic feels like it needs a sub-item, either split it into its own concern or restructure with update_node / move_node. NOT FOR CHECKLISTS: if you're making a checklist / task list / to-do (lines you'll check off), do NOT add a concern full of items as fake checkboxes — add ONE node and mark_checklist_node it, then add lines via record_decision. NOTE: the default conversation board has a FIXED structure of one concern + one item; add_item rejects it (along with add_concern / move_node / reorder_node / delete_node). For structured option-evaluation derived from a default-board conversation, create_board a NEW board instead of growing the default board. TITLE STYLE: short (<40 chars), drop board/concern prefix, match sibling grammar — see NODE / CONCERN TITLE FORMATTING in the server instructions.",
+      "Add a DISCUSSION item under a concern. Boards are intentionally 2-level (concern → items) — sub-items are not supported. If a topic feels like it needs a sub-item, either split it into its own concern or restructure with update_node / move_node. NOT FOR CHECKLISTS: if you're making a checklist / task list / to-do (lines you'll check off), do NOT add a concern full of items as fake checkboxes — add ONE node and mark_checklist_node it, then add lines via record_decision. NOTE: the default conversation board has a FIXED structure of one concern + one item; add_item rejects it (along with add_concern / move_node / reorder_node / delete_node). For structured option-evaluation derived from a default-board conversation, create_board a NEW board instead of growing the default board. TITLE STYLE: short (<40 chars), drop board/concern prefix, match sibling grammar — see NODE / CONCERN TITLE FORMATTING in the onboard guide.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -104,7 +114,7 @@ export const TOOLS = [
   {
     name: "post_to_node",
     description:
-      "Post your reply to a node's UI thread AND set the node's status in one call. The status parameter is REQUIRED — it represents where this node stands AFTER your post, forcing you to make the status decision explicit each time you respond. Use 'discussing' for ongoing back-and-forth without a decision yet; 'adopted' / 'rejected' / 'agreed' / 'resolved' to mark a decision; 'needs-reply' to flag for user attention. The broker inserts the message first, then logs the status transition (if changed), so the timeline reads naturally: message → status change.",
+      "Post your reply to a node's UI thread AND set the node's status in one call. node_id MUST point to an ITEM — the broker REJECTS a post targeting a concern (concerns are category headers with no thread; the post would be stranded). To post under a concern, pick one of its items or add one with add_item. The status parameter is REQUIRED — it represents where this node stands AFTER your post, forcing you to make the status decision explicit each time you respond. Use 'discussing' for ongoing back-and-forth without a decision yet; 'adopted' / 'rejected' / 'agreed' / 'resolved' to mark a decision; 'needs-reply' to flag for user attention. The broker inserts the message first, then logs the status transition (if changed), so the timeline reads naturally: message → status change. ISSUE IDS: an issue id written in a backtick code span (iss_...) becomes a clickable link in the UI that opens that issue — so whenever a message is about a specific issue (filing it, changing its state, discussing it) write the id as a code span, not the title alone, and keep its exact form; reformatting breaks the link. IMAGES YOU RECEIVE: when the relayed message text contains a line like \"[image] /Users/.../uploads/<board>/img_xxx.png\", use the Read tool on that path BEFORE you reply (Read handles PNG/JPG natively) — the image is part of the user's answer, so don't reply without looking at it.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -139,7 +149,7 @@ export const TOOLS = [
   {
     name: "update_node",
     description:
-      "Update title / context / kind of an existing node. Use for typo fixes, evolving descriptions, or converting concern↔item when the structure was misjudged at creation. At least one of title / context / kind must be provided. The UI broadcasts a structure-update so clients refetch. Does NOT modify thread messages or status — for those use post_to_node / set_node_status. TITLE STYLE on rename: check sibling titles and match their grammar — see NODE / CONCERN TITLE FORMATTING in the server instructions.",
+      "Update title / context / kind of an existing node. Use for typo fixes, evolving descriptions, or converting concern↔item when the structure was misjudged at creation. At least one of title / context / kind must be provided. The UI broadcasts a structure-update so clients refetch. Does NOT modify thread messages or status — for those use post_to_node / set_node_status. TITLE STYLE on rename: check sibling titles and match their grammar — see NODE / CONCERN TITLE FORMATTING in the onboard guide.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -212,7 +222,7 @@ export const TOOLS = [
   {
     name: "set_node_status",
     description:
-      "Update a node's status. Status values capture different stages depending on the board's goal (option-decision board / Q&A board / agreement-building / etc): 'pending' (not started), 'discussing' (in progress), 'resolved' (handled, generic done), 'agreed' (consensus reached on this point), 'adopted' (this option was chosen as THE alternative), 'rejected' (this option was NOT chosen / dismissed; node greyed out in UI), 'needs-reply' (user is flagging this for the assistant's attention; vivid border in UI), 'done' (TODO-style completion — useful for feature-tracker boards where each item is a deliverable).",
+      "Update a node's status. Status is an ITEM-level concept: mark items when their decision lands. CONCERNS (category headers) do NOT carry a meaningful status — concern.status is FROZEN at 'pending' and set_node_status on a concern node is REJECTED, so don't try to mutate it; the board's discussing/settled rollup looks only at item statuses. Status values capture different stages depending on the board's goal (option-decision board / Q&A board / agreement-building / etc): 'pending' (not started), 'discussing' (in progress), 'resolved' (handled, generic done), 'agreed' (consensus reached on this point), 'adopted' (this option was chosen as THE alternative), 'rejected' (this option was NOT chosen / dismissed; node greyed out in UI), 'needs-reply' (user is flagging this for the assistant's attention; vivid border in UI), 'done' (TODO-style completion — useful for feature-tracker boards where each item is a deliverable).",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -1268,6 +1278,13 @@ export async function dispatchToolCall(
 ): Promise<ToolResult> {
   try {
     switch (name) {
+      case "onboard": {
+        // Static text — no broker round-trip and no session needed. This is
+        // the full guide that is deliberately kept OUT of the delivered
+        // instructions payload (which the client truncates at ~4KB).
+        return textResult(ONBOARD_GUIDE);
+      }
+
       case "create_board": {
         const sessionId = ensureSession();
         const a = args as { structure: any };

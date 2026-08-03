@@ -1,5 +1,7 @@
 import { describe, test, expect } from "bun:test";
-import { TOOLS } from "../../server/tools.ts";
+import { TOOLS, dispatchToolCall } from "../../server/tools.ts";
+import { INSTRUCTIONS } from "../../server/instructions.ts";
+import { ONBOARD_GUIDE } from "../../server/onboard-guide.ts";
 
 function findTool(name: string) {
   const t = TOOLS.find((x: any) => x.name === name);
@@ -41,5 +43,32 @@ describe("MCP tool input schemas", () => {
     ]) {
       expect(enums).toContain(expected);
     }
+  });
+});
+
+describe("instructions bootstrap + onboard tool", () => {
+  // The delivered MCP `instructions` payload must stay tiny: the client
+  // truncates the combined block at ~4KB across all servers, so the detail
+  // lives behind the `onboard` tool instead. Guard against silent regrowth.
+  test("delivered INSTRUCTIONS is a small bootstrap (< 2KB)", () => {
+    expect(Buffer.byteLength(INSTRUCTIONS, "utf8")).toBeLessThan(2048);
+  });
+
+  test("bootstrap compels calling onboard", () => {
+    expect(INSTRUCTIONS).toContain("onboard");
+  });
+
+  test("onboard tool is registered with no required args", () => {
+    const t: any = findTool("onboard");
+    // No arguments — it always returns the full guide.
+    expect(t.inputSchema.required ?? []).toEqual([]);
+  });
+
+  test("onboard returns a non-empty guide as text", async () => {
+    const res: any = await dispatchToolCall("onboard", {});
+    expect(res.isError).toBeUndefined();
+    const text = res.content?.[0]?.text ?? "";
+    expect(text).toBe(ONBOARD_GUIDE);
+    expect(text.length).toBeGreaterThan(1000);
   });
 });
