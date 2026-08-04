@@ -161,15 +161,22 @@ export function handleAttachCCSession(body: any) {
   // ownedBoardsAndMaps).
   const refreshTargets = { boards: [] as string[], maps: [] as string[] };
 
-  // Primary reclaim — same cc_session_id, attach was called before the prior
-  // MCP died.
-  const deadSessions = db
+  // Primary reclaim — EVERY OTHER broker row that shares this cc_session_id,
+  // whether or not the stale-sweep has flipped it to alive=0 yet. Two rows with
+  // the same cc_session_id are the same CC session registered twice (a restart
+  // or a `/mcp` reconnect); the attaching (newest) row is authoritative and all
+  // the others are stale by definition. Including still-alive rows closes the
+  // zombie window: an orphaned MCP server reparented to pid 1 keeps its row
+  // alive=1 until its own ppid guard fires, and the old "alive = 0" filter left
+  // that row's boards / issues stranded in the meantime. We exclude our OWN id
+  // so we can never cannibalize the session we are binding.
+  const priorSessions = db
     .prepare(
-      "SELECT id, name FROM sessions WHERE alive = 0 AND cc_session_id = ? ORDER BY last_seen DESC",
+      "SELECT id, name FROM sessions WHERE cc_session_id = ? AND id != ? ORDER BY last_seen DESC",
     )
-    .all(ccId) as { id: string; name: string | null }[];
-  if (deadSessions.length > 0) {
-    const deadIds = deadSessions.map((s) => s.id);
+    .all(ccId, sessionId) as { id: string; name: string | null }[];
+  if (priorSessions.length > 0) {
+    const deadIds = priorSessions.map((s) => s.id);
     const before = ownedBoardsAndMaps(deadIds);
     refreshTargets.boards.push(...before.boards);
     refreshTargets.maps.push(...before.maps);
@@ -220,15 +227,25 @@ export function handleAttachCCSession(body: any) {
 
     // Carry the human-readable session name forward — without this, every CC
     // restart erases the name the user set in the sidebar. Use the most-recent
-    // dead session's name (ORDER BY last_seen DESC above) and only fill if the
+    // prior session's name (ORDER BY last_seen DESC above) and only fill if the
     // new session hasn't set its own name yet.
-    const inheritedName = deadSessions.find((s) => s.name)?.name ?? null;
+    const inheritedName = priorSessions.find((s) => s.name)?.name ?? null;
     if (inheritedName) {
       db.run("UPDATE sessions SET name = ? WHERE id = ? AND name IS NULL", [
         inheritedName,
         sessionId,
       ]);
     }
+
+    // Soft-delete the superseded rows now that their content lives on us. A row
+    // that was still alive=1 (a live zombie) must drop off the sidebar, and a
+    // future attach must never reclaim from these emptied rows again. The SELECT
+    // above already excluded our own id, so this never touches us.
+    db.run(
+      `UPDATE sessions SET alive = 0 WHERE id IN (${placeholders})`,
+      deadIds,
+    );
+    onSessionsChanged();
   }
 
   // Secondary reclaim — same cwd, never bound. Limited to same cwd so we

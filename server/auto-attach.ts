@@ -17,8 +17,10 @@
 // Keeping it is safe because attaching is idempotent — the broker reclaims the
 // previous session's boards, exactly as it does across a CC restart. The one
 // real hazard is PID reuse: a NEW CC inheriting a dead one's PID would read a
-// stale card. Guarded below by matching the recorded cwd, and by ignoring hints
-// older than HINT_MAX_AGE_MS.
+// stale card. The DIRECT hint (named by our ppid) is guarded by age alone —
+// HINT_MAX_AGE_MS — because gating it on cwd would break a `/cd` + `/mcp`
+// reconnect (same pid, new cwd); the cwd-fallback scan still requires a cwd
+// match. See directHintCcId for the full recycled-pid tradeoff.
 
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -66,19 +68,53 @@ function parseHintFile(file: string): Hint | null {
   }
 }
 
+// Raw parse — JSON only, no validity/age filtering. Used for the DIRECT hint so
+// the whole accept/reject decision lives in directHintCcId (below), the single,
+// unit-tested source of truth for the recycled-pid tradeoff.
+function parseHintFileRaw(file: string): Hint | null {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8")) as Hint;
+  } catch {
+    return null;
+  }
+}
+
+// Decide whether the DIRECT hint (the file whose name == our ppid) is ours.
+// Accept its cc_session_id whenever it is present and fresh, EVEN IF its
+// recorded cwd no longer equals process.cwd(). The ppid match is a strong
+// signal the hint came from OUR CC: an MCP server is CC's direct child, so the
+// hint named by our ppid was written by the CC that owns us. That CC may have
+// just run `/cd` (changing its cwd) and then `/mcp` (re-spawning us) — the hint
+// still carries the OLD cwd, so gating on cwd here would wrongly reject it and
+// leave the session unbound. That `/cd` + `/mcp` breakage is exactly what this
+// relaxation fixes.
+//
+// Recycled-pid tradeoff: a stale hint left by a PREVIOUS CC that happened to be
+// assigned the SAME pid could now be accepted despite a cwd change — the case
+// the old cwd guard was there to catch. The age check (HINT_MAX_AGE_MS) is the
+// remaining mitigation: a recycled pid landing on a card still inside the
+// window is very unlikely. The cwd-equality requirement is KEPT for the
+// readHintByCwd fallback below, which matches hints from OTHER pids by cwd.
+export function directHintCcId(hint: Hint | null, now: number): string | null {
+  if (!hint?.cc_session_id) return null;
+  if (
+    typeof hint.written_at === "number" &&
+    now - hint.written_at * 1000 > HINT_MAX_AGE_MS
+  ) {
+    return null;
+  }
+  return hint.cc_session_id;
+}
+
 export function readHintCcId(): string | null {
   // Fast path: the file named by our parent PID. On macOS / Linux the hook's
   // $PPID and this server's process.ppid are both Claude Code, so the filename
-  // agrees; the cwd guard then just rejects a card left by a recycled PID.
+  // agrees. We accept it by ppid + freshness alone (NOT cwd — see directHintCcId)
+  // so a `/cd` + `/mcp` reconnect (same pid, new cwd) still binds.
   const file = hintFilePath();
-  const direct = fs.existsSync(file) ? parseHintFile(file) : null;
-  if (direct?.cc_session_id) {
-    if (direct.cwd && direct.cwd !== process.cwd()) {
-      log(`Ignoring hint for pid ${process.ppid}: cwd mismatch`);
-    } else {
-      return direct.cc_session_id;
-    }
-  }
+  const direct = fs.existsSync(file) ? parseHintFileRaw(file) : null;
+  const directId = directHintCcId(direct, Date.now());
+  if (directId) return directId;
   // Fallback: match by CWD. On Windows the hook does NOT share our PID — Claude
   // Code runs it through a wrapper, so its $PPID / process.ppid is that wrapper
   // (or 1, from bash mis-reading $PPID) and it writes <wrapper>.json, never
@@ -90,8 +126,9 @@ export function readHintCcId(): string | null {
   return readHintByCwd();
 }
 
-// The most-recent hint whose recorded cwd is ours — the same cwd the fast path
-// trusts as its PID-reuse guard, used here as the primary key instead of the PID.
+// The most-recent hint whose recorded cwd is ours. This fallback keys on cwd
+// (not the PID) to catch hints written by OTHER pids — the Windows wrapper case
+// above — so cwd equality is still required here, unlike the direct fast path.
 function readHintByCwd(): string | null {
   const dir = path.dirname(hintFilePath());
   let files: string[];

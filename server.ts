@@ -27,6 +27,7 @@ import {
 } from "./server/config.ts";
 import { INSTRUCTIONS } from "./server/instructions.ts";
 import { log } from "./server/log.ts";
+import { parentGone, processIsAlive } from "./server/orphan.ts";
 import { pollAndPushMessages } from "./server/poll.ts";
 import {
   getAttachedCcId,
@@ -113,13 +114,21 @@ async function notifyAttachRecovered(ccId: string): Promise<void> {
 async function main() {
   await ensureBroker();
 
+  // Capture our parent (Claude Code) pid ONCE, now, while it is guaranteed
+  // alive. We can't re-derive it later: Bun caches process.ppid on first access
+  // and never refreshes it after a reparent (see server/orphan.ts), so its value
+  // stays frozen at this pid even once CC has died. The heartbeat's orphan
+  // backstop probes THIS pid's liveness rather than trusting process.ppid to
+  // turn into 1 (it never does).
+  const parentPid = process.ppid;
+
   const reg = await brokerFetch<RegisterResponse>("/register", {
     pid: process.pid,
     cwd: myCwd,
     // The owning CC's PID (our parent). A sibling MCP server under the same CC
     // (e.g. claude-peers) shares this ppid, so it can mark this session working
     // via /heartbeat-cc-pid without knowing our cc_session_id.
-    cc_pid: process.ppid,
+    cc_pid: parentPid,
     // Says "my pid is not in your process table" — the broker otherwise sweeps
     // this session away as dead within 30 seconds, after which the user cannot
     // send it anything.
@@ -146,7 +155,13 @@ async function main() {
   let pollTimer: ReturnType<typeof setInterval>;
   let heartbeatTimer: ReturnType<typeof setInterval>;
 
+  // Idempotent: several paths can race to trigger shutdown (SIGINT/SIGTERM,
+  // the heartbeat orphan guard, and the stdin-close handler below). Guard so a
+  // second entry can't double-unregister or fight the first's process.exit.
+  let exiting = false;
   const cleanup = async () => {
+    if (exiting) return;
+    exiting = true;
     clearInterval(pollTimer);
     clearInterval(heartbeatTimer);
     const sid = getSessionId();
@@ -172,15 +187,17 @@ async function main() {
   // wiped by some broker state reset) we re-try the bind once per tick.
   // On the happy path this is one extra null check + nothing else.
   heartbeatTimer = setInterval(async () => {
-    // Orphan guard: if our parent Claude Code process exits, we get
-    // reparented to init (process.ppid becomes 1) and never receive
-    // SIGINT/SIGTERM, so the cleanup below would never run. Without this
-    // we'd linger as a zombie MCP server — heartbeating forever, keeping a
-    // dead session "alive" in the broker (cluttering the sidebar) and
-    // leaking memory. Detect the orphaning and shut ourselves down so the
-    // session drops to alive=0 on its own.
-    if (process.ppid === 1) {
-      log("Parent CC exited (ppid=1); shutting down orphaned MCP server");
+    // Orphan backstop: if our parent Claude Code process exits, we get
+    // reparented to init and never receive SIGINT/SIGTERM, so the cleanup below
+    // would never run. Without this we'd linger as a zombie MCP server —
+    // heartbeating forever, keeping a dead session "alive" in the broker
+    // (cluttering the sidebar) and leaking memory. We CANNOT detect this via
+    // process.ppid: Bun caches it and it never turns into 1 after a reparent
+    // (see server/orphan.ts) — so we probe whether the parent pid captured at
+    // startup is still alive. This is the BACKSTOP (bounded by one heartbeat
+    // interval); the stdin-close handler below is the primary, faster trigger.
+    if (parentGone(parentPid, processIsAlive)) {
+      log(`Parent CC (pid ${parentPid}) gone; shutting down orphaned MCP server`);
       await cleanup();
       return;
     }
@@ -239,6 +256,17 @@ async function main() {
 
   process.on("SIGINT", cleanup);
   process.on("SIGTERM", cleanup);
+
+  // Primary orphan shutdown. When the parent CC exits it closes the pipe on our
+  // stdin, so stdin hits EOF ('end'/'close') and we die the instant CC dies.
+  // This is the MAIN exit path for an orphan: process.ppid is cached by Bun and
+  // never turns into 1 after a reparent (see server/orphan.ts), so the heartbeat
+  // guard above can only ever be a slower liveness-probe backstop. Safe against
+  // the MCP transport: StdioServerTransport binds ONLY 'data' and 'error' on
+  // stdin (verified in @modelcontextprotocol/sdk), so adding 'end'/'close'
+  // listeners does not disturb its JSON-RPC framing or stdin consumption.
+  process.stdin.on("end", cleanup);
+  process.stdin.on("close", cleanup);
 }
 
 // Last-resort net for the long-lived MCP server. A broker blip surfaces as a

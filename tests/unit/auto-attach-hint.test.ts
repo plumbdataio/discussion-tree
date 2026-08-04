@@ -14,7 +14,9 @@ import { tmpdir } from "node:os";
 
 const home = mkdtempSync(path.join(tmpdir(), "pd-hint-"));
 process.env.DISCUSSION_TREE_HOME = home;
-const { readHintCcId, hintFilePath } = await import("../../server/auto-attach.ts");
+const { readHintCcId, hintFilePath, directHintCcId } = await import(
+  "../../server/auto-attach.ts"
+);
 
 const writeHint = (h: Record<string, unknown>) => {
   const f = hintFilePath();
@@ -58,13 +60,17 @@ describe("auto-attach hint", () => {
     expect(fs.existsSync(f)).toBe(true);
   });
 
-  test("a card left by a different CC on a recycled pid is ignored", () => {
+  test("a fresh direct hint is accepted even when its cwd differs (the /cd + /mcp case)", () => {
+    // The file named by our ppid is OUR CC's hint. If that CC ran /cd (new cwd)
+    // then /mcp (re-spawning this server), the hint still records the OLD cwd —
+    // but the ppid match means it is ours, so we bind anyway. The recycled-pid
+    // card is instead guarded by age (see the stale-card test below).
     writeHint({
-      cc_session_id: "cc-someone-else",
-      cwd: "/somewhere/else",
+      cc_session_id: "cc-cd-then-mcp",
+      cwd: "/the/old/cwd",
       written_at: nowSec(),
     });
-    expect(readHintCcId()).toBeNull();
+    expect(readHintCcId()).toBe("cc-cd-then-mcp");
   });
 
   test("a stale card is ignored even if the cwd matches", () => {
@@ -138,6 +144,65 @@ describe("auto-attach hint — cwd fallback (hook PID != server PID)", () => {
       written_at: nowSec(),
     });
     expect(readHintCcId()).toBe("cc-direct");
+  });
+});
+
+// The pure decision behind the direct fast path. cwd is deliberately NOT a
+// factor — freshness (via `now`) is the only guard — so a `/cd`'d CC still binds.
+describe("directHintCcId (pure)", () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  test("(a) direct hint, matching cwd, fresh → returns the id", () => {
+    const now = Date.now();
+    expect(
+      directHintCcId(
+        {
+          cc_session_id: "cc-a",
+          cwd: process.cwd(),
+          written_at: Math.floor(now / 1000),
+        },
+        now,
+      ),
+    ).toBe("cc-a");
+  });
+
+  test("(b) direct hint, DIFFERENT cwd, fresh → still returns the id [NEW]", () => {
+    const now = Date.now();
+    expect(
+      directHintCcId(
+        {
+          cc_session_id: "cc-b",
+          cwd: "/some/other/cwd",
+          written_at: Math.floor(now / 1000),
+        },
+        now,
+      ),
+    ).toBe("cc-b");
+  });
+
+  test("(c) expired hint → null (recycled-pid mitigation)", () => {
+    const now = Date.now();
+    expect(
+      directHintCcId(
+        {
+          cc_session_id: "cc-c",
+          cwd: process.cwd(),
+          written_at: Math.floor((now - 60 * DAY_MS) / 1000),
+        },
+        now,
+      ),
+    ).toBeNull();
+  });
+
+  test("(d) hint with no cc_session_id (or null hint) → null", () => {
+    const now = Date.now();
+    expect(
+      directHintCcId(
+        { cwd: process.cwd(), written_at: Math.floor(now / 1000) },
+        now,
+      ),
+    ).toBeNull();
+    expect(directHintCcId(null, now)).toBeNull();
   });
 });
 
