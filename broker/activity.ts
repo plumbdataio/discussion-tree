@@ -35,14 +35,25 @@ const toolHeartbeats = new Map<string, number>();
 // external cc-usage bridge this can live in dt itself. The delay lets a
 // transient "temporarily limiting requests" 429 clear before we resume.
 //
+// The cause is classified per-stall (rate_limit / login / transient) so only a
+// transient error is actually nudged. Classification is DEFERRED to fire time,
+// not done at receipt: the StopFailure hook can POST before the cap/error line
+// has settled as the last entry in the transcript jsonl (a write race), so
+// classifying at the instant of receipt would misread a 5h cap as "transient"
+// and futilely nudge it. By fire time (~AUTO_CONTINUE_DELAY_MS later) the line
+// is reliably written, so classification is race-proof and order-independent.
+//
 // A stall that does NOT clear — most notably a 5h usage cap, which won't lift
 // until its window resets — otherwise turned this into a ~30s hammer loop:
 // continue → capped again → stall → continue → … (observed spamming "continue"
-// for over an hour on a 5h cap). So a STREAK CAP backs off after
-// MAX_AUTO_CONTINUE_STREAK consecutive nudges that never led to recovery; the
-// streak resets the moment the session genuinely shows life again
-// (cancelAutoContinue), so a later, unrelated transient stall still gets its
-// full retries.
+// for over an hour on a 5h cap). Fire-time rate_limit suppression stops that at
+// the source (a suppressed nudge starts no new turn, so no fresh StopFailure).
+// The STREAK CAP remains a backstop for genuinely-transient stalls that keep
+// failing: it backs off after MAX_AUTO_CONTINUE_STREAK consecutive *sent*
+// nudges that never led to recovery. The streak counts actual sends (not merely
+// scheduled timers), so a suppressed rate_limit/login stall never burns it; it
+// resets the moment the session genuinely shows life again (clearStall), so a
+// later, unrelated transient stall still gets its full retries.
 const autoContinueTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const autoContinueStreak = new Map<string, number>();
 const AUTO_CONTINUE_DELAY_MS = Number(process.env.DT_AUTO_CONTINUE_MS) || 30_000;
@@ -62,29 +73,66 @@ const selectSessionStalledAt = db.prepare(
 const AUTO_CONTINUE_MESSAGE =
   '[discussion-tree auto-continue] Your session had stopped (an API error, rate-limit, or stall) and discussion-tree sent this AUTOMATICALLY to wake you back up. This is NOT a message from the user — do not treat it as a new instruction, an answer, or a "go ahead". Resume exactly where you were, following the user\'s instructions and any pending decision as they stood before you stopped. If you were waiting on the user\'s judgment, you are STILL waiting on it: do not proceed past that point on the strength of this message.';
 
-function scheduleAutoContinue(sessionId: string): void {
-  const streak = autoContinueStreak.get(sessionId) ?? 0;
-  if (streak >= MAX_AUTO_CONTINUE_STREAK) {
-    // Persistent stall (e.g. a 5h usage cap that won't lift until its window
-    // resets) — stop hammering "continue" every ~30s. It resumes once the
-    // session shows real life again, which resets the streak below.
-    return;
-  }
-  autoContinueStreak.set(sessionId, streak + 1);
+// Schedule the deferred auto-continue. Called UNCONDITIONALLY on every stall —
+// the decision of whether to actually nudge is made at fire time, once the
+// transcript has settled (see the module comment above). `transcriptPath` is
+// carried through from the hook so the timer can classify the cause then;
+// `reasonOverride` short-circuits classification (used by tests to inject a
+// cause deterministically without staging a transcript file).
+function scheduleAutoContinue(
+  sessionId: string,
+  transcriptPath?: string,
+  reasonOverride?: StallReason,
+): void {
   const prev = autoContinueTimers.get(sessionId);
   if (prev) clearTimeout(prev);
   autoContinueTimers.set(
     sessionId,
     setTimeout(() => {
       autoContinueTimers.delete(sessionId);
-      // Re-check right before enqueueing: if the session recovered between this
-      // timer firing and now, clearStall already cleared stalled_at but can no
-      // longer cancel us (we're out of the map) — so don't nudge a live session
-      // into a duplicate turn.
+      // Re-check right before doing anything: if the session recovered between
+      // this timer firing and now, clearStall already cleared stalled_at but can
+      // no longer cancel us (we're out of the map) — so don't act on a live
+      // session. Cheaper than the classify below, so do it first.
       const stalled = (
         selectSessionStalledAt.get(sessionId) as { stalled_at: string | null } | null
       )?.stalled_at;
       if (!stalled) return;
+
+      // Classify NOW, not at receipt. By fire time the cap/error line is
+      // reliably the settled last isApiErrorMessage entry in the transcript, so
+      // a 5h cap that looked "transient" at the instant the hook fired is read
+      // correctly here. No transcript / no recognizable banner → "transient"
+      // (fail open = the old always-continue behavior).
+      const reason: StallReason =
+        reasonOverride ??
+        (transcriptPath
+          ? classifyStallFromTranscript(transcriptPath)
+          : "transient");
+      if (reason === "rate_limit") {
+        // A 5h / weekly cap won't lift on a nudge; the cc-usage bridge resumes
+        // at the reset time. Leave the stall badge, send nothing.
+        return;
+      }
+      if (reason === "login") {
+        // Only the human can re-auth. Don't nudge; drop a one-time UI notice so
+        // the user knows to /login (the bare ⚠️ badge alone doesn't say why).
+        notifyLoginRequired(sessionId);
+        return;
+      }
+
+      // transient (or inconclusive → fail open): the streak-gated nudge. The
+      // streak counts SENT nudges, so the cap check and increment live here at
+      // fire time, not at schedule time — a suppressed rate_limit/login stall
+      // never burns the budget.
+      const streak = autoContinueStreak.get(sessionId) ?? 0;
+      if (streak >= MAX_AUTO_CONTINUE_STREAK) {
+        // Persistent transient stall — stop hammering "continue" every ~30s. It
+        // resumes once the session shows real life again, which resets the
+        // streak (clearStall).
+        return;
+      }
+      autoContinueStreak.set(sessionId, streak + 1);
       const row = selectDefaultBoardForSession.get(sessionId) as
         | { id: string }
         | null;
@@ -166,18 +214,19 @@ function lookupAliveSessionByCcId(ccSessionId: string): string | null {
 
 // The StopFailure hook fires when a turn ends with an API error (rate limit,
 // "retry also failed", auth, …). The stall WARNING is message-agnostic — ANY
-// error-stop raises the same ⚠️ badge — but the RESPONSE is now per-cause: only
-// a transient error deserves an auto-continue nudge. A usage cap or a login
-// expiry won't clear on a nudge, so blindly continuing them just hammered
-// "continue" ~every 30s (up to the streak cap) for nothing. The cause is
-// classified from the transcript tail passed by the hook (transcript_path);
-// `reason` is a direct override used by tests. Unknown → "transient" (fail
-// open = the old always-continue behavior).
+// error-stop raises the same ⚠️ badge, set here immediately. The per-cause
+// RESPONSE (nudge / login notice / nothing) is DEFERRED to fire time: the cause
+// is classified inside the auto-continue timer, not here, because the cap/error
+// line may not yet be settled in the transcript at the instant this hook POSTs
+// (see the module comment on scheduleAutoContinue). So this handler no longer
+// decides — it always schedules and passes the transcript through; the timer
+// classifies once it has settled. `reason` is a direct override used by tests
+// to inject a cause without staging a transcript file.
 export function handleSessionStalled(body: {
   cc_session_id?: string;
   transcript_path?: string;
   reason?: string;
-}): { ok: boolean; reason?: StallReason } {
+}): { ok: boolean } {
   if (!body.cc_session_id) return { ok: false };
   const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
   if (!sessionId) return { ok: false };
@@ -195,23 +244,14 @@ export function handleSessionStalled(body: {
   }
   broadcastToAll({ type: "session-stall-update" });
 
-  const reason: StallReason =
-    (body.reason as StallReason | undefined) ??
-    (body.transcript_path
-      ? classifyStallFromTranscript(body.transcript_path)
-      : "transient");
-
-  if (reason === "rate_limit") {
-    // A 5h / weekly cap won't lift on a nudge; the cc-usage bridge resumes at
-    // the reset time. Leave the stall badge, but do NOT auto-continue.
-  } else if (reason === "login") {
-    // Only the human can re-auth. Don't nudge; drop a one-time UI notice so the
-    // user knows to /login (the bare ⚠️ badge alone doesn't say why).
-    notifyLoginRequired(sessionId);
-  } else {
-    scheduleAutoContinue(sessionId);
-  }
-  return { ok: true, reason };
+  // Schedule unconditionally; the timer classifies at fire time and decides
+  // whether to nudge (transient), notify (login), or stay quiet (rate_limit).
+  scheduleAutoContinue(
+    sessionId,
+    body.transcript_path,
+    body.reason as StallReason | undefined,
+  );
+  return { ok: true };
 }
 
 // Sessions we've already dropped a "login expired" notice into for the current

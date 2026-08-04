@@ -1,5 +1,13 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import {
+  writeFileSync,
+  appendFileSync,
+  rmSync,
+  mkdtempSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
   startBroker,
   post,
   get,
@@ -15,6 +23,11 @@ import {
 // overridden directly via `reason` here (the classifier itself is unit-tested
 // in stall-reason.test.ts). Fresh session per case: the streak / login-notice
 // state is per-session.
+//
+// NOTE: classification is now DEFERRED to fire time (inside the auto-continue
+// timer), so /session-stalled no longer returns an authoritative `reason` at
+// receipt — these tests assert on the OUTCOME (nudge sent / notice landed)
+// after the timer has fired, which is what actually matters.
 
 const AUTO_PREFIX = "[discussion-tree auto-continue]";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -57,22 +70,22 @@ async function defaultBoardId(sessionId: string): Promise<string> {
 describe("stall per-cause auto-continue", () => {
   test("transient → one nudge fires", async () => {
     const { sessionId, ccId } = await freshSession();
-    const r = await post<{ ok: boolean; reason?: string }>(
-      `${broker.url}/session-stalled`,
-      { cc_session_id: ccId, reason: "transient" },
-    );
-    expect(r.json.reason).toBe("transient");
+    const r = await post<{ ok: boolean }>(`${broker.url}/session-stalled`, {
+      cc_session_id: ccId,
+      reason: "transient",
+    });
+    expect(r.json.ok).toBe(true);
     await sleep(220);
     expect(await nudgeCount(sessionId)).toBe(1);
   });
 
   test("rate_limit → NO nudge (bridge handles the reset-time resume)", async () => {
     const { sessionId, ccId } = await freshSession();
-    const r = await post<{ ok: boolean; reason?: string }>(
-      `${broker.url}/session-stalled`,
-      { cc_session_id: ccId, reason: "rate_limit" },
-    );
-    expect(r.json.reason).toBe("rate_limit");
+    const r = await post<{ ok: boolean }>(`${broker.url}/session-stalled`, {
+      cc_session_id: ccId,
+      reason: "rate_limit",
+    });
+    expect(r.json.ok).toBe(true);
     await sleep(220);
     expect(await nudgeCount(sessionId)).toBe(0);
   });
@@ -81,11 +94,13 @@ describe("stall per-cause auto-continue", () => {
     const { sessionId, ccId } = await freshSession();
     const boardId = await defaultBoardId(sessionId);
 
-    const r = await post<{ ok: boolean; reason?: string }>(
-      `${broker.url}/session-stalled`,
-      { cc_session_id: ccId, reason: "login" },
-    );
-    expect(r.json.reason).toBe("login");
+    const r = await post<{ ok: boolean }>(`${broker.url}/session-stalled`, {
+      cc_session_id: ccId,
+      reason: "login",
+    });
+    expect(r.json.ok).toBe(true);
+    // The notice is now dropped at fire time (inside the timer), so wait past
+    // the delay before asserting it landed.
     await sleep(220);
     expect(await nudgeCount(sessionId)).toBe(0);
 
@@ -98,10 +113,13 @@ describe("stall per-cause auto-continue", () => {
     expect(notes.length).toBe(1);
 
     // A second login stall does NOT duplicate the notice (dedup per episode).
+    // Wait for ITS timer to fire before checking, so the dedup is truly
+    // exercised (not just observed before the second timer could add a note).
     await post(`${broker.url}/session-stalled`, {
       cc_session_id: ccId,
       reason: "login",
     });
+    await sleep(220);
     const board2 = await get<{ threads: Record<string, any[]> }>(
       `${broker.url}/api/board/${boardId}`,
     );
@@ -111,13 +129,98 @@ describe("stall per-cause auto-continue", () => {
     expect(notes2.length).toBe(1);
   });
 
-  test("no reason + no transcript → transient (backward compatible)", async () => {
+  test("no reason + no transcript → transient nudge (backward compatible)", async () => {
     const { sessionId, ccId } = await freshSession();
-    const r = await post<{ ok: boolean; reason?: string }>(
-      `${broker.url}/session-stalled`,
-      { cc_session_id: ccId },
-    );
-    expect(r.json.reason).toBe("transient");
+    const r = await post<{ ok: boolean }>(`${broker.url}/session-stalled`, {
+      cc_session_id: ccId,
+    });
+    expect(r.json.ok).toBe(true);
+    await sleep(220);
+    expect(await nudgeCount(sessionId)).toBe(1);
+  });
+});
+
+// Fire-time classification: the fix is that the cause is read from the transcript
+// when the auto-continue timer FIRES, not when /session-stalled is received. This
+// is what makes it race-proof — the StopFailure hook can POST before the cap line
+// is written to the jsonl. These tests drive the REAL classifier through a real
+// transcript file (no `reason` override), and the key case stages the file so it
+// is "transient" at receipt and only settles to "rate_limit" before the timer
+// fires: with receipt-time classification it would have nudged; with fire-time it
+// must not.
+describe("stall auto-continue classifies at fire time (from the transcript)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "dt-firetime-"));
+  const RATE_LIMIT_LINE = JSON.stringify({
+    type: "assistant",
+    isApiErrorMessage: true,
+    message: { content: "You've hit your session limit · resets 10:50pm" },
+  });
+  const BENIGN_LINE = JSON.stringify({
+    type: "assistant",
+    message: { content: "working on it" },
+  });
+
+  function writeTranscript(name: string, lines: string[]): string {
+    const p = join(dir, name);
+    writeFileSync(p, lines.join("\n") + "\n");
+    return p;
+  }
+
+  afterAll(() => {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+  });
+
+  test("rate_limit that only settles AFTER receipt → NO nudge (proves fire-time)", async () => {
+    const { sessionId, ccId } = await freshSession();
+    // At receipt the transcript holds no error line → would classify transient.
+    const p = writeTranscript("late-settle.jsonl", [BENIGN_LINE]);
+
+    await post<{ ok: boolean }>(`${broker.url}/session-stalled`, {
+      cc_session_id: ccId,
+      transcript_path: p,
+    });
+    // The POST has returned → receipt-time processing is done. If classification
+    // happened at receipt it already saw "transient" and scheduled a send. Now
+    // settle the cap line, well before the ~60ms timer fires.
+    appendFileSync(p, RATE_LIMIT_LINE + "\n");
+
+    await sleep(220);
+    // Fire-time classification saw the settled rate_limit line → suppressed.
+    expect(await nudgeCount(sessionId)).toBe(0);
+  });
+
+  test("a settled rate_limit transcript → NO nudge", async () => {
+    const { sessionId, ccId } = await freshSession();
+    const p = writeTranscript("rl.jsonl", [BENIGN_LINE, RATE_LIMIT_LINE]);
+    await post<{ ok: boolean }>(`${broker.url}/session-stalled`, {
+      cc_session_id: ccId,
+      transcript_path: p,
+    });
+    await sleep(220);
+    expect(await nudgeCount(sessionId)).toBe(0);
+  });
+
+  test("a transcript with no recognizable error line → nudge (fail open)", async () => {
+    const { sessionId, ccId } = await freshSession();
+    const p = writeTranscript("clean.jsonl", [BENIGN_LINE, BENIGN_LINE]);
+    await post<{ ok: boolean }>(`${broker.url}/session-stalled`, {
+      cc_session_id: ccId,
+      transcript_path: p,
+    });
+    await sleep(220);
+    expect(await nudgeCount(sessionId)).toBe(1);
+  });
+
+  test("an unreadable transcript path → nudge (fail open)", async () => {
+    const { sessionId, ccId } = await freshSession();
+    await post<{ ok: boolean }>(`${broker.url}/session-stalled`, {
+      cc_session_id: ccId,
+      transcript_path: join(dir, "does-not-exist.jsonl"),
+    });
     await sleep(220);
     expect(await nudgeCount(sessionId)).toBe(1);
   });
