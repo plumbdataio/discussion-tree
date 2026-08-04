@@ -238,6 +238,14 @@ export function ItemCard({
           giving the same on-screen order as before with the browser's
           anchored-scrolling holding the bottom in place. */}
       <div className="thread" ref={threadRef}>
+        {/* In-flow at the visual bottom (first DOM child under column-reverse),
+            co-located with tentativeText: the pending timer-send preview scrolls
+            with the thread and is bounded by this scroll container, so a tall
+            scheduled message no longer squeezes the thread or pushes the input
+            row off-screen. The `.thread > :first-child { margin-bottom:auto }`
+            top-align rule still applies (now to this chip when present, and it
+            returns null → falls through to the newest message otherwise). */}
+        <ScheduledPinned scheduled={scheduledForNode} />
         {tentativeText && (
           <div className="thread-msg from-user pending">
             <span className="who">
@@ -264,8 +272,6 @@ export function ItemCard({
         ))}
       </div>
       <ScrollToBottomButton scrollRef={threadRef} reversed />
-
-      <ScheduledPinned scheduled={scheduledForNode} />
 
       <div className="input-row">
         <ResizableTextarea

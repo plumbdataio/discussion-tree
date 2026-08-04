@@ -207,6 +207,14 @@ export function DefaultBoardLayout({
           bottom, exactly like before — but the browser's anchor
           behaviour keeps the bottom in view without any JS. */}
       <div className="default-board-thread" ref={threadRef}>
+        {/* In-flow at the visual bottom (first DOM child under column-reverse),
+            co-located with tentativeText: the pending timer-send preview now
+            scrolls with the thread and its height is bounded by this scroll
+            container, so a tall (image / long-text) scheduled message can no
+            longer squeeze the thread to nothing or push the input row
+            off-screen — which is what happened when it was a pinned sibling
+            outside the scroll container. */}
+        <ScheduledPinned scheduled={scheduledForNode} />
         {tentativeText && (
           <div className="thread-msg from-user pending">
             <span className="who">
@@ -238,7 +246,6 @@ export function DefaultBoardLayout({
           relative to .default-board (which is position: relative). */}
       <ScrollToBottomButton scrollRef={threadRef} reversed />
 
-      <ScheduledPinned scheduled={scheduledForNode} />
       <div className="default-board-input">
         <ResizableTextarea
           className="answer-input"
