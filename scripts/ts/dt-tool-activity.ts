@@ -5,6 +5,8 @@
 // Pings the broker on every tool invocation so the UI can show a "working"
 // activity badge automatically. Best-effort — any failure (broker down, etc.)
 // is swallowed so it never blocks tool use. Short timeout keeps tool latency low.
+import { brokerBaseUrl } from "../broker-url.ts";
+
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
     let data = "";
@@ -25,12 +27,11 @@ try {
 
 const sid = input.session_id ?? "";
 const tool = input.tool_name ?? "";
-const port = process.env.DISCUSSION_TREE_PORT ?? "7898";
 
 if (sid) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 1000);
-  await fetch(`http://127.0.0.1:${port}/heartbeat-tool`, {
+  await fetch(`${brokerBaseUrl()}/heartbeat-tool`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cc_session_id: sid, tool }),

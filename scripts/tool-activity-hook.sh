@@ -16,7 +16,8 @@ set -e
 input=$(cat)
 sid=$(printf '%s' "$input" | jq -r '.session_id // empty')
 tool=$(printf '%s' "$input" | jq -r '.tool_name // empty')
-port="${DISCUSSION_TREE_PORT:-7898}"
+# Resolve DT_BROKER_BASE (honors DISCUSSION_TREE_BROKER_URL for remote sessions).
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/broker-url.sh"
 
 if [ -n "$sid" ]; then
   body=$(jq -n --arg s "$sid" --arg t "$tool" '{cc_session_id:$s, tool:$t}')
@@ -26,7 +27,7 @@ if [ -n "$sid" ]; then
     -X POST \
     -H "Content-Type: application/json" \
     -d "$body" \
-    "http://127.0.0.1:${port}/heartbeat-tool" \
+    "${DT_BROKER_BASE}/heartbeat-tool" \
     >/dev/null 2>&1 || true
 
   # Track Bash run_in_background launches so the UI can show a BG marker
@@ -43,7 +44,7 @@ if [ -n "$sid" ]; then
         curl -sS --max-time 1 -X POST \
           -H "Content-Type: application/json" \
           -d "$bg_body" \
-          "http://127.0.0.1:${port}/bg-task-start" \
+          "${DT_BROKER_BASE}/bg-task-start" \
           >/dev/null 2>&1 || true
       fi
     fi

@@ -27,10 +27,13 @@
 //   }
 //
 // Env:
-//   DISCUSSION_TREE_PORT — broker port, default 7898
+//   DISCUSSION_TREE_BROKER_URL — full broker base URL (remote sessions); when
+//     set it overrides the loopback default below.
+//   DISCUSSION_TREE_PORT — broker port for the loopback default, default 7898
 //   DISCUSSION_TREE_TOPIC_DRIFT_DEBUG=1 — log decision to stderr
 
 import { existsSync, readFileSync } from "node:fs";
+import { brokerBaseUrl } from "./broker-url.ts";
 
 const DEBUG = process.env.DISCUSSION_TREE_TOPIC_DRIFT_DEBUG === "1";
 function debug(...args: unknown[]) {
@@ -110,10 +113,9 @@ if (!drift) {
 }
 
 // Pull active option-decision boards for this CC session from the broker.
-const port = parseInt(process.env.DISCUSSION_TREE_PORT ?? "7898", 10);
 let activeBoards: Array<{ id: string; title: string; status: string }> = [];
 try {
-  const res = await fetch(`http://127.0.0.1:${port}/api/sessions`);
+  const res = await fetch(`${brokerBaseUrl()}/api/sessions`);
   if (res.ok) {
     const j: any = await res.json();
     const sessions: any[] = j.sessions ?? [];

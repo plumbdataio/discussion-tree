@@ -57,21 +57,22 @@ EOF
 # failure (no session_id, broker down, jq/curl missing, count 0) prints
 # nothing and never aborts the hook.
 sid=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null || true)
-port="${DISCUSSION_TREE_PORT:-7898}"
+# Resolve DT_BROKER_BASE (honors DISCUSSION_TREE_BROKER_URL for remote sessions).
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/broker-url.sh"
 if [ -n "${sid:-}" ]; then
   body=$(jq -n --arg s "$sid" '{cc_session_id:$s}' 2>/dev/null || true)
   # Compaction finished and the session resumed — clear the "compacting" badge
   # the PreCompact hook set. Best-effort; the broker also self-heals on the next
   # tool heartbeat / re-attach if this doesn't land.
   done_resp=$(curl -sS --max-time 1 -X POST -H "Content-Type: application/json" \
-    -d "$body" "http://127.0.0.1:${port}/session-compacting-done" \
+    -d "$body" "${DT_BROKER_BASE}/session-compacting-done" \
     2>/dev/null || echo '{}')
   # The boundary BEFORE this one — the start of the window that was just
   # compacted, and so the start of what needs reviewing below. The broker hands
   # it back because stamping this compaction overwrites it.
   prev=$(printf '%s' "$done_resp" | jq -r '.previous_compact_at // empty' 2>/dev/null || true)
   resp=$(curl -sS --max-time 1 -X POST -H "Content-Type: application/json" \
-    -d "$body" "http://127.0.0.1:${port}/get-incomplete-checklists" \
+    -d "$body" "${DT_BROKER_BASE}/get-incomplete-checklists" \
     2>/dev/null || echo '{}')
   count=$(printf '%s' "$resp" | jq -r '.count // 0' 2>/dev/null || echo 0)
   if [[ "$count" =~ ^[0-9]+$ ]] && [ "$count" -gt 0 ]; then
@@ -97,7 +98,7 @@ if [ -n "${sid:-}" ]; then
     '{cc_session_id:$s, unlinked_only:true, head_chars:60} + (if $f == "" then {} else {from:$f} end)' \
     2>/dev/null || true)
   rresp=$(curl -sS --max-time 2 -X POST -H "Content-Type: application/json" \
-    -d "$rbody" "http://127.0.0.1:${port}/review-message-links" 2>/dev/null || echo '{}')
+    -d "$rbody" "${DT_BROKER_BASE}/review-message-links" 2>/dev/null || echo '{}')
   rcount=$(printf '%s' "$rresp" | jq -r '.total // 0' 2>/dev/null || echo 0)
   if [[ "$rcount" =~ ^[0-9]+$ ]] && [ "$rcount" -gt 0 ]; then
     printf '\n[discussion-tree issue-link review]\n%s message(s) from the window you just compacted are not attached to any issue. That window is the part you can no longer read, so linking it now is what makes the conversation for an issue followable later.\n\nCall review_message_links (defaults to exactly this window) and, for each message that belongs to an issue, link_message_to_issues. Messages that genuinely belong to none need no action — this is a nudge, not a block, so use your judgement and carry on.\n' "$rcount"

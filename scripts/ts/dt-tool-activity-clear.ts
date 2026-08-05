@@ -5,6 +5,8 @@
 // Fires when CC finishes a turn. Clears the auto "working" badge immediately
 // instead of waiting for the broker's idle-timeout watchdog (still kept as a
 // safety net in case CC crashes and Stop never fires). Best-effort.
+import { brokerBaseUrl } from "../broker-url.ts";
+
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
     let data = "";
@@ -24,12 +26,11 @@ try {
 }
 
 const sid = input.session_id ?? "";
-const port = process.env.DISCUSSION_TREE_PORT ?? "7898";
 
 if (sid) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 1000);
-  await fetch(`http://127.0.0.1:${port}/clear-tool-activity`, {
+  await fetch(`${brokerBaseUrl()}/clear-tool-activity`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cc_session_id: sid }),

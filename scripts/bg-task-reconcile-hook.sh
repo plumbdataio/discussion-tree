@@ -28,7 +28,8 @@ set -e
 input=$(cat)
 sid=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null || true)
 transcript=$(printf '%s' "$input" | jq -r '.transcript_path // empty' 2>/dev/null || true)
-port="${DISCUSSION_TREE_PORT:-7898}"
+# Resolve DT_BROKER_BASE (honors DISCUSSION_TREE_BROKER_URL for remote sessions).
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/broker-url.sh"
 
 [ -z "${sid:-}" ] && exit 0
 [ -z "${transcript:-}" ] && exit 0
@@ -54,6 +55,6 @@ body=$(jq -n --arg s "$sid" --argjson t "$arr" \
 [ -z "${body:-}" ] && exit 0
 
 curl -sS --max-time 1 -X POST -H "Content-Type: application/json" \
-  -d "$body" "http://127.0.0.1:${port}/bg-task-done" >/dev/null 2>&1 || true
+  -d "$body" "${DT_BROKER_BASE}/bg-task-done" >/dev/null 2>&1 || true
 
 exit 0

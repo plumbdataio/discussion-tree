@@ -22,7 +22,8 @@ set -e
 input=$(cat)
 sid=$(printf '%s' "$input" | jq -r '.session_id // empty')
 stop_hook_active=$(printf '%s' "$input" | jq -r '.stop_hook_active // false')
-port="${DISCUSSION_TREE_PORT:-7898}"
+# Resolve DT_BROKER_BASE (honors DISCUSSION_TREE_BROKER_URL for remote sessions).
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/broker-url.sh"
 
 [ -z "$sid" ] && exit 0
 
@@ -44,7 +45,7 @@ resp=$(curl -sS --max-time 1 \
   -X POST \
   -H "Content-Type: application/json" \
   -d "$body" \
-  "http://127.0.0.1:${port}/get-unanswered" 2>/dev/null || echo '{}')
+  "${DT_BROKER_BASE}/get-unanswered" 2>/dev/null || echo '{}')
 
 count=$(printf '%s' "$resp" | jq -r '.count // 0')
 # Broker's verdict: block while count>0, but false once the streak cap is hit.
@@ -70,7 +71,7 @@ if [ "$count" -gt 0 ] && [ "$block" = "true" ]; then
     -X POST \
     -H "Content-Type: application/json" \
     -d "$hb_body" \
-    "http://127.0.0.1:${port}/heartbeat-tool" \
+    "${DT_BROKER_BASE}/heartbeat-tool" \
     >/dev/null 2>&1 || true
 
   # Per-node: name the exact nodes whose user submission is still unreplied so

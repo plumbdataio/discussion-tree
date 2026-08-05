@@ -9,7 +9,8 @@ set -e
 
 input=$(cat)
 sid=$(printf '%s' "$input" | jq -r '.session_id // empty')
-port="${DISCUSSION_TREE_PORT:-7898}"
+# Resolve DT_BROKER_BASE (honors DISCUSSION_TREE_BROKER_URL for remote sessions).
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/broker-url.sh"
 
 if [ -n "$sid" ]; then
   body=$(jq -n --arg s "$sid" '{cc_session_id:$s}')
@@ -18,7 +19,7 @@ if [ -n "$sid" ]; then
     -X POST \
     -H "Content-Type: application/json" \
     -d "$body" \
-    "http://127.0.0.1:${port}/clear-tool-activity" \
+    "${DT_BROKER_BASE}/clear-tool-activity" \
     >/dev/null 2>&1 || true
 fi
 
