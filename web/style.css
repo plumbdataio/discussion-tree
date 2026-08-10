@@ -172,6 +172,9 @@ body {
   border-right: 1px solid var(--border);
   background: var(--panel);
   overflow-y: auto;
+  /* Never scroll sideways: a long session name / cwd wraps (below) rather than
+     widening the rail. This clips any residual horizontal overflow. */
+  overflow-x: hidden;
   padding: 16px 14px;
 }
 
@@ -875,6 +878,9 @@ body {
   font-size: 10px;
   color: var(--muted);
   font-family: "SF Mono", Menlo, monospace;
+  /* Long folder paths wrap to the next line instead of forcing the rail wider
+     (matches .session-name). Without this a long unbroken segment overflows. */
+  word-break: break-word;
 }
 
 .boards {
