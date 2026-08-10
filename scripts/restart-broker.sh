@@ -60,7 +60,10 @@ command -v bun >/dev/null 2>&1 || { echo "restart-broker: bun not on PATH." >&2;
 mkdir -p "$home" 2>/dev/null || true
 # DISCUSSION_TREE_HOME passes through from the environment if it was set; if not,
 # the broker resolves its own os.homedir() default (matching ensureBroker).
-nohup bun broker.ts >>"$log" 2>&1 &
+# --smol keeps JSC's heap small and GC aggressive. The long-lived broker
+# otherwise grows its footprint to ~1GB over a few days (mostly cold, retained
+# pages bun never returns to the OS) — memory analysis 2026-08-10.
+nohup bun --smol broker.ts >>"$log" 2>&1 &
 
 # 5. Confirm it bound.
 i=0

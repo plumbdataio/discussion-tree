@@ -76,7 +76,8 @@ trap 'rmdir "$lock" 2>/dev/null || true' EXIT
 # Launch detached so the broker outlives this hook process and the CC session.
 # Logs go under the state home for debuggability.
 log="${home}/broker.log"
-DISCUSSION_TREE_HOME="$home" nohup bun "$broker" >>"$log" 2>&1 &
+# --smol: keep the long-lived broker's JSC heap small (see restart-broker.sh).
+DISCUSSION_TREE_HOME="$home" nohup bun --smol "$broker" >>"$log" 2>&1 &
 
 # Give it a moment to bind, then confirm. We don't fail the hook either way.
 for _ in 1 2 3 4 5 6 7 8 9 10; do
