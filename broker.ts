@@ -203,11 +203,19 @@ if (BIND_HOST !== "127.0.0.1" && BIND_HOST !== "localhost") {
 // be picked up in practice, so the reload was pure interruption. Set DT_HMR=1
 // when you are the only one looking at the page and want live reloads back.
 const HMR = process.env.DT_HMR === "1";
+// Serve a PRODUCTION build by default. dt is a real all-day deployment, not a
+// dev server: the development build ships React's dev runtime, whose DevTools
+// backrefs (_debugOwner etc.) pin unmounted fiber trees — a measured ~250MB of
+// retained detached DOM after visiting a heavy board (2026-08-10). Production
+// mode (minified, NODE_ENV=production, React's prod runtime) drops that and is
+// lighter/faster overall. Opt back into a dev build (warnings + optional HMR)
+// with DT_DEV=1 only while actually developing against the UI.
+const DEV = process.env.DT_DEV === "1";
 
 const server = Bun.serve({
   port: PORT,
   hostname: BIND_HOST,
-  development: { hmr: HMR },
+  development: DEV ? { hmr: HMR } : false,
   routes: {
     "/": indexHtml,
     "/board/:id": indexHtml,
