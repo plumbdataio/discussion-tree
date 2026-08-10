@@ -80,10 +80,15 @@ function App() {
     return () => mql.removeEventListener("change", apply);
   }, [settings.theme]);
 
-  // Every page takes its id as a prop and re-fetches on a prop change, so none
-  // need a `key` (which would force a remount). The persistent shell + sidebar
-  // live in <AppShell>; each page only fills the header + main via <AppLayout>,
-  // so navigation never remounts the sidebar — no flash, no scroll reset.
+  // Force a full remount of the MAIN page on every route change: the rendered
+  // page is keyed by `path` (below), so React unmounts the previous view —
+  // tearing down its DOM, state, effects, and WS subscriptions — before it
+  // mounts the next. Without this, navigating board→board REUSES the same
+  // <BoardApp> (only its boardId prop changes), which lets the tab's memory
+  // grow as old view data lingers. The persistent shell + sidebar live in
+  // <AppShell> (OUTSIDE the keyed page), so they never remount — only the main
+  // view does. Trade-off: each navigation re-fetches and resets the main scroll
+  // position (accepted 2026-08-10 for the memory win).
   let page: React.ReactNode;
   if (sessionId) {
     page = <SessionDashboard sessionId={sessionId} />;
@@ -108,7 +113,7 @@ function App() {
         currentMapId={mapId}
         currentDiagramId={diagramId}
       >
-        {page}
+        <React.Fragment key={path}>{page}</React.Fragment>
       </AppShell>
       <AnchorButton />
       <GearButton />
