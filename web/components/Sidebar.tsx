@@ -670,8 +670,23 @@ export function Sidebar({
           // Seed the activity map from the just-fetched sessions so we have
           // an initial value even before any WS frame arrives. WS updates
           // continue to overlay this in real time.
+          //
+          // Rebuild the map from ONLY the sessions the broker still lists,
+          // rather than spreading `prev`, so it cannot grow without bound: the
+          // broker mints a fresh session_id on every CC restart, so the WS
+          // `pd-activity-update` handler (and this seed) would otherwise keep
+          // every dead id forever in this always-mounted component. Carry a
+          // prior value forward for a still-listed session (so a live update
+          // that arrived between polls isn't dropped), then overlay the
+          // freshly-fetched activity for the active ones.
           setActivitiesBySession((prev) => {
-            const next: Record<string, Activity | null> = { ...prev };
+            const liveIds = new Set<string>();
+            for (const s of data.sessions) liveIds.add(s.id);
+            for (const s of data.inactive_sessions ?? []) liveIds.add(s.id);
+            const next: Record<string, Activity | null> = {};
+            for (const id of Object.keys(prev)) {
+              if (liveIds.has(id)) next[id] = prev[id];
+            }
             for (const s of data.sessions) {
               next[s.id] = s.activity ?? null;
             }
