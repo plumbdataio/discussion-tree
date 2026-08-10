@@ -76,6 +76,14 @@ trap 'rmdir "$lock" 2>/dev/null || true' EXIT
 # Launch detached so the broker outlives this hook process and the CC session.
 # Logs go under the state home for debuggability.
 log="${home}/broker.log"
+# cd to the plugin root first: Bun.serve resolves web/index.html's asset URLs
+# against the process cwd, and this hook inherits the cwd of whatever CC session
+# triggered it. Launching from another project's dir bakes broken chunk paths
+# (e.g. /../../../<that-project>/chunk-*.js) into the served index.html, which
+# the browser can't load -> blank page (observed 2026-08-06). restart-broker.sh
+# already cds before launching; do the same here so any session that revives the
+# broker gets the repo cwd. Exit 0 (never block session start) if it's missing.
+cd "$root" || exit 0
 # --smol: keep the long-lived broker's JSC heap small (see restart-broker.sh).
 DISCUSSION_TREE_HOME="$home" nohup bun --smol "$broker" >>"$log" 2>&1 &
 
