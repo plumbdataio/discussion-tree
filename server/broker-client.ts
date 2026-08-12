@@ -9,6 +9,7 @@ import {
   BROKER_URL,
 } from "./config.ts";
 import { log } from "./log.ts";
+import { dirname } from "node:path";
 
 export async function brokerFetch<T>(
   path: string,
@@ -117,7 +118,18 @@ export async function ensureBroker(): Promise<void> {
   }
 
   log("Starting broker daemon...");
-  const proc = Bun.spawn(["bun", BROKER_SCRIPT], {
+  // Launch from the broker script's own directory (the repo root), NOT this MCP
+  // server's cwd. This process inherits the cwd of whatever project its CC
+  // session runs in, and Bun.serve resolves web/index.html's asset URLs against
+  // the process cwd — so spawning without an explicit cwd bakes broken chunk
+  // paths (/../../../<that-project>/chunk-*.js) into the served index.html and
+  // the page renders blank (observed 2026-08-06, and again 2026-08-12 when
+  // several sessions' MCP servers each respawned a broker from their own project
+  // dir). ensure-broker-running.sh already cds before launching; this is the
+  // same fix for the MCP-server auto-spawn path. --smol matches restart-broker.sh
+  // and the shell hook (keeps the long-lived broker's JSC heap small).
+  const proc = Bun.spawn(["bun", "--smol", BROKER_SCRIPT], {
+    cwd: dirname(BROKER_SCRIPT),
     stdio: ["ignore", "ignore", "inherit"],
   });
   proc.unref();
