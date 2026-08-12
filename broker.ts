@@ -8,6 +8,10 @@
  * the MCP server when no broker is already listening.
  */
 
+// MUST be first: runs the single-broker guard before any module below opens the
+// SQLite file, so a duplicate broker (a thundering-herd respawn during an
+// outage) exits before it can contend on the DB. See broker/singleton-guard.ts.
+import "./broker/singleton-guard.ts";
 import indexHtml from "./web/index.html";
 import {
   DB_PATH,
