@@ -714,10 +714,15 @@ export function handleListIssues(body: any): {
     // Oldest-updated first would bury fresh work; newest-updated first matches
     // how the user scans the list.
     " ORDER BY i.updated_at DESC";
-  return {
-    ok: true,
-    issues: attachTagsToList(db.prepare(sql).all(...args) as IssueRow[]),
-  };
+  const rows = attachTagsToList(db.prepare(sql).all(...args) as IssueRow[]);
+  // lean (the MCP list_issues tool passes this): drop the full body so an
+  // agent's list stays small — a list scanned for dedup / "what's next" needs
+  // titles, not every issue's body. The browser does NOT pass lean (it searches
+  // over and expands bodies in place), so its rows keep their body.
+  if (body?.lean === true) {
+    for (const r of rows) delete (r as { body?: string }).body;
+  }
+  return { ok: true, issues: rows };
 }
 
 // The sessions an issue may be filed under. Deliberately NOT /api/sessions:

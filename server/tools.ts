@@ -12,7 +12,7 @@
 import type { CreateBoardResponse } from "../shared/types.ts";
 import { brokerFetch, fetchImage } from "./broker-client.ts";
 import { ONBOARD_GUIDE } from "./onboard-guide.ts";
-import { ensureSession } from "./state.ts";
+import { ensureSession, getSessionId } from "./state.ts";
 
 export const TOOLS = [
   {
@@ -1072,7 +1072,7 @@ export const TOOLS = [
   {
     name: "list_issues",
     description:
-      "Read the tracker. Defaults to what is still outstanding (done/dropped hidden). Use BEFORE saying 'what were we going to do next?' and before filing a new issue, so you extend an existing one instead of creating a duplicate. Filter by owner to answer 'what is the user waiting on me for' (owner=cc) or 'what am I waiting on them for' (owner=user).",
+      "Read the tracker. Defaults to YOUR OWN session's outstanding issues, without bodies — a light list to scan for 'what were we going to do next?' and to dedupe against BEFORE filing a new issue (extend an existing one instead of duplicating). Pass all_sessions:true for the cross-session ledger (every project's issues), include_body:true when you need each issue's full text, and owner=cc / owner=user to see which side holds the ball. done/dropped stay hidden unless include_closed:true.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -1087,11 +1087,25 @@ export const TOOLS = [
             "dropped",
           ] },
         priority: { type: "string" as const, enum: ["low", "mid", "high"] },
-        session_id: { type: "string" as const },
+        session_id: {
+          type: "string" as const,
+          description:
+            "Filter to one session's issues. Defaults to your own session; pass all_sessions:true instead to span every session.",
+        },
+        all_sessions: {
+          type: "boolean" as const,
+          description:
+            "Span EVERY session/project (the full cross-session ledger) instead of just your own. Larger — use when you need the global view.",
+        },
         tags: {
           type: "array" as const,
           items: { type: "string" as const },
           description: "Keep only issues carrying ANY of these tags.",
+        },
+        include_body: {
+          type: "boolean" as const,
+          description:
+            "Include each issue's full body text (default off — the list omits bodies to stay small).",
         },
         include_closed: { type: "boolean" as const, description: "Include done / dropped." },
       },
@@ -2234,9 +2248,22 @@ export async function dispatchToolCall(
 
       case "list_issues": {
         ensureSession();
+        // Default to THIS session's issues and drop bodies, so an agent's list
+        // stays light (dedup / "what's next" needs titles, not every full body).
+        // all_sessions:true opts into the cross-session ledger; include_body:true
+        // opts into full text. The browser calls /list-issues directly and passes
+        // neither, so its global, full-body, searchable view is unchanged.
+        const a = { ...(args as Record<string, unknown>) };
+        const sid = getSessionId();
+        if (a.session_id === undefined && a.all_sessions !== true && sid) {
+          a.session_id = sid;
+        }
+        a.lean = a.include_body !== true;
+        delete a.all_sessions;
+        delete a.include_body;
         const res = await brokerFetch<{ ok: boolean; issues?: unknown[] }>(
           "/list-issues",
-          args as Record<string, unknown>,
+          a,
         );
         return textResult(JSON.stringify(res.issues ?? [], null, 2));
       }
