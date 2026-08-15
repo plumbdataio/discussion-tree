@@ -22,6 +22,7 @@ import {
   resetDeliveredForRepushStmt,
   resweepUnackedStmt,
   recomputeBoardStatus,
+  revertBoardFromPending,
   selectBoard,
   selectPending,
   setPendingThreadItem,
@@ -41,12 +42,23 @@ import { markWorkingFromUserSubmit } from "./activity.ts";
 // parent board's auto-rollup, broadcast lets the sidebar follow. Returns
 // { from, to } when the board actually moved so the HTTP response can
 // report the transition back to the MCP tool caller.
+//
+// This is the single choke point BOTH post paths (handlePostToNode for a CC
+// reply, handleSubmitAnswer for a user reply) funnel through after inserting
+// their thread_item, so it also owns the board-level "resurface a shelved
+// board" revert: a 'pending' board was manually shelved (auto_status_sync=0),
+// and a fresh post means it's live again — unfreeze it and pull it to
+// 'discussing' BEFORE recomputing so it rejoins the sidebar's active group.
+// Node-level analog: bumpStatusToDiscussing. NOTE: nodes.ts has its OWN copy of
+// this helper WITHOUT the revert — a bare node-status change must NOT resurface
+// a shelved board; only an actual post does.
 function syncBoardStatus(
   boardId: string,
 ): { from: string; to: string } | null {
   const before = db
     .prepare("SELECT status FROM boards WHERE id = ?")
     .get(boardId) as { status: string } | null;
+  if (before?.status === "pending") revertBoardFromPending.run(boardId);
   const next = recomputeBoardStatus(boardId);
   if (!next) return null;
   broadcast(boardId, { type: "board-status-update", status: next });
@@ -328,6 +340,10 @@ export async function handleSubmitAnswer(body: any): Promise<
             node_id: log.nodeId,
             source: "user",
           });
+          // A structure request IS a fresh user post on the board (it lands on
+          // the log node), so it resurfaces a shelved ('pending') board too.
+          // syncBoardStatus owns the revert + the board-status broadcast.
+          syncBoardStatus(body.board_id);
         }
         return { ok: true };
       }

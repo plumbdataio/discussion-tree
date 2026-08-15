@@ -818,6 +818,13 @@ body {
   color: #155e75;
   border-color: #67e8f9;
 }
+/* pending = shelved / snoozed: a muted ochre-tan, calmer than the vivid amber
+   of "paused" so a shelved board reads as set-aside rather than on-hold. */
+.sb-summary-pending {
+  background: #f0e9d8;
+  color: #8a6d3b;
+  border-color: #ddcba8;
+}
 .sb-summary-completed {
   background: #dcfce7;
   color: #16a34a;
@@ -843,6 +850,11 @@ body {
   background: #103745;
   color: #67e8f9;
   border-color: #155e75;
+}
+:root[data-theme="dark"] .sb-summary-pending {
+  background: #322d20;
+  color: #cdb582;
+  border-color: #5f5230;
 }
 :root[data-theme="dark"] .sb-summary-completed {
   background: #14302a;
@@ -956,6 +968,12 @@ body {
   background: #cffafe;
   color: #155e75;
   border-color: #67e8f9;
+}
+/* pending = shelved / snoozed: muted ochre-tan (see .sb-summary-pending). */
+.sb-status-pending {
+  background: #f0e9d8;
+  color: #8a6d3b;
+  border-color: #ddcba8;
 }
 .sb-status-completed {
   background: #dcfce7;
@@ -4779,6 +4797,11 @@ button.secondary {
   background: #103745;
   color: #67e8f9;
   border-color: #155e75;
+}
+:root[data-theme="dark"] .sb-status-pending {
+  background: #322d20;
+  color: #cdb582;
+  border-color: #5f5230;
 }
 :root[data-theme="dark"] .sb-status-completed {
   background: #14302a;

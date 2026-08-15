@@ -13,6 +13,7 @@ import type { SupportedLanguage } from "../i18n.ts";
 export type BoardStatusFilter = {
   discussing: boolean;
   settled: boolean;
+  pending: boolean;
   completed: boolean;
   withdrawn: boolean;
   paused: boolean;
@@ -62,6 +63,11 @@ const DEFAULTS: Settings = {
   boardStatusFilter: {
     discussing: true,
     settled: true,
+    // Shelved boards start hidden — the whole point of "pending" is to keep a
+    // snoozed board OUT of the active sidebar view. It resurfaces on its own
+    // when a new post reverts it to "discussing"; the filter checkbox lets the
+    // user reveal shelved boards on demand.
+    pending: false,
     completed: true,
     withdrawn: true,
     paused: true,

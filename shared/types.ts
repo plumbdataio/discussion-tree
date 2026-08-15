@@ -481,16 +481,21 @@ export interface Session {
 // "completed" / "withdrawn" / "paused" are set explicitly via
 // set_board_status and are NOT touched by node-status changes — they
 // represent user-driven lifecycle decisions about the board as a whole.
+// "pending" is a hybrid: it is set explicitly (set_board_status shelves the
+// board and freezes the rollup) BUT it is auto-reverted to "discussing" by the
+// broker the moment a new post lands, so a shelved board resurfaces on its own.
 export type BoardStatus =
   | "discussing"
   | "settled"
+  | "pending"
   | "completed"
   | "withdrawn"
   | "paused";
 
 // Statuses where the broker auto-recomputes the value from node statuses.
-// Set-board-status to anything else (completed / withdrawn / paused) freezes
-// the board against auto-recompute.
+// Set-board-status to anything else (pending / completed / withdrawn / paused)
+// freezes the board against auto-recompute (pending is un-frozen again by the
+// broker's revert-on-new-post, the others stay frozen until re-set).
 export const AUTO_BOARD_STATUSES: readonly BoardStatus[] = [
   "discussing",
   "settled",

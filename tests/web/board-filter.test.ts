@@ -6,6 +6,7 @@ import type { BoardStatusFilter } from "../../web/utils/settings.ts";
 const ALL_ON: BoardStatusFilter = {
   discussing: true,
   settled: true,
+  pending: true,
   completed: true,
   withdrawn: true,
   paused: true,
@@ -45,6 +46,7 @@ describe("isBoardVisible", () => {
     const allOff = allExcept(
       "discussing",
       "settled",
+      "pending",
       "completed",
       "withdrawn",
       "paused",

@@ -397,6 +397,7 @@ function SessionItem({
             [
               "discussing",
               "settled",
+              "pending",
               "completed",
               "withdrawn",
               "paused",
