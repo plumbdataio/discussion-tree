@@ -10,14 +10,13 @@ function findTool(name: string) {
 }
 
 describe("MCP tool input schemas", () => {
-  test("set_board_status enum covers the current 6-value taxonomy + legacy 'active'", () => {
+  test("set_board_status enum covers the current 5-value taxonomy + legacy 'active'", () => {
     const t: any = findTool("set_board_status");
     const enums: string[] = t.inputSchema.properties.status.enum;
-    // The auto-managed pair, the shelve state, and the explicit-lifecycle trio.
+    // The auto-managed pair and the explicit-lifecycle trio.
     for (const expected of [
       "discussing",
       "settled",
-      "pending",
       "completed",
       "withdrawn",
       "paused",

@@ -284,7 +284,6 @@
   "board_status": {
     "discussing": "議論中",
     "settled": "方針確定",
-    "pending": "棚上げ",
     "completed": "完了",
     "withdrawn": "破棄",
     "paused": "保留",

@@ -40,7 +40,9 @@ describe("useSettings", () => {
     expect(s.language).toBe("system");
     expect(s.theme).toBe("system");
     expect(s.boardStatusFilter.discussing).toBe(true);
-    expect(s.boardStatusFilter.paused).toBe(true);
+    // "paused" is the shelve status: shelved boards default to hidden so they
+    // declutter the sidebar until a new post resurfaces them.
+    expect(s.boardStatusFilter.paused).toBe(false);
     expect(s.sessionOrder).toEqual([]);
     expect(s.collapsedSessions).toEqual({});
     unmount();

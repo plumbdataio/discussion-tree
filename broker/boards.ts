@@ -81,7 +81,6 @@ export function handleSetBoardStatus(body: any) {
   const allowed = [
     "discussing",
     "settled",
-    "pending",
     "completed",
     "withdrawn",
     "paused",
@@ -99,16 +98,12 @@ export function handleSetBoardStatus(body: any) {
   if (next === "completed") {
     db.run("UPDATE boards SET closed = 1 WHERE id = ?", [body.board_id]);
   }
-  // "pending" shelves the board: freeze the auto-rollup (like
-  // set_board_auto_status(false)) so node changes don't immediately flip it
-  // back to discussing/settled and un-shelve it. It resurfaces on its own when
-  // the next post lands (threads.ts syncBoardStatus → revertBoardFromPending,
-  // which flips it back to discussing AND re-enables the rollup).
-  if (next === "pending") {
-    db.run("UPDATE boards SET auto_status_sync = 0 WHERE id = ?", [
-      body.board_id,
-    ]);
-  }
+  // "paused" shelves the board: recomputeBoardStatus already leaves explicit
+  // (non-auto) statuses alone, so node changes won't flip a paused board back
+  // to discussing/settled — no auto_status_sync flag change is needed here to
+  // freeze it. It resurfaces on its own when the next post lands (threads.ts
+  // syncBoardStatus → revertBoardFromPaused, which flips it back to discussing
+  // AND re-enables the rollup).
   broadcast(body.board_id, {
     type: "board-status-update",
     status: next,

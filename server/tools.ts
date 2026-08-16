@@ -292,7 +292,7 @@ export const TOOLS = [
   {
     name: "set_board_status",
     description:
-      "Set the BOARD-level status. Two values are AUTO-managed by the broker (recomputed from item-node statuses on every mutation) and should not normally be set by hand: 'discussing' (some item nodes still in-progress) and 'settled' (every item node landed in a settled status — adopted / agreed / rejected / resolved / done). 'pending' SHELVES the board: it is hidden from the sidebar's active view to cut clutter and its status is frozen (node changes won't flip it back) — but it AUTO-RESURFACES the moment any new post (yours or the user's) lands on it, reverting to 'discussing'. Use 'pending' to snooze a board that's alive but not currently active. The remaining three are EXPLICIT lifecycle decisions the broker leaves alone once set: 'completed' (purpose fulfilled / work done, even if some nodes remain in pending because the work proceeded outside the board), 'withdrawn' (proposal abandoned / no longer pursued), 'paused' (temporarily on hold). Use this tool to declare pending / completed / withdrawn / paused; let the broker handle discussing ↔ settled on its own. Legacy value 'active' is accepted and normalized to 'discussing' for backwards compatibility.",
+      "Set the BOARD-level status. Two of the five values are AUTO-managed by the broker (recomputed from item-node statuses on every mutation) and should not normally be set by hand: 'discussing' (some item nodes still in-progress) and 'settled' (every item node landed in a settled status — adopted / agreed / rejected / resolved / done). The remaining three are EXPLICIT lifecycle decisions you declare by hand: 'completed' (purpose fulfilled / work done, even if some nodes remain in pending because the work proceeded outside the board), 'withdrawn' (proposal abandoned / no longer pursued), and 'paused' (temporarily on hold: hidden from the sidebar's active view to cut clutter, its status frozen so node changes don't flip it back, but it AUTO-RESURFACES to 'discussing' the moment any new post — yours or the user's — lands on it). 'completed' and 'withdrawn' the broker leaves alone once set; 'paused' snoozes a board that's alive but not currently active and un-shelves itself on the next post. Use this tool to declare completed / withdrawn / paused; let the broker handle discussing ↔ settled on its own. Legacy value 'active' is accepted and normalized to 'discussing' for backwards compatibility.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -302,7 +302,6 @@ export const TOOLS = [
           enum: [
             "discussing",
             "settled",
-            "pending",
             "completed",
             "withdrawn",
             "paused",

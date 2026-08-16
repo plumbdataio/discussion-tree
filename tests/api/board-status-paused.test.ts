@@ -8,11 +8,12 @@ import {
   type BrokerHandle,
 } from "../harness/broker-harness.ts";
 
-// The "pending" board status is the one hybrid in the taxonomy: it is set
-// MANUALLY (set_board_status shelves the board and freezes the auto-rollup with
-// auto_status_sync=0) but it AUTO-REVERTS to "discussing" the moment any new
-// post — a CC reply OR a user reply — lands on the board. These tests pin both
-// halves of that contract down.
+// The "paused" board status is the one hybrid in the taxonomy: it is set
+// MANUALLY (set_board_status shelves the board — recomputeBoardStatus leaves
+// non-auto statuses alone, so a node change won't flip it back) but it
+// AUTO-REVERTS to "discussing" the moment any new post — a CC reply OR a user
+// reply — lands on the board. These tests pin both halves of that contract
+// down.
 
 let broker: BrokerHandle;
 let sessionId: string;
@@ -50,36 +51,38 @@ async function fetchBoard(
 async function shelve(boardId: string) {
   const r = await post<{ ok: boolean }>(`${broker.url}/set-board-status`, {
     board_id: boardId,
-    status: "pending",
+    status: "paused",
   });
   expect(r.json.ok).toBe(true);
 }
 
-describe("board status 'pending' (shelve + auto-resurface-on-post)", () => {
-  test("set_board_status('pending') sets status=pending AND freezes auto_status_sync=0", async () => {
+describe("board status 'paused' (shelve + auto-resurface-on-post)", () => {
+  test("set_board_status('paused') shelves the board (status=paused)", async () => {
     const id = await createBoard("Shelve me");
     await shelve(id);
     const b = await fetchBoard(id);
-    expect(b.status).toBe("pending");
-    expect(b.auto_status_sync).toBe(0);
+    expect(b.status).toBe("paused");
+    // "paused" freezes via the explicit-status handling in recomputeBoardStatus
+    // (non-auto statuses are returned as-is), NOT by zeroing auto_status_sync —
+    // so the flag stays at its default of 1 while shelved.
+    expect(b.auto_status_sync).toBe(1);
   });
 
   test("a shelved board stays frozen through node-status changes (no post = no resurface)", async () => {
     const id = await createBoard("Frozen while shelved");
     await shelve(id);
     // A bare node-status mutation must NOT resurface a shelved board — only an
-    // actual post does. Even settling the only item leaves it pending.
+    // actual post does. Even settling the only item leaves it paused.
     await post(`${broker.url}/set-node-status`, {
       board_id: id,
       node_id: "i1",
       status: "adopted",
     });
     const b = await fetchBoard(id);
-    expect(b.status).toBe("pending");
-    expect(b.auto_status_sync).toBe(0);
+    expect(b.status).toBe("paused");
   });
 
-  test("a CC post (/post-to-node) reverts pending → discussing and re-enables auto_status_sync", async () => {
+  test("a CC post (/post-to-node) reverts paused → discussing and re-enables auto_status_sync", async () => {
     const id = await createBoard("CC revert");
     await shelve(id);
     const r = await post<{
@@ -94,7 +97,7 @@ describe("board status 'pending' (shelve + auto-resurface-on-post)", () => {
     expect(r.json.ok).toBe(true);
     // The transition is reported back to the MCP caller too.
     expect(r.json.board_status_changed).toEqual({
-      from: "pending",
+      from: "paused",
       to: "discussing",
     });
     const b = await fetchBoard(id);
@@ -102,7 +105,7 @@ describe("board status 'pending' (shelve + auto-resurface-on-post)", () => {
     expect(b.auto_status_sync).toBe(1);
   });
 
-  test("a user post (/submit-answer delivered via /poll-messages) reverts pending → discussing and re-enables auto_status_sync", async () => {
+  test("a user post (/submit-answer delivered via /poll-messages) reverts paused → discussing and re-enables auto_status_sync", async () => {
     const id = await createBoard("User revert");
     await shelve(id);
 
@@ -125,7 +128,7 @@ describe("board status 'pending' (shelve + auto-resurface-on-post)", () => {
     const final = await submitP;
     expect(final.json.ok).toBe(true);
     expect(final.json.board_status_changed).toEqual({
-      from: "pending",
+      from: "paused",
       to: "discussing",
     });
 
@@ -134,13 +137,13 @@ describe("board status 'pending' (shelve + auto-resurface-on-post)", () => {
     expect(b.auto_status_sync).toBe(1);
   });
 
-  test("/set-board-status accepts 'pending' as a valid value", async () => {
-    const id = await createBoard("Accepts pending");
+  test("/set-board-status accepts 'paused' as a valid value", async () => {
+    const id = await createBoard("Accepts paused");
     const r = await post<{ ok: boolean }>(`${broker.url}/set-board-status`, {
       board_id: id,
-      status: "pending",
+      status: "paused",
     });
     expect(r.json.ok).toBe(true);
-    expect((await fetchBoard(id)).status).toBe("pending");
+    expect((await fetchBoard(id)).status).toBe("paused");
   });
 });

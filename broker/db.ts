@@ -679,13 +679,13 @@ export const bumpStatusToDiscussing = db.prepare(
   `UPDATE nodes SET status = 'discussing' WHERE board_id = ? AND id = ? AND status IN ('pending', 'needs-reply')`,
 );
 // Board-level analog of bumpStatusToDiscussing: a new post on a SHELVED board
-// resurfaces it. 'pending' is a manual set (set_board_status froze the rollup
-// with auto_status_sync=0), so any fresh activity means the board is live
-// again — pull it back to 'discussing' AND re-enable the auto-rollup so the
-// status resumes deriving from node states. Guarded on status='pending' so it
-// is a no-op for every other board. Invoked from threads.ts on the post paths.
-export const revertBoardFromPending = db.prepare(
-  `UPDATE boards SET status = 'discussing', auto_status_sync = 1 WHERE id = ? AND status = 'pending'`,
+// resurfaces it. 'paused' is a manual set (set_board_status shelved the board),
+// so any fresh activity means the board is live again — pull it back to
+// 'discussing' AND re-enable the auto-rollup so the status resumes deriving
+// from node states. Guarded on status='paused' so it is a no-op for every other
+// board. Invoked from threads.ts on the post paths.
+export const revertBoardFromPaused = db.prepare(
+  `UPDATE boards SET status = 'discussing', auto_status_sync = 1 WHERE id = ? AND status = 'paused'`,
 );
 export const selectNodesByBoard = db.prepare(
   `SELECT * FROM nodes WHERE board_id = ? AND deleted_at IS NULL ORDER BY position`,

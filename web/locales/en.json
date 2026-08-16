@@ -285,7 +285,6 @@
     "active": "Discussing",
     "discussing": "Discussing",
     "settled": "Settled",
-    "pending": "Pending",
     "completed": "Completed",
     "withdrawn": "Withdrawn",
     "paused": "Paused"

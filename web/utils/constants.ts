@@ -19,13 +19,12 @@ export const NODE_STATUSES = [
 ] as const;
 
 // "discussing" / "settled" are auto-managed by the broker (rolled up from
-// node statuses); "pending" (shelved, auto-resurfaced on the next post) and
-// "completed" / "withdrawn" / "paused" are explicit lifecycle decisions. All
+// node statuses); "completed" / "withdrawn" / "paused" are explicit lifecycle
+// decisions ("paused" is shelved and auto-resurfaces on the next post). All
 // show up here so the sidebar filter offers the full set as checkboxes.
 export const BOARD_STATUSES = [
   "discussing",
   "settled",
-  "pending",
   "completed",
   "withdrawn",
   "paused",
