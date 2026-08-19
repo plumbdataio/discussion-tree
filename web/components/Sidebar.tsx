@@ -566,17 +566,15 @@ function SessionItem({
                     />
                     {d.title}
                   </span>
-                  {/* Same red unread badge as maps — the count of unseen CC
-                      chat replies. Nothing when there's nothing new. */}
+                  {/* Plain red unread dot — same as boards (the ask was
+                      "like boards": a dot, not maps' numbered count). */}
                   {hasUnread && (
                     <span
-                      className="sidebar-unread-count"
+                      className="sidebar-unread-dot"
                       title={t("sidebar.unread_dot_title", {
                         count: d.unread_count,
                       })}
-                    >
-                      {d.unread_count}
-                    </span>
+                    />
                   )}
                 </a>
               </li>
