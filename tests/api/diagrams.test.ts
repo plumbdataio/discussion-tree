@@ -213,6 +213,42 @@ describe("diagrams — chat", () => {
     expect(view.json.thread[0].board_id).toBe(id);
   });
 
+  test("/api/sessions exposes a diagram's unread CC-chat count (rises on post, clears on read)", async () => {
+    const id = await createDiagram("Unread badge");
+
+    const findDiagram = async () => {
+      const list = await get<{ sessions: any[]; inactive_sessions: any[] }>(
+        `${broker.url}/api/sessions`,
+      );
+      const all = [
+        ...(list.json.sessions ?? []),
+        ...(list.json.inactive_sessions ?? []),
+      ];
+      const s = all.find((x) => x.id === sessionId);
+      return (s?.diagrams ?? []).find((d: any) => d.id === id);
+    };
+
+    // Freshly created: no CC chat yet, so the badge is zero.
+    expect((await findDiagram())?.unread_count).toBe(0);
+
+    // A CC reply lands unread → the sidebar count goes to 1.
+    await post(`${broker.url}/post-diagram-chat`, {
+      issue_ids: [],
+      diagram_id: id,
+      message: "Have a look at the updated flow.",
+    });
+    expect((await findDiagram())?.unread_count).toBe(1);
+
+    // Viewing the diagram marks its CC messages read (generic mark-read path) →
+    // the count clears, exactly like a board/map.
+    const view = await get<any>(`${broker.url}/api/diagram/${id}`);
+    const itemId = view.json.thread[0].id;
+    await post(`${broker.url}/mark-thread-items-read`, {
+      thread_item_ids: [itemId],
+    });
+    expect((await findDiagram())?.unread_count).toBe(0);
+  });
+
   test("/diagram-chat delivers + materializes the user message into the thread", async () => {
     const id = await createDiagram("Chat delivery");
     // /diagram-chat blocks until the owning session polls — fire it, poll, await.

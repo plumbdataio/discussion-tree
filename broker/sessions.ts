@@ -12,6 +12,7 @@ import {
   scheduledSendAtForSession,
 } from "./activity.ts";
 import { getContextUsage } from "./context-usage.ts";
+import { DIAGRAM_CHAT_NODE } from "./diagrams.ts";
 import { pendingScheduledCountForSession } from "./scheduled-messages.ts";
 import {
   db,
@@ -681,13 +682,26 @@ export function handleListSessions() {
         unread_count: unread + checklistUnread,
       };
     });
-    // Mermaid diagrams owned by this session (id + title only). Archived ones
-    // are hidden from the sidebar, mirroring archived maps/boards.
-    const diagrams = db
+    // Mermaid diagrams owned by this session. Archived ones are hidden from the
+    // sidebar, mirroring archived maps/boards. unread = unseen CC replies in the
+    // diagram's chat thread (board_id = diagram id, node_id = the synthetic
+    // '__chat__' node) — same read_at/source rule as boards and maps, so the
+    // sidebar can raise the same unread badge and it clears on view.
+    const diagramRows = db
       .prepare(
         "SELECT id, title FROM diagrams WHERE session_id = ? AND archived = 0 ORDER BY updated_at DESC",
       )
       .all(s.id) as { id: string; title: string }[];
+    const diagrams = diagramRows.map((d) => {
+      const unread = (
+        db
+          .prepare(
+            "SELECT COUNT(*) AS cnt FROM thread_items WHERE board_id = ? AND node_id = ? AND read_at IS NULL AND source = 'cc'",
+          )
+          .get(d.id, DIAGRAM_CHAT_NODE) as { cnt: number }
+      ).cnt;
+      return { id: d.id, title: d.title, unread_count: unread };
+    });
     return {
       id: s.id,
       name: s.name,

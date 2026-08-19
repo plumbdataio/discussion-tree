@@ -21,7 +21,7 @@ import { SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
 import { validateMermaidSyntax } from "./mermaid-validate.ts";
 
 // Synthetic node id for the diagram's right-side chat thread.
-const DIAGRAM_CHAT_NODE = "__chat__";
+export const DIAGRAM_CHAT_NODE = "__chat__";
 
 db.run(`
   CREATE TABLE IF NOT EXISTS diagrams (

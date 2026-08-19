@@ -298,6 +298,15 @@ export interface MapListItem {
   unread_count?: number;
 }
 
+// Lightweight sidebar entry for a mermaid diagram (mirrors MapListItem).
+// unread_count = unseen CC replies in the diagram's chat, same semantics as
+// boards/maps, so the sidebar can raise the same unread badge.
+export interface DiagramListItem {
+  id: string;
+  title: string;
+  unread_count?: number;
+}
+
 // Global banner (= a single message shown at the top of every page).
 // Used for cross-session announcements that need to interrupt the user
 // regardless of which board they're on. Stored in-memory on the
@@ -561,6 +570,10 @@ export interface SessionListItem {
   // Divergent-discussion maps owned by this session (sidebar lists them with
   // a distinct icon so board vs map is clear at a glance).
   maps?: MapListItem[];
+  // Mermaid diagrams owned by this session (3rd surface; sidebar lists them
+  // with a distinct icon). unread_count carries unseen CC chat replies so the
+  // sidebar raises the same unread badge as boards/maps.
+  diagrams?: DiagramListItem[];
 }
 
 export interface SetSessionNameRequest {

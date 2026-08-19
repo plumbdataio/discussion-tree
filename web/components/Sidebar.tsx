@@ -545,25 +545,43 @@ function SessionItem({
       )}
       {/* Mermaid diagrams owned by this session — a 3rd surface. Reuses the
           map list styling; distinct icon so it reads apart from maps. */}
-      {!collapsed && (((s as any).diagrams?.length ?? 0) as number) > 0 && (
+      {!collapsed && (s.diagrams?.length ?? 0) > 0 && (
         <ul className="maps diagrams">
-          {(s as any).diagrams.map((d: { id: string; title: string }) => (
-            <li
-              key={d.id}
-              className={d.id === currentDiagramId ? "current" : ""}
-            >
-              <a href={"/diagram/" + d.id} className="sidebar-map-link">
-                <span className="sidebar-map-title">
-                  <DiagramIcon
-                    className="sidebar-diagram-icon"
-                    size={13}
-                    strokeWidth={1.75}
-                  />
-                  {d.title}
-                </span>
-              </a>
-            </li>
-          ))}
+          {s.diagrams!.map((d) => {
+            const hasUnread = (d.unread_count ?? 0) > 0;
+            return (
+              <li
+                key={d.id}
+                className={
+                  (d.id === currentDiagramId ? "current " : "") +
+                  (hasUnread ? "has-unread" : "")
+                }
+              >
+                <a href={"/diagram/" + d.id} className="sidebar-map-link">
+                  <span className="sidebar-map-title">
+                    <DiagramIcon
+                      className="sidebar-diagram-icon"
+                      size={13}
+                      strokeWidth={1.75}
+                    />
+                    {d.title}
+                  </span>
+                  {/* Same red unread badge as maps — the count of unseen CC
+                      chat replies. Nothing when there's nothing new. */}
+                  {hasUnread && (
+                    <span
+                      className="sidebar-unread-count"
+                      title={t("sidebar.unread_dot_title", {
+                        count: d.unread_count,
+                      })}
+                    >
+                      {d.unread_count}
+                    </span>
+                  )}
+                </a>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
