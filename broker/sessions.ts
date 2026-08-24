@@ -16,10 +16,12 @@ import { DIAGRAM_CHAT_NODE } from "./diagrams.ts";
 import { pendingScheduledCountForSession } from "./scheduled-messages.ts";
 import {
   db,
+  insertCliInject,
   insertSession,
   insertThread,
   selectCliCommands,
   selectCliHistory,
+  selectCliInject,
   selectSessionTmux,
   setSessionCcPid,
   setSessionTmux,
@@ -31,6 +33,7 @@ import { generateId } from "./helpers.ts";
 import { onSessionsChanged } from "./power.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
 import { REMOTE_SESSION_TIMEOUT_MS } from "./config.ts";
+import { injectIntoPane, isValidCliCommand } from "../shared/tmux-inject.ts";
 
 // Board / map ids owned by the given (about-to-be-reclaimed) sessions. Collected
 // BEFORE the reclaim UPDATE moves them, so afterwards we can nudge any open
@@ -141,6 +144,8 @@ export function handleAttachCCSession(body: any) {
   // Capture the CC process's tmux pane/socket (the MCP server reads these from
   // its own env and forwards them). Overwrite on every attach so a relaunch in
   // a fresh pane stays correct; null when CC wasn't started inside tmux.
+  // (Whether cli-send injects locally or enqueues is decided by is_remote, set
+  // at /register from the MCP's remote flag — see selectSessionTmux.)
   setSessionTmux.run(
     body.tmux_pane ? String(body.tmux_pane) : null,
     body.tmux_socket ? String(body.tmux_socket) : null,
@@ -780,125 +785,44 @@ export function cleanStaleSessions() {
 //
 // The command must be a single slash-token (args ride the separate field). This
 // replaced a fixed /compact-only allowlist: the command is pasted into the
-// user's OWN CC pane (argv, no shell — see runTmux) and /cli-send is same-origin
+// user's OWN CC pane (argv, no shell — see shared/tmux-inject.ts) and /cli-send is same-origin
 // guarded, so accepting any well-formed command grants nothing the user can't
 // already type at their own terminal. The WebUI warns that some commands open an
 // interactive TUI mode dt can't drive.
-const CLI_COMMAND_RE = /^\/[A-Za-z0-9][A-Za-z0-9:_-]*$/;
-function isValidCliCommand(command: string): boolean {
-  return CLI_COMMAND_RE.test(command);
-}
-
-// Run a tmux subprocess (argv — no shell, so the buffer text can't inject).
-// Optionally pipe `input` to stdin (used by load-buffer to carry arbitrary,
-// possibly multiline, text without ARG_MAX limits).
-async function runTmux(
-  argv: string[],
-  input?: string,
-): Promise<{ code: number; stdout: string }> {
-  try {
-    const proc = Bun.spawn(argv, {
-      stdin: input != null ? "pipe" : "ignore",
-      stdout: "pipe",
-      stderr: "ignore",
-    });
-    if (input != null && proc.stdin) {
-      proc.stdin.write(input);
-      await proc.stdin.end();
-    }
-    const stdout = await new Response(proc.stdout).text();
-    const code = await proc.exited;
-    return { code, stdout };
-  } catch {
-    // tmux not installed / spawn failed — treat as "command unavailable" so the
-    // caller reports pane_gone rather than the broker 500-ing.
-    return { code: 127, stdout: "" };
-  }
-}
-
-// Shells we must NOT paste a command into — if the pane's foreground process is
-// one of these, Claude has exited and a shell took over (the session row can
-// still be alive=1 for up to one watchdog sweep). Pasting "/compact …\n" there
-// would run it as shell input. Allowlisting "claude" instead is too brittle
-// (the binary can present as node etc.), so we denylist shells.
-const PANE_SHELLS = new Set([
-  "bash",
-  "zsh",
-  "sh",
-  "fish",
-  "dash",
-  "tcsh",
-  "csh",
-  "ksh",
-]);
-
-// Look up the pane: returns "missing" if the pane id is gone, "shell" if a
-// shell now owns it (Claude exited), or "ok". One list-panes call carries both
-// the id and its foreground command.
-async function probePane(
-  base: string[],
-  pane: string,
-): Promise<"ok" | "missing" | "shell"> {
-  const { code, stdout } = await runTmux([
-    ...base,
-    "list-panes",
-    "-a",
-    "-F",
-    "#{pane_id}\t#{pane_current_command}",
-  ]);
-  if (code !== 0) return "missing";
-  for (const line of stdout.split("\n")) {
-    const [id, cmd] = line.split("\t");
-    if (id?.trim() === pane) {
-      return PANE_SHELLS.has((cmd ?? "").trim()) ? "shell" : "ok";
-    }
-  }
-  return "missing";
-}
-
-// Monotonic buffer-name counter so concurrent /cli-send calls never share a
-// tmux buffer (a shared name + `-d` lets one request paste another's args).
-let cliSendSeq = 0;
-
-// Delay between the paste and the submit Enter. The CC TUI ingests a bracketed
-// paste asynchronously; if Enter arrives before it has settled, the keystroke
-// lands inside/before the paste and is dropped — the text appears but never
-// submits (observed against the real CC TUI). Wait a beat so Enter is a clean,
-// separate submit. Tunable via env for slow terminals.
-const CLI_SEND_ENTER_DELAY_MS =
-  Number(process.env.DT_CLI_SEND_ENTER_DELAY_MS) || 250;
-
-// Paste the text into the pane as ONE bracketed paste (so a multiline prompt
-// arrives intact — newlines stay input, not submit), then press Enter. Mirrors
-// exactly what a human does: paste the /compact block, hit Enter.
-async function sendToPane(
-  base: string[],
-  pane: string,
-  text: string,
-): Promise<void> {
-  // Clear whatever is already on the prompt line first. Reported 2026-07-29:
-  // a command arrived as "9;37M/compact …" — the tail of a mouse-report escape
-  // sequence was sitting in the input, and the paste landed after it, so CC
-  // received a line that was not a slash command at all.
-  //
-  // C-u (kill to start of line) rather than C-c: interrupting is not a text
-  // operation, and if CC happens to be mid-turn, C-c cancels that turn — the
-  // fix would then be worse than the leftover it cleans up. C-u touches only
-  // the line being edited, so on an idle prompt it does exactly what is wanted
-  // and on a busy one it does nothing.
-  await runTmux([...base, "send-keys", "-t", pane, "C-u"]);
-  const buf = `dt-cli-send-${++cliSendSeq}`;
-  await runTmux([...base, "load-buffer", "-b", buf, "-"], text);
-  await runTmux([...base, "paste-buffer", "-t", pane, "-b", buf, "-p", "-d"]);
-  await new Promise((r) => setTimeout(r, CLI_SEND_ENTER_DELAY_MS));
-  await runTmux([...base, "send-keys", "-t", pane, "Enter"]);
-}
+// isValidCliCommand / probePane / sendToPane / injectIntoPane now live in
+// shared/tmux-inject.ts so the MCP server (remote cli-send) reuses the exact
+// same probe -> paste -> Enter sequence the broker uses for local injection.
 
 // The session's default (conversation) board — where a sent CLI command is
 // logged as a green "system command" notice so the user has a record of it.
 const selectDefaultBoardForCliNotice = db.prepare(
   "SELECT id FROM boards WHERE session_id = ? AND is_default = 1 LIMIT 1",
 );
+
+// Log an issued CLI command on the session's default (conversation) board as a
+// "system command" notice (source=system, NOT a user message) so the user has a
+// record of it — rendered as a pale-green chip. Best-effort: a session with no
+// default board just skips it. Only the command name is recorded, not the
+// (possibly long) args. Called by the local path immediately, and by the remote
+// path when the MCP acks the command actually ran (see handleCliInjectAcked).
+function logCliCommandOnDefaultBoard(sessionId: string, command: string): void {
+  const def = selectDefaultBoardForCliNotice.get(sessionId) as
+    | { id: string }
+    | undefined;
+  if (!def) return;
+  insertThread.run(
+    def.id,
+    "main",
+    "system",
+    `cli_command:${command}`,
+    new Date().toISOString(),
+  );
+  broadcast(def.id, {
+    type: "thread-update",
+    node_id: "main",
+    source: "system",
+  });
+}
 
 export async function handleCliSend(body: any) {
   const sessionId = String(body?.session_id ?? "");
@@ -908,55 +832,77 @@ export async function handleCliSend(body: any) {
     return { ok: false, error: "invalid_command" };
   }
   const sess = selectSessionTmux.get(sessionId) as
-    | { tmux_pane: string | null; tmux_socket: string | null }
+    | {
+        tmux_pane: string | null;
+        tmux_socket: string | null;
+        is_remote: number;
+      }
     | undefined;
   if (!sess) return { ok: false, error: "session_not_found" };
   if (!sess.tmux_pane) return { ok: false, error: "no_tmux_pane" };
   // Refuse while CC isn't idle: "working" (mid-turn spinner) eats the command as
   // a chat message; "blocked" (AskUserQuestion / ExitPlanMode) eats it as the
-  // tool's answer. Either way the slash command wouldn't be interpreted.
+  // tool's answer. Either way the slash command wouldn't be interpreted. (The
+  // busy state is reported over the network too, so it's known for a remote CC.)
   const state = activities.get(sessionId)?.state;
   if (state === "working" || state === "blocked") {
     return { ok: false, error: "session_busy" };
-  }
-  const base = sess.tmux_socket
-    ? ["tmux", "-S", sess.tmux_socket]
-    : ["tmux"];
-  // A killed tmux server / closed pane leaves a stale id; a shell now owning the
-  // pane means Claude exited (and pasting would run in the shell) — refuse both.
-  const probe = await probePane(base, sess.tmux_pane);
-  if (probe === "missing") return { ok: false, error: "pane_gone" };
-  if (probe === "shell") return { ok: false, error: "pane_not_claude" };
-  const text = args.trim() ? `${command} ${args}` : command;
-  await sendToPane(base, sess.tmux_pane, text);
-  // Log the issued command on the session's default (conversation) board as a
-  // "system command" notice (source=system, NOT a user message) so the user has
-  // a record of it — rendered as a pale-green chip. Best-effort: a session with
-  // no default board just skips this. Only the command name is recorded, not the
-  // (possibly long) args.
-  const def = selectDefaultBoardForCliNotice.get(sessionId) as
-    | { id: string }
-    | undefined;
-  if (def) {
-    insertThread.run(
-      def.id,
-      "main",
-      "system",
-      `cli_command:${command}`,
-      new Date().toISOString(),
-    );
-    broadcast(def.id, {
-      type: "thread-update",
-      node_id: "main",
-      source: "system",
-    });
   }
   // Record the send so the modal can offer it later. Always record the command
   // (even with empty args) so a no-args command like a personal /skill still
   // shows up in the command datalist; selectCliHistory filters out the empty-arg
   // row so the ARGS history list still only shows deliberately-typed prompts.
   // Dedup by (command, args); a re-send just bumps last_used_at.
-  upsertCliHistory.run(command, args.trim() ? args : "", new Date().toISOString());
+  upsertCliHistory.run(
+    command,
+    args.trim() ? args : "",
+    new Date().toISOString(),
+  );
+  // Remote CC: its tmux is on another machine, so the broker cannot inject.
+  // Queue the command; the CC's MCP server drains cli_injects on its poll and
+  // runs send-keys on its OWN pane (server/poll.ts + shared/tmux-inject.ts). The
+  // default-board notice is deferred to the MCP's ack so it reflects an actual
+  // run on the far machine.
+  if (sess.is_remote) {
+    insertCliInject.run(
+      sessionId,
+      command,
+      args.trim() ? args : "",
+      new Date().toISOString(),
+    );
+    return { ok: true, queued: true };
+  }
+  // Local CC: the broker shares the machine, so inject straight into the pane.
+  // A killed tmux server / closed pane or a shell now owning the pane (Claude
+  // exited) are refused inside injectIntoPane.
+  const res = await injectIntoPane(
+    sess.tmux_socket,
+    sess.tmux_pane,
+    command,
+    args,
+  );
+  if (!res.ok) return { ok: false, error: res.error };
+  logCliCommandOnDefaultBoard(sessionId, command);
+  return { ok: true };
+}
+
+// The remote CC's MCP server calls this after running (or failing to run) a
+// queued cli-inject on its own pane. On success we log the command on the
+// default board — the same record the local path writes, deferred to reflect
+// ACTUAL execution on the far machine. The row was already marked delivered at
+// poll-drain, so this is purely the after-the-fact notice; a failed / no-tmux
+// run (ok=false) logs nothing.
+export function handleCliInjectAcked(body: {
+  id?: number;
+  ok?: boolean;
+}): { ok: boolean } {
+  if (typeof body?.id !== "number") return { ok: false };
+  const inj = selectCliInject.get(body.id) as
+    | { session_id: string; command: string }
+    | undefined;
+  if (inj && body.ok) {
+    logCliCommandOnDefaultBoard(inj.session_id, inj.command);
+  }
   return { ok: true };
 }
 
@@ -993,4 +939,5 @@ export const routes = {
   "/reset-unanswered": handleResetUnansweredPosts,
   "/cli-send": handleCliSend,
   "/cli-history": handleCliHistory,
+  "/cli-inject-acked": handleCliInjectAcked,
 };

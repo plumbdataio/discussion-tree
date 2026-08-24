@@ -16,6 +16,7 @@ import {
   db,
   insertPending,
   insertThread,
+  markCliInjectDelivered,
   markDelivered,
   markPendingViaTimer,
   markPushedStmt,
@@ -25,6 +26,7 @@ import {
   revertBoardFromPaused,
   selectBoard,
   selectPending,
+  selectPendingCliInjects,
   setPendingThreadItem,
   updateNodeStatus,
 } from "./db.ts";
@@ -462,9 +464,19 @@ export function handlePollMessages(body: any) {
     }
     markDelivered.run(m.id);
   }
+  // Drain any queued cli-inject commands for this session (remote cli-send): the
+  // MCP runs them on its own pane. Mark delivered at drain (not on the MCP's
+  // ack) — re-running /compact is worse than a rare miss, so a lost inject is
+  // not re-delivered.
+  const cli_injects = selectPendingCliInjects.all(body.session_id) as {
+    id: number;
+    command: string;
+    args: string;
+  }[];
+  for (const inj of cli_injects) markCliInjectDelivered.run(inj.id);
   // Ride the current CLI-verbosity pref along with the drain so the poller can
   // inject the matching footer reminder without a second round-trip.
-  return { messages, cli_verbosity: getCliVerbosity() };
+  return { messages, cli_verbosity: getCliVerbosity(), cli_injects };
 }
 
 // Option B re-delivery: the per-CC poller calls this when a channel push to CC

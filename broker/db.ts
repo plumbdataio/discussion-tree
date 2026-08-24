@@ -238,9 +238,43 @@ export const setSessionTmux = db.prepare(
 );
 // alive = 1 ONLY: a soft-deleted session's saved pane may now sit at a shell
 // prompt (Claude exited), where pasting "/compact <args>" would be run by the
-// shell. Never inject into a dead session.
+// shell. Never inject into a dead session. is_remote rides along: the broker
+// runs `tmux send-keys` on ITS OWN machine, so it can only reach a co-located
+// CC's pane. A remote session's tmux lives on another machine, so cli-send
+// ENQUEUES for it (see cli_injects) instead of injecting locally. is_remote is
+// already set at /register from the MCP's remote flag (BROKER_URL not on
+// localhost).
 export const selectSessionTmux = db.prepare(
-  "SELECT tmux_pane, tmux_socket FROM sessions WHERE id = ? AND alive = 1",
+  "SELECT tmux_pane, tmux_socket, is_remote FROM sessions WHERE id = ? AND alive = 1",
+);
+
+// cli_injects: a queue of slash-commands to inject into a REMOTE session's tmux.
+// The broker can't reach a remote CC's tmux (different machine), so instead of
+// running send-keys locally it enqueues here; the CC's MCP server drains this on
+// its poll and runs send-keys on its OWN pane. `delivered` flips at drain (not
+// on the MCP's ack) because re-running /compact is worse than a rare miss, so a
+// lost inject is NOT re-delivered.
+db.run(`
+  CREATE TABLE IF NOT EXISTS cli_injects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    command TEXT NOT NULL,
+    args TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    delivered INTEGER NOT NULL DEFAULT 0
+  )
+`);
+export const insertCliInject = db.prepare(
+  "INSERT INTO cli_injects (session_id, command, args, created_at) VALUES (?, ?, ?, ?)",
+);
+export const selectPendingCliInjects = db.prepare(
+  "SELECT id, command, args FROM cli_injects WHERE session_id = ? AND delivered = 0 ORDER BY id",
+);
+export const markCliInjectDelivered = db.prepare(
+  "UPDATE cli_injects SET delivered = 1 WHERE id = ?",
+);
+export const selectCliInject = db.prepare(
+  "SELECT session_id, command FROM cli_injects WHERE id = ?",
 );
 
 db.run(`

@@ -452,11 +452,23 @@ export function isValidCliVerbosity(s: string): s is CliVerbosity {
 export interface PollMessagesRequest {
   session_id: string;
 }
+// A slash-command queued for the MCP to inject into its OWN tmux pane (remote
+// cli-send). The broker can't reach a remote CC's tmux, so it enqueues and the
+// MCP drains these on its poll — see server/poll.ts and shared/tmux-inject.ts.
+export interface CliInject {
+  id: number;
+  command: string;
+  args: string;
+}
+
 export interface PollMessagesResponse {
   messages: PendingMessage[];
   // The current CLI-verbosity preference, so the poller can inject the matching
   // per-message reminder into the channel footer without a separate fetch.
   cli_verbosity?: CliVerbosity;
+  // Slash-commands to inject locally into this session's own tmux pane (remote
+  // cli-send). Empty / absent for the common case.
+  cli_injects?: CliInject[];
 }
 
 export interface Activity {

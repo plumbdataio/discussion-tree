@@ -175,6 +175,125 @@ describe("/cli-send across a CC restart", () => {
   });
 });
 
+// Remote cli-send: the CC's tmux is on ANOTHER machine, so the broker can't
+// inject locally; it QUEUES the command for that session's MCP to run on its
+// poll (server/poll.ts). A session is remote when it registered with remote:true
+// (its MCP's BROKER_URL isn't localhost).
+describe("/cli-send — remote (cross-machine)", () => {
+  async function registerRemote(): Promise<string> {
+    const r = await post<{ session_id: string }>(`${broker.url}/register`, {
+      pid: 99000 + Math.floor(Math.random() * 1000),
+      cwd: "/tmp/pd-remote",
+      remote: true,
+    });
+    return r.json.session_id;
+  }
+
+  test("queues instead of injecting (skips the probe, even with a dead pane)", async () => {
+    const sid = await registerRemote();
+    // A pane on a nonexistent socket: the LOCAL path fails pane_gone here, so a
+    // queued:true result proves the remote branch skipped the probe.
+    await attachWithTmux(sid, `cc-remote-${sid}`, "%1", "/tmp/dt-test-no-sock");
+    const r = await post<{ ok: boolean; queued?: boolean; error?: string }>(
+      `${broker.url}/cli-send`,
+      { session_id: sid, command: "/compact", args: "do it" },
+    );
+    expect(r.json.ok).toBe(true);
+    expect(r.json.queued).toBe(true);
+    expect(r.json.error).toBeUndefined();
+  });
+
+  test("still rejects a remote session with no captured tmux pane", async () => {
+    const sid = await registerRemote();
+    await attachCC(broker.url, sid); // binds cc_session_id, no pane
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/cli-send`,
+      { session_id: sid, command: "/compact", args: "" },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toBe("no_tmux_pane");
+  });
+
+  test("still rejects a malformed command for a remote session", async () => {
+    const sid = await registerRemote();
+    await attachWithTmux(sid, `cc-remote-bad-${sid}`, "%1", "/tmp/sock");
+    const r = await post<{ ok: boolean; error?: string }>(
+      `${broker.url}/cli-send`,
+      { session_id: sid, command: "not a command", args: "" },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toBe("invalid_command");
+  });
+
+  test("the poll delivers the queued inject exactly once", async () => {
+    const sid = await registerRemote();
+    await attachWithTmux(sid, `cc-remote-poll-${sid}`, "%1", "/tmp/sock");
+    await post(`${broker.url}/cli-send`, {
+      session_id: sid,
+      command: "/compact",
+      args: "keep it",
+    });
+    const first = await post<{
+      cli_injects?: { id: number; command: string; args: string }[];
+    }>(`${broker.url}/poll-messages`, { session_id: sid });
+    expect(first.json.cli_injects?.length).toBe(1);
+    expect(first.json.cli_injects?.[0].command).toBe("/compact");
+    expect(first.json.cli_injects?.[0].args).toBe("keep it");
+    // delivered flips at drain, so a second poll gets nothing (no double-run).
+    const second = await post<{ cli_injects?: { id: number }[] }>(
+      `${broker.url}/poll-messages`,
+      { session_id: sid },
+    );
+    expect(second.json.cli_injects?.length ?? 0).toBe(0);
+  });
+
+  test("cli-inject-acked accepts an id and rejects a missing one", async () => {
+    const sid = await registerRemote();
+    await attachWithTmux(sid, `cc-remote-ack-${sid}`, "%1", "/tmp/sock");
+    await post(`${broker.url}/cli-send`, {
+      session_id: sid,
+      command: "/compact",
+      args: "",
+    });
+    const drained = await post<{ cli_injects?: { id: number }[] }>(
+      `${broker.url}/poll-messages`,
+      { session_id: sid },
+    );
+    const injectId = drained.json.cli_injects?.[0]?.id;
+    expect(typeof injectId).toBe("number");
+    // ok:true logs the default-board notice; the endpoint returns ok. Idempotent.
+    const ack = await post<{ ok: boolean }>(`${broker.url}/cli-inject-acked`, {
+      id: injectId,
+      ok: true,
+    });
+    expect(ack.json.ok).toBe(true);
+    const again = await post<{ ok: boolean }>(`${broker.url}/cli-inject-acked`, {
+      id: injectId,
+      ok: true,
+    });
+    expect(again.json.ok).toBe(true);
+    // A non-number id is a no-op failure, never a throw.
+    const bad = await post<{ ok: boolean }>(`${broker.url}/cli-inject-acked`, {
+      ok: true,
+    });
+    expect(bad.json.ok).toBe(false);
+  });
+
+  test("a LOCAL session (not remote) still injects synchronously (no queue)", async () => {
+    // Same dead-pane setup as the remote queue test, but a local session: it
+    // must take the inject path and fail pane_gone, NOT queue.
+    const sid = await registerSession(broker.url);
+    await attachWithTmux(sid, `cc-local-${sid}`, "%1", "/tmp/dt-test-no-sock");
+    const r = await post<{ ok: boolean; queued?: boolean; error?: string }>(
+      `${broker.url}/cli-send`,
+      { session_id: sid, command: "/compact", args: "" },
+    );
+    expect(r.json.ok).toBe(false);
+    expect(r.json.queued).toBeUndefined();
+    expect(r.json.error).toBe("pane_gone");
+  });
+});
+
 describe("/cli-history", () => {
   test("rejects a malformed command", async () => {
     const r = await post<{ ok: boolean; error?: string }>(

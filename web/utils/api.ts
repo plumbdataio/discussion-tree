@@ -208,14 +208,18 @@ export async function postCliSend(
   sessionId: string,
   command: string,
   args: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; queued?: boolean }> {
   try {
     const r = await fetch("/cli-send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId, command, args }),
     });
-    return (await r.json()) as { ok: boolean; error?: string };
+    return (await r.json()) as {
+      ok: boolean;
+      error?: string;
+      queued?: boolean;
+    };
   } catch {
     return { ok: false, error: "network" };
   }

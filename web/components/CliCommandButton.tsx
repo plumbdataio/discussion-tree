@@ -124,7 +124,10 @@ function CliCommandModal({
     const res = await postCliSend(sessionId, command, args);
     setSending(false);
     if (res.ok) {
-      showToast(t("cli.sent_ok"), "ok");
+      // A remote session's CC is on another machine, so the broker queued the
+      // command for that session's MCP to run on its poll — it lands a beat
+      // later, not synchronously. Word the toast so the user knows to wait.
+      showToast(res.queued ? t("cli.sent_queued") : t("cli.sent_ok"), "ok");
       onClose();
       return;
     }

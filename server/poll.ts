@@ -4,7 +4,15 @@
 // arrives here and is pushed to CC as a single channel message.
 
 import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import type { CliVerbosity, PollMessagesResponse } from "../shared/types.ts";
+import type {
+  CliInject,
+  CliVerbosity,
+  PollMessagesResponse,
+} from "../shared/types.ts";
+import {
+  injectIntoPane,
+  ownTmuxPaneFromEnv,
+} from "../shared/tmux-inject.ts";
 import { brokerFetch } from "./broker-client.ts";
 import { BROKER_FETCH_TIMEOUT_MS, BROKER_URL } from "./config.ts";
 import { log } from "./log.ts";
@@ -285,9 +293,39 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
         }`,
       );
     }
+    // Remote cli-send: the broker queued slash-commands it couldn't inject
+    // (its tmux is on another machine). Run them on OUR OWN pane now.
+    if (result.cli_injects?.length) {
+      await runCliInjects(result.cli_injects);
+    }
   } catch (e) {
     log(`Poll error: ${e instanceof Error ? e.message : String(e)}`);
   } finally {
     pollInFlight = false;
+  }
+}
+
+// Inject each queued slash-command into THIS process's own tmux pane, then ack
+// the broker with the outcome (the broker logs a default-board notice on
+// success). The pane/socket come from our OWN env, never from the broker, so a
+// compromised broker still can't target another pane. Non-slash commands are
+// rejected inside injectIntoPane. When CC isn't in tmux (no pane) we ack
+// ok:false rather than silently dropping.
+async function runCliInjects(injects: CliInject[]): Promise<void> {
+  const { pane, socket } = ownTmuxPaneFromEnv();
+  for (const inj of injects) {
+    let ok = false;
+    if (pane) {
+      const res = await injectIntoPane(socket, pane, inj.command, inj.args);
+      ok = res.ok;
+      if (!res.ok) {
+        log(`cli-inject ${inj.id} (${inj.command}) failed: ${res.error}`);
+      } else {
+        log(`cli-inject ${inj.id} (${inj.command}) done`);
+      }
+    } else {
+      log(`cli-inject ${inj.id} (${inj.command}) skipped: not inside tmux`);
+    }
+    void brokerFetch("/cli-inject-acked", { id: inj.id, ok }).catch(() => {});
   }
 }
