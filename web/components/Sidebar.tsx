@@ -29,6 +29,7 @@ import type { TFunction } from "i18next";
 import type { Activity, SessionListItem } from "../../shared/types.ts";
 import { BOARD_STATUSES, normalizeBoardStatus } from "../utils/constants.ts";
 import { isBoardVisible } from "../utils/boardFilter.ts";
+import { applyOrder, sessionOrderKey } from "../utils/sessionOrder.ts";
 import { contextWarnBand } from "../utils/contextBand.ts";
 import {
   type BoardStatusFilter,
@@ -44,31 +45,8 @@ import { boardTitle } from "../utils/boardTitle.ts";
 let cachedSessions: SessionListItem[] | null = null;
 let cachedInactive: SessionListItem[] = [];
 
-// Apply the user's preferred ordering. `order` is a list of cwds (NOT session
-// ids): the broker mints a fresh session row id on every CC restart, so an
-// id-keyed order would drop a restarted session to the bottom every time. cwd
-// is stable across restarts, so a session returns to its saved slot. Sessions
-// whose cwd is listed come first (in the listed order); the rest follow in
-// natural broker order. Stable for ties / unlisted (sessions sharing a cwd
-// stay in natural order).
-function applyOrder(
-  sessions: SessionListItem[],
-  order: string[],
-): SessionListItem[] {
-  const rank = new Map<string, number>();
-  order.forEach((cwd, i) => {
-    if (!rank.has(cwd)) rank.set(cwd, i);
-  });
-  return sessions
-    .map((s, i) => ({ s, i }))
-    .sort((a, b) => {
-      const ra = rank.has(a.s.cwd) ? (rank.get(a.s.cwd) as number) : Infinity;
-      const rb = rank.has(b.s.cwd) ? (rank.get(b.s.cwd) as number) : Infinity;
-      if (ra !== rb) return ra - rb;
-      return a.i - b.i;
-    })
-    .map((x) => x.s);
-}
+// Session ordering (applyOrder / sessionOrderKey) lives in
+// ../utils/sessionOrder.ts so it's unit-testable.
 
 // Format a scheduled-send ISO timestamp to a short local clock time for the
 // sidebar marker tooltip. Falls back to the raw string if it doesn't parse.
@@ -830,10 +808,16 @@ export function Sidebar({
     const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;
     const insertAt = position === "before" ? adjustedTo : adjustedTo + 1;
     arr.splice(insertAt, 0, moved);
-    // Persist by cwd (stable across CC restarts; the session row id is not).
-    const cwds: string[] = [];
-    for (const s of arr) if (!cwds.includes(s.cwd)) cwds.push(s.cwd);
-    updateSettings({ sessionOrder: cwds });
+    // Persist by cc_session_id (stable across CC restarts / `/mcp` AND unique,
+    // so two sessions sharing a cwd order independently); sessionOrderKey falls
+    // back to cwd for a session that hasn't attached yet. See applyOrder for how
+    // legacy cwd-keyed orders keep resolving until this migrates them.
+    const keys: string[] = [];
+    for (const s of arr) {
+      const k = sessionOrderKey(s);
+      if (!keys.includes(k)) keys.push(k);
+    }
+    updateSettings({ sessionOrder: keys });
   };
 
   return (
