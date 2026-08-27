@@ -4,9 +4,11 @@ import { applyOrder, sessionOrderKey } from "../../web/utils/sessionOrder.ts";
 const s = (cc_session_id: string | null, cwd: string) => ({ cc_session_id, cwd });
 
 describe("sessionOrderKey", () => {
-  test("prefers cc_session_id, falls back to cwd when not yet attached", () => {
+  test("is the cc_session_id, with no cwd fallback (null stays null)", () => {
     expect(sessionOrderKey(s("cc-1", "/a"))).toBe("cc-1");
-    expect(sessionOrderKey(s(null, "/a"))).toBe("/a");
+    // An attached session always has a cc_session_id; a null one is not ordered
+    // by cwd — it simply yields a null key that the persist step skips.
+    expect(sessionOrderKey(s(null, "/a"))).toBeNull();
   });
 });
 

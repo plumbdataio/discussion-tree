@@ -809,13 +809,13 @@ export function Sidebar({
     const insertAt = position === "before" ? adjustedTo : adjustedTo + 1;
     arr.splice(insertAt, 0, moved);
     // Persist by cc_session_id (stable across CC restarts / `/mcp` AND unique,
-    // so two sessions sharing a cwd order independently); sessionOrderKey falls
-    // back to cwd for a session that hasn't attached yet. See applyOrder for how
-    // legacy cwd-keyed orders keep resolving until this migrates them.
+    // so two sessions sharing a cwd order independently). No cwd fallback: an
+    // attached session always has a cc_session_id, and a (non-occurring) null is
+    // skipped rather than ordered by cwd.
     const keys: string[] = [];
     for (const s of arr) {
       const k = sessionOrderKey(s);
-      if (!keys.includes(k)) keys.push(k);
+      if (k != null && !keys.includes(k)) keys.push(k);
     }
     updateSettings({ sessionOrder: keys });
   };
