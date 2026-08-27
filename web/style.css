@@ -8092,3 +8092,17 @@ ul.maps li.current .sidebar-map-link {
   margin-left: 3px;
   font-size: 9px;
 }
+
+/* Active state for the map's bottom-left "select mode" toggle (React Flow
+   ControlButton). Highlighted while marquee-select is on. */
+.react-flow__controls-button.map-control-active {
+  background: #2563eb;
+  color: #fff;
+}
+.react-flow__controls-button.map-control-active:hover {
+  background: #1d4ed8;
+}
+.react-flow__controls-button.map-control-active svg {
+  color: #fff;
+  stroke: #fff;
+}

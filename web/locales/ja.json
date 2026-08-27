@@ -403,6 +403,8 @@
     "undo_delete": "元に戻す",
     "restored": "元に戻しました",
     "frame_add": "グルーピング枠を追加",
+    "select_mode_off": "選択モード(空きキャンバスをドラッグで矩形選択)",
+    "select_mode_on": "選択モードON — ドラッグで矩形選択(パンは中ボタンドラッグ or Space+ドラッグ)",
     "frame_untitled": "(無題の枠)",
     "frame_color_default": "デフォルト色",
     "frame_color_custom": "カスタム色",

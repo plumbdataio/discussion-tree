@@ -21,12 +21,15 @@ import {
   ControlButton,
   ConnectionMode,
   MarkerType,
+  SelectionMode,
   applyNodeChanges,
   applyEdgeChanges,
   reconnectEdge,
+  type OnSelectionChangeParams,
 } from "@xyflow/react";
 import {
   AlertTriangle,
+  BoxSelect,
   ChartNetwork,
   Frame,
   Lock,
@@ -149,6 +152,12 @@ export function MapView({ mapId }: { mapId: string }) {
   const [notFound, setNotFound] = useState(false);
   const [rfNodes, setRfNodes] = useState<RFNode[]>([]);
   const [rfEdges, setRfEdges] = useState<RFEdge[]>([]);
+  // Select mode: while ON, dragging empty canvas draws a marquee box that
+  // selects the enclosed nodes (and their connecting edges — see
+  // onSelectionChange); OFF (default) keeps the plain drag-to-pan behavior. A
+  // bottom-left toggle button flips it. Panning still works via middle/right
+  // mouse or Space+drag while select mode is on.
+  const [selectMode, setSelectMode] = useState(false);
   // The canvas starts LOCKED (read-only: no select / drag / connect) so the
   // map can't be disturbed by accident; the bottom-left lock toggle and the
   // "L" hotkey flip it. interactive = !locked.
@@ -485,6 +494,28 @@ export function MapView({ mapId }: { mapId: string }) {
     // onDelete (which fires with the node and its incident edges together);
     // reconnects persist in onReconnect. So nothing to persist here.
     setRfEdges((es) => applyEdgeChanges(changes, es));
+  }, []);
+
+  // When a set of nodes is selected (marquee or otherwise), also select any
+  // edge whose BOTH endpoints are in that set — so a boxed cluster comes with
+  // its internal connections. Only ADD (never force-deselect), so a manually
+  // clicked edge isn't clobbered; and return the same array when nothing
+  // changed so the follow-up selection-change this triggers is a no-op (no
+  // render loop). Purely visual — not persisted.
+  const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
+    const selIds = new Set(params.nodes.map((n) => n.id));
+    if (selIds.size === 0) return;
+    setRfEdges((es) => {
+      let changed = false;
+      const next = es.map((e) => {
+        if (!e.selected && selIds.has(e.source) && selIds.has(e.target)) {
+          changed = true;
+          return { ...e, selected: true };
+        }
+        return e;
+      });
+      return changed ? next : es;
+    });
   }, []);
 
   // Record an undoable frame edit (color / title / size / geometry). Called by
@@ -892,15 +923,8 @@ export function MapView({ mapId }: { mapId: string }) {
                 view.activity?.state === "blocked"
               }
             />
-            <button
-              type="button"
-              className="map-timeline-btn"
-              title={t("map.frame_add")}
-              aria-label={t("map.frame_add")}
-              onClick={addFrame}
-            >
-              <Frame size={16} strokeWidth={1.9} />
-            </button>
+            {/* "Add grouping frame" moved to the bottom-left map controls
+                (next to zoom / lock) so map tools live in one place. */}
             <button
               type="button"
               className="map-timeline-btn"
@@ -949,6 +973,13 @@ export function MapView({ mapId }: { mapId: string }) {
                 // Lock only freezes STRUCTURE: drag (above), connect (above),
                 // resize (NodeResizer hidden when locked), and edge edit (below).
                 elementsSelectable
+                // Select mode: marquee-select on empty-canvas drag (Partial =
+                // a node partly inside the box counts). Off = drag pans as
+                // before; on = pan via middle/right mouse or Space+drag.
+                selectionOnDrag={selectMode}
+                panOnDrag={selectMode ? [1, 2] : true}
+                selectionMode={SelectionMode.Partial}
+                onSelectionChange={onSelectionChange}
                 // Clicking an edge selects it; lift the selected edge above the
                 // nodes so a path that runs behind an unrelated card is visible
                 // (and highlighted by FloatingEdge) end to end.
@@ -965,6 +996,31 @@ export function MapView({ mapId }: { mapId: string }) {
                     toggle can't unlock. This one drives our `locked` state
                     directly (and the "L" hotkey does the same). */}
                 <Controls showInteractive={false}>
+                  {/* Map tools live here (bottom-left), next to zoom + lock. */}
+                  <ControlButton
+                    onClick={() => setSelectMode((v) => !v)}
+                    title={
+                      selectMode
+                        ? t("map.select_mode_on")
+                        : t("map.select_mode_off")
+                    }
+                    aria-label={
+                      selectMode
+                        ? t("map.select_mode_on")
+                        : t("map.select_mode_off")
+                    }
+                    aria-pressed={selectMode}
+                    className={selectMode ? "map-control-active" : undefined}
+                  >
+                    <BoxSelect size={14} />
+                  </ControlButton>
+                  <ControlButton
+                    onClick={addFrame}
+                    title={t("map.frame_add")}
+                    aria-label={t("map.frame_add")}
+                  >
+                    <Frame size={14} />
+                  </ControlButton>
                   <ControlButton
                     onClick={() => setLocked((v) => !v)}
                     title={locked ? t("map.unlock") : t("map.lock")}

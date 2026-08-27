@@ -403,6 +403,8 @@
     "undo_delete": "Undo",
     "restored": "Restored",
     "frame_add": "Add grouping frame",
+    "select_mode_off": "Select mode (drag empty canvas to box-select)",
+    "select_mode_on": "Select mode ON — drag to box-select (pan: middle-drag or Space+drag)",
     "frame_untitled": "(untitled frame)",
     "frame_color_default": "Default colour",
     "frame_color_custom": "Custom colour",
