@@ -144,6 +144,16 @@ type UndoEntry =
       kind: "node-geom";
       nodeId: string;
       prev: { x: number; y: number; w?: number; h?: number };
+    }
+  // A multi-selection move (marquee-selected cards/frames dragged together):
+  // one undo entry reverts the whole group so Cmd+Z isn't per-node.
+  | {
+      kind: "node-move-batch";
+      moves: {
+        nodeId: string;
+        isFrame: boolean;
+        prev: { x: number; y: number };
+      }[];
     };
 
 export function MapView({ mapId }: { mapId: string }) {
@@ -537,33 +547,59 @@ export function MapView({ mapId }: { mapId: string }) {
   );
 
   // Capture a node/frame's pre-drag position so the move can be undone.
-  const onNodeDragStart = useCallback((_e: any, node: RFNode) => {
-    dragStartPos.current[node.id] = {
-      x: node.position.x,
-      y: node.position.y,
-    };
-  }, []);
+  const onNodeDragStart = useCallback(
+    (_e: any, node: RFNode, nodes: RFNode[]) => {
+      // `nodes` is every node being dragged — the whole selection on a
+      // multi-drag, or just [node] for a single card. Capture each start pos so
+      // onNodeDragStop can persist and record undo for ALL of them.
+      const dragged = nodes?.length ? nodes : [node];
+      for (const n of dragged) {
+        dragStartPos.current[n.id] = { x: n.position.x, y: n.position.y };
+      }
+    },
+    [],
+  );
 
   const onNodeDragStop = useCallback(
-    (_e: any, node: RFNode) => {
-      draggingIds.current.delete(node.id);
-      const nx = Math.round(node.position.x);
-      const ny = Math.round(node.position.y);
-      const start = dragStartPos.current[node.id];
-      delete dragStartPos.current[node.id];
-      const moved =
-        !!start && (Math.round(start.x) !== nx || Math.round(start.y) !== ny);
-      const prev = start
-        ? { x: Math.round(start.x), y: Math.round(start.y) }
-        : null;
-      if (node.type === "frame") {
-        if (moved && prev) recordFrameUpdate(node.id, prev);
-        // Frames persist via their own endpoint (they're not map_nodes).
-        postMapUpdateFrame(mapId, node.id, { x: nx, y: ny }).catch(() => {});
-        return;
+    (_e: any, node: RFNode, nodes: RFNode[]) => {
+      // Persist EVERY dragged node, not just the grabbed one — React Flow moves
+      // the whole selection during a multi-drag, so all of them must be written
+      // or the others snap back on the next WS refresh.
+      const dragged = nodes?.length ? nodes : [node];
+      const batch: {
+        nodeId: string;
+        isFrame: boolean;
+        prev: { x: number; y: number };
+      }[] = [];
+      for (const n of dragged) {
+        draggingIds.current.delete(n.id);
+        const nx = Math.round(n.position.x);
+        const ny = Math.round(n.position.y);
+        const start = dragStartPos.current[n.id];
+        delete dragStartPos.current[n.id];
+        const moved =
+          !!start && (Math.round(start.x) !== nx || Math.round(start.y) !== ny);
+        const prev = start
+          ? { x: Math.round(start.x), y: Math.round(start.y) }
+          : null;
+        const isFrame = n.type === "frame";
+        if (isFrame) {
+          // Frames persist via their own endpoint (they're not map_nodes).
+          postMapUpdateFrame(mapId, n.id, { x: nx, y: ny }).catch(() => {});
+        } else {
+          postMapMoveNode(mapId, n.id, nx, ny).catch(() => {});
+        }
+        if (moved && prev) batch.push({ nodeId: n.id, isFrame, prev });
       }
-      if (moved && prev) recordNodeGeom(node.id, prev);
-      postMapMoveNode(mapId, node.id, nx, ny).catch(() => {});
+      // One undo entry: a lone move keeps the existing single-kind entry; a
+      // group move gets a batch so Cmd+Z reverts all of them at once.
+      if (batch.length === 1) {
+        const only = batch[0];
+        if (only.isFrame) recordFrameUpdate(only.nodeId, only.prev);
+        else recordNodeGeom(only.nodeId, only.prev);
+      } else if (batch.length > 1) {
+        undoStack.current.push({ kind: "node-move-batch", moves: batch });
+      }
     },
     [mapId, recordFrameUpdate, recordNodeGeom],
   );
@@ -671,6 +707,18 @@ export function MapView({ mapId }: { mapId: string }) {
           ],
           t("map.undone"),
         );
+        return;
+      }
+      if (entry.kind === "node-move-batch") {
+        const jobs = entry.moves.map((m) =>
+          m.isFrame
+            ? postMapUpdateFrame(mapId, m.nodeId, {
+                x: m.prev.x,
+                y: m.prev.y,
+              })
+            : postMapMoveNode(mapId, m.nodeId, m.prev.x, m.prev.y),
+        );
+        announceUndo(jobs, t("map.undone"));
         return;
       }
       // frame-update
