@@ -714,6 +714,35 @@ export const TOOLS = [
     },
   },
   {
+    name: "set_map_node_layout",
+    description:
+      "Set a map node's position and/or size: x, y = the card's top-left canvas coordinates; w, h = the card's width/height. Pass any subset — an omitted field keeps its current value (move without resizing, or resize without moving); at least one of x/y/w/h is required. Read current positions/sizes with get_map. ★DO NOT move or resize nodes on your own initiative — do this ONLY when the user explicitly asks you to. The user arranges the cards in the canvas into a layout that is visually meaningful to them, and a proactive layout change can silently destroy that arrangement. The result returns BOTH the before and after {x, y, w, h}; if a change turns out to be unwanted, revert it by calling this again with the 'before' values.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        map_id: { type: "string" as const },
+        node_id: { type: "string" as const },
+        x: {
+          type: "number" as const,
+          description: "New top-left X (canvas coords). Optional.",
+        },
+        y: {
+          type: "number" as const,
+          description: "New top-left Y (canvas coords). Optional.",
+        },
+        w: {
+          type: "number" as const,
+          description: "New card width. Optional.",
+        },
+        h: {
+          type: "number" as const,
+          description: "New card height. Optional.",
+        },
+      },
+      required: ["map_id", "node_id"],
+    },
+  },
+  {
     name: "delete_map_node",
     description:
       "Logically delete a map node (it disappears from the canvas; its messages + touching edges are kept in the DB so nothing dangles). Use when a branch is abandoned.",
@@ -1936,6 +1965,35 @@ export async function dispatchToolCall(
         if (!res.ok)
           return textResult(res.error ?? "update_map_node failed", true);
         return textResult(`Map node ${a.node_id} updated.`);
+      }
+
+      case "set_map_node_layout": {
+        ensureSession();
+        const a = args as {
+          map_id: string;
+          node_id: string;
+          x?: number;
+          y?: number;
+          w?: number;
+          h?: number;
+        };
+        type Layout = { x: number; y: number; w: number; h: number };
+        const res = await brokerFetch<{
+          ok: boolean;
+          before?: Layout;
+          after?: Layout;
+          error?: string;
+        }>("/map-move-node", a);
+        if (!res.ok)
+          return textResult(res.error ?? "set_map_node_layout failed", true);
+        const fmt = (l?: Layout) =>
+          l ? `x=${l.x} y=${l.y} w=${l.w} h=${l.h}` : "(unknown)";
+        return textResult(
+          `Map node ${a.node_id} layout set.\n` +
+            `before: ${fmt(res.before)}\n` +
+            `after:  ${fmt(res.after)}\n` +
+            `To undo, call set_map_node_layout with the 'before' values.`,
+        );
       }
 
       case "delete_map_node": {

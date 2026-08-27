@@ -345,18 +345,37 @@ export function handleUpdateMapNode(body: any) {
 
 // Position / size persist. SILENT in the pull model — broadcast so other
 // browsers follow, but no channel push to the AI (it re-reads on next act).
+// Both the UI drag/resize (postMapMoveNode, always sends x,y) and the
+// set_map_node_layout MCP tool (any subset of x/y/w/h) funnel through here. A
+// missing field keeps its current value (move without resizing, or vice versa).
+// Returns before + after with NULL sizes resolved to the card defaults so the
+// caller has concrete, revertable numbers.
 export function handleMoveMapNode(body: any) {
   const mapId = String(body?.map_id ?? "");
   const nodeId = String(body?.node_id ?? "");
   const cur = selectMapNode.get(mapId, nodeId) as MapNode | undefined;
   if (!cur) return { ok: false, error: "map node not found" };
-  const x = typeof body?.x === "number" ? body.x : cur.x;
-  const y = typeof body?.y === "number" ? body.y : cur.y;
-  const w = typeof body?.w === "number" ? body.w : cur.w ?? null;
-  const h = typeof body?.h === "number" ? body.h : cur.h ?? null;
+  const hasX = typeof body?.x === "number";
+  const hasY = typeof body?.y === "number";
+  const hasW = typeof body?.w === "number";
+  const hasH = typeof body?.h === "number";
+  if (!hasX && !hasY && !hasW && !hasH) {
+    return { ok: false, error: "provide at least one of x, y, w, h" };
+  }
+  const before = {
+    x: cur.x,
+    y: cur.y,
+    w: cur.w ?? NODE_W,
+    h: cur.h ?? NODE_H,
+  };
+  const x = hasX ? body.x : cur.x;
+  const y = hasY ? body.y : cur.y;
+  const w = hasW ? body.w : cur.w ?? null;
+  const h = hasH ? body.h : cur.h ?? null;
   updateMapNodePos.run(x, y, w, h, mapId, nodeId);
   emit(mapId);
-  return { ok: true };
+  const after = { x, y, w: w ?? NODE_W, h: h ?? NODE_H };
+  return { ok: true, before, after };
 }
 
 // Logical delete: the node disappears from the map but its messages + the
