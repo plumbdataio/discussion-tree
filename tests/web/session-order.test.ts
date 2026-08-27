@@ -24,11 +24,12 @@ describe("applyOrder", () => {
     expect(applyOrder([a, b], ["cc-a", "cc-b"])).toEqual([a, b]);
   });
 
-  test("legacy cwd-keyed order still resolves (backward compat)", () => {
+  test("a legacy cwd-keyed order is ignored (cwd is no longer a key)", () => {
     const x = s("cc-x", "/x");
     const y = s("cc-y", "/y");
-    // Old saved order was a list of cwds; sessions still match by cwd.
-    expect(applyOrder([y, x], ["/x", "/y"])).toEqual([x, y]);
+    // Old builds persisted a list of cwds; those keys now match nothing, so the
+    // sessions fall to natural order (a one-time reset — the user re-drags once).
+    expect(applyOrder([y, x], ["/x", "/y"])).toEqual([y, x]);
   });
 
   test("listed come first; unlisted keep natural order (stable ties)", () => {
@@ -41,11 +42,4 @@ describe("applyOrder", () => {
     expect(applyOrder([a, b, c], [])).toEqual([a, b, c]);
   });
 
-  test("cc_session_id match wins over a cwd also present in the order", () => {
-    const a = s("cc-a", "/repo");
-    const b = s("cc-b", "/repo");
-    // Mixed/transitional order: a's cwd and b's id. b (by id, rank 0) leads a
-    // (by cwd, rank 1).
-    expect(applyOrder([a, b], ["cc-b", "/repo"])).toEqual([b, a]);
-  });
 });
