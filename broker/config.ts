@@ -61,17 +61,24 @@ export const SUBMIT_DELIVERY_TIMEOUT_MS = 8_000;
 export const AUTO_ACTIVITY_TIMEOUT_MS = 60_000;
 
 // A running subagent (Task worker) is considered live only while its last tool
-// heartbeat is younger than this. Deliberately MUCH longer than the "working"
-// window above: a subagent can sit minutes inside a single long tool call (a
-// big test run, a slow build) or between tool calls while the model thinks, and
-// a 60s window would flicker the indicator off mid-run. The primary clear path
-// is the SubagentStop hook; this is the backstop for when it never fires (the
-// subagent's parent crashed, or SubagentStop didn't run), so a leaked
-// subagent-running marker disappears on its own within ~3 minutes of the last
-// tool call. Override via DT_SUBAGENT_TIMEOUT_MS (used by tests).
+// heartbeat is younger than this. This backstop turned out to be the PRIMARY
+// clear path in practice, not a rare fallback: SubagentStop does NOT fire for a
+// whole class of short-lived subagents (measured 2026-08-28 — brief agents that
+// emit a single tool call and then vanish with no SubagentStop, or whose stop
+// carries a different agent_id than their tool calls did). For those the
+// backstop is the ONLY thing that clears them, so a long window let finished
+// subagents pile up: the sidebar was observed counting two subagents that had
+// been idle 156s and 163s — done, but still shown. 60s clears a finished /
+// orphaned subagent within a minute while a genuinely-active subagent (which
+// calls tools every few-to-tens of seconds) stays counted. Trade-off: a
+// subagent sitting inside ONE tool call longer than 60s with no intervening
+// tool calls can briefly read as idle; that is rarer than the pile-up above and
+// SubagentStop still removes it the instant it finishes. Tunable via
+// DT_SUBAGENT_TIMEOUT_MS (also used by tests); raise it if long single-tool
+// subagents flicker.
 export const SUBAGENT_TIMEOUT_MS = process.env.DT_SUBAGENT_TIMEOUT_MS
   ? parseInt(process.env.DT_SUBAGENT_TIMEOUT_MS, 10)
-  : 180_000;
+  : 60_000;
 
 // How often broker.ts re-checks every alive session's PID and soft-deletes
 // rows whose process is gone. Runs about once per heartbeat interval so a
