@@ -31,6 +31,8 @@
     "needs_reply_title": "返答求む {{count}} 件",
     "scheduled_send_title": "{{time}} に送信予約あり",
     "scheduled_send_aria": "送信予約あり",
+    "subagent_running_title": "サブエージェント {{count}} 個が実行中 — クリックでクリア",
+    "subagent_running_aria": "実行中のサブエージェント {{count}} 個のマーカーをクリア",
     "stalled_title": "Claude Code が API エラー等で停止しています",
     "stalled_aria": "停止中",
     "compacting_title": "Claude Code がコンテキストを compact 中です",

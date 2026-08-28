@@ -60,6 +60,19 @@ export const SUBMIT_DELIVERY_TIMEOUT_MS = 8_000;
 // this is a safety net for cases where Stop never fires (CC crash mid-turn).
 export const AUTO_ACTIVITY_TIMEOUT_MS = 60_000;
 
+// A running subagent (Task worker) is considered live only while its last tool
+// heartbeat is younger than this. Deliberately MUCH longer than the "working"
+// window above: a subagent can sit minutes inside a single long tool call (a
+// big test run, a slow build) or between tool calls while the model thinks, and
+// a 60s window would flicker the indicator off mid-run. The primary clear path
+// is the SubagentStop hook; this is the backstop for when it never fires (the
+// subagent's parent crashed, or SubagentStop didn't run), so a leaked
+// subagent-running marker disappears on its own within ~3 minutes of the last
+// tool call. Override via DT_SUBAGENT_TIMEOUT_MS (used by tests).
+export const SUBAGENT_TIMEOUT_MS = process.env.DT_SUBAGENT_TIMEOUT_MS
+  ? parseInt(process.env.DT_SUBAGENT_TIMEOUT_MS, 10)
+  : 180_000;
+
 // How often broker.ts re-checks every alive session's PID and soft-deletes
 // rows whose process is gone. Runs about once per heartbeat interval so a
 // remote session that stopped beating is noticed promptly (the timeout below is

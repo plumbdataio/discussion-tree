@@ -277,6 +277,58 @@ export const selectCliInject = db.prepare(
   "SELECT session_id, command FROM cli_injects WHERE id = ?",
 );
 
+// running_subagents: which Task-worker subagents are currently running under a
+// session, so the sidebar can show a per-session "subagent running" indicator.
+// A subagent's tool calls fire the SAME PreToolUse hook as the parent (same
+// session_id / transcript_path), but their stdin JSON carries an `agent_id`
+// (the parent's own tool calls do not). The tool-activity hook routes those to
+// /heartbeat-subagent, which UPSERTs a row here keyed by (session_id, agent_id)
+// — session_id is the broker session id (resolved from cc_session_id, same as
+// the working spinner / bg-tasks), not the CC id. last_seen is refreshed on
+// every tool call; stopped flips to 1 when the SubagentStop hook fires (or the
+// user clears it). A subagent counts as running only while stopped=0 AND
+// last_seen is within SUBAGENT_TIMEOUT_MS — the timeout is the backstop for a
+// SubagentStop that never fires. Ephemeral runtime state (not conversation
+// data), so unlike the rest of this file it is mutated with UPDATEs on the
+// stopped flag rather than kept append-only forever.
+db.run(`
+  CREATE TABLE IF NOT EXISTS running_subagents (
+    session_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    last_seen TEXT NOT NULL,
+    stopped INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (session_id, agent_id)
+  )
+`);
+db.run(
+  "CREATE INDEX IF NOT EXISTS idx_running_subagents_session ON running_subagents(session_id, stopped)",
+);
+// A tool heartbeat proves the subagent is running: refresh last_seen and clear
+// any stopped flag (so a subagent that heartbeats again after an all-stop /
+// clear correctly re-counts as running).
+export const upsertRunningSubagent = db.prepare(
+  `INSERT INTO running_subagents (session_id, agent_id, last_seen, stopped)
+   VALUES (?, ?, ?, 0)
+   ON CONFLICT(session_id, agent_id)
+   DO UPDATE SET last_seen = excluded.last_seen, stopped = 0`,
+);
+// SubagentStop with a known agent_id — drop exactly that one.
+export const stopRunningSubagent = db.prepare(
+  "UPDATE running_subagents SET stopped = 1 WHERE session_id = ? AND agent_id = ? AND stopped = 0",
+);
+// SubagentStop without an agent_id, and the manual clear escape hatch — drop
+// every still-running subagent for the session at once.
+export const stopAllRunningSubagentsForSession = db.prepare(
+  "UPDATE running_subagents SET stopped = 1 WHERE session_id = ? AND stopped = 0",
+);
+// Count currently-running subagents = distinct agent_id (the PK guarantees one
+// row each) that are not stopped and whose last tool heartbeat is fresh. The
+// caller passes the freshness cutoff (now - SUBAGENT_TIMEOUT_MS) as an ISO
+// string so the timeout backstop is applied in SQL.
+export const countRunningSubagentsForSession = db.prepare(
+  "SELECT COUNT(*) AS cnt FROM running_subagents WHERE session_id = ? AND stopped = 0 AND last_seen >= ?",
+);
+
 db.run(`
   CREATE TABLE IF NOT EXISTS boards (
     id TEXT PRIMARY KEY,

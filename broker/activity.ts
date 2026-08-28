@@ -13,12 +13,17 @@ import {
   clearSessionCompactingStmt,
   clearSessionStalledStmt,
   clearSessionStalledBeforeStmt,
+  countRunningSubagentsForSession,
   db,
   insertThread,
   selectAliveSessionByCcPid,
   setSessionCompactingStmt,
   setSessionStalledStmt,
+  stopAllRunningSubagentsForSession,
+  stopRunningSubagent,
+  upsertRunningSubagent,
 } from "./db.ts";
+import { SUBAGENT_TIMEOUT_MS } from "./config.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
 import {
   classifyStallFromTranscript,
@@ -179,6 +184,33 @@ function broadcastBgTasks(sessionId: string) {
 
 export function bgTaskCountForSession(sessionId: string): number {
   return bgTasks.get(sessionId)?.size ?? 0;
+}
+
+// --- Running subagents (Task workers) --------------------------------------
+// Persisted in running_subagents (broker DB), keyed by (broker session_id,
+// agent_id). Driven by the PreToolUse hook: a tool call carrying an `agent_id`
+// is a subagent's, so the hook posts /heartbeat-subagent instead of the
+// parent's /heartbeat-tool (which is what stops the PARENT working spinner from
+// spinning for subagent activity). The count is DB-derived (not an in-memory
+// Map like bgTasks) so it survives a broker restart — a real subagent keeps
+// running across a deploy-time broker bounce.
+
+// How many subagents are currently running for a session: not stopped AND with
+// a fresh last tool heartbeat (the timeout backstop for a missed SubagentStop).
+export function runningSubagentCountForSession(sessionId: string): number {
+  const cutoff = new Date(Date.now() - SUBAGENT_TIMEOUT_MS).toISOString();
+  const row = countRunningSubagentsForSession.get(sessionId, cutoff) as {
+    cnt: number;
+  };
+  return row.cnt;
+}
+
+function broadcastSubagents(sessionId: string) {
+  broadcastToAll({
+    type: "subagent-update",
+    session_id: sessionId,
+    count: runningSubagentCountForSession(sessionId),
+  });
 }
 
 // Scheduled-send markers: broker session_id → ISO fire time of a message an
@@ -708,6 +740,78 @@ export function handleBgTaskClearSession(body: {
   return { ok: true, cleared };
 }
 
+// PreToolUse hook entry for a SUBAGENT tool call (stdin carried an agent_id).
+// The hook posts here INSTEAD of /heartbeat-tool, so the parent's working
+// spinner no longer spins for a subagent's activity — the subagent gets its own
+// per-session "running" indicator instead. UPSERT (session, agent_id) with a
+// fresh last_seen; the broadcast nudges the sidebar to re-read the count. A tool
+// heartbeat is also proof the subagent is alive, so the UPSERT clears any
+// stopped flag (a subagent that heartbeats after an all-stop/clear re-counts).
+export function handleHeartbeatSubagent(body: {
+  cc_session_id?: string;
+  agent_id?: string;
+}): { ok: boolean; count?: number } {
+  if (!body.cc_session_id || !body.agent_id) return { ok: false };
+  const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
+  if (!sessionId) return { ok: false };
+  upsertRunningSubagent.run(
+    sessionId,
+    body.agent_id,
+    new Date().toISOString(),
+  );
+  broadcastSubagents(sessionId);
+  return { ok: true, count: runningSubagentCountForSession(sessionId) };
+}
+
+// SubagentStop hook entry — a Task worker finished. It is UNKNOWN whether the
+// SubagentStop stdin carries an agent_id, so handle both:
+//   - agent_id present  → drop exactly that (session, agent_id).
+//   - agent_id absent   → drop ALL still-running subagents for the session.
+// The all-drop is the least-surprising choice for the ambiguous case: a stop
+// event without an id means "a subagent under this session ended", and the only
+// safe reading that never leaves a phantom indicator up is to clear the set (a
+// genuinely-still-running sibling re-registers on its very next tool call, which
+// re-counts it via the UPSERT above). The alternative — dropping "the oldest" —
+// could clear the wrong one and strand a finished subagent's marker, which is
+// exactly the stuck-indicator failure the timeout backstop and this hook exist
+// to prevent. Correctness therefore never depends on the id being present.
+export function handleSubagentStop(body: {
+  cc_session_id?: string;
+  agent_id?: string;
+}): { ok: boolean; stopped: number } {
+  if (!body.cc_session_id) return { ok: false, stopped: 0 };
+  const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
+  if (!sessionId) return { ok: false, stopped: 0 };
+  const res = body.agent_id
+    ? stopRunningSubagent.run(sessionId, body.agent_id)
+    : stopAllRunningSubagentsForSession.run(sessionId);
+  if (res.changes > 0) broadcastSubagents(sessionId);
+  return { ok: true, stopped: res.changes };
+}
+
+// Clear ALL running subagents for one session at once — the manual escape hatch
+// (mirrors handleBgTaskClearSession). Two ways in: the sidebar "clear"
+// affordance on the subagent indicator, and a direct call. This is the safety
+// net for when SubagentStop fails to fire and a marker would otherwise linger
+// until the timeout. A subagent that is genuinely still running re-appears on
+// its next tool call (the UPSERT clears its stopped flag) — same as the
+// all-drop SubagentStop path.
+export function handleSubagentClearSession(body: {
+  session_id?: string;
+  cc_session_id?: string;
+}): { ok: boolean; cleared: number; error?: string } {
+  let sessionId: string | null = body.session_id ?? null;
+  if (!sessionId && body.cc_session_id) {
+    sessionId = lookupAliveSessionByCcId(body.cc_session_id);
+  }
+  if (!sessionId) {
+    return { ok: false, cleared: 0, error: "session not found" };
+  }
+  const res = stopAllRunningSubagentsForSession.run(sessionId);
+  if (res.changes > 0) broadcastSubagents(sessionId);
+  return { ok: true, cleared: res.changes };
+}
+
 // Bulk clear for a set of sessions. Used when an external tool wants
 // to silence every spinner across a group of CCs at once (e.g. a
 // scheduled "observation mode" where the user wants the badges
@@ -785,6 +889,9 @@ export const routes = {
   "/bg-task-start": handleBgTaskStart,
   "/bg-task-done": handleBgTaskDone,
   "/bg-task-clear-session": handleBgTaskClearSession,
+  "/heartbeat-subagent": handleHeartbeatSubagent,
+  "/subagent-stop": handleSubagentStop,
+  "/subagent-clear-session": handleSubagentClearSession,
   "/set-session-schedule-marker": handleSetScheduleMarker,
   "/clear-session-schedule-marker": handleClearScheduleMarker,
 };

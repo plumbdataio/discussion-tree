@@ -9,6 +9,7 @@ import {
   bgTaskCountForSession,
   clearCompacting,
   clearStall,
+  runningSubagentCountForSession,
   scheduledSendAtForSession,
 } from "./activity.ts";
 import { getContextUsage } from "./context-usage.ts";
@@ -720,6 +721,7 @@ export function handleListSessions() {
       activity,
       context_usage,
       bg_task_count: bgTaskCountForSession(s.id),
+      running_subagents: runningSubagentCountForSession(s.id),
       scheduled_send_at: scheduledSendAtForSession(s.id),
       scheduled_message_count: pendingScheduledCountForSession(s.id),
       boards: enrichBoards(activeBoards),

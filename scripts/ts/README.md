@@ -15,6 +15,7 @@ machine where you'd rather not depend on `jq` / `curl` in the PATH.
 | `scripts/session-start-hook.sh` | [`dt-session-start.ts`](dt-session-start.ts) |
 | `scripts/tool-activity-hook.sh` | [`dt-tool-activity.ts`](dt-tool-activity.ts) |
 | `scripts/tool-activity-clear-hook.sh` | [`dt-tool-activity-clear.ts`](dt-tool-activity-clear.ts) |
+| `scripts/subagent-stop-hook.sh` | [`dt-subagent-stop.ts`](dt-subagent-stop.ts) |
 
 All three:
 
@@ -73,6 +74,16 @@ to `bun` and to the script (PATH-independent).
           {
             "type": "command",
             "command": "C:/Users/<you>/.bun/bin/bun.exe <repo>/scripts/ts/dt-tool-activity-clear.ts"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:/Users/<you>/.bun/bin/bun.exe <repo>/scripts/ts/dt-subagent-stop.ts"
           }
         ]
       }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   AlertTriangle,
+  Bot,
   ChevronDown,
   ChevronRight,
   ChevronsLeft,
@@ -302,6 +303,32 @@ function SessionItem({
           >
             <Cog size={14} strokeWidth={2.25} />
             <span className="session-bg-count">{s.bg_task_count}</span>
+          </button>
+        )}
+        {(s.running_subagents ?? 0) > 0 && (
+          <button
+            type="button"
+            className="session-subagent-indicator"
+            title={t("sidebar.subagent_running_title", {
+              count: s.running_subagents,
+            })}
+            aria-label={t("sidebar.subagent_running_aria", {
+              count: s.running_subagents,
+            })}
+            onClick={(e) => {
+              // Don't let the click bubble into the session-row nav.
+              e.stopPropagation();
+              fetch("/subagent-clear-session", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ session_id: s.id }),
+              }).catch(() => {
+                /* best-effort; the WS broadcast updates the count */
+              });
+            }}
+          >
+            <Bot size={14} strokeWidth={2.25} />
+            <span className="session-subagent-count">{s.running_subagents}</span>
           </button>
         )}
         {((s as any).scheduled_message_count ?? 0) > 0 && (

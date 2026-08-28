@@ -760,6 +760,44 @@ body {
   }
 }
 
+/* Subagent-running marker — a Bot glyph + a red count, shown next to the
+   activity spinner in the sidebar when a session has one or more Task-worker
+   subagents running. Distinct from the amber BG-task cog: a subagent's tool
+   calls no longer spin the parent's "working" spinner, so this is the only cue
+   that the session is busy delegating. A <button> — click clears a stale
+   counter (mirrors the BG marker). */
+.session-subagent-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-family: inherit;
+  line-height: 1;
+  color: #3730a3;
+  background: #e0e7ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 4px;
+  cursor: pointer;
+}
+.session-subagent-indicator:hover {
+  background: #c7d2fe;
+  border-color: #a5b4fc;
+}
+/* Red count badge so the number reads as a live, attention-worthy count
+   regardless of how many subagents are running (one icon, N in the badge). */
+.session-subagent-count {
+  color: #fff;
+  background: #dc2626;
+  border-radius: 999px;
+  min-width: 14px;
+  padding: 0 4px;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Scheduled-send marker — a paper plane with a small clock tucked into its
    bottom-right corner. Shown next to the activity / BG indicators when a
    session has a message queued to go out at a future time (e.g. a deferred

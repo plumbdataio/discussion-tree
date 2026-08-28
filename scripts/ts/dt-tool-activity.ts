@@ -27,17 +27,31 @@ try {
 
 const sid = input.session_id ?? "";
 const tool = input.tool_name ?? "";
+// A SUBAGENT (Task worker) tool call fires THIS SAME hook under the parent's
+// session_id, but its stdin carries an agent_id the parent's own tool calls
+// never do. Detection is the PRESENCE of agent_id (the sibling agent_type has an
+// unstable value, so it is not used).
+const agentId = input.agent_id ?? "";
 
-if (sid) {
+async function post(path: string, body: unknown): Promise<void> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 1000);
-  await fetch(`${brokerBaseUrl()}/heartbeat-tool`, {
+  await fetch(`${brokerBaseUrl()}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cc_session_id: sid, tool }),
+    body: JSON.stringify(body),
     signal: ctrl.signal,
   }).catch(() => {});
   clearTimeout(t);
+}
+
+if (sid && agentId) {
+  // Subagent branch: DON'T ping /heartbeat-tool (that would spin the PARENT's
+  // working badge for the subagent's work). Record a per-subagent heartbeat so
+  // the UI shows a distinct "subagent running" indicator instead.
+  await post("/heartbeat-subagent", { cc_session_id: sid, agent_id: agentId });
+} else if (sid) {
+  await post("/heartbeat-tool", { cc_session_id: sid, tool });
 }
 
 process.exit(0);

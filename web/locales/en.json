@@ -31,6 +31,8 @@
     "needs_reply_title": "{{count}} awaiting your reply",
     "scheduled_send_title": "Message scheduled to send at {{time}}",
     "scheduled_send_aria": "scheduled send",
+    "subagent_running_title": "{{count}} subagent(s) running — click to clear",
+    "subagent_running_aria": "clear {{count}} running subagent marker(s)",
     "stalled_title": "Claude Code stopped on an API error",
     "stalled_aria": "stalled",
     "compacting_title": "Claude Code is compacting its context",

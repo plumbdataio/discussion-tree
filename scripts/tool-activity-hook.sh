@@ -16,8 +16,28 @@ set -e
 input=$(cat)
 sid=$(printf '%s' "$input" | jq -r '.session_id // empty')
 tool=$(printf '%s' "$input" | jq -r '.tool_name // empty')
+# A SUBAGENT (Task worker) tool call fires THIS SAME hook, under the parent's
+# session_id — but its stdin carries an agent_id that the parent's own tool
+# calls never do. Detection is purely the PRESENCE of agent_id (its sibling
+# agent_type has an unstable value, so it is not used).
+agent_id=$(printf '%s' "$input" | jq -r '.agent_id // empty')
 # Resolve DT_BROKER_BASE (honors DISCUSSION_TREE_BROKER_URL for remote sessions).
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/broker-url.sh"
+
+# Subagent branch: DON'T ping /heartbeat-tool (that would spin the PARENT's
+# working badge for the subagent's work). Instead record a per-subagent
+# heartbeat so the UI shows a distinct "subagent running" indicator, then stop —
+# the BG-task tracking below is a parent-only concern.
+if [ -n "$sid" ] && [ -n "$agent_id" ]; then
+  sub_body=$(jq -n --arg s "$sid" --arg a "$agent_id" \
+    '{cc_session_id:$s, agent_id:$a}')
+  curl -sS --max-time 1 -X POST \
+    -H "Content-Type: application/json" \
+    -d "$sub_body" \
+    "${DT_BROKER_BASE}/heartbeat-subagent" \
+    >/dev/null 2>&1 || true
+  exit 0
+fi
 
 if [ -n "$sid" ]; then
   body=$(jq -n --arg s "$sid" --arg t "$tool" '{cc_session_id:$s, tool:$t}')

@@ -21,6 +21,7 @@ const SIDEBAR_REFRESH_TYPES = new Set([
   "session-compacting-update",
   "sidebar-refresh",
   "bg-tasks-update",
+  "subagent-update",
   "schedule-marker-update",
 ]);
 

@@ -571,6 +571,13 @@ export interface SessionListItem {
   // seen reported done. Frontend renders a BG marker next to the
   // working spinner whenever this is > 0.
   bg_task_count?: number;
+  // Number of Task-worker subagents currently running under this session
+  // (distinct agent_id with a fresh tool heartbeat, not yet stopped). A
+  // subagent's tool calls fire the same PreToolUse hook as the parent, so
+  // without this the parent's working spinner would spin for subagent activity;
+  // instead the sidebar renders a distinct Bot indicator + count. Cleared by the
+  // SubagentStop hook, a timeout backstop, or a manual click.
+  running_subagents?: number;
   // ISO timestamp of a message scheduled to be sent to this session at a
   // future time, if one is queued. An external scheduler registers it via
   // /set-session-schedule-marker; the broker itself sends nothing — this is
