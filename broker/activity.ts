@@ -23,7 +23,6 @@ import {
   stopRunningSubagent,
   upsertRunningSubagent,
 } from "./db.ts";
-import { SUBAGENT_TIMEOUT_MS } from "./config.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
 import {
   classifyStallFromTranscript,
@@ -188,18 +187,22 @@ export function bgTaskCountForSession(sessionId: string): number {
 
 // --- Running subagents (Task workers) --------------------------------------
 // Persisted in running_subagents (broker DB), keyed by (broker session_id,
-// agent_id). Driven by the PreToolUse hook: a tool call carrying an `agent_id`
-// is a subagent's, so the hook posts /heartbeat-subagent instead of the
-// parent's /heartbeat-tool (which is what stops the PARENT working spinner from
-// spinning for subagent activity). The count is DB-derived (not an in-memory
+// agent_id); agent_id is stable per subagent (does NOT rotate). Driven by the
+// PreToolUse hook: a tool call carrying an `agent_id` is a subagent's, so the
+// hook posts /heartbeat-subagent instead of the parent's /heartbeat-tool (which
+// is what stops the PARENT working spinner from spinning for subagent activity).
+// ONLY subagents with a non-empty agent_type are tracked — the empty-agent_type
+// harness helpers are ignored because they never get a SubagentStop and would
+// leak (see handleHeartbeatSubagent). No time-based expiry: removal is via
+// SubagentStop plus the manual clear. The count is DB-derived (not an in-memory
 // Map like bgTasks) so it survives a broker restart — a real subagent keeps
 // running across a deploy-time broker bounce.
 
-// How many subagents are currently running for a session: not stopped AND with
-// a fresh last tool heartbeat (the timeout backstop for a missed SubagentStop).
+// How many subagents are currently running for a session: not stopped. There is
+// no time-based expiry — a real subagent stays counted until its SubagentStop
+// fires or the user clears it (see the running_subagents doc comment in db.ts).
 export function runningSubagentCountForSession(sessionId: string): number {
-  const cutoff = new Date(Date.now() - SUBAGENT_TIMEOUT_MS).toISOString();
-  const row = countRunningSubagentsForSession.get(sessionId, cutoff) as {
+  const row = countRunningSubagentsForSession.get(sessionId) as {
     cnt: number;
   };
   return row.cnt;
@@ -747,11 +750,23 @@ export function handleBgTaskClearSession(body: {
 // fresh last_seen; the broadcast nudges the sidebar to re-read the count. A tool
 // heartbeat is also proof the subagent is alive, so the UPSERT clears any
 // stopped flag (a subagent that heartbeats after an all-stop/clear re-counts).
+//
+// GATE on a non-empty agent_type. A REAL subagent's stdin carries a real
+// agent_type (e.g. "general-purpose") on 100% of its tool calls and it reliably
+// gets a SubagentStop. The harness ALSO spawns tiny transient "helper"
+// subagents whose stdin agent_type is EMPTY; they make 1-2 quick tool calls,
+// then vanish and NEVER get a SubagentStop, so registering them would leak rows
+// that inflate the count forever (measured 2026-08-28). Dropping the empty-type
+// ones here at the source keeps the count to real, stoppable subagents. The
+// type VALUE is not otherwise used — no DB column stores it — this is only a
+// non-empty check.
 export function handleHeartbeatSubagent(body: {
   cc_session_id?: string;
   agent_id?: string;
+  agent_type?: string;
 }): { ok: boolean; count?: number } {
   if (!body.cc_session_id || !body.agent_id) return { ok: false };
+  if (!body.agent_type || !body.agent_type.trim()) return { ok: false };
   const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
   if (!sessionId) return { ok: false };
   upsertRunningSubagent.run(
@@ -773,8 +788,8 @@ export function handleHeartbeatSubagent(body: {
 // genuinely-still-running sibling re-registers on its very next tool call, which
 // re-counts it via the UPSERT above). The alternative — dropping "the oldest" —
 // could clear the wrong one and strand a finished subagent's marker, which is
-// exactly the stuck-indicator failure the timeout backstop and this hook exist
-// to prevent. Correctness therefore never depends on the id being present.
+// exactly the stuck-indicator failure this hook (and the manual clear) exist to
+// prevent. Correctness therefore never depends on the id being present.
 export function handleSubagentStop(body: {
   cc_session_id?: string;
   agent_id?: string;
@@ -793,9 +808,9 @@ export function handleSubagentStop(body: {
 // (mirrors handleBgTaskClearSession). Two ways in: the sidebar "clear"
 // affordance on the subagent indicator, and a direct call. This is the safety
 // net for when SubagentStop fails to fire and a marker would otherwise linger
-// until the timeout. A subagent that is genuinely still running re-appears on
-// its next tool call (the UPSERT clears its stopped flag) — same as the
-// all-drop SubagentStop path.
+// indefinitely (there is no time-based expiry). A subagent that is genuinely
+// still running re-appears on its next tool call (the UPSERT clears its stopped
+// flag) — same as the all-drop SubagentStop path.
 export function handleSubagentClearSession(body: {
   session_id?: string;
   cc_session_id?: string;

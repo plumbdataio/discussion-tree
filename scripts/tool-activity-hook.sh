@@ -18,9 +18,13 @@ sid=$(printf '%s' "$input" | jq -r '.session_id // empty')
 tool=$(printf '%s' "$input" | jq -r '.tool_name // empty')
 # A SUBAGENT (Task worker) tool call fires THIS SAME hook, under the parent's
 # session_id — but its stdin carries an agent_id that the parent's own tool
-# calls never do. Detection is purely the PRESENCE of agent_id (its sibling
-# agent_type has an unstable value, so it is not used).
+# calls never do. Detection is purely the PRESENCE of agent_id. agent_type is
+# ALSO forwarded: a real subagent's is a non-empty string (e.g. "general-purpose")
+# while transient harness "helper" subagents send an empty agent_type; the broker
+# uses that to register only real subagents (empty-type helpers never get a
+# SubagentStop and would leak).
 agent_id=$(printf '%s' "$input" | jq -r '.agent_id // empty')
+agent_type=$(printf '%s' "$input" | jq -r '.agent_type // empty')
 # Resolve DT_BROKER_BASE (honors DISCUSSION_TREE_BROKER_URL for remote sessions).
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/broker-url.sh"
 
@@ -29,8 +33,8 @@ agent_id=$(printf '%s' "$input" | jq -r '.agent_id // empty')
 # heartbeat so the UI shows a distinct "subagent running" indicator, then stop —
 # the BG-task tracking below is a parent-only concern.
 if [ -n "$sid" ] && [ -n "$agent_id" ]; then
-  sub_body=$(jq -n --arg s "$sid" --arg a "$agent_id" \
-    '{cc_session_id:$s, agent_id:$a}')
+  sub_body=$(jq -n --arg s "$sid" --arg a "$agent_id" --arg t "$agent_type" \
+    '{cc_session_id:$s, agent_id:$a, agent_type:$t}')
   curl -sS --max-time 1 -X POST \
     -H "Content-Type: application/json" \
     -d "$sub_body" \

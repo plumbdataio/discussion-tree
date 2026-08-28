@@ -60,26 +60,6 @@ export const SUBMIT_DELIVERY_TIMEOUT_MS = 8_000;
 // this is a safety net for cases where Stop never fires (CC crash mid-turn).
 export const AUTO_ACTIVITY_TIMEOUT_MS = 60_000;
 
-// A running subagent (Task worker) is considered live only while its last tool
-// heartbeat is younger than this. This backstop turned out to be the PRIMARY
-// clear path in practice, not a rare fallback: SubagentStop does NOT fire for a
-// whole class of short-lived subagents (measured 2026-08-28 — brief agents that
-// emit a single tool call and then vanish with no SubagentStop, or whose stop
-// carries a different agent_id than their tool calls did). For those the
-// backstop is the ONLY thing that clears them, so a long window let finished
-// subagents pile up: the sidebar was observed counting two subagents that had
-// been idle 156s and 163s — done, but still shown. 60s clears a finished /
-// orphaned subagent within a minute while a genuinely-active subagent (which
-// calls tools every few-to-tens of seconds) stays counted. Trade-off: a
-// subagent sitting inside ONE tool call longer than 60s with no intervening
-// tool calls can briefly read as idle; that is rarer than the pile-up above and
-// SubagentStop still removes it the instant it finishes. Tunable via
-// DT_SUBAGENT_TIMEOUT_MS (also used by tests); raise it if long single-tool
-// subagents flicker.
-export const SUBAGENT_TIMEOUT_MS = process.env.DT_SUBAGENT_TIMEOUT_MS
-  ? parseInt(process.env.DT_SUBAGENT_TIMEOUT_MS, 10)
-  : 60_000;
-
 // How often broker.ts re-checks every alive session's PID and soft-deletes
 // rows whose process is gone. Runs about once per heartbeat interval so a
 // remote session that stopped beating is noticed promptly (the timeout below is

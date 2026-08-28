@@ -284,13 +284,29 @@ export const selectCliInject = db.prepare(
 // (the parent's own tool calls do not). The tool-activity hook routes those to
 // /heartbeat-subagent, which UPSERTs a row here keyed by (session_id, agent_id)
 // — session_id is the broker session id (resolved from cc_session_id, same as
-// the working spinner / bg-tasks), not the CC id. last_seen is refreshed on
-// every tool call; stopped flips to 1 when the SubagentStop hook fires (or the
-// user clears it). A subagent counts as running only while stopped=0 AND
-// last_seen is within SUBAGENT_TIMEOUT_MS — the timeout is the backstop for a
-// SubagentStop that never fires. Ephemeral runtime state (not conversation
-// data), so unlike the rest of this file it is mutated with UPDATEs on the
-// stopped flag rather than kept append-only forever.
+// the working spinner / bg-tasks), not the CC id. agent_id is STABLE across
+// every tool call of one subagent (measured 2026-08-28: it does NOT rotate), so
+// the same subagent maps to the same row for its whole life.
+//
+// ONLY subagents whose PreToolUse stdin carries a NON-EMPTY agent_type are
+// tracked here. The harness also spawns tiny transient "helper" subagents whose
+// stdin agent_type is EMPTY; they make 1-2 quick tool calls, then vanish and
+// NEVER get a SubagentStop — so if they were registered they would linger
+// forever and inflate the count. handleHeartbeatSubagent gates them out at the
+// source (empty agent_type → not upserted), so a row here is always a real,
+// long-lived subagent that reliably gets a SubagentStop.
+//
+// last_seen is refreshed on every tool call; stopped flips to 1 when the
+// SubagentStop hook fires (or the user clears it). A subagent counts as running
+// while stopped=0 — there is NO time-based expiry: real subagents legitimately
+// run 30+ minutes and can go a long time between tool calls, so any staleness
+// timeout would drop a genuinely-running one. Removal is by SubagentStop
+// (reliable for real subagents) plus the manual clear escape hatch (for the
+// rare missed stop). Rows under a dead/soft-deleted session are simply never
+// shown (the sidebar only lists alive sessions), so no time-based cleanup is
+// needed. Ephemeral runtime state (not conversation data), so unlike the rest
+// of this file it is mutated with UPDATEs on the stopped flag rather than kept
+// append-only forever.
 db.run(`
   CREATE TABLE IF NOT EXISTS running_subagents (
     session_id TEXT NOT NULL,
@@ -322,11 +338,11 @@ export const stopAllRunningSubagentsForSession = db.prepare(
   "UPDATE running_subagents SET stopped = 1 WHERE session_id = ? AND stopped = 0",
 );
 // Count currently-running subagents = distinct agent_id (the PK guarantees one
-// row each) that are not stopped and whose last tool heartbeat is fresh. The
-// caller passes the freshness cutoff (now - SUBAGENT_TIMEOUT_MS) as an ISO
-// string so the timeout backstop is applied in SQL.
+// row each) that are not stopped. NO time bound: a real subagent stays counted
+// from its first heartbeat until SubagentStop / manual clear, however long it
+// runs or however long between its tool calls.
 export const countRunningSubagentsForSession = db.prepare(
-  "SELECT COUNT(*) AS cnt FROM running_subagents WHERE session_id = ? AND stopped = 0 AND last_seen >= ?",
+  "SELECT COUNT(*) AS cnt FROM running_subagents WHERE session_id = ? AND stopped = 0",
 );
 
 db.run(`
