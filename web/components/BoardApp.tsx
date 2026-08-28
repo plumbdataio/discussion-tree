@@ -33,6 +33,7 @@ import {
 } from "../utils/nodeStatusFilter.ts";
 import { postSubmitAnswer } from "../utils/api.ts";
 import { readBoardCache, writeBoardCache } from "../utils/boardCache.ts";
+import { setImageDims } from "../utils/imageDims.ts";
 import { useLiveSocket } from "../utils/liveSocket.ts";
 import { openScheduledList } from "../utils/scheduledList.ts";
 import { translateError } from "../utils/errors.ts";
@@ -120,6 +121,10 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
       }
       const view = (await res.json()) as BoardView;
       if (boardIdRef.current !== boardId) return;
+      // Populate the image-dims store BEFORE setData so the <img> renderers
+      // have each uploaded image's aspect box on the very first paint of the
+      // new data (see web/utils/imageDims.ts).
+      setImageDims(view.image_dims);
       setData(view);
       // Persist for next cold start (iOS tab eviction / hard reload).
       writeBoardCache(boardId, view).catch(() => {
@@ -147,6 +152,9 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     let cancelled = false;
     readBoardCache(boardId).then((cached) => {
       if (cancelled || !cached) return;
+      // The cached snapshot carries its own image_dims (it's a BoardView) —
+      // feed them too so a cold-start render reserves image boxes as well.
+      setImageDims(cached.image_dims);
       setData((prev) => (prev && prev.board.id === boardId ? prev : cached));
     });
     fetchBoard();

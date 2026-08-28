@@ -4313,6 +4313,13 @@ body.concern-resizing * {
 }
 
 .md-body img {
+  /* max-width + height:auto are load-bearing, not just cosmetic: chat <img>s
+     carry width/height attributes (from the board's image_dims payload) so the
+     browser reserves the aspect-ratio box before a lazy image loads. max-width
+     scales the box down to the container while height:auto derives the height
+     from that aspect ratio — together they reserve the correct SCALED height up
+     front, so no layout shift when the pixels arrive. Do not pin a fixed
+     width/height here or the responsive scaling breaks. */
   max-width: 100%;
   height: auto;
   border-radius: 6px;

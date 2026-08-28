@@ -600,10 +600,25 @@ export interface SetSessionNameRequest {
   name: string;
 }
 
+// Intrinsic pixel dimensions of an uploaded image, read from its file header
+// by the broker (see broker/image-dims.ts). Handed to the frontend so each
+// chat <img> can reserve the correct aspect-ratio box before the (lazy) image
+// loads — otherwise its height jumps from ~0 to real on load and, with the
+// chat scroller's overflow-anchor:none, everything below shifts.
+export interface ImageDims {
+  w: number;
+  h: number;
+}
+
 export interface BoardView {
   board: Board;
   nodes: Node[];
   threads: Record<string, ThreadItem[]>;
+  // Intrinsic dimensions for every /uploads/... image referenced by this
+  // board's thread items / node context, keyed by the image URL. Deduped at
+  // the board level (not per message) to keep the payload small. Images whose
+  // header doesn't parse are simply absent (they keep their current behavior).
+  image_dims?: Record<string, ImageDims>;
   activity?: Activity | null;
   owner_alive?: boolean;
   // Owning CC stopped on an API error — drives the header stall warning.

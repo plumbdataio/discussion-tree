@@ -3,17 +3,21 @@
 // /api/board/<id> and indirectly by tests.
 
 import { randomBytes } from "node:crypto";
+import * as path from "node:path";
 
 import type {
   Board,
   ChecklistItem,
   ChecklistItemSource,
   ChecklistSourcePreview,
+  ImageDims,
   Node,
   NodeInput,
   ThreadItem,
   ThreadSource,
 } from "../shared/types.ts";
+import { UPLOADS_DIR } from "./config.ts";
+import { imageDimensions } from "./image-dims.ts";
 import {
   db,
   insertNode,
@@ -165,6 +169,50 @@ export function attachChecklistItems(boardId: string, nodes: Node[]): void {
   }
 }
 
+// Markdown image whose target is a local upload: ![alt](/uploads/<board>/<file>).
+// Captures the URL regardless of an optional "title" after it. Global so a
+// single message with several images yields all of them.
+const UPLOAD_IMG_RE = /!\[[^\]]*\]\(\s*(\/uploads\/[^)\s]+)/g;
+
+// Resolve a /uploads/... URL to its absolute on-disk path, refusing anything
+// that escapes UPLOADS_DIR (a crafted ../ in the URL). Returns null if outside.
+function uploadUrlToAbs(url: string): string | null {
+  const rel = url.slice("/uploads/".length);
+  let decoded = rel;
+  try {
+    decoded = decodeURIComponent(rel);
+  } catch {
+    /* leave as-is if it isn't valid percent-encoding */
+  }
+  const abs = path.resolve(UPLOADS_DIR, decoded);
+  const root = path.resolve(UPLOADS_DIR);
+  if (abs !== root && !abs.startsWith(root + path.sep)) return null;
+  return abs;
+}
+
+// Scan the given markdown texts for /uploads/ image references and read each
+// one's intrinsic dimensions (header-only + cached — cheap). Deduped by URL.
+// Only images that parse are included; the rest keep their current behavior.
+export function collectImageDims(texts: string[]): Record<string, ImageDims> {
+  const out: Record<string, ImageDims> = {};
+  const seen = new Set<string>();
+  for (const text of texts) {
+    if (!text || text.indexOf("/uploads/") === -1) continue;
+    UPLOAD_IMG_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = UPLOAD_IMG_RE.exec(text)) !== null) {
+      const url = m[1];
+      if (seen.has(url)) continue;
+      seen.add(url);
+      const abs = uploadUrlToAbs(url);
+      if (!abs) continue;
+      const dims = imageDimensions(abs);
+      if (dims) out[url] = dims;
+    }
+  }
+  return out;
+}
+
 export function getBoardView(boardId: string) {
   const board = selectBoard.get(boardId) as Board | null;
   if (!board) return null;
@@ -182,6 +230,14 @@ export function getBoardView(boardId: string) {
     if (!threadsByNode[t.node_id]) threadsByNode[t.node_id] = [];
     threadsByNode[t.node_id].push(t);
   }
+  // Intrinsic dimensions for every uploaded image referenced on this board, so
+  // the frontend can reserve each <img>'s aspect-ratio box before it lazily
+  // loads (see collectImageDims / broker/image-dims.ts). Node context renders
+  // through the same MDView, so scan it too.
+  const image_dims = collectImageDims([
+    ...threads.map((t) => t.text),
+    ...nodes.map((n) => n.context),
+  ]);
   const activity = activities.get(board.session_id) ?? null;
   const ownerRow = db
     .prepare(
@@ -219,6 +275,7 @@ export function getBoardView(boardId: string) {
     board,
     nodes,
     threads: threadsByNode,
+    image_dims,
     activity,
     owner_alive,
     owner_stalled,

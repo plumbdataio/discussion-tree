@@ -17,6 +17,10 @@ import { IssueIdLink } from "./IssueIdLink.tsx";
 // The same tight patterns as the code-span path keep placeholders (iss_xxx)
 // from becoming dead links.
 import { rehypeLinkifyIds } from "../utils/rehypeLinkifyIds.ts";
+// Intrinsic dimensions for uploaded images, fed by the board load. Setting
+// width/height on the <img> lets the browser reserve the aspect-ratio box
+// before a lazy image loads — see the `img` renderer + web/utils/imageDims.ts.
+import { getImageDims } from "../utils/imageDims.ts";
 // @reusable-ui MDView — USE WHEN: rendering user- or CC-authored markdown text
 //   (GFM + CJK-aware bold/strikethrough). INSTEAD OF: raw text or
 //   dangerouslySetInnerHTML.
@@ -116,9 +120,29 @@ function MDViewImpl({
           // fold are never fetched or decoded, and the browser is free to drop
           // ones that scroll far away. decoding="async" keeps the decode off the
           // main thread so a big screenshot cannot stall the thread mid-scroll.
-          img: ({ node, ...props }) => (
-            <img {...props} loading="lazy" decoding="async" />
-          ),
+          //
+          // width/height (intrinsic px, from the board's image_dims payload)
+          // give the browser an aspect ratio to reserve the image's box BEFORE
+          // it lazily loads. Without it a lazy image's height jumps ~0 -> real
+          // on load, and the chat scroller (overflow-anchor:none) does not
+          // compensate, so everything below shifts. CSS keeps it responsive:
+          // `.md-body img { max-width:100%; height:auto }` scales it to the
+          // container while the attributes hold the aspect box. Non-upload URLs
+          // (no dims) keep their current unreserved behavior.
+          img: ({ node, ...props }) => {
+            const dims =
+              typeof props.src === "string"
+                ? getImageDims(props.src)
+                : undefined;
+            return (
+              <img
+                {...props}
+                {...(dims ? { width: dims.w, height: dims.h } : {})}
+                loading="lazy"
+                decoding="async"
+              />
+            );
+          },
         }}
       >
         {escapeCodeHostileEmphasis(text)}
