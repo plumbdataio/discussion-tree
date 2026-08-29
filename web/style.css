@@ -4328,6 +4328,21 @@ body.concern-resizing * {
   border: 1px solid var(--border);
 }
 
+/* Inline chat images are wrapped in a link that opens the full-res image in a
+   new tab (MDView img renderer). The wrapper hugs the image (fit-content, not
+   the full row) so only the image is the tap target, carries no text-link
+   decoration, and hints it's zoomable. The inner <img> keeps its own margin. */
+.md-body a.md-img-link {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  text-decoration: none;
+  cursor: zoom-in;
+}
+.md-body a.md-img-link img {
+  margin: 0;
+}
+
 /* (table styling is consolidated above, with .md-table-wrap) */
 
 .md-body hr {

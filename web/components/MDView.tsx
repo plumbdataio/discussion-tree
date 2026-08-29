@@ -134,13 +134,30 @@ function MDViewImpl({
               typeof props.src === "string"
                 ? getImageDims(props.src)
                 : undefined;
-            return (
+            const img = (
               <img
                 {...props}
                 {...(dims ? { width: dims.w, height: dims.h } : {})}
                 loading="lazy"
                 decoding="async"
               />
+            );
+            // Tap/click opens the full-resolution image in a NEW TAB. On mobile
+            // this hands off to the browser's native image viewer (pinch-zoom,
+            // save), which is friendlier on a small screen than an in-app modal.
+            // A drag (thread scroll) never fires the anchor's click, so this
+            // does not fight scrolling. Only when we actually have a URL.
+            return typeof props.src === "string" ? (
+              <a
+                href={props.src}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="md-img-link"
+              >
+                {img}
+              </a>
+            ) : (
+              img
             );
           },
         }}
