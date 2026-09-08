@@ -1058,6 +1058,21 @@ a.session-name:hover {
   font-weight: 700;
 }
 
+/* "Boards" heading + the board-status filter dropdown on one row. The title
+   keeps its size; the toolbar owns the bottom margin so the title's own is
+   zeroed here. */
+.dashboard-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.dashboard-toolbar .dashboard-title {
+  margin: 0;
+}
+
 .board-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -1159,6 +1174,21 @@ a.session-name:hover {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 10px;
+}
+
+/* Right-hand cluster in a card header: the needs-reply badge + unread dot
+   (reusing the sidebar's exact classes) sit next to the status pill, centered
+   with it. The flex gap governs spacing, so the sidebar rows' left margins are
+   zeroed here. */
+.board-card .card-header-flags {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.board-card .card-header-flags .sidebar-unread-dot,
+.board-card .card-header-flags .sidebar-needs-reply-badge {
+  margin-left: 0;
 }
 
 .board-card .card-title {

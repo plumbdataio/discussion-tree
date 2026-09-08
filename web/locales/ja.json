@@ -76,7 +76,9 @@
     "node_stats_label": "ノード集計:",
     "needs_reply_count": "⚠ 返答求む {{count}} 件",
     "open_total": "未確定 {{open}} / 合計 {{total}}",
-    "decided_count": "確定 {{count}} 件"
+    "decided_count": "確定 {{count}} 件",
+    "status_filter_all": "すべての状態",
+    "no_boards_match_filter": "フィルタに一致するボードがありません。"
   },
   "root_dashboard": {
     "title": "全セッション",

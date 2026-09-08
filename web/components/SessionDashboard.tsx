@@ -10,7 +10,11 @@ import type { SessionListItem } from "../../shared/types.ts";
 import { AppLayout } from "./AppShell.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
 import { EditableSessionName } from "./EditableSessionName.tsx";
-import { normalizeBoardStatus } from "../utils/constants.ts";
+import { MultiSelectDropdown } from "./MultiSelectDropdown.tsx";
+import { SessionActivityIcons } from "./SessionActivityIcons.tsx";
+import { BOARD_STATUSES, normalizeBoardStatus } from "../utils/constants.ts";
+import { isBoardVisible, statusListToFilter } from "../utils/boardFilter.ts";
+import { openScheduledList } from "../utils/scheduledList.ts";
 import { useDocumentTitle } from "../utils/useDocumentTitle.ts";
 import { boardTitle } from "../utils/boardTitle.ts";
 
@@ -20,6 +24,12 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showArchived, setShowArchived] = useState(false);
+  // Board status filter, local to this screen (independent of the sidebar's
+  // own persisted filter). Defaults to discussing-only so a session with many
+  // settled/completed boards opens on just the live ones. Held as the list of
+  // enabled statuses (MultiSelectDropdown's shape); an empty list means "no
+  // filter" = show every status (matches the dropdown's allLabel semantics).
+  const [statusFilter, setStatusFilter] = useState<string[]>(["discussing"]);
 
   // The component now persists across /session/A → /session/B navigation (no
   // `key` remount under the SPA shell), so clear the view when the session id
@@ -56,6 +66,24 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
       cancelled = true;
     };
   }, [sessionId, refreshKey, t]);
+
+  // Keep the board-list live like the sidebar: the header now shows the
+  // session's activity/subagent/bg/timer chips and each card shows unread /
+  // needs-reply, all of which change under the user. Without a refresh they'd
+  // freeze at the last fetch (a "working" spinner could sit stale). Poll on the
+  // same 10s cadence as the sidebar, and refresh immediately on the shared
+  // `pd-sidebar-refresh` window event (rename / read / status changes dispatch
+  // it) so the two views never disagree for long. A refetch replaces `data` in
+  // place (setData(null) only runs on sessionId change), so no blank flash.
+  useEffect(() => {
+    const id = setInterval(() => setRefreshKey((k) => k + 1), 10000);
+    const onRefresh = () => setRefreshKey((k) => k + 1);
+    window.addEventListener("pd-sidebar-refresh", onRefresh);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("pd-sidebar-refresh", onRefresh);
+    };
+  }, []);
 
   // Browser-tab + auto-tracker friendly title (shared hook). The root
   // dashboard, which has no session, keeps the bare "discussion-tree".
@@ -127,6 +155,29 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
     return t([`board_status.${s}`, s]);
   };
 
+  // Enabled statuses → the BoardStatusFilter object isBoardVisible expects
+  // (empty selection = no filter = every status on).
+  const boardFilterObj = statusListToFilter(statusFilter);
+  // No board is "open" on this screen, so currentBoardId = null. Same semantics
+  // as the sidebar (default conversation board always shows), and the same
+  // array order — neither the sidebar nor this screen sorts data.boards.
+  const visibleBoards = data.boards.filter((b) =>
+    isBoardVisible(b, boardFilterObj, null),
+  );
+  // Per-status counts for the dropdown, taken from the full list BEFORE this
+  // axis's selection applies (so a count doesn't drop to 0 when you deselect
+  // it and stops telling you what turning it back on would reveal).
+  const statusCounts: Record<string, number> = {};
+  for (const b of data.boards) {
+    const s = normalizeBoardStatus(b.status);
+    statusCounts[s] = (statusCounts[s] ?? 0) + 1;
+  }
+  const statusOptions = BOARD_STATUSES.map((s) => ({
+    value: s,
+    label: t([`board_status.${s}`, s]),
+    count: statusCounts[s] ?? 0,
+  }));
+
   return (
     <AppLayout
       header={
@@ -146,16 +197,39 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
             />
           </h1>
           <ContextMeter usage={data.context_usage} prefix="Context: " />
+          {/* Same live indicator cluster the sidebar shows for this session.
+              CTX chip suppressed here because the ContextMeter above already
+              carries context — see SessionActivityIcons' showCtxChip. */}
+          <SessionActivityIcons
+            session={data}
+            onOpenScheduledList={openScheduledList}
+            showCtxChip={false}
+          />
         </header>
       }
     >
       <div className="dashboard">
-          <h2 className="dashboard-title">{t("session_dashboard.boards_title")}</h2>
-          {data.boards.length === 0 && (
+          <div className="dashboard-toolbar">
+            <h2 className="dashboard-title">
+              {t("session_dashboard.boards_title")}
+            </h2>
+            <MultiSelectDropdown
+              label={t("sidebar.status_filter_label")}
+              options={statusOptions}
+              selected={statusFilter}
+              onChange={setStatusFilter}
+              allLabel={t("session_dashboard.status_filter_all")}
+            />
+          </div>
+          {data.boards.length === 0 ? (
             <div className="empty">{t("session_dashboard.no_boards_help")}</div>
-          )}
+          ) : visibleBoards.length === 0 ? (
+            <div className="empty">
+              {t("session_dashboard.no_boards_match_filter")}
+            </div>
+          ) : null}
           <div className="board-cards">
-            {data.boards.map((b) => (
+            {visibleBoards.map((b) => (
               <div
                 key={b.id}
                 className={`board-card-wrap board-status-${b.status ?? "discussing"}`}
@@ -165,22 +239,39 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
                     <h3 className="card-title">
                       {boardTitle(b, t)}
                     </h3>
-                    <span className="board-status-pill">
-                      <span className="board-status-dot" />
-                      {boardStatusLabel(b.status)}
+                    {/* needs-reply badge + unread dot, matching the sidebar's
+                        board-row cues (same classes). The needs-reply count is
+                        shown here as the ① badge instead of the text stat below
+                        so it isn't surfaced twice. */}
+                    <span className="card-header-flags">
+                      {b.stats.needs_reply > 0 && (
+                        <span
+                          className="sidebar-needs-reply-badge"
+                          title={t("sidebar.needs_reply_title", {
+                            count: b.stats.needs_reply,
+                          })}
+                        >
+                          {b.stats.needs_reply}
+                        </span>
+                      )}
+                      {(b.unread_count ?? 0) > 0 && (
+                        <span
+                          className="sidebar-unread-dot"
+                          title={t("sidebar.unread_dot_title", {
+                            count: b.unread_count,
+                          })}
+                        />
+                      )}
+                      <span className="board-status-pill">
+                        <span className="board-status-dot" />
+                        {boardStatusLabel(b.status)}
+                      </span>
                     </span>
                   </div>
                   <div className="card-stats-label">
                     {t("session_dashboard.node_stats_label")}
                   </div>
                   <div className="card-stats">
-                    {b.stats.needs_reply > 0 && (
-                      <span className="stat needs-reply">
-                        {t("session_dashboard.needs_reply_count", {
-                          count: b.stats.needs_reply,
-                        })}
-                      </span>
-                    )}
                     <span className="stat">
                       {t("session_dashboard.open_total", {
                         open: b.stats.open,

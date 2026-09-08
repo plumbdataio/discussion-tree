@@ -1,5 +1,5 @@
 import type { BoardListItem } from "../../shared/types.ts";
-import { normalizeBoardStatus } from "./constants.ts";
+import { BOARD_STATUSES, normalizeBoardStatus } from "./constants.ts";
 import type { BoardStatusFilter } from "./settings.ts";
 
 // Whether a board should appear in the sidebar given the user's status
@@ -21,4 +21,18 @@ export function isBoardVisible(
   if (currentBoardId != null && board.id === currentBoardId) return true;
   const status = normalizeBoardStatus(board.status) as keyof BoardStatusFilter;
   return filter[status] !== false;
+}
+
+// Convert a list of enabled statuses (MultiSelectDropdown's shape) into the
+// BoardStatusFilter object isBoardVisible consumes. An empty list means "no
+// filter on this axis" — the dropdown's allLabel state — so every status is on.
+// The session dashboard uses this with a default of ["discussing"], which
+// yields a filter that shows only discussing boards (plus the always-visible
+// default board, per isBoardVisible).
+export function statusListToFilter(selected: string[]): BoardStatusFilter {
+  const showAll = selected.length === 0;
+  return BOARD_STATUSES.reduce((acc, s) => {
+    acc[s as keyof BoardStatusFilter] = showAll || selected.includes(s);
+    return acc;
+  }, {} as BoardStatusFilter);
 }

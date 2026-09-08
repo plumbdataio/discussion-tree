@@ -76,7 +76,9 @@
     "node_stats_label": "Node stats:",
     "needs_reply_count": "⚠ {{count}} needs reply",
     "open_total": "{{open}} open / {{total}} total",
-    "decided_count": "{{count}} decided"
+    "decided_count": "{{count}} decided",
+    "status_filter_all": "All statuses",
+    "no_boards_match_filter": "No boards match the current filter."
   },
   "root_dashboard": {
     "title": "All sessions",

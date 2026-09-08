@@ -1,28 +1,21 @@
 import React, { useEffect, useState } from "react";
 import {
-  AlertTriangle,
-  Bot,
   ChevronDown,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Clock,
-  Cog,
   Filter,
   GripVertical,
   Menu,
   MessageCircle,
-  RefreshCw,
-  Send,
   Settings,
-  Shrink,
   ChartNetwork,
   Network,
   Plus,
   ClipboardList,
 } from "lucide-react";
-import { HelpBubbleIcon } from "./HelpBubbleIcon.tsx";
 import { DiagramIcon } from "./DiagramIcon.tsx";
+import { SessionActivityIcons } from "./SessionActivityIcons.tsx";
 import { SpawnModal } from "./SpawnModal.tsx";
 import { IssueTrackerButton } from "./IssueTrackerButton.tsx";
 import { useTranslation } from "react-i18next";
@@ -31,7 +24,6 @@ import type { Activity, SessionListItem } from "../../shared/types.ts";
 import { BOARD_STATUSES, normalizeBoardStatus } from "../utils/constants.ts";
 import { isBoardVisible } from "../utils/boardFilter.ts";
 import { applyOrder, sessionOrderKey } from "../utils/sessionOrder.ts";
-import { contextWarnBand } from "../utils/contextBand.ts";
 import {
   type BoardStatusFilter,
   useSettings,
@@ -48,17 +40,6 @@ let cachedInactive: SessionListItem[] = [];
 
 // Session ordering (applyOrder / sessionOrderKey) lives in
 // ../utils/sessionOrder.ts so it's unit-testable.
-
-// Format a scheduled-send ISO timestamp to a short local clock time for the
-// sidebar marker tooltip. Falls back to the raw string if it doesn't parse.
-function formatScheduleTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 type DropPosition = "before" | "after";
 
@@ -105,30 +86,6 @@ function SessionItem({
   // mouse Y vs the item's rect midpoint on every dragover.
   const [dropPosition, setDropPosition] = useState<DropPosition | null>(null);
 
-  // Transient "just re-attached" spinner. The MCP server's heartbeat self-heal
-  // re-bound this session after its broker binding was lost; GlobalBanner relays
-  // that as a `pd-session-reattached` window event. We flash a brief spinner so
-  // the human sees the recovery (the agent gets a channel notice separately).
-  // A nonce (not a bool) so a second event mid-flash re-arms the auto-clear.
-  // Purely momentary — independent of the working / stall / compacting states.
-  const REATTACH_FLASH_MS = 4000;
-  const [reattachNonce, setReattachNonce] = useState(0);
-  const reattaching = reattachNonce > 0;
-  useEffect(() => {
-    const onReattach = (e: Event) => {
-      const detail = (e as CustomEvent<{ session_id?: string }>).detail;
-      if (detail?.session_id === s.id) setReattachNonce((n) => n + 1);
-    };
-    window.addEventListener("pd-session-reattached", onReattach);
-    return () =>
-      window.removeEventListener("pd-session-reattached", onReattach);
-  }, [s.id]);
-  useEffect(() => {
-    if (reattachNonce === 0) return;
-    const tid = setTimeout(() => setReattachNonce(0), REATTACH_FLASH_MS);
-    return () => clearTimeout(tid);
-  }, [reattachNonce]);
-
   // Visibility = default board OR currently-open board OR passes the status
   // filter. See isBoardVisible for why the first two bypass the filter.
   const visibleBoards = s.boards.filter((b) =>
@@ -141,11 +98,6 @@ function SessionItem({
   const hasCurrentBoard =
     currentBoardId != null &&
     s.boards.some((b) => b.id === currentBoardId);
-
-  // Context-low warning chip. Band derived in one place (contextWarnBand):
-  // <15% free shows the chip, <=10% is critical (red) to match ContextMeter.
-  const ctxPct = s.context_usage?.remaining_pct;
-  const ctxBand = contextWarnBand(ctxPct);
 
   return (
     <div
@@ -231,162 +183,15 @@ function SessionItem({
         {/* All per-session status indicators live in ONE grid cell (a flex
             row) so the fixed 4-column .session-header (chevron | name |
             indicators | drag-handle) never overflows to a second row no
-            matter how many indicators are active at once. */}
-        <span className="session-indicators">
-        {s.stalled && (
-          <span
-            className="session-stall-indicator"
-            title={t("sidebar.stalled_title")}
-            aria-label={t("sidebar.stalled_aria")}
-          >
-            <AlertTriangle size={15} strokeWidth={2.5} />
-          </span>
-        )}
-        {s.compacting && !s.stalled && (
-          <span
-            className="session-compacting-indicator"
-            title={t("sidebar.compacting_title")}
-            aria-label={t("sidebar.compacting_aria")}
-          >
-            <Shrink size={15} strokeWidth={2.5} />
-          </span>
-        )}
-        {reattaching && !activity && (
-          <span
-            className="session-reattach-indicator"
-            title={t("sidebar.reattached_title")}
-            aria-label={t("sidebar.reattached_aria")}
-          >
-            <RefreshCw size={14} strokeWidth={2.75} />
-          </span>
-        )}
-        {activity && (
-          <span
-            className={`session-activity-indicator activity-${activity.state}`}
-            title={
-              activity.message
-                ? `${activity.state}: ${activity.message}`
-                : activity.state
-            }
-            aria-label={activity.state}
-          >
-            {/* "blocked" = CC waiting on the user (AskUserQuestion /
-                ExitPlanMode). Show a chat-bubble-with-alert glyph + pulse
-                instead of the spinning refresh icon — a spinning icon
-                reads as "still working" and was easy to overlook, and a
-                generic warning triangle didn't convey "the assistant
-                wants to talk to you". */}
-            {activity.state === "blocked" ? (
-              <HelpBubbleIcon size={16} strokeWidth={2} />
-            ) : (
-              <RefreshCw size={14} strokeWidth={2.75} />
-            )}
-          </span>
-        )}
-        {(s.bg_task_count ?? 0) > 0 && (
-          <button
-            type="button"
-            className="session-bg-indicator"
-            title={`background tasks: ${s.bg_task_count} — click to clear`}
-            aria-label={`clear ${s.bg_task_count} background task marker(s)`}
-            onClick={(e) => {
-              // Don't let the click bubble into the session-row nav.
-              e.stopPropagation();
-              fetch("/bg-task-clear-session", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ session_id: s.id }),
-              }).catch(() => {
-                /* best-effort; the WS broadcast updates the count */
-              });
-            }}
-          >
-            <Cog size={14} strokeWidth={2.25} />
-            <span className="session-bg-count">{s.bg_task_count}</span>
-          </button>
-        )}
-        {(s.running_subagents ?? 0) > 0 && (
-          <button
-            type="button"
-            className="session-subagent-indicator"
-            title={t("sidebar.subagent_running_title", {
-              count: s.running_subagents,
-            })}
-            aria-label={t("sidebar.subagent_running_aria", {
-              count: s.running_subagents,
-            })}
-            onClick={(e) => {
-              // Don't let the click bubble into the session-row nav.
-              e.stopPropagation();
-              fetch("/subagent-clear-session", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ session_id: s.id }),
-              }).catch(() => {
-                /* best-effort; the WS broadcast updates the count */
-              });
-            }}
-          >
-            <Bot size={14} strokeWidth={2.25} />
-            <span className="session-subagent-count">{s.running_subagents}</span>
-          </button>
-        )}
-        {((s as any).scheduled_message_count ?? 0) > 0 && (
-          <button
-            type="button"
-            className="session-timer-indicator"
-            title={t("timer.sidebar_title", {
-              count: (s as any).scheduled_message_count,
-            })}
-            aria-label={t("timer.sidebar_title", {
-              count: (s as any).scheduled_message_count,
-            })}
-            onClick={(e) => {
-              // Inside the session-row link — don't navigate, just open the list.
-              e.preventDefault();
-              e.stopPropagation();
-              openScheduledList();
-            }}
-          >
-            <Clock size={13} strokeWidth={2} />
-            <span className="session-timer-count">
-              {(s as any).scheduled_message_count}
-            </span>
-          </button>
-        )}
-        {/* CTX chip is rendered LAST so it sits at the right edge of the
-            right-aligned indicators cell. The working spinner (and the other
-            transient indicators) appear to its LEFT, so they no longer push the
-            CTX chip left/right as they toggle. */}
-        {ctxBand && (
-          <span
-            className={`session-ctx-indicator${ctxBand === "critical" ? " ctx-critical" : ""}`}
-            title={t("sidebar.ctx_low_title", { pct: Math.round(ctxPct as number) })}
-            aria-label={t("sidebar.ctx_low_aria")}
-          >
-            CTX
-            <span className="ctx-bang" aria-hidden="true">
-              !
-            </span>
-          </span>
-        )}
-        {s.scheduled_send_at && (
-          <span
-            className="session-schedule-indicator"
-            title={t("sidebar.scheduled_send_title", {
-              time: formatScheduleTime(s.scheduled_send_at),
-            })}
-            aria-label={t("sidebar.scheduled_send_aria")}
-          >
-            <Send size={13} strokeWidth={2} />
-            <Clock
-              className="session-schedule-clock"
-              size={9}
-              strokeWidth={3}
-            />
-          </span>
-        )}
-        </span>
+            matter how many indicators are active at once. Shared with the
+            session dashboard header via SessionActivityIcons; `activity` is the
+            live WS-updated value (activitiesBySession[s.id]), so it's passed
+            explicitly rather than read off `s`. */}
+        <SessionActivityIcons
+          session={s}
+          activity={activity}
+          onOpenScheduledList={openScheduledList}
+        />
         {draggable && (
           <span className="session-drag-handle" aria-hidden="true">
             <GripVertical size={12} strokeWidth={1.75} />
