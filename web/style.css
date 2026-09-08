@@ -388,6 +388,20 @@ body {
     cursor: pointer;
     color: var(--text);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    /* iOS Safari hit-test fix. This button is position:fixed but lives INSIDE
+       .app (also position:fixed; overflow:hidden). On first load Safari fails
+       to give such a nested fixed element its own paint/hit-test layer, so
+       taps fall through and the button is dead until a pinch-zoom forces a
+       re-layer ("works only after zoom"). Its siblings .sidebar /
+       .sidebar-backdrop already carry a transform (translateX) and so get
+       their own layer and stay tappable; this button had transform:none and
+       was the only one affected. Promote it the same way. translateZ(0) adds
+       no visible offset, and a transform on the element itself does not move
+       where the fixed button is pinned (it only changes the containing block
+       for descendants, of which the button has none that are positioned). */
+    transform: translateZ(0);
+    /* Drop the legacy 300ms tap delay / double-tap-zoom on the control. */
+    touch-action: manipulation;
   }
 
   .sidebar {
