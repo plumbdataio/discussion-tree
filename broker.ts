@@ -216,7 +216,20 @@ const HMR = process.env.DT_HMR === "1";
 // with DT_DEV=1 only while actually developing against the UI.
 const DEV = process.env.DT_DEV === "1";
 
-const server = Bun.serve({
+// Layer 2 backstop for the anti-swarm fix. singleton-guard.ts already turns
+// away a broker that finds a HEALTHY one via /health, but that leaves the
+// cold-start race: several launchers all see /health down, all get past the
+// guard, all reach here — and only ONE can bind the port (Bun rejects a 2nd
+// bind on :PORT; there is no reusePort). Whoever loses that bind has already
+// opened the DB and started the maintenance timers above, so if its throw goes
+// uncaught the process does NOT exit — it lingers as a stuck `bun` process, and
+// a whole herd of them piles up. Catch the bind failure and exit(0) CLEANLY so a
+// race loser can never linger. The Layer 1 launch lock in server/broker-client
+// makes this rare; this guarantees it can never swarm even if the lock is
+// bypassed (fs hiccup, or a spawn from a path that doesn't take the lock).
+let server!: ReturnType<typeof Bun.serve>;
+try {
+  server = Bun.serve({
   port: PORT,
   hostname: BIND_HOST,
   development: DEV ? { hmr: HMR } : false,
@@ -352,7 +365,21 @@ const server = Bun.serve({
       // No inbound WS messages used.
     },
   },
-});
+  });
+} catch (e) {
+  // Match loosely on the message: Bun surfaces a busy port as a plain Error
+  // ("Failed to start server. Is port <n> in use?"), not a typed EADDRINUSE, so
+  // check both spellings. Anything else is a real startup failure — re-throw it
+  // rather than masking it behind a clean exit.
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/in use|EADDRINUSE/i.test(msg)) {
+    console.error(
+      `[broker] :${PORT} already owned by another broker; exiting`,
+    );
+    process.exit(0);
+  }
+  throw e;
+}
 
 console.error(
   `[discussion-tree broker] listening on http://127.0.0.1:${server.port}`,

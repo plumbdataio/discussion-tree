@@ -9,10 +9,17 @@
 // same SQLite file into "database is locked" crashes.
 //
 // This is the proactive half of the fix: if a healthy broker already answers
-// /health, exit now instead of starting a second one. The cold-start race where
-// none is up yet is handled by the bind itself — Bun.serve throws EADDRINUSE for
-// whichever loses the race (verified 2026-08-12: Bun rejects a second bind on
-// the same port by default), so at most one broker ever listens.
+// /health, exit now instead of starting a second one. The cold-start race —
+// several launchers all seeing /health down and all getting past this guard — is
+// NOT fully handled here. The port bind decides WHO listens: Bun.serve throws for
+// whichever loses the race (verified 2026-08-12: Bun rejects a second bind on the
+// same port by default, no reusePort), so at most one broker ever listens. But a
+// bind loser has already opened the DB and started timers, so it must also be
+// made to EXIT — that is the try/catch around Bun.serve in broker.ts (Layer 2).
+// Together: this guard turns away the "already healthy" case cheaply; the bind
+// picks the single listener; the catch makes every loser exit cleanly instead of
+// lingering as a stuck process. The MCP-side launch lock (server/launch-lock.ts)
+// makes the herd rare in the first place.
 import { PORT } from "./config.ts";
 
 const alreadyUp = await fetch(`http://127.0.0.1:${PORT}/health`, {

@@ -1,4 +1,6 @@
 import { fileURLToPath } from "node:url";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 // MCP-server side configuration. Mirrors broker/config.ts in spirit, but
 // only carries the values server.ts itself needs (port for talking to the
@@ -66,3 +68,25 @@ export const BROKER_RESPAWN_AFTER_FAILS = 3;
 export const BROKER_SCRIPT = fileURLToPath(
   new URL("../broker.ts", import.meta.url),
 );
+
+// The dt state home. Replicated from broker/config.ts (NOT imported: pulling in
+// that module would run its load-time side effects — mkdir of the home dir and
+// the DB's parent — inside the MCP process, which never touches the DB). Kept
+// byte-for-byte identical so the auto-spawn lock below lands in the same place
+// the broker and hooks use. os.homedir() — not process.env.HOME — because HOME
+// is unset on stock Windows shells.
+export const HOME_DIR =
+  process.env.DISCUSSION_TREE_HOME ?? join(homedir(), ".discussion-tree");
+
+// Single-launcher lock directory for ensureBroker()'s auto-spawn. SAME path the
+// shell SessionStart hook (scripts/ensure-broker-running.sh) uses, so the two
+// spawn paths coordinate through one lock and only ONE broker is launched per
+// outage. mkdir on this dir is the atomic acquire (see server/launch-lock.ts).
+export const LAUNCH_LOCK_DIR = join(HOME_DIR, ".broker-launch.lock");
+
+// How long a launch lock may sit before it is presumed abandoned by a launcher
+// that crashed mid-spawn. Comfortably longer than the ~6s spawn+health-wait so a
+// slow-but-live holder is never stolen from, short enough that a genuinely dead
+// holder's lock is reclaimed on a later ensureBroker() attempt rather than
+// deadlocking every future launch.
+export const LAUNCH_LOCK_STALE_MS = 15_000;

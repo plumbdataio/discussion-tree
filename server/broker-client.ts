@@ -7,7 +7,14 @@ import {
   BROKER_IS_REMOTE,
   BROKER_SCRIPT,
   BROKER_URL,
+  LAUNCH_LOCK_DIR,
+  LAUNCH_LOCK_STALE_MS,
 } from "./config.ts";
+import {
+  isLockStale,
+  releaseLock,
+  tryAcquireLock,
+} from "./launch-lock.ts";
 import { log } from "./log.ts";
 import { dirname } from "node:path";
 
@@ -100,23 +107,23 @@ export async function isBrokerAlive(): Promise<boolean> {
   }
 }
 
-export async function ensureBroker(): Promise<void> {
-  if (await isBrokerAlive()) {
-    log("Broker already running");
-    return;
+// Poll /health up to `attempts` times at `intervalMs` spacing. Returns true as
+// soon as the broker answers, false if it never does within the window.
+async function waitForBroker(
+  attempts: number,
+  intervalMs: number,
+): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    if (await isBrokerAlive()) return true;
   }
+  return false;
+}
 
-  // A remote broker is not ours to start. Spawning a local one here would be
-  // worse than failing: this session would attach to a second, empty broker
-  // and every board it creates would be invisible to the user, who is looking
-  // at the other machine.
-  if (BROKER_IS_REMOTE) {
-    throw new Error(
-      `Broker at ${BROKER_URL} is not reachable, and it is not on this machine so it cannot be started from here. ` +
-        "Check that it is running, that DISCUSSION_TREE_BIND lets it accept non-loopback connections, and that the network between the two machines is up.",
-    );
-  }
-
+// The actual spawn + health-wait, factored out so both the lock-holder path and
+// the stale-steal path in ensureBroker() reuse it. Throws the same "after 6
+// seconds" error the original inline code did if /health never comes up.
+async function spawnBrokerAndWait(): Promise<void> {
   log("Starting broker daemon...");
   // Launch from the broker script's own directory (the repo root), NOT this MCP
   // server's cwd. This process inherits the cwd of whatever project its CC
@@ -137,12 +144,83 @@ export async function ensureBroker(): Promise<void> {
   // 30 × 200ms = 6s ceiling. SQLite open + Bun.serve startup is <100ms on a
   // healthy machine, so this is generous; if we don't see /health by then
   // something is genuinely wrong.
-  for (let i = 0; i < 30; i++) {
-    await new Promise((r) => setTimeout(r, 200));
-    if (await isBrokerAlive()) {
-      log("Broker started");
+  if (await waitForBroker(30, 200)) {
+    log("Broker started");
+    return;
+  }
+  throw new Error("Failed to start broker daemon after 6 seconds");
+}
+
+export async function ensureBroker(): Promise<void> {
+  if (await isBrokerAlive()) {
+    log("Broker already running");
+    return;
+  }
+
+  // A remote broker is not ours to start. Spawning a local one here would be
+  // worse than failing: this session would attach to a second, empty broker
+  // and every board it creates would be invisible to the user, who is looking
+  // at the other machine.
+  if (BROKER_IS_REMOTE) {
+    throw new Error(
+      `Broker at ${BROKER_URL} is not reachable, and it is not on this machine so it cannot be started from here. ` +
+        "Check that it is running, that DISCUSSION_TREE_BIND lets it accept non-loopback connections, and that the network between the two machines is up.",
+    );
+  }
+
+  // Serialize spawns across processes with an atomic single-launcher lock, so a
+  // broker-down window can't trigger a thundering herd of respawns. The lock is
+  // a directory (mkdir is atomic): exactly one launcher wins and spawns; the
+  // rest wait for that spawn instead of piling on. Shares the SAME lock path as
+  // the shell SessionStart hook (scripts/ensure-broker-running.sh) so the two
+  // spawn paths coordinate through one lock. See server/launch-lock.ts.
+  //
+  // A filesystem hiccup taking the lock must NEVER break ensureBroker's
+  // contract, so tryAcquireLock reports "error" instead of throwing and we fall
+  // back to an unlocked spawn — the broker.ts bind-loser backstop (Layer 2)
+  // still guarantees no lingering swarm even without the lock.
+  const first = tryAcquireLock(LAUNCH_LOCK_DIR);
+
+  if (first.status === "error" || first.status === "acquired") {
+    // "acquired": we hold the lock, so we are the sole launcher — spawn, and
+    // release in a finally so the lock is freed on every path (success, throw,
+    // timeout). "error": lock unavailable; spawn unlocked (nothing to release).
+    if (first.status === "error") return spawnBrokerAndWait();
+    try {
+      await spawnBrokerAndWait();
+    } finally {
+      releaseLock(LAUNCH_LOCK_DIR);
+    }
+    return;
+  }
+
+  // first.status === "held": another launcher (this path, or the shell hook) is
+  // mid-spawn. Do NOT spawn a second broker — wait ~6s for theirs to come up.
+  if (await waitForBroker(30, 200)) return;
+
+  // Still down after the wait. Either the holder is unusually slow, or it
+  // crashed and left a lock dir behind that would deadlock EVERY future launch.
+  // If the lock is old enough to be presumed abandoned, steal it ONCE and spawn
+  // ourselves. mtime is re-read here (isLockStale stats the dir), so a lock that
+  // was released and freshly re-acquired by a new holder reads as young and is
+  // left alone. Do NOT loop: one steal-and-retry, then fail.
+  if (isLockStale(LAUNCH_LOCK_DIR, LAUNCH_LOCK_STALE_MS)) {
+    releaseLock(LAUNCH_LOCK_DIR); // steal the stale lock
+    const retry = tryAcquireLock(LAUNCH_LOCK_DIR);
+    if (retry.status === "acquired") {
+      try {
+        await spawnBrokerAndWait();
+      } finally {
+        releaseLock(LAUNCH_LOCK_DIR);
+      }
       return;
     }
+    // "held": another launcher grabbed it between our steal and retry — let
+    // their spawn finish rather than fighting. The port bind is atomic and the
+    // Layer 2 backstop makes any bind-loser exit cleanly, so even a double
+    // spawn here cannot produce a swarm.
+    if (retry.status === "held" && (await waitForBroker(30, 200))) return;
   }
+
   throw new Error("Failed to start broker daemon after 6 seconds");
 }
