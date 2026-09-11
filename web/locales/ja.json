@@ -51,6 +51,14 @@
     "collapse_label": "サイドバーを閉じる",
     "expand_label": "サイドバーを開く"
   },
+  "usage_limits": {
+    "five_hour_label": "5時間",
+    "seven_day_label": "7日",
+    "five_hour_full": "5時間枠: {{pct}}%使用。リセット{{time}}",
+    "five_hour_no_reset": "5時間枠: {{pct}}%使用",
+    "seven_day_full": "7日枠: {{pct}}%使用。リセット{{time}}",
+    "seven_day_no_reset": "7日枠: {{pct}}%使用"
+  },
   "session_dashboard": {
     "back_to_top": "← トップへ戻る",
     "session_meta_boards": "{{cwd}} · ボード数: {{count}}",

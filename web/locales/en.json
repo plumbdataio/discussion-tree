@@ -51,6 +51,14 @@
     "collapse_label": "Collapse sidebar",
     "expand_label": "Expand sidebar"
   },
+  "usage_limits": {
+    "five_hour_label": "5h",
+    "seven_day_label": "7d",
+    "five_hour_full": "5-hour window: {{pct}}% used, resets {{time}}",
+    "five_hour_no_reset": "5-hour window: {{pct}}% used",
+    "seven_day_full": "7-day window: {{pct}}% used, resets {{time}}",
+    "seven_day_no_reset": "7-day window: {{pct}}% used"
+  },
   "session_dashboard": {
     "back_to_top": "← Back to top",
     "session_meta_boards": "{{cwd}} · boards: {{count}}",

@@ -18,9 +18,14 @@ import { DiagramIcon } from "./DiagramIcon.tsx";
 import { SessionActivityIcons } from "./SessionActivityIcons.tsx";
 import { SpawnModal } from "./SpawnModal.tsx";
 import { IssueTrackerButton } from "./IssueTrackerButton.tsx";
+import { UsageLimitsChip } from "./UsageLimitsChip.tsx";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import type { Activity, SessionListItem } from "../../shared/types.ts";
+import type {
+  Activity,
+  SessionListItem,
+  UsageLimits,
+} from "../../shared/types.ts";
 import { BOARD_STATUSES, normalizeBoardStatus } from "../utils/constants.ts";
 import { isBoardVisible } from "../utils/boardFilter.ts";
 import { applyOrder, sessionOrderKey } from "../utils/sessionOrder.ts";
@@ -37,6 +42,10 @@ import { boardTitle } from "../utils/boardTitle.ts";
 // while we revalidate in the background. Updated on every successful fetch.
 let cachedSessions: SessionListItem[] | null = null;
 let cachedInactive: SessionListItem[] = [];
+// Account-global native usage limits (5h / 7d), cached module-side like the
+// session lists so a remounted sidebar shows the last value before the first
+// fetch returns.
+let cachedUsageLimits: UsageLimits | null = null;
 
 // Session ordering (applyOrder / sessionOrderKey) lives in
 // ../utils/sessionOrder.ts so it's unit-testable.
@@ -415,6 +424,9 @@ export function Sidebar({
   const [inactiveSessions, setInactiveSessions] = useState<SessionListItem[]>(
     cachedInactive,
   );
+  const [usageLimits, setUsageLimits] = useState<UsageLimits | null>(
+    cachedUsageLimits,
+  );
   const [error, setError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Hover-peek: when the sidebar is collapsed, hovering the reopen tab (or the
@@ -486,12 +498,15 @@ export function Sidebar({
         const data = (await res.json()) as {
           sessions: SessionListItem[];
           inactive_sessions?: SessionListItem[];
+          usage_limits?: UsageLimits | null;
         };
         if (!cancelled) {
           cachedSessions = data.sessions;
           cachedInactive = data.inactive_sessions ?? [];
+          cachedUsageLimits = data.usage_limits ?? null;
           setSessions(cachedSessions);
           setInactiveSessions(cachedInactive);
+          setUsageLimits(cachedUsageLimits);
           setError(null);
           // Seed the activity map from the just-fetched sessions so we have
           // an initial value even before any WS frame arrives. WS updates
@@ -778,6 +793,16 @@ export function Sidebar({
             </button>
           </div>
         </div>
+
+        {/* Account-global native usage limits (5h / 7d subscription windows).
+            One chip for the whole account — the numbers are the same across
+            every session — so it lives here at the top of the sidebar, not on
+            a per-session row. Renders nothing until Claude Code reports them. */}
+        {usageLimits && (
+          <div className="sidebar-usage-limits">
+            <UsageLimitsChip limits={usageLimits} />
+          </div>
+        )}
 
         <div className="sidebar-filter">
           {filterOpen && (

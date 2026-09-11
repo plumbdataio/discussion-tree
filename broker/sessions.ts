@@ -12,7 +12,7 @@ import {
   runningSubagentCountForSession,
   scheduledSendAtForSession,
 } from "./activity.ts";
-import { getContextUsage } from "./context-usage.ts";
+import { getContextUsage, getGlobalUsageLimits } from "./context-usage.ts";
 import { DIAGRAM_CHAT_NODE } from "./diagrams.ts";
 import { pendingScheduledCountForSession } from "./scheduled-messages.ts";
 import {
@@ -734,6 +734,10 @@ export function handleListSessions() {
   return {
     sessions: aliveSessions.map(buildItem),
     inactive_sessions: inactiveSessions.map(buildItem),
+    // Account-global native 5h / 7d subscription-usage limits: a single value
+    // (freshest non-stale across all sessions) so the sidebar shows ONE chip,
+    // not a per-session number. null when nothing has been reported yet.
+    usage_limits: getGlobalUsageLimits(),
   };
 }
 

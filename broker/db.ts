@@ -165,6 +165,43 @@ export const selectAllContextUsage = db.prepare(
 export const deleteContextUsage = db.prepare(
   `DELETE FROM context_usage WHERE session_id = ?`,
 );
+
+// Native 5h / 7d subscription-usage limits, as delivered by Claude Code's
+// statusLine command (rate_limits.{five_hour,seven_day}) and forwarded by
+// scripts/cc-context-report-hook.sh to /report-usage-limits. Each window's two
+// fields are nullable: they arrive only after the first API response, only on
+// Pro/Max plans, and a window's fields drop out after it resets. Stored per
+// broker session_id (mirroring context_usage) even though the numbers are
+// ACCOUNT-global — the getter surfaces the single freshest value. Persisted so a
+// broker restart doesn't blank the chip until the next tool call re-reports.
+db.run(`
+  CREATE TABLE IF NOT EXISTS usage_limits (
+    session_id TEXT PRIMARY KEY,
+    five_hour_pct REAL,
+    five_hour_resets_at INTEGER,
+    seven_day_pct REAL,
+    seven_day_resets_at INTEGER,
+    set_at TEXT NOT NULL
+  )
+`);
+export const upsertUsageLimits = db.prepare(
+  `INSERT INTO usage_limits
+     (session_id, five_hour_pct, five_hour_resets_at, seven_day_pct, seven_day_resets_at, set_at)
+   VALUES (?, ?, ?, ?, ?, ?)
+   ON CONFLICT(session_id) DO UPDATE SET
+     five_hour_pct = excluded.five_hour_pct,
+     five_hour_resets_at = excluded.five_hour_resets_at,
+     seven_day_pct = excluded.seven_day_pct,
+     seven_day_resets_at = excluded.seven_day_resets_at,
+     set_at = excluded.set_at`,
+);
+export const selectAllUsageLimits = db.prepare(
+  `SELECT session_id, five_hour_pct, five_hour_resets_at, seven_day_pct, seven_day_resets_at, set_at
+     FROM usage_limits`,
+);
+export const deleteUsageLimits = db.prepare(
+  `DELETE FROM usage_limits WHERE session_id = ?`,
+);
 // Counter of user UI submissions that haven't been matched by a CC
 // post_to_node yet. Incremented when a user_input_relay is delivered to CC,
 // decremented when CC posts back into any node on a board owned by this

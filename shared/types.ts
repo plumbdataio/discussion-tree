@@ -542,6 +542,21 @@ export interface BoardListItem {
   unread_count?: number;
 }
 
+// Native 5h / 7d subscription-usage limits, sourced from Claude Code's
+// statusLine command (rate_limits.{five_hour,seven_day}). used% is 0..100;
+// resets_at is a unix epoch in SECONDS. Every field is optional: a window's
+// data arrives only after the first API response, only on Pro/Max plans, and
+// drops out once that window resets. These numbers are ACCOUNT-global, so the
+// UI shows one chip (see /api/sessions `usage_limits`), not one per session.
+export interface UsageLimits {
+  five_hour_pct?: number;
+  five_hour_resets_at?: number;
+  seven_day_pct?: number;
+  seven_day_resets_at?: number;
+  // ISO timestamp of the last report, so the UI can dim / hide a stale value.
+  set_at: string;
+}
+
 export interface SessionListItem {
   id: string;
   name: string | null;

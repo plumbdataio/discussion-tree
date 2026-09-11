@@ -683,6 +683,60 @@ body {
   }
 }
 
+/* Account-global native usage limits (5h / 7d subscription windows), shown as
+   one chip at the top of the sidebar. Matches .context-meter's chrome (border,
+   radius, tabular numerals) but holds two labeled units side by side instead of
+   a single value — each fact reads on its own rather than being run together
+   with a separator. */
+.sidebar-usage-limits {
+  display: flex;
+  justify-content: flex-end;
+  margin: -4px 0 10px;
+}
+.usage-limits-chip {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 8px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  white-space: nowrap;
+  cursor: default;
+}
+.usage-limits-unit {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+.usage-limits-unit + .usage-limits-unit {
+  border-left: 1px solid var(--border);
+  padding-left: 8px;
+}
+.usage-limits-label {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.usage-limits-value {
+  color: var(--text);
+  font-weight: 600;
+}
+/* Consumed-share severity: the value colors as a window fills up. Border-less
+   so it tints only the number, keeping the chip calm until it matters. */
+.usage-limits-unit.usage-limits-warn .usage-limits-value {
+  color: #92400e;
+}
+.usage-limits-unit.usage-limits-critical .usage-limits-value {
+  color: #991b1b;
+  font-weight: 700;
+}
+
 .session-activity-indicator {
   display: inline-flex;
   align-items: center;
