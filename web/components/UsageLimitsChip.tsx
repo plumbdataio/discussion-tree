@@ -5,16 +5,29 @@ import type { UsageLimits } from "../../shared/types.ts";
 // @reusable-ui UsageLimitsChip — USE WHEN: showing the account-global Claude
 // subscription usage (the native 5h / 7d rate-limit windows Claude Code exposes
 // on its statusline) INSTEAD OF hand-rolling a usage readout. These numbers are
-// account-wide, so render ONE chip from a global surface (sidebar header), never
-// one per session row.
+// account-wide, so feed it from the shared useUsageLimits() store
+// (web/utils/usageLimits.ts, populated by the Sidebar's poll) and render it in a
+// page header next to the ContextMeter — never one per session row.
 
-// used% severity: the more of a window is consumed, the more it matters. >= 90%
-// used is the "almost out" red band; >= 75% is caution; below that stays calm.
-function usedSeverity(pct: number | undefined): string {
+// used% severity rank: the more of a window is consumed, the more it matters.
+// >= 90% used is the "almost out" red band; >= 75% is caution; below that stays
+// calm. Returned as a rank so the chip can take the STRONGEST window's severity.
+type Severity = "" | "warn" | "critical";
+function usedSeverity(pct: number | undefined): Severity {
   if (typeof pct !== "number") return "";
-  if (pct >= 90) return " usage-limits-critical";
-  if (pct >= 75) return " usage-limits-warn";
+  if (pct >= 90) return "critical";
+  if (pct >= 75) return "warn";
   return "";
+}
+
+function severityRank(s: Severity): number {
+  if (s === "critical") return 2;
+  if (s === "warn") return 1;
+  return 0;
+}
+
+function severityClass(s: Severity): string {
+  return s ? " usage-limits-" + s : "";
 }
 
 // resets_at is a unix epoch in SECONDS. Returns a locale time string, or null
@@ -60,11 +73,23 @@ function UsageLimitsChipImpl({
     );
   }
 
+  // The chip shows two windows that can differ in severity; color the whole
+  // chip background with the STRONGEST present window's severity so a near-limit
+  // window reads at a glance as danger, while the per-window value below still
+  // tints to say WHICH window is the offender.
+  const fiveSev = usedSeverity(limits.five_hour_pct);
+  const sevenSev = usedSeverity(limits.seven_day_pct);
+  const chipSev =
+    severityRank(fiveSev) >= severityRank(sevenSev) ? fiveSev : sevenSev;
+
   return (
-    <div className="usage-limits-chip" title={titleParts.join("\n")}>
+    <div
+      className={"usage-limits-chip" + severityClass(chipSev)}
+      title={titleParts.join("\n")}
+    >
       {hasFive && (
         <span
-          className={"usage-limits-unit" + usedSeverity(limits.five_hour_pct)}
+          className={"usage-limits-unit" + severityClass(fiveSev)}
         >
           <span className="usage-limits-label">
             {t("usage_limits.five_hour_label")}
@@ -76,7 +101,7 @@ function UsageLimitsChipImpl({
       )}
       {hasSeven && (
         <span
-          className={"usage-limits-unit" + usedSeverity(limits.seven_day_pct)}
+          className={"usage-limits-unit" + severityClass(sevenSev)}
         >
           <span className="usage-limits-label">
             {t("usage_limits.seven_day_label")}

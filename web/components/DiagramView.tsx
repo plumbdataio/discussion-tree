@@ -16,6 +16,8 @@ import { MDView } from "./MDView.tsx";
 import type { Activity, ThreadItem } from "../../shared/types.ts";
 import { AppLayout } from "./AppShell.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
+import { UsageLimitsChip } from "./UsageLimitsChip.tsx";
+import { useUsageLimits } from "../utils/usageLimits.ts";
 import { ActivityBadge } from "./ActivityBadge.tsx";
 import { CliCommandButton } from "./CliCommandButton.tsx";
 import { useHeaderActivity } from "../utils/useHeaderActivity.ts";
@@ -69,6 +71,8 @@ interface DiagramViewData {
 // to edit it (→ upsert → live re-render).
 export function DiagramView({ diagramId }: { diagramId: string }) {
   const { t } = useTranslation();
+  // Account-global 5h/7d usage, fed by the Sidebar's poll via the shared store.
+  const usageLimits = useUsageLimits();
   const [view, setView] = useState<DiagramViewData | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [svg, setSvg] = useState("");
@@ -324,6 +328,9 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
           {view.diagram.title || t("diagram.untitled")}
         </h1>
         <ContextMeter usage={view.owner_context_usage} prefix="Context: " />
+        {/* Account-global 5h/7d usage, just right of Context (matches the old
+            statusline userscript's spot). */}
+        <UsageLimitsChip limits={usageLimits} />
         {!ownerAlive && (
           <span
             className="owner-warning"

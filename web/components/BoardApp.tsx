@@ -7,6 +7,8 @@ import { AppLayout } from "./AppShell.tsx";
 import { BoardStructureRequestModal } from "./BoardStructureRequestModal.tsx";
 import { CliCommandButton } from "./CliCommandButton.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
+import { UsageLimitsChip } from "./UsageLimitsChip.tsx";
+import { useUsageLimits } from "../utils/usageLimits.ts";
 import { ConcernColumn } from "./ConcernColumn.tsx";
 import { DefaultBoardLayout } from "./DefaultBoardLayout.tsx";
 import {
@@ -49,6 +51,8 @@ import { boardTitle } from "../utils/boardTitle.ts";
 // switches.
 export function BoardApp({ boardId }: { boardId: string | null }) {
   const { t } = useTranslation();
+  // Account-global 5h/7d usage, fed by the Sidebar's poll via the shared store.
+  const usageLimits = useUsageLimits();
   const [data, setData] = useState<BoardView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [flashingNodes, setFlashingNodes] = useState<Set<string>>(new Set());
@@ -652,6 +656,9 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           </span>
         )}
         <ContextMeter usage={data.owner_context_usage} prefix="Context: " />
+        {/* Account-global 5h/7d usage, just right of Context (matches the old
+            statusline userscript's spot). */}
+        <UsageLimitsChip limits={usageLimits} />
         {!ownerAlive && (
           <span
             className="owner-warning"

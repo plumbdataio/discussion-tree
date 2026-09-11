@@ -60,6 +60,8 @@ import { TimelineModal } from "./TimelineModal.tsx";
 import { buildTimelineEntries } from "../utils/timeline.ts";
 import { AppLayout } from "./AppShell.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
+import { UsageLimitsChip } from "./UsageLimitsChip.tsx";
+import { useUsageLimits } from "../utils/usageLimits.ts";
 import { ActivityBadge } from "./ActivityBadge.tsx";
 import { ThreadMessage } from "./ThreadMessage.tsx";
 import { useHeaderActivity } from "../utils/useHeaderActivity.ts";
@@ -158,6 +160,8 @@ type UndoEntry =
 
 export function MapView({ mapId }: { mapId: string }) {
   const { t } = useTranslation();
+  // Account-global 5h/7d usage, fed by the Sidebar's poll via the shared store.
+  const usageLimits = useUsageLimits();
   const [view, setView] = useState<MapViewData | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [rfNodes, setRfNodes] = useState<RFNode[]>([]);
@@ -938,6 +942,9 @@ export function MapView({ mapId }: { mapId: string }) {
             {view.map.title}
           </h1>
           <ContextMeter usage={view.owner_context_usage} prefix="Context: " />
+          {/* Account-global 5h/7d usage, just right of Context (matches the old
+              statusline userscript's spot). */}
+          <UsageLimitsChip limits={usageLimits} />
           {!ownerAlive && (
             <span className="owner-warning" title={t("header.owner_warning_title")}>
               {t("header.owner_warning")}

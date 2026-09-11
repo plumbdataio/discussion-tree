@@ -12,6 +12,8 @@ import { ContextMeter } from "./ContextMeter.tsx";
 import { EditableSessionName } from "./EditableSessionName.tsx";
 import { MultiSelectDropdown } from "./MultiSelectDropdown.tsx";
 import { SessionActivityIcons } from "./SessionActivityIcons.tsx";
+import { UsageLimitsChip } from "./UsageLimitsChip.tsx";
+import { useUsageLimits } from "../utils/usageLimits.ts";
 import { BOARD_STATUSES, normalizeBoardStatus } from "../utils/constants.ts";
 import { isBoardVisible, statusListToFilter } from "../utils/boardFilter.ts";
 import { openScheduledList } from "../utils/scheduledList.ts";
@@ -20,6 +22,8 @@ import { boardTitle } from "../utils/boardTitle.ts";
 
 export function SessionDashboard({ sessionId }: { sessionId: string }) {
   const { t } = useTranslation();
+  // Account-global 5h/7d usage, fed by the Sidebar's poll via the shared store.
+  const usageLimits = useUsageLimits();
   const [data, setData] = useState<SessionListItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -197,6 +201,9 @@ export function SessionDashboard({ sessionId }: { sessionId: string }) {
             />
           </h1>
           <ContextMeter usage={data.context_usage} prefix="Context: " />
+          {/* Account-global 5h/7d usage, between Context and the working cluster
+              (where the old statusline userscript put it). */}
+          <UsageLimitsChip limits={usageLimits} />
           {/* Same live indicator cluster the sidebar shows for this session.
               CTX chip suppressed here because the ContextMeter above already
               carries context — see SessionActivityIcons' showCtxChip. */}

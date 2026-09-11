@@ -684,15 +684,10 @@ body {
 }
 
 /* Account-global native usage limits (5h / 7d subscription windows), shown as
-   one chip at the top of the sidebar. Matches .context-meter's chrome (border,
-   radius, tabular numerals) but holds two labeled units side by side instead of
-   a single value — each fact reads on its own rather than being run together
-   with a separator. */
-.sidebar-usage-limits {
-  display: flex;
-  justify-content: flex-end;
-  margin: -4px 0 10px;
-}
+   one chip in the page header just right of the ContextMeter. Matches
+   .context-meter's chrome (border, radius, tabular numerals) but holds two
+   labeled units side by side instead of a single value — each fact reads on its
+   own rather than being run together with a separator. */
 .usage-limits-chip {
   display: inline-flex;
   align-items: stretch;
@@ -727,14 +722,45 @@ body {
   color: var(--text);
   font-weight: 600;
 }
-/* Consumed-share severity: the value colors as a window fills up. Border-less
-   so it tints only the number, keeping the chip calm until it matters. */
+/* Consumed-share severity, in two layers. (1) The whole chip takes a soft
+   tinted background from the STRONGEST present window, so a near-limit window
+   reads at a glance as caution/danger — the old number-only tint was too quiet.
+   (2) The offending window's own value stays color-weighted so you can still
+   tell WHICH window triggered it. Kept pastel (soft), matching .context-meter's
+   bands. */
+.usage-limits-chip.usage-limits-warn {
+  border-color: #fcd34d;
+  background: #fef3c7;
+}
+.usage-limits-chip.usage-limits-critical {
+  border-color: #fca5a5;
+  background: #fde8e8;
+}
 .usage-limits-unit.usage-limits-warn .usage-limits-value {
   color: #92400e;
 }
 .usage-limits-unit.usage-limits-critical .usage-limits-value {
   color: #991b1b;
   font-weight: 700;
+}
+/* Dark theme: swap the light pastel pills for dark-muted bands so the chip
+   doesn't glare as a bright pill in a dark header. Label/value ride on
+   --muted/--text, which the dark palette keeps legible on these grounds. */
+:root[data-theme="dark"] .usage-limits-chip.usage-limits-warn {
+  border-color: #92400e;
+  background: #3a2a05;
+}
+:root[data-theme="dark"] .usage-limits-chip.usage-limits-critical {
+  border-color: #b91c1c;
+  background: #450a0a;
+}
+:root[data-theme="dark"] .usage-limits-unit.usage-limits-warn .usage-limits-value {
+  color: #fbbf24;
+}
+:root[data-theme="dark"]
+  .usage-limits-unit.usage-limits-critical
+  .usage-limits-value {
+  color: #fca5a5;
 }
 
 .session-activity-indicator {
