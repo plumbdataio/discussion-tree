@@ -71,6 +71,19 @@ if [ -n "${sid:-}" ]; then
   # compacted, and so the start of what needs reviewing below. The broker hands
   # it back because stamping this compaction overwrites it.
   prev=$(printf '%s' "$done_resp" | jq -r '.previous_compact_at // empty' 2>/dev/null || true)
+  # Reset the context-free meter to ~empty right after a compact. The true
+  # post-compact free % isn't available here: context data reaches only the
+  # statusline (never a hook's stdin), and the statusline for the resumed turn
+  # has not rendered yet, so /tmp/claude-sl-<sid>-pct still holds the PRE-compact
+  # (tight) value at this instant. Posting 100 (= 100% free) means that if the
+  # user glances at the meter before sending their next instruction — which can
+  # be much later — they see "freed", not the alarming pre-compact tight value.
+  # The very next PostToolUse (cc-context-report-hook.sh) overwrites this with
+  # the real post-compact free %, so 100 is only a transient placeholder until
+  # the session next does real work. Best-effort; never aborts the hook.
+  ctxbody=$(jq -n --arg s "$sid" '{cc_session_id:$s, remaining_pct:100}' 2>/dev/null || true)
+  curl -sS --max-time 1 -X POST -H "Content-Type: application/json" \
+    -d "$ctxbody" "${DT_BROKER_BASE}/report-context-usage" >/dev/null 2>&1 || true
   resp=$(curl -sS --max-time 1 -X POST -H "Content-Type: application/json" \
     -d "$body" "${DT_BROKER_BASE}/get-incomplete-checklists" \
     2>/dev/null || echo '{}')
