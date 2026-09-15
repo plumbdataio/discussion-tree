@@ -2299,6 +2299,11 @@ textarea.answer-input:disabled {
   font-weight: 600;
   font-size: 15px;
   margin: 0 0 6px;
+  /* Same as .item-card .title: break a long unbreakable token instead of
+     overrunning the header and hiding the expand button. */
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .concern-card .context {
@@ -2792,6 +2797,21 @@ body.concern-resizing * {
   margin: 0;
   font-size: 14px;
   font-weight: 600;
+  /* Take the row's slack and allow shrinking below the intrinsic width of a
+     long unbreakable token (min-width:0), then break that token at any point
+     (overflow-wrap:anywhere) instead of overrunning the row and pushing the
+     status pill + expand button off the card. Titles with normal break
+     opportunities (spaces, CJK) still wrap there first. */
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Keep the row's trailing controls at their natural size next to the expand
+   button (already flex:0 0 auto) so a long title can never squeeze them out. */
+.item-card .title-row > .status-badge,
+.item-card .title-row > .mark-node-read {
+  flex: 0 0 auto;
 }
 
 /* The pill base — used by both ItemCard's title-row badge and NodeModal's
