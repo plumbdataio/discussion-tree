@@ -89,15 +89,14 @@ export function dropContextUsage(sessionId: string) {
 // writes them to /tmp/claude-sl-<cc_session_id>-limits.json and this repo's
 // cc-context-report-hook.sh POSTs them here. The values are ACCOUNT-global (the
 // same across every session the account runs), but each session reports its own
-// snapshot; we keep the latest per broker session and surface only the freshest
-// non-stale one so the frontend renders a SINGLE global chip, not one per row.
+// snapshot; we keep the latest per broker session and getGlobalUsageLimits()
+// combines them per window (see there) into a SINGLE global chip, not one per row.
 
-// Beyond this age a stored snapshot is considered stale and hidden: with no
-// session reporting for 6h the 5h window has fully reset anyway (so its number
-// would mislead) and there is nothing keeping the value current. Any live
-// session doing tool calls refreshes set_at continuously, so this only hides
-// the chip once the account has been idle for hours.
-const USAGE_LIMITS_STALE_MS = 6 * 60 * 60 * 1000;
+// Window lengths, used only as the reset boundary when a snapshot carries a pct
+// but no resets_at (see getGlobalUsageLimits): the window is assumed to reset
+// one window-length after the report.
+const FIVE_HOUR_MS = 5 * 60 * 60 * 1000;
+const SEVEN_DAY_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Keyed by broker session_id, mirroring `usages` above.
 const limits = new Map<string, UsageLimits>();
@@ -178,18 +177,101 @@ export function handleReportUsageLimits(body: {
   return { ok: true, session_id: sessionId };
 }
 
-// The single account-global usage snapshot to show: the most-recently-reported
-// value across all sessions that isn't stale. null when nothing has been
-// reported (or everything is stale) — the frontend then renders no chip.
+// The single account-global usage snapshot to show. We evaluate the 5h and 7d
+// windows INDEPENDENTLY across every stored snapshot, driven by each window's
+// own resets_at rather than a fixed age cutoff:
+//
+//   - A window's reported value is valid until its resets_at; before that we
+//     show the latest reported value no matter how old the report is (a 7d
+//     number stays good for days, so a short idle gap must not hide it).
+//   - Once now passes resets_at, the window has rolled over to ~0, so we show
+//     0% for it — present-but-past-reset, NOT absent.
+//   - Per-window independence: a still-valid 5h from an older snapshot is shown
+//     even when the newest snapshot carries only 7d. (Claude Code emits the 5h
+//     window only after the first API response, so a freshly-started session
+//     reports 7d-only.)
+//   - This replaces the old fixed 6h cutoff, which wrongly hid the 7-day value
+//     (valid for days) after a short idle gap.
+//
+// When a window's resets_at is absent we fall back to set_at + the window
+// length as its reset boundary. Returns null only when no stored snapshot
+// carries either window's pct — the frontend then renders no chip.
 export function getGlobalUsageLimits(): UsageLimits | null {
-  let best: UsageLimits | null = null;
-  const cutoff = Date.now() - USAGE_LIMITS_STALE_MS;
-  for (const v of limits.values()) {
-    const t = Date.parse(v.set_at);
-    if (!Number.isFinite(t) || t < cutoff) continue;
-    if (!best || Date.parse(v.set_at) > Date.parse(best.set_at)) best = v;
+  type WindowResult = {
+    pct: number;
+    resets_at: number | undefined;
+    set_at: string;
+  };
+
+  // Evaluate one window across all snapshots: pick the freshest snapshot that
+  // carries this window's pct, then decide whether it has reset since.
+  const evalWindow = (
+    getPct: (v: UsageLimits) => number | undefined,
+    getResetsAt: (v: UsageLimits) => number | undefined,
+    windowLenMs: number,
+  ): WindowResult | null => {
+    // 1. Freshest (greatest set_at) snapshot whose pct for this window is set.
+    let e: UsageLimits | null = null;
+    for (const v of limits.values()) {
+      if (typeof getPct(v) !== "number") continue;
+      if (!e || Date.parse(v.set_at) > Date.parse(e.set_at)) e = v;
+    }
+    if (!e) return null;
+
+    // 2. Reset boundary in ms: the reported resets_at if present, else the
+    //    report time plus one window length. An unparseable set_at with no
+    //    resets_at is treated as already past reset.
+    const resetsAt = getResetsAt(e);
+    let boundary: number;
+    if (
+      typeof resetsAt === "number" &&
+      Number.isFinite(resetsAt) &&
+      resetsAt > 0
+    ) {
+      boundary = resetsAt * 1000;
+    } else {
+      const setAtMs = Date.parse(e.set_at);
+      boundary = Number.isNaN(setAtMs) ? -Infinity : setAtMs + windowLenMs;
+    }
+
+    // 3. Past the boundary → the window has rolled over: show 0%, reset unknown.
+    if (Date.now() >= boundary) {
+      return { pct: 0, resets_at: undefined, set_at: e.set_at };
+    }
+    // Still within the window → pass the reported value (and resets_at) through.
+    return { pct: getPct(e) as number, resets_at: resetsAt, set_at: e.set_at };
+  };
+
+  const five = evalWindow(
+    (v) => v.five_hour_pct,
+    (v) => v.five_hour_resets_at,
+    FIVE_HOUR_MS,
+  );
+  const seven = evalWindow(
+    (v) => v.seven_day_pct,
+    (v) => v.seven_day_resets_at,
+    SEVEN_DAY_MS,
+  );
+
+  // Neither window had any snapshot with a pct → nothing to show.
+  if (!five && !seven) return null;
+
+  // set_at: the greatest set_at among the snapshots that actually contributed.
+  let setAt = "";
+  for (const r of [five, seven]) {
+    if (!r) continue;
+    if (setAt === "" || Date.parse(r.set_at) > Date.parse(setAt)) {
+      setAt = r.set_at;
+    }
   }
-  return best;
+
+  return {
+    five_hour_pct: five ? five.pct : undefined,
+    five_hour_resets_at: five ? five.resets_at : undefined,
+    seven_day_pct: seven ? seven.pct : undefined,
+    seven_day_resets_at: seven ? seven.resets_at : undefined,
+    set_at: setAt,
+  };
 }
 
 // Drop a session's stored limits when it is unregistered / swept. Mirrors
