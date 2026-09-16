@@ -24,10 +24,8 @@ import {
   upsertRunningSubagent,
 } from "./db.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
-import {
-  classifyStallFromTranscript,
-  type StallReason,
-} from "./stall-reason.ts";
+import { classifyStall, type StallReason } from "./stall-reason.ts";
+import { getGlobalUsageLimits } from "./context-usage.ts";
 
 export const activities = new Map<string, Activity>();
 const toolHeartbeats = new Map<string, number>();
@@ -50,8 +48,11 @@ const toolHeartbeats = new Map<string, number>();
 // A stall that does NOT clear — most notably a 5h usage cap, which won't lift
 // until its window resets — otherwise turned this into a ~30s hammer loop:
 // continue → capped again → stall → continue → … (observed spamming "continue"
-// for over an hour on a 5h cap). Fire-time rate_limit suppression stops that at
-// the source (a suppressed nudge starts no new turn, so no fresh StopFailure).
+// for over an hour on a 5h cap). Fire-time rate_limit handling stops that at the
+// source: instead of a ~30s nudge, a cap arms a SINGLE resume timer aimed at the
+// window's reset time + a safety margin (RESUME_AFTER_RESET_MS), so dt itself
+// resumes the session exactly once shortly after it un-caps — no bridge, no
+// hammering. If the reset time can't be determined, it sends nothing at all.
 // The STREAK CAP remains a backstop for genuinely-transient stalls that keep
 // failing: it backs off after MAX_AUTO_CONTINUE_STREAK consecutive *sent*
 // nudges that never led to recovery. The streak counts actual sends (not merely
@@ -62,6 +63,11 @@ const autoContinueTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const autoContinueStreak = new Map<string, number>();
 const AUTO_CONTINUE_DELAY_MS = Number(process.env.DT_AUTO_CONTINUE_MS) || 30_000;
 const MAX_AUTO_CONTINUE_STREAK = Number(process.env.DT_AUTO_CONTINUE_MAX) || 3;
+// A rate_limit resume fires this long AFTER the cap's reset time — more than a
+// minute, because AT the reset instant the window may not have actually rolled
+// over yet, so resuming exactly on it would re-cap and stall again.
+const RESUME_AFTER_RESET_MS =
+  Number(process.env.DT_RESUME_AFTER_RESET_MS) || 90_000;
 const selectDefaultBoardForSession = db.prepare(
   "SELECT id FROM boards WHERE session_id = ? AND is_default = 1 LIMIT 1",
 );
@@ -77,16 +83,56 @@ const selectSessionStalledAt = db.prepare(
 const AUTO_CONTINUE_MESSAGE =
   '[discussion-tree auto-continue] Your session had stopped (an API error, rate-limit, or stall) and discussion-tree sent this AUTOMATICALLY to wake you back up. This is NOT a message from the user — do not treat it as a new instruction, an answer, or a "go ahead". Resume exactly where you were, following the user\'s instructions and any pending decision as they stood before you stopped. If you were waiting on the user\'s judgment, you are STILL waiting on it: do not proceed past that point on the strength of this message.';
 
+// True while the session's stalled_at is still set — the recovery check reused
+// by both timer phases (a session that recovered between a timer firing and now
+// has cleared stalled_at, and clearStall can no longer cancel us once we're out
+// of the map, so re-read it before acting).
+function stillStalled(sessionId: string): boolean {
+  const stalled = (
+    selectSessionStalledAt.get(sessionId) as { stalled_at: string | null } | null
+  )?.stalled_at;
+  return !!stalled;
+}
+
+// Send the auto-continue message ONCE to the session's default board. Dynamic
+// import avoids a static cycle (threads.ts imports this module). A delivery
+// timeout (CC alive but parked at a choice prompt) is fine — the message is
+// queued and picked up when it resumes.
+function sendAutoContinue(sessionId: string): void {
+  const row = selectDefaultBoardForSession.get(sessionId) as
+    | { id: string }
+    | null;
+  if (!row) return;
+  void import("./threads.ts")
+    .then((m) =>
+      m.handleSubmitAnswer({
+        board_id: row.id,
+        node_id: "main",
+        text: AUTO_CONTINUE_MESSAGE,
+      }),
+    )
+    .catch(() => {});
+}
+
 // Schedule the deferred auto-continue. Called UNCONDITIONALLY on every stall —
 // the decision of whether to actually nudge is made at fire time, once the
 // transcript has settled (see the module comment above). `transcriptPath` is
 // carried through from the hook so the timer can classify the cause then;
-// `reasonOverride` short-circuits classification (used by tests to inject a
-// cause deterministically without staging a transcript file).
+// `reasonOverride` short-circuits classification, and `resetAtOverride` injects
+// the cap reset time (epoch ms) directly — both used by tests to drive a cause
+// deterministically without staging a transcript file.
+//
+// TWO-PHASE for a rate_limit cap: the first (short) timer classifies; if it is a
+// cap, it does NOT nudge but instead REPLACES its own slot with a single longer
+// timer aimed at the reset time + a safety margin, which resumes exactly once.
+// The single `autoContinueTimers[sessionId]` slot (cleared here on every call,
+// re-set by each phase) guarantees the session never holds more than one pending
+// timer — repeated stalls while capped just re-aim the same single resume.
 function scheduleAutoContinue(
   sessionId: string,
   transcriptPath?: string,
   reasonOverride?: StallReason,
+  resetAtOverride?: number | null,
 ): void {
   const prev = autoContinueTimers.get(sessionId);
   if (prev) clearTimeout(prev);
@@ -94,28 +140,56 @@ function scheduleAutoContinue(
     sessionId,
     setTimeout(() => {
       autoContinueTimers.delete(sessionId);
-      // Re-check right before doing anything: if the session recovered between
-      // this timer firing and now, clearStall already cleared stalled_at but can
-      // no longer cancel us (we're out of the map) — so don't act on a live
-      // session. Cheaper than the classify below, so do it first.
-      const stalled = (
-        selectSessionStalledAt.get(sessionId) as { stalled_at: string | null } | null
-      )?.stalled_at;
-      if (!stalled) return;
+      // Cheap recovery check first, before the classify below.
+      if (!stillStalled(sessionId)) return;
 
       // Classify NOW, not at receipt. By fire time the cap/error line is
-      // reliably the settled last isApiErrorMessage entry in the transcript, so
-      // a 5h cap that looked "transient" at the instant the hook fired is read
-      // correctly here. No transcript / no recognizable banner → "transient"
-      // (fail open = the old always-continue behavior).
-      const reason: StallReason =
-        reasonOverride ??
-        (transcriptPath
-          ? classifyStallFromTranscript(transcriptPath)
-          : "transient");
+      // reliably settled in the transcript, so a 5h cap that looked "transient"
+      // at the instant the hook fired is read correctly here. No transcript / no
+      // recognizable banner → "transient" (fail open = old always-continue).
+      let reason: StallReason;
+      let parsedResetAt: number | null = null;
+      if (reasonOverride) {
+        reason = reasonOverride;
+      } else if (transcriptPath) {
+        const c = classifyStall(transcriptPath);
+        reason = c.reason;
+        parsedResetAt = c.resetAt;
+      } else {
+        reason = "transient";
+      }
+
       if (reason === "rate_limit") {
-        // A 5h / weekly cap won't lift on a nudge; the cc-usage bridge resumes
-        // at the reset time. Leave the stall badge, send nothing.
+        // A cap won't lift on a nudge; resume ONCE, shortly after the window
+        // resets. Prefer an explicit override, then the reset time parsed from
+        // the cap text, then the account-global 5h reset time (unix SECONDS →
+        // ms). If none is known, DO NOT nudge — leaving the stall badge up is
+        // strictly better than hammering "continue" into a still-capped window.
+        const limits = getGlobalUsageLimits();
+        const fallback =
+          limits && typeof limits.five_hour_resets_at === "number"
+            ? limits.five_hour_resets_at * 1000
+            : null;
+        const resetAt = resetAtOverride ?? parsedResetAt ?? fallback;
+        if (resetAt == null) return;
+        // Wait until reset + margin; but if the reset is already past, still hold
+        // off at least the margin — never fire instantly into a window that may
+        // not have rolled over yet.
+        const fireDelay = Math.max(
+          resetAt + RESUME_AFTER_RESET_MS - Date.now(),
+          RESUME_AFTER_RESET_MS,
+        );
+        // Re-use the single slot: exactly one pending timer (this resume).
+        autoContinueTimers.set(
+          sessionId,
+          setTimeout(() => {
+            autoContinueTimers.delete(sessionId);
+            if (!stillStalled(sessionId)) return; // recovered before reset → skip
+            // Resume ONCE. Do NOT loop, re-schedule, or touch the transient
+            // streak — this is a cap resume, not a transient retry.
+            sendAutoContinue(sessionId);
+          }, fireDelay),
+        );
         return;
       }
       if (reason === "login") {
@@ -137,23 +211,7 @@ function scheduleAutoContinue(
         return;
       }
       autoContinueStreak.set(sessionId, streak + 1);
-      const row = selectDefaultBoardForSession.get(sessionId) as
-        | { id: string }
-        | null;
-      if (!row) return;
-      // Dynamic import avoids a static cycle (threads.ts imports this module).
-      // Same channel path the cc-usage bridge uses for the 5h auto-resume; a
-      // delivery timeout (CC alive but parked at a choice prompt) is fine — the
-      // message is queued and picked up when it resumes.
-      void import("./threads.ts")
-        .then((m) =>
-          m.handleSubmitAnswer({
-            board_id: row.id,
-            node_id: "main",
-            text: AUTO_CONTINUE_MESSAGE,
-          }),
-        )
-        .catch(() => {});
+      sendAutoContinue(sessionId);
     }, AUTO_CONTINUE_DELAY_MS),
   );
 }
@@ -261,6 +319,7 @@ export function handleSessionStalled(body: {
   cc_session_id?: string;
   transcript_path?: string;
   reason?: string;
+  reset_at?: number | null;
 }): { ok: boolean } {
   if (!body.cc_session_id) return { ok: false };
   const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
@@ -280,11 +339,14 @@ export function handleSessionStalled(body: {
   broadcastToAll({ type: "session-stall-update" });
 
   // Schedule unconditionally; the timer classifies at fire time and decides
-  // whether to nudge (transient), notify (login), or stay quiet (rate_limit).
+  // whether to nudge (transient), notify (login), or arm a single reset-time
+  // resume (rate_limit). `reason` / `reset_at` are direct overrides used by tests
+  // to inject a cause + reset time without staging a transcript file.
   scheduleAutoContinue(
     sessionId,
     body.transcript_path,
     body.reason as StallReason | undefined,
+    body.reset_at ?? null,
   );
   return { ok: true };
 }
