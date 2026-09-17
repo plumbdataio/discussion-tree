@@ -71,9 +71,11 @@ interface DiagramViewData {
 // to edit it (→ upsert → live re-render).
 export function DiagramView({ diagramId }: { diagramId: string }) {
   const { t } = useTranslation();
-  // Account-global 5h/7d usage, fed by the Sidebar's poll via the shared store.
-  const usageLimits = useUsageLimits();
   const [view, setView] = useState<DiagramViewData | null>(null);
+  // Per-account 5h/7d usage for THIS diagram's owner session (its subscription),
+  // fed by the Sidebar's poll via the shared per-session store. null until the
+  // diagram loads / the owner has reported.
+  const usageLimits = useUsageLimits(view?.diagram.session_id ?? null);
   const [notFound, setNotFound] = useState(false);
   const [svg, setSvg] = useState("");
   const [error, setError] = useState<string | null>(null);

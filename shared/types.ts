@@ -546,8 +546,9 @@ export interface BoardListItem {
 // statusLine command (rate_limits.{five_hour,seven_day}). used% is 0..100;
 // resets_at is a unix epoch in SECONDS. Every field is optional: a window's
 // data arrives only after the first API response, only on Pro/Max plans, and
-// drops out once that window resets. These numbers are ACCOUNT-global, so the
-// UI shows one chip (see /api/sessions `usage_limits`), not one per session.
+// drops out once that window resets. These numbers are PER-ACCOUNT (one
+// subscription per CLAUDE_CONFIG_DIR), so each page shows its own session's
+// value (see SessionListItem.usage_limits), not a single machine-wide chip.
 export interface UsageLimits {
   five_hour_pct?: number;
   five_hour_resets_at?: number;
@@ -599,6 +600,13 @@ export interface SessionListItem {
   // advisory UI state so the sidebar can show a "scheduled send" marker.
   // Cleared once the message goes out or the schedule is cancelled.
   scheduled_send_at?: string | null;
+  // Native 5h / 7d subscription-usage limits for THIS session's account (its
+  // CLAUDE_CONFIG_DIR). Different config dirs are different subscriptions with
+  // independent limits, so each session's page shows its own account's value —
+  // sessions on the same account share it (an idle one gets a sibling's fresher
+  // number). null when the session hasn't reported an account yet. The frontend
+  // reads this per-page via useUsageLimits(sessionId), NOT the top-level global.
+  usage_limits?: UsageLimits | null;
   boards: BoardListItem[];
   archived_boards?: BoardListItem[];
   // Divergent-discussion maps owned by this session (sidebar lists them with

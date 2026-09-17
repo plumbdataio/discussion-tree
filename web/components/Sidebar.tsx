@@ -502,7 +502,13 @@ export function Sidebar({
           setSessions(cachedSessions);
           setInactiveSessions(cachedInactive);
           // Feed the shared store that every header's UsageLimitsChip reads.
-          setSharedUsageLimits(data.usage_limits ?? null);
+          // Both lists are passed so a header whose owner session is inactive
+          // still finds its per-account value; the top-level value rides along
+          // as the account-agnostic fallback (no-arg useUsageLimits()).
+          setSharedUsageLimits(
+            [...data.sessions, ...(data.inactive_sessions ?? [])],
+            data.usage_limits ?? null,
+          );
           setError(null);
           // Seed the activity map from the just-fetched sessions so we have
           // an initial value even before any WS frame arrives. WS updates

@@ -51,9 +51,11 @@ import { boardTitle } from "../utils/boardTitle.ts";
 // switches.
 export function BoardApp({ boardId }: { boardId: string | null }) {
   const { t } = useTranslation();
-  // Account-global 5h/7d usage, fed by the Sidebar's poll via the shared store.
-  const usageLimits = useUsageLimits();
   const [data, setData] = useState<BoardView | null>(null);
+  // Per-account 5h/7d usage for THIS board's owner session (its subscription),
+  // fed by the Sidebar's poll via the shared per-session store. null until the
+  // board loads / the owner has reported.
+  const usageLimits = useUsageLimits(data?.board.session_id ?? null);
   const [error, setError] = useState<string | null>(null);
   const [flashingNodes, setFlashingNodes] = useState<Set<string>>(new Set());
   const [activitiesBySession, setActivitiesBySession] = useState<

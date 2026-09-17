@@ -432,3 +432,203 @@ describe("getGlobalUsageLimits — per-window, reset-driven staleness", () => {
     }
   });
 });
+
+// --- Per-account usage limits (getUsageLimitsForAccount) ----------------------
+//
+// Each session reports its subscription (account = CLAUDE_CONFIG_DIR). The
+// broker groups by account so a session's page shows ITS OWN subscription's 5h
+// / 7d, sessions on the same account share a value, and the reset-driven combine
+// still applies per account. /api/sessions carries this on each session row
+// (sessions[].usage_limits), which is what these tests read.
+
+// A random account string, unique per call, so tests sharing the module-level
+// broker never collide (getUsageLimitsForAccount matches the account exactly, so
+// distinct strings are fully isolated from each other and from null-account
+// rows left by the tests above).
+const acct = (tag: string) =>
+  `/cfg/${tag}-${Math.random().toString(36).slice(2)}`;
+
+// Read one session's per-account usage_limits from /api/sessions (searches both
+// the active and inactive lists). null when the session isn't listed or carries
+// no value.
+async function readSessionLimits(
+  b: BrokerHandle,
+  sessionId: string,
+): Promise<any> {
+  const list = await get<{
+    sessions: any[];
+    inactive_sessions?: any[];
+  }>(`${b.url}/api/sessions`);
+  const all = [...list.json.sessions, ...(list.json.inactive_sessions ?? [])];
+  const s = all.find((x) => x.id === sessionId);
+  return s ? s.usage_limits ?? null : null;
+}
+
+describe("getUsageLimitsForAccount — per-account grouping", () => {
+  test("two accounts: each session's page shows only its own account's value", async () => {
+    const sidA = await registerSession(broker.url);
+    const ccA = await attachCC(broker.url, sidA);
+    const sidB = await registerSession(broker.url);
+    const ccB = await attachCC(broker.url, sidB);
+    const acctA = acct("A");
+    const acctB = acct("B");
+    await post(`${broker.url}/report-usage-limits`, {
+      cc_session_id: ccA,
+      five_hour_pct: 20,
+      seven_day_pct: 30,
+      account: acctA,
+    });
+    await post(`${broker.url}/report-usage-limits`, {
+      cc_session_id: ccB,
+      five_hour_pct: 70,
+      seven_day_pct: 80,
+      account: acctB,
+    });
+    const ulA = await readSessionLimits(broker, sidA);
+    const ulB = await readSessionLimits(broker, sidB);
+    expect(ulA.five_hour_pct).toBe(20);
+    expect(ulA.seven_day_pct).toBe(30);
+    expect(ulB.five_hour_pct).toBe(70);
+    expect(ulB.seven_day_pct).toBe(80);
+  });
+
+  test("same account: an idle session shows a sibling's fresher value", async () => {
+    const shared = acct("shared");
+    const sid1 = await registerSession(broker.url);
+    const cc1 = await attachCC(broker.url, sid1);
+    const sid2 = await registerSession(broker.url);
+    const cc2 = await attachCC(broker.url, sid2);
+    // sid1 reports first (older / lower), then its sibling sid2 reports fresher.
+    await post(`${broker.url}/report-usage-limits`, {
+      cc_session_id: cc1,
+      five_hour_pct: 10,
+      account: shared,
+    });
+    // Small delay so set_at strictly increases (ISO ms resolution).
+    await new Promise((r) => setTimeout(r, 5));
+    await post(`${broker.url}/report-usage-limits`, {
+      cc_session_id: cc2,
+      five_hour_pct: 90,
+      account: shared,
+    });
+    // sid1's OWN row is older, but its page shows the account's freshest = 90.
+    const ul1 = await readSessionLimits(broker, sid1);
+    expect(ul1.five_hour_pct).toBe(90);
+  });
+
+  test("reset-driven per account: value before resets_at, 0 after", async () => {
+    const acctFuture = acct("reset-future");
+    const acctPast = acct("reset-past");
+    const sidF = await registerSession(broker.url);
+    const ccF = await attachCC(broker.url, sidF);
+    const sidP = await registerSession(broker.url);
+    const ccP = await attachCC(broker.url, sidP);
+    const future = nowSec() + 3600;
+    const past = nowSec() - 60;
+    await post(`${broker.url}/report-usage-limits`, {
+      cc_session_id: ccF,
+      five_hour_pct: 40,
+      five_hour_resets_at: future,
+      account: acctFuture,
+    });
+    await post(`${broker.url}/report-usage-limits`, {
+      cc_session_id: ccP,
+      five_hour_pct: 40,
+      five_hour_resets_at: past,
+      account: acctPast,
+    });
+    const ulF = await readSessionLimits(broker, sidF);
+    const ulP = await readSessionLimits(broker, sidP);
+    // Before its reset: the reported value + resets_at pass through.
+    expect(ulF.five_hour_pct).toBe(40);
+    expect(ulF.five_hour_resets_at).toBe(future);
+    // After its reset: the window rolled over to 0, resets_at cleared.
+    expect(ulP.five_hour_pct).toBe(0);
+    expect(ulP.five_hour_resets_at ?? null).toBeNull();
+  });
+
+  test("a session that reported no account has null per-session usage_limits", async () => {
+    const sid = await registerSession(broker.url);
+    const ccId = await attachCC(broker.url, sid);
+    await post(`${broker.url}/report-usage-limits`, {
+      cc_session_id: ccId,
+      five_hour_pct: 55,
+    });
+    // Its own row has no account, so accountForSession is null → no per-session
+    // value (the page shows no chip rather than borrowing another subscription).
+    const ul = await readSessionLimits(broker, sid);
+    expect(ul ?? null).toBeNull();
+    // ...but the account-agnostic top-level global still reflects reports.
+    const list = await get<{ usage_limits: any }>(`${broker.url}/api/sessions`);
+    expect(list.json.usage_limits).not.toBeNull();
+  });
+
+  test("global stays account-agnostic while per-session isolates by account", async () => {
+    // Fresh broker so the store holds only these two reports.
+    const b = await startBroker();
+    try {
+      const sid1 = await registerSession(b.url);
+      const cc1 = await attachCC(b.url, sid1);
+      const sid2 = await registerSession(b.url);
+      const cc2 = await attachCC(b.url, sid2);
+      // Two DIFFERENT accounts, each carrying only one window.
+      await post(`${b.url}/report-usage-limits`, {
+        cc_session_id: cc1,
+        seven_day_pct: 22,
+        account: acct("x"),
+      });
+      await new Promise((r) => setTimeout(r, 5));
+      await post(`${b.url}/report-usage-limits`, {
+        cc_session_id: cc2,
+        five_hour_pct: 66,
+        account: acct("y"),
+      });
+      const list = await get<{ usage_limits: any; sessions: any[] }>(
+        `${b.url}/api/sessions`,
+      );
+      // Top-level global (unfiltered) surfaces BOTH windows even though they
+      // came from different accounts — proves getGlobalUsageLimits still works.
+      expect(list.json.usage_limits.five_hour_pct).toBe(66);
+      expect(list.json.usage_limits.seven_day_pct).toBe(22);
+      // Each session's per-account value shows ONLY its own account's window.
+      const s1 = list.json.sessions.find((s: any) => s.id === sid1);
+      const s2 = list.json.sessions.find((s: any) => s.id === sid2);
+      expect(s1.usage_limits.seven_day_pct).toBe(22);
+      expect(s1.usage_limits.five_hour_pct ?? null).toBeNull();
+      expect(s2.usage_limits.five_hour_pct).toBe(66);
+      expect(s2.usage_limits.seven_day_pct ?? null).toBeNull();
+    } finally {
+      await b.kill();
+    }
+  });
+
+  test("account survives a broker restart (re-warmed from DB)", async () => {
+    const home = mkdtempSync(join(tmpdir(), "pd-limits-acct-"));
+    const env = {
+      DISCUSSION_TREE_HOME: home,
+      DISCUSSION_TREE_DB: join(home, "db.sqlite"),
+    };
+    const a = await startBroker(env);
+    const reg = await post<{ session_id: string }>(`${a.url}/register`, {
+      pid: process.pid,
+      cwd: "/tmp/pd-limits-acct",
+    });
+    const sid = reg.json.session_id;
+    const ccId = await attachCC(a.url, sid);
+    await post(`${a.url}/report-usage-limits`, {
+      cc_session_id: ccId,
+      five_hour_pct: 44,
+      account: acct("persist"),
+    });
+    await a.kill();
+
+    const b2 = await startBroker(env);
+    await post(`${b2.url}/heartbeat`, { session_id: sid });
+    // The per-session value depends on the account being re-warmed from the DB
+    // (accountForSession reads the in-memory row that startup rebuilds).
+    const ul = await readSessionLimits(b2, sid);
+    expect(ul.five_hour_pct).toBe(44);
+    await b2.kill();
+    rmSync(home, { recursive: true, force: true });
+  });
+});

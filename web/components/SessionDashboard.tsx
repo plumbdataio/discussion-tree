@@ -22,8 +22,10 @@ import { boardTitle } from "../utils/boardTitle.ts";
 
 export function SessionDashboard({ sessionId }: { sessionId: string }) {
   const { t } = useTranslation();
-  // Account-global 5h/7d usage, fed by the Sidebar's poll via the shared store.
-  const usageLimits = useUsageLimits();
+  // Per-account 5h/7d usage for THIS session's subscription, fed by the
+  // Sidebar's poll via the shared per-session store. sessionId is the broker
+  // session id this dashboard is showing.
+  const usageLimits = useUsageLimits(sessionId);
   const [data, setData] = useState<SessionListItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);

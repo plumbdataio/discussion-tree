@@ -2,12 +2,13 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import type { UsageLimits } from "../../shared/types.ts";
 
-// @reusable-ui UsageLimitsChip — USE WHEN: showing the account-global Claude
+// @reusable-ui UsageLimitsChip — USE WHEN: showing a session's Claude
 // subscription usage (the native 5h / 7d rate-limit windows Claude Code exposes
 // on its statusline) INSTEAD OF hand-rolling a usage readout. These numbers are
-// account-wide, so feed it from the shared useUsageLimits() store
+// per-account (one subscription per CLAUDE_CONFIG_DIR), so feed it the current
+// page's value from the shared useUsageLimits(sessionId) store
 // (web/utils/usageLimits.ts, populated by the Sidebar's poll) and render it in a
-// page header next to the ContextMeter — never one per session row.
+// page header next to the ContextMeter.
 
 // used% severity rank: the more of a window is consumed, the more it matters.
 // >= 90% used is the "almost out" red band; >= 75% is caution; below that stays

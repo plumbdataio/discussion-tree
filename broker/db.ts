@@ -171,8 +171,11 @@ export const deleteContextUsage = db.prepare(
 // scripts/cc-context-report-hook.sh to /report-usage-limits. Each window's two
 // fields are nullable: they arrive only after the first API response, only on
 // Pro/Max plans, and a window's fields drop out after it resets. Stored per
-// broker session_id (mirroring context_usage) even though the numbers are
-// ACCOUNT-global — the getter surfaces the single freshest value. Persisted so a
+// broker session_id (mirroring context_usage). `account` = the reporting
+// session's CLAUDE_CONFIG_DIR — different config dirs are different
+// subscriptions with independent limits, so the numbers are per-account (NOT
+// machine-global): the getter combines only rows that share an account. Old
+// rows (reported before the account field existed) carry NULL. Persisted so a
 // broker restart doesn't blank the chip until the next tool call re-reports.
 db.run(`
   CREATE TABLE IF NOT EXISTS usage_limits (
@@ -181,22 +184,30 @@ db.run(`
     five_hour_resets_at INTEGER,
     seven_day_pct REAL,
     seven_day_resets_at INTEGER,
+    account TEXT,
     set_at TEXT NOT NULL
   )
 `);
+// Additive migration for installs whose usage_limits table predates the account
+// column. Declared BEFORE the prepared statements below because bun:sqlite
+// compiles a prepared statement immediately — one that names `account` would
+// throw "no such column" at import on an un-migrated DB and the broker would
+// never start.
+safeAlter("ALTER TABLE usage_limits ADD COLUMN account TEXT");
 export const upsertUsageLimits = db.prepare(
   `INSERT INTO usage_limits
-     (session_id, five_hour_pct, five_hour_resets_at, seven_day_pct, seven_day_resets_at, set_at)
-   VALUES (?, ?, ?, ?, ?, ?)
+     (session_id, five_hour_pct, five_hour_resets_at, seven_day_pct, seven_day_resets_at, account, set_at)
+   VALUES (?, ?, ?, ?, ?, ?, ?)
    ON CONFLICT(session_id) DO UPDATE SET
      five_hour_pct = excluded.five_hour_pct,
      five_hour_resets_at = excluded.five_hour_resets_at,
      seven_day_pct = excluded.seven_day_pct,
      seven_day_resets_at = excluded.seven_day_resets_at,
+     account = excluded.account,
      set_at = excluded.set_at`,
 );
 export const selectAllUsageLimits = db.prepare(
-  `SELECT session_id, five_hour_pct, five_hour_resets_at, seven_day_pct, seven_day_resets_at, set_at
+  `SELECT session_id, five_hour_pct, five_hour_resets_at, seven_day_pct, seven_day_resets_at, account, set_at
      FROM usage_limits`,
 );
 export const deleteUsageLimits = db.prepare(

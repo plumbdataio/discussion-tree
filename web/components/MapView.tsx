@@ -160,9 +160,11 @@ type UndoEntry =
 
 export function MapView({ mapId }: { mapId: string }) {
   const { t } = useTranslation();
-  // Account-global 5h/7d usage, fed by the Sidebar's poll via the shared store.
-  const usageLimits = useUsageLimits();
   const [view, setView] = useState<MapViewData | null>(null);
+  // Per-account 5h/7d usage for THIS map's owner session (its subscription), fed
+  // by the Sidebar's poll via the shared per-session store. null until the map
+  // loads / the owner has reported.
+  const usageLimits = useUsageLimits(view?.map.session_id ?? null);
   const [notFound, setNotFound] = useState(false);
   const [rfNodes, setRfNodes] = useState<RFNode[]>([]);
   const [rfEdges, setRfEdges] = useState<RFEdge[]>([]);

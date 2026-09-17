@@ -85,21 +85,32 @@ export function dropContextUsage(sessionId: string) {
 
 // --- Native 5h / 7d subscription-usage limits --------------------------------
 // Claude Code's statusLine command delivers rate_limits.{five_hour,seven_day}
-// (used_percentage 0..100 + resets_at unix seconds). The user's statusline
-// writes them to /tmp/claude-sl-<cc_session_id>-limits.json and this repo's
-// cc-context-report-hook.sh POSTs them here. The values are ACCOUNT-global (the
-// same across every session the account runs), but each session reports its own
-// snapshot; we keep the latest per broker session and getGlobalUsageLimits()
-// combines them per window (see there) into a SINGLE global chip, not one per row.
+// (used_percentage 0..100 + resets_at unix seconds) plus `account` = the
+// session's CLAUDE_CONFIG_DIR. The user's statusline writes them to
+// /tmp/claude-sl-<cc_session_id>-limits.json and this repo's
+// cc-context-report-hook.sh POSTs them here. The numbers are PER-ACCOUNT (one
+// subscription per config dir) — NOT machine-global: two config dirs are two
+// different subscriptions with independent limits. Each session reports its own
+// snapshot; we keep the latest per broker session, tagged with the account it
+// came from. getUsageLimitsForAccount() combines per window over only the rows
+// that share an account (so sessions on the same subscription share a value and
+// an idle one shows a sibling's fresher number), while getGlobalUsageLimits()
+// combines over ALL rows as an account-agnostic fallback.
 
 // Window lengths, used only as the reset boundary when a snapshot carries a pct
-// but no resets_at (see getGlobalUsageLimits): the window is assumed to reset
-// one window-length after the report.
+// but no resets_at (see combineLimits): the window is assumed to reset one
+// window-length after the report.
 const FIVE_HOUR_MS = 5 * 60 * 60 * 1000;
 const SEVEN_DAY_MS = 7 * 24 * 60 * 60 * 1000;
 
+// A stored snapshot is a UsageLimits plus the account it was reported under
+// (null for rows reported before the account field existed / a report that
+// omitted it). Only `account` is internal; the four displayed fields + set_at
+// are the UsageLimits shape handed to the frontend.
+type StoredUsageLimits = UsageLimits & { account: string | null };
+
 // Keyed by broker session_id, mirroring `usages` above.
-const limits = new Map<string, UsageLimits>();
+const limits = new Map<string, StoredUsageLimits>();
 
 // Re-warm from the DB on startup so a broker restart doesn't blank the chip
 // until a session re-reports on its next tool call.
@@ -109,6 +120,7 @@ for (const row of selectAllUsageLimits.all() as {
   five_hour_resets_at: number | null;
   seven_day_pct: number | null;
   seven_day_resets_at: number | null;
+  account: string | null;
   set_at: string;
 }[]) {
   limits.set(row.session_id, {
@@ -116,6 +128,7 @@ for (const row of selectAllUsageLimits.all() as {
     five_hour_resets_at: row.five_hour_resets_at ?? undefined,
     seven_day_pct: row.seven_day_pct ?? undefined,
     seven_day_resets_at: row.seven_day_resets_at ?? undefined,
+    account: row.account ?? null,
     set_at: row.set_at,
   });
 }
@@ -137,12 +150,22 @@ function cleanResetsAt(v: unknown): number | undefined {
   return Math.floor(v);
 }
 
+// account is the reporting session's CLAUDE_CONFIG_DIR. Keep a non-empty
+// trimmed string; anything else (absent, non-string, blank) is stored as NULL
+// and treated as "unknown account".
+function cleanAccount(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  return t.length > 0 ? t : null;
+}
+
 export function handleReportUsageLimits(body: {
   cc_session_id?: string;
   five_hour_pct?: number;
   five_hour_resets_at?: number;
   seven_day_pct?: number;
   seven_day_resets_at?: number;
+  account?: string;
 }): { ok: boolean; session_id?: string } {
   if (!body.cc_session_id) return { ok: false };
   const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
@@ -151,6 +174,7 @@ export function handleReportUsageLimits(body: {
   const fiveHourResetsAt = cleanResetsAt(body.five_hour_resets_at);
   const sevenDayPct = cleanPct(body.seven_day_pct);
   const sevenDayResetsAt = cleanResetsAt(body.seven_day_resets_at);
+  const account = cleanAccount(body.account);
   // Reject a report that carries no usable field at all — nothing to store, and
   // it would otherwise overwrite a good row with an empty, freshly-dated one and
   // let it win the "freshest" pick with blank numbers.
@@ -158,11 +182,12 @@ export function handleReportUsageLimits(body: {
     return { ok: false };
   }
   const setAt = new Date().toISOString();
-  const value: UsageLimits = {
+  const value: StoredUsageLimits = {
     five_hour_pct: fiveHourPct,
     five_hour_resets_at: fiveHourResetsAt,
     seven_day_pct: sevenDayPct,
     seven_day_resets_at: sevenDayResetsAt,
+    account,
     set_at: setAt,
   };
   limits.set(sessionId, value);
@@ -172,14 +197,15 @@ export function handleReportUsageLimits(body: {
     fiveHourResetsAt ?? null,
     sevenDayPct ?? null,
     sevenDayResetsAt ?? null,
+    account,
     setAt,
   );
   return { ok: true, session_id: sessionId };
 }
 
-// The single account-global usage snapshot to show. We evaluate the 5h and 7d
-// windows INDEPENDENTLY across every stored snapshot, driven by each window's
-// own resets_at rather than a fixed age cutoff:
+// Combine a SUBSET of stored snapshots into one usage value. We evaluate the 5h
+// and 7d windows INDEPENDENTLY across the given snapshots, driven by each
+// window's own resets_at rather than a fixed age cutoff:
 //
 //   - A window's reported value is valid until its resets_at; before that we
 //     show the latest reported value no matter how old the report is (a 7d
@@ -194,25 +220,29 @@ export function handleReportUsageLimits(body: {
 //     (valid for days) after a short idle gap.
 //
 // When a window's resets_at is absent we fall back to set_at + the window
-// length as its reset boundary. Returns null only when no stored snapshot
-// carries either window's pct — the frontend then renders no chip.
-export function getGlobalUsageLimits(): UsageLimits | null {
+// length as its reset boundary. Returns null only when no snapshot in the
+// subset carries either window's pct — the frontend then renders no chip.
+//
+// Callers choose the subset: getGlobalUsageLimits() passes every row (account-
+// agnostic fallback), getUsageLimitsForAccount() passes only one account's rows.
+function combineLimits(entries: Iterable<StoredUsageLimits>): UsageLimits | null {
+  const all = [...entries];
   type WindowResult = {
     pct: number;
     resets_at: number | undefined;
     set_at: string;
   };
 
-  // Evaluate one window across all snapshots: pick the freshest snapshot that
+  // Evaluate one window across the subset: pick the freshest snapshot that
   // carries this window's pct, then decide whether it has reset since.
   const evalWindow = (
-    getPct: (v: UsageLimits) => number | undefined,
-    getResetsAt: (v: UsageLimits) => number | undefined,
+    getPct: (v: StoredUsageLimits) => number | undefined,
+    getResetsAt: (v: StoredUsageLimits) => number | undefined,
     windowLenMs: number,
   ): WindowResult | null => {
     // 1. Freshest (greatest set_at) snapshot whose pct for this window is set.
-    let e: UsageLimits | null = null;
-    for (const v of limits.values()) {
+    let e: StoredUsageLimits | null = null;
+    for (const v of all) {
       if (typeof getPct(v) !== "number") continue;
       if (!e || Date.parse(v.set_at) > Date.parse(e.set_at)) e = v;
     }
@@ -272,6 +302,35 @@ export function getGlobalUsageLimits(): UsageLimits | null {
     seven_day_resets_at: seven ? seven.resets_at : undefined,
     set_at: setAt,
   };
+}
+
+// Account-agnostic combine over EVERY stored snapshot. Kept as a fallback (the
+// auto-continue rate-limit resume uses it, and sessions.ts still exposes it as
+// the top-level /api/sessions value for back-compat), but a page's chip is now
+// driven by getUsageLimitsForAccount so it shows ITS OWN subscription.
+export function getGlobalUsageLimits(): UsageLimits | null {
+  return combineLimits(limits.values());
+}
+
+// Per-account combine: the same reset-driven logic as the global getter, but
+// over only the snapshots reported under `account`. This is what makes two
+// subscriptions (two CLAUDE_CONFIG_DIRs) show independent numbers, and lets an
+// idle session pick up a fresher value reported by a sibling on the SAME
+// account. Returns null when no row for the account carries a usable pct.
+export function getUsageLimitsForAccount(account: string): UsageLimits | null {
+  const mine: StoredUsageLimits[] = [];
+  for (const v of limits.values()) {
+    if (v.account === account) mine.push(v);
+  }
+  if (mine.length === 0) return null;
+  return combineLimits(mine);
+}
+
+// The account on the given session's OWN latest stored row (null if it has
+// never reported, or reported without an account). sessions.ts uses this to
+// decide which account's combined value to attach to each session row.
+export function accountForSession(sessionId: string): string | null {
+  return limits.get(sessionId)?.account ?? null;
 }
 
 // Drop a session's stored limits when it is unregistered / swept. Mirrors

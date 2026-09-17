@@ -12,7 +12,12 @@ import {
   runningSubagentCountForSession,
   scheduledSendAtForSession,
 } from "./activity.ts";
-import { getContextUsage, getGlobalUsageLimits } from "./context-usage.ts";
+import {
+  accountForSession,
+  getContextUsage,
+  getGlobalUsageLimits,
+  getUsageLimitsForAccount,
+} from "./context-usage.ts";
 import { DIAGRAM_CHAT_NODE } from "./diagrams.ts";
 import { pendingScheduledCountForSession } from "./scheduled-messages.ts";
 import {
@@ -647,6 +652,13 @@ export function handleListSessions() {
     // self-healing fallback for tabs that miss a WS frame.
     const activity = activities.get(s.id) ?? null;
     const context_usage = getContextUsage(s.id);
+    // Per-account native 5h / 7d limits for THIS session: look up the account it
+    // last reported under, then the combined value for that account (which pulls
+    // in any fresher sibling on the same subscription). null when the session
+    // has never reported an account — the page then shows no chip rather than
+    // borrowing an unrelated subscription's numbers.
+    const account = accountForSession(s.id);
+    const usage_limits = account ? getUsageLimitsForAccount(account) : null;
     // Maps (divergence surface) owned by this session. node_count + unread are
     // computed cheaply; map messages live in thread_items keyed by the map_id.
     const mapRows = db
@@ -724,6 +736,7 @@ export function handleListSessions() {
       running_subagents: runningSubagentCountForSession(s.id),
       scheduled_send_at: scheduledSendAtForSession(s.id),
       scheduled_message_count: pendingScheduledCountForSession(s.id),
+      usage_limits,
       boards: enrichBoards(activeBoards),
       archived_boards: enrichBoards(archivedBoards),
       maps,
@@ -734,9 +747,11 @@ export function handleListSessions() {
   return {
     sessions: aliveSessions.map(buildItem),
     inactive_sessions: inactiveSessions.map(buildItem),
-    // Account-global native 5h / 7d subscription-usage limits: a single value
-    // (freshest non-stale across all sessions) so the sidebar shows ONE chip,
-    // not a per-session number. null when nothing has been reported yet.
+    // Back-compat account-agnostic native 5h / 7d value (combined over ALL
+    // sessions). Each session now also carries its OWN per-account usage_limits
+    // (see buildItem) which is what the page chips read; this top-level value is
+    // kept as a fallback for any client that hasn't switched to the per-session
+    // field. null when nothing has been reported yet.
     usage_limits: getGlobalUsageLimits(),
   };
 }
