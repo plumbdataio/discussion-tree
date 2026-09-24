@@ -33,7 +33,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-context-report-hook.sh"
+            "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/cc-context-report-hook.ts"
           }
         ]
       }
@@ -60,7 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-compact-board-reminder.sh"
+            "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/post-compact-board-reminder.ts"
           }
         ]
       }
@@ -70,7 +70,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/stop-failure-hook.sh"
+            "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/stop-failure-hook.ts"
           }
         ]
       }
