@@ -51,6 +51,11 @@ import {
 import { initPower, routes as powerRoutes } from "./broker/power.ts";
 import { routes as readsRoutes } from "./broker/reads.ts";
 import { WEB_BUILD_ID } from "./broker/web-build-id.ts";
+import {
+  ensureWebDist,
+  keepWebDistAlive,
+  resolveDistAsset,
+} from "./broker/web-dist.ts";
 import { routes as contextUsageRoutes } from "./broker/context-usage.ts";
 import {
   cleanStaleSessions,
@@ -216,6 +221,51 @@ const HMR = process.env.DT_HMR === "1";
 // with DT_DEV=1 only while actually developing against the UI.
 const DEV = process.env.DT_DEV === "1";
 
+// Production serves a frontend prebuilt by a short-lived child process instead
+// of letting Bun bundle the HTML import in-process: the in-process bundler
+// keeps ~350 MB of working memory for the life of the broker (measured
+// 2026-09-27; see broker/web-dist.ts). If the prebuild fails for any reason we
+// fall back to the in-process path so the UI never goes down. DT_WEB_PREBUILD=0
+// forces the fallback (escape hatch, and for A/B memory measurements).
+let webDistDir: string | null = null;
+if (DEV) {
+  console.error(
+    `[discussion-tree broker] web: dev mode, in-process bundling (hmr=${HMR})`,
+  );
+} else if (process.env.DT_WEB_PREBUILD === "0") {
+  console.error(
+    `[discussion-tree broker] web: prebuild disabled (DT_WEB_PREBUILD=0), in-process bundling`,
+  );
+} else {
+  const t0 = performance.now();
+  const dist = ensureWebDist();
+  if (dist.ok) {
+    webDistDir = dist.dir;
+    keepWebDistAlive(dist.dir);
+    console.error(
+      `[discussion-tree broker] web: prebuilt dist ${dist.dir} (${dist.built ? `built in ${Math.round(performance.now() - t0)}ms` : "cached"})`,
+    );
+  } else {
+    console.error(
+      `[discussion-tree broker] WARNING: web prebuild FAILED, falling back to in-process bundling (costs ~350MB resident): ${dist.error}`,
+    );
+  }
+}
+
+// SPA entry: the prebuilt index.html when available, else the HTML import.
+const spaRoute = webDistDir
+  ? (() => {
+      const indexPath = `${webDistDir}/index.html`;
+      return () =>
+        new Response(Bun.file(indexPath), {
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "no-cache",
+          },
+        });
+    })()
+  : indexHtml;
+
 // Layer 2 backstop for the anti-swarm fix. singleton-guard.ts already turns
 // away a broker that finds a HEALTHY one via /health, but that leaves the
 // cold-start race: several launchers all see /health down, all get past the
@@ -234,11 +284,11 @@ try {
   hostname: BIND_HOST,
   development: DEV ? { hmr: HMR } : false,
   routes: {
-    "/": indexHtml,
-    "/board/:id": indexHtml,
-    "/session/:id": indexHtml,
-    "/map/:id": indexHtml,
-    "/diagram/:id": indexHtml,
+    "/": spaRoute,
+    "/board/:id": spaRoute,
+    "/session/:id": spaRoute,
+    "/map/:id": spaRoute,
+    "/diagram/:id": spaRoute,
   },
   async fetch(req, server) {
     const url = new URL(req.url);
@@ -338,6 +388,19 @@ try {
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return Response.json({ error: msg }, { status: 500 });
+      }
+    }
+
+    // Prebuilt frontend assets (index-<hash>.js / .css). Checked last, just
+    // before the catch-all, so it can never shadow a broker route; it only
+    // matches top-level files that actually exist in the dist dir. The names
+    // are content-hashed, so they are safe to cache forever.
+    if (webDistDir && req.method === "GET") {
+      const asset = resolveDistAsset(webDistDir, path);
+      if (asset) {
+        return new Response(Bun.file(asset), {
+          headers: { "cache-control": "public, max-age=31536000, immutable" },
+        });
       }
     }
 

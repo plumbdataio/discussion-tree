@@ -1,8 +1,9 @@
 // A fingerprint of the frontend this broker process is serving.
 //
-// WHY: Bun bundles web/ into memory at startup (`import indexHtml from
-// "./web/index.html"`), so a page keeps running the bundle it was loaded with
-// until someone reloads it. HMR used to paper over that, but it reloaded the
+// WHY: the broker serves one fixed build of web/ for its whole lifetime (a
+// prebuilt dist in production, see broker/web-dist.ts; the in-process HTML
+// import in dev), so a page keeps running the bundle it was loaded with until
+// someone reloads it. HMR used to paper over that, but it reloaded the
 // user's page on every keystroke-level edit and had to go (see broker.ts), which
 // left "remember to hard-refresh" as a human step — and a human step that is
 // only needed occasionally is one that gets forgotten, on both sides.
