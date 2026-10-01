@@ -94,7 +94,7 @@
           },
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/check-unanswered-posts.sh"
+            "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/check-unanswered-posts.ts"
           },
           {
             "type": "command",

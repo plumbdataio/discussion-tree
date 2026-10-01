@@ -22,6 +22,20 @@ const RESPONSES: Record<string, unknown> = {
   "/session-compacting-done": { previous_compact_at: "2026-09-23T01:02:03Z" },
   "/get-incomplete-checklists": { count: 2 },
   "/review-message-links": { total: 3 },
+  "/get-unanswered": {
+    ok: true,
+    count: 1,
+    block: true,
+    nodes: [
+      {
+        board_id: "bd_smoke",
+        node_id: "i1",
+        node_path: "Smoke board > I1",
+        surface: "board",
+        reply_tool: "post_to_node",
+      },
+    ],
+  },
 };
 
 const server = Bun.serve({
@@ -204,12 +218,48 @@ async function postCompactScenario(): Promise<void> {
   );
 }
 
+async function checkUnansweredScenario(): Promise<void> {
+  console.log("check-unanswered-posts.ts");
+  const r = await runHook(
+    "check-unanswered-posts.ts",
+    JSON.stringify({ session_id: "smoke-cu", stop_hook_active: false }),
+  );
+  check("exits 0", r.code === 0, `code=${r.code} stderr=${r.stderr.trim()}`);
+  let parsed: any;
+  try {
+    parsed = JSON.parse(r.stdout);
+  } catch {
+    parsed = undefined;
+  }
+  check(
+    "stdout is {decision:block} naming the node + reply tool",
+    parsed?.decision === "block" &&
+      String(parsed?.reason).includes("Smoke board > I1") &&
+      String(parsed?.reason).includes("reply with post_to_node"),
+    r.stdout.slice(0, 120),
+  );
+  check(
+    "POST /get-unanswered {cc_session_id}",
+    subset(got("/get-unanswered")?.body, { cc_session_id: "smoke-cu" }),
+    JSON.stringify(got("/get-unanswered")?.body),
+  );
+  check(
+    "POST /heartbeat-tool {tool: stop-hook-continuation}",
+    subset(got("/heartbeat-tool")?.body, {
+      cc_session_id: "smoke-cu",
+      tool: "stop-hook-continuation",
+    }),
+    JSON.stringify(got("/heartbeat-tool")?.body),
+  );
+}
+
 // ---- Run --------------------------------------------------------------------
 try {
   await contextScenario();
   await contextNoFilesScenario();
   await stopFailureScenario();
   await postCompactScenario();
+  await checkUnansweredScenario();
 } finally {
   server.stop(true);
 }
