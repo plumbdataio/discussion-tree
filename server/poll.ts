@@ -19,6 +19,12 @@ import { log } from "./log.ts";
 import { gapSince } from "./message-gap.ts";
 import { getSessionId } from "./state.ts";
 import { rewriteUploadPaths } from "./upload-paths.ts";
+import {
+  EXTERNAL_NOTIFY_KIND,
+  externalNotifyHeader,
+  externalNotifyMeta,
+  externalNotifyReminder,
+} from "./external-notify.ts";
 import { BROKER_IS_REMOTE } from "./config.ts";
 
 // Overlap guard: the poll fires every POLL_INTERVAL_MS (1s), but a single drain
@@ -170,6 +176,10 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
         reminderParts.push(
           `[discussion-tree] Map message (${target}). Respond by GROWING THE MAP (add_map_node / connect_map_nodes / update_map_node) and/or reply via post_to_map_node(map_id="${msg.board_id}", node_id="${msg.node_id || "__general__"}"). Incremental, a few nodes at a time.${shape ? `\n\n${shape}` : ""}`,
         );
+      } else if (kind === EXTERNAL_NOTIFY_KIND && msg.board_id && msg.node_id) {
+        // Automated relay notice (/notify-session): NOT the user. Frame it as
+        // untrusted and name the node whose unanswered flag a reply clears.
+        reminderParts.push(externalNotifyReminder(msg));
       } else if (kind === "diagram_chat" && msg.board_id) {
         // diagram_chat: board_id IS the diagram_id. The user is chatting about a
         // Mermaid diagram; CC responds by EDITING it (upsert_diagram, live
@@ -198,7 +208,11 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
       // Attachment paths are written from the BROKER's filesystem. On this
       // machine Read opens them directly; from another machine they do not
       // exist, so they become a get_image call instead. No-op when local.
-      const body = rewriteUploadPaths(msg.text, BROKER_IS_REMOTE);
+      const rewritten = rewriteUploadPaths(msg.text, BROKER_IS_REMOTE);
+      const body =
+        kind === EXTERNAL_NOTIFY_KIND
+          ? `${externalNotifyHeader(msg)}\n\n${rewritten}`
+          : rewritten;
       const content =
         reminderParts.length > 0
           ? `${body}\n\n---\n${reminderParts.join("\n\n")}`
@@ -239,6 +253,9 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
             ...(kind === "diagram_chat"
               ? { diagram_id: String(msg.board_id) }
               : {}),
+            // external_notify: source_label (+ message_id, already set above).
+            // All strings — see externalNotifyMeta.
+            ...(kind === EXTERNAL_NOTIFY_KIND ? externalNotifyMeta(msg) : {}),
           },
         },
         });

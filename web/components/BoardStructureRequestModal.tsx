@@ -13,6 +13,7 @@ import {
 import { translateError } from "../utils/errors.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 import { useDraft } from "../utils/drafts.ts";
+import { isUnreadThreadItem } from "../utils/threadSource.ts";
 
 // Synthetic node id for the board-level structure-request draft (it isn't
 // tied to any one node), so the in-flight request survives a reload / nav.
@@ -86,7 +87,7 @@ export function BoardStructureRequestModal({
   // arrival during the modal session also clears immediately).
   useEffect(() => {
     const unreadIds = logThread
-      .filter((it) => it.source === "cc" && !it.read_at)
+      .filter((it) => isUnreadThreadItem(it))
       .map((it) => it.id);
     if (unreadIds.length === 0) return;
     fetch("/mark-thread-items-read", {

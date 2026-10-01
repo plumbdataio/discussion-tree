@@ -8,6 +8,8 @@ import { showToast } from "./Toast.tsx";
 import { formatThreadTimestamp } from "../utils/format.ts";
 import { toggleFavorite, useFavorited } from "../utils/favorites.ts";
 import { estimateMessageHeight } from "../utils/estimateMessageHeight.ts";
+import { isUnreadThreadItem } from "../utils/threadSource.ts";
+import { SenderName } from "./SenderName.tsx";
 
 // One rendered .thread-msg row, factored out and memoized so a parent
 // re-render (e.g. every textarea keystroke updating draft state) doesn't
@@ -81,7 +83,7 @@ function ThreadMessageImpl({
     );
   }
 
-  const isUnread = item.source === "cc" && !item.read_at;
+  const isUnread = isUnreadThreadItem(item);
   const showAnchor = !compact && enableAnchor && boardId && nodeId && sessionId;
 
   const handleAnchor = async () => {
@@ -126,7 +128,7 @@ function ThreadMessageImpl({
         <Maximize2 size={12} strokeWidth={1.75} />
       </button>
       <span className="who">
-        {item.source === "user" ? t("item_card.you") : t("item_card.claude")}
+        <SenderName source={item.source} label={item.sender_label} />
         {!compact && (
           <span className="thread-msg-time" title={item.created_at}>
             {formatThreadTimestamp(item.created_at)}
@@ -154,6 +156,7 @@ export const ThreadMessage = React.memo(
     prev.item.text === next.item.text &&
     prev.item.read_at === next.item.read_at &&
     prev.item.source === next.item.source &&
+    prev.item.sender_label === next.item.sender_label &&
     prev.item.created_at === next.item.created_at &&
     prev.boardId === next.boardId &&
     prev.nodeId === next.nodeId &&

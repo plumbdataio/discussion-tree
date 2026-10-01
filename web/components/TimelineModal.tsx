@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MDView } from "./MDView.tsx";
+import { SenderName } from "./SenderName.tsx";
 import { formatThreadTimestamp } from "../utils/format.ts";
 import type { TimelineEntry } from "../utils/timeline.ts";
 
@@ -98,9 +99,10 @@ export function TimelineModal({
                     {e.nodeTitle}
                   </span>
                   <span className="timeline-who">
-                    {e.item.source === "user"
-                      ? t("item_card.you")
-                      : t("item_card.claude")}
+                    <SenderName
+                      source={e.item.source}
+                      label={e.item.sender_label}
+                    />
                   </span>
                   <span className="timeline-time" title={e.item.created_at}>
                     {formatThreadTimestamp(e.item.created_at)}

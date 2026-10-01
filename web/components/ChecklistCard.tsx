@@ -59,6 +59,7 @@ function whoLabel(source: string | undefined, t: TFunction): string | null {
   if (source === "cc") return "CC";
   if (source === "user") return t("checklist.who_you");
   if (source === "system") return t("checklist.who_system");
+  if (source === "external") return t("item_card.external");
   return source ?? null;
 }
 

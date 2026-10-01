@@ -708,7 +708,8 @@ export function handleListIssues(body: any): {
     " (SELECT COUNT(*) FROM issue_links l WHERE l.issue_id = i.id) AS link_count," +
     " (SELECT COUNT(*) FROM thread_items t" +
     "   WHERE t.board_id = i.chat_board_id AND t.node_id = i.chat_node_id" +
-    "     AND t.source = 'cc' AND t.read_at IS NULL) AS chat_unread" +
+    // 'external' = a relay notice posted on the issue's thread (/notify-session).
+    "     AND t.source IN ('cc', 'external') AND t.read_at IS NULL) AS chat_unread" +
     " FROM issues i LEFT JOIN sessions s ON s.id = i.session_id" +
     (where.length ? ` WHERE ${where.join(" AND ")}` : "") +
     // Oldest-updated first would bury fresh work; newest-updated first matches
@@ -1080,7 +1081,7 @@ export function handleIssueTimeline(body: any):
   const rows = db
     .prepare(
       `SELECT t.id, t.board_id, t.node_id, t.source, t.text, t.created_at,
-              t.read_at, ${LOCATION_COLUMNS}
+              t.read_at, t.sender_label, ${LOCATION_COLUMNS}
          FROM issue_links l
          JOIN thread_items t ON t.id = l.thread_item_id
          ${LOCATION_JOINS}
@@ -1093,6 +1094,7 @@ export function handleIssueTimeline(body: any):
     text: string;
     created_at: string;
     read_at: string | null;
+    sender_label: string | null;
   })[];
 
   const location = findIssueChatNode(issueId);
@@ -1118,6 +1120,8 @@ export function handleIssueTimeline(body: any):
       at: r.created_at,
       text: r.text,
       read_at: r.read_at,
+      // source="external" only: which relay posted it.
+      sender_label: r.sender_label,
       surface: r.surface,
       container_id: r.board_id,
       node_id: r.node_id,

@@ -17,7 +17,9 @@ import type { Activity, ThreadItem } from "../../shared/types.ts";
 import { AppLayout } from "./AppShell.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
 import { UsageLimitsChip } from "./UsageLimitsChip.tsx";
+import { ModelChip } from "./ModelChip.tsx";
 import { useUsageLimits } from "../utils/usageLimits.ts";
+import { useSessionModel } from "../utils/sessionModel.ts";
 import { ActivityBadge } from "./ActivityBadge.tsx";
 import { CliCommandButton } from "./CliCommandButton.tsx";
 import { useHeaderActivity } from "../utils/useHeaderActivity.ts";
@@ -76,6 +78,7 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
   // fed by the Sidebar's poll via the shared per-session store. null until the
   // diagram loads / the owner has reported.
   const usageLimits = useUsageLimits(view?.diagram.session_id ?? null);
+  const sessionModel = useSessionModel(view?.diagram.session_id ?? null);
   const [notFound, setNotFound] = useState(false);
   const [svg, setSvg] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -333,6 +336,7 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
         {/* Account-global 5h/7d usage, just right of Context (matches the old
             statusline userscript's spot). */}
         <UsageLimitsChip limits={usageLimits} />
+        <ModelChip model={sessionModel} />
         {!ownerAlive && (
           <span
             className="owner-warning"

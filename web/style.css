@@ -15,6 +15,11 @@
      distinct from user (yellow) and CC (blue) bubbles. */
   --command: #f0fdf4;
   --command-border: #bbf7d0;
+  /* Automated EXTERNAL notices (/notify-session relays): a neutral warm-gray
+     bubble with an amber edge — clearly neither the user (yellow) nor CC (blue). */
+  --external: #faf8f5;
+  --external-border: #d6d3d1;
+  --external-accent: #d97706;
   --status-pending: #9ca3af;
   --status-discussing: #f59e0b;
   --status-resolved: #10b981;
@@ -681,6 +686,21 @@ body {
     animation: none;
     box-shadow: 0 0 3px 1px rgba(220, 38, 38, 0.25);
   }
+}
+
+/* Current Claude model of the page's owner session (ModelChip), right after the
+   usage-limits chip. Same chrome as .context-meter / .usage-limits-chip. */
+.model-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: default;
 }
 
 /* Account-global native usage limits (5h / 7d subscription windows), shown as
@@ -3793,6 +3813,10 @@ body.concern-resizing * {
   background: var(--cc);
   border-color: var(--cc-border);
 }
+.anchor-list-row-from-external {
+  background: var(--external);
+  border-color: var(--external-border);
+}
 /* Path header sits a notch darker than the row body so the user can
    read it as a label, not as part of the message text. Reuses the
    border tones from each source palette — they're already in-family
@@ -3802,6 +3826,9 @@ body.concern-resizing * {
 }
 .anchor-list-row-from-cc .anchor-row-path {
   background: var(--cc-border);
+}
+.anchor-list-row-from-external .anchor-row-path {
+  background: var(--external-border);
 }
 .anchor-list-row:hover {
   border-color: #16a34a;
@@ -4003,6 +4030,9 @@ body.concern-resizing * {
 }
 .modal-source-cc {
   border-left-color: var(--accent);
+}
+.modal-source-external {
+  border-left-color: var(--external-accent);
 }
 .modal-source-system {
   border-left-color: var(--muted);
@@ -4206,6 +4236,12 @@ body.concern-resizing * {
   border: 1px solid var(--cc-border);
 }
 
+.node-modal-msg.from-external {
+  background: var(--external);
+  border: 1px solid var(--external-border);
+  border-left: 3px solid var(--external-accent);
+}
+
 .node-modal-msg .modal-who {
   margin-bottom: 6px;
 }
@@ -4218,6 +4254,32 @@ body.concern-resizing * {
 .thread-msg.from-cc {
   background: var(--cc);
   border: 1px solid var(--cc-border);
+}
+
+/* An automated external relay notice — NOT the user, NOT Claude. */
+.thread-msg.from-external {
+  background: var(--external);
+  border: 1px solid var(--external-border);
+  border-left: 3px solid var(--external-accent);
+}
+
+/* The relay's name next to the "External" sender label (SenderName): a small
+   muted chip, so "what kind of sender" and "which relay" read as two facts. */
+.sender-relay {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--external-border);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--muted);
+  background: var(--panel);
+}
+/* .thread-msg .who is a flex row with its own gap — no extra margin there. */
+.thread-msg .who .sender-relay {
+  margin-left: 0;
 }
 
 .thread-msg.from-system {
@@ -4953,6 +5015,9 @@ button.secondary {
   --cc-border: #1f4669;
   --command: #102a1c;
   --command-border: #1f5237;
+  --external: #1c1a17;
+  --external-border: #44403c;
+  --external-accent: #b45309;
   --status-pending: #6b7280;
   --status-discussing: #fbbf24;
   --status-resolved: #34d399;
@@ -6019,6 +6084,7 @@ button.secondary {
 }
 .timeline-entry.from-user { border-left-color: var(--user-border); }
 .timeline-entry.from-cc { border-left-color: var(--cc-border); }
+.timeline-entry.from-external { border-left-color: var(--external-accent); }
 .timeline-entry:hover,
 .timeline-entry:focus-visible {
   background: var(--bg);
@@ -7650,6 +7716,11 @@ ul.maps li.current .sidebar-map-link {
 .issue-timeline-msg.source-user {
   background: var(--user);
   border-color: var(--user-border);
+}
+.issue-timeline-msg.source-external {
+  background: var(--external);
+  border-color: var(--external-border);
+  border-left: 3px solid var(--external-accent);
 }
 .issue-timeline-msg-head {
   display: flex;

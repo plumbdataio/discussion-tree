@@ -15,6 +15,7 @@ import {
   type IssueSession,
   type IssueTimelineMessage,
 } from "../utils/issues.ts";
+import { isUnreadThreadItem } from "../utils/threadSource.ts";
 
 // ONE ISSUE'S CONVERSATION — read it here, and continue it here.
 //
@@ -82,6 +83,9 @@ function TimelineMessage({
       <div className="issue-timeline-msg-head">
         <span className="issue-timeline-who">
           {t(`issues.source.${m.source}`, { defaultValue: m.source })}
+          {m.source === "external" && m.sender_label ? (
+            <span className="sender-relay">{m.sender_label}</span>
+          ) : null}
         </span>
         <span className="issue-timeline-at">{fmt(m.at)}</span>
         {surfacePath(m) && (
@@ -135,7 +139,7 @@ export function IssueTimelineModal({
           // HERE. Marking messages on other boards read would clear their
           // unread dots without the user having seen them in place.
           const unread = (r.messages ?? [])
-            .filter((m) => m.on_issue_thread && m.source === "cc" && !m.read_at)
+            .filter((m) => m.on_issue_thread && isUnreadThreadItem(m))
             .map((m) => m.id);
           if (unread.length === 0) return;
           fetch("/mark-thread-items-read", {

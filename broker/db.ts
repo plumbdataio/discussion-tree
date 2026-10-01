@@ -488,6 +488,10 @@ try {
 } catch {
   /* column already exists — fine */
 }
+// Who sent a source='external' item: the sanitized label an automated relay
+// passed to /notify-session (e.g. "sentry-relay"). NULL for every other source.
+// thread_items has no metadata column, so the label gets its own.
+safeAlter("ALTER TABLE thread_items ADD COLUMN sender_label TEXT");
 
 db.run(`
   CREATE TABLE IF NOT EXISTS pending_messages (
@@ -893,6 +897,28 @@ export const insertThread = {
     ),
 };
 
+// An automated external notice (/notify-session). Starts UNREAD like a CC post:
+// the user only watches the dt UI, so it must raise the unread dot. Kept apart
+// from insertThreadItem so that helper's signature stays untouched.
+const insertExternalThreadRaw = db.prepare(
+  `INSERT INTO thread_items (board_id, node_id, source, text, created_at, read_at, sender_label) VALUES (?, ?, 'external', ?, ?, NULL, ?)`,
+);
+export function insertExternalThreadItem(
+  boardId: string,
+  nodeId: string,
+  text: string,
+  createdAt: string,
+  senderLabel: string,
+) {
+  return insertExternalThreadRaw.run(
+    boardId,
+    nodeId,
+    text,
+    createdAt,
+    senderLabel,
+  );
+}
+
 export const selectThreadsByBoard = db.prepare(
   `SELECT * FROM thread_items WHERE board_id = ? ORDER BY id`,
 );
@@ -937,7 +963,11 @@ export const selectPending = db.prepare(
               AND t.node_id = pm.node_id
               AND t.source IN ('user', 'cc')
               AND (pm.thread_item_id IS NULL OR t.id < pm.thread_item_id)
-          ) AS prev_message_at
+          ) AS prev_message_at,
+          -- external_notify only: the relay's label, read off its linked thread
+          -- item so the poller can name the sender. NULL for every other kind.
+          (SELECT ti.sender_label FROM thread_items ti
+            WHERE ti.id = pm.thread_item_id) AS sender_label
      FROM pending_messages pm
     WHERE pm.session_id = ? AND pm.delivered = 0 AND pm.cancelled = 0
     ORDER BY pm.created_at`,

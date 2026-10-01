@@ -8,7 +8,9 @@ import { BoardStructureRequestModal } from "./BoardStructureRequestModal.tsx";
 import { CliCommandButton } from "./CliCommandButton.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
 import { UsageLimitsChip } from "./UsageLimitsChip.tsx";
+import { ModelChip } from "./ModelChip.tsx";
 import { useUsageLimits } from "../utils/usageLimits.ts";
+import { useSessionModel } from "../utils/sessionModel.ts";
 import { ConcernColumn } from "./ConcernColumn.tsx";
 import { DefaultBoardLayout } from "./DefaultBoardLayout.tsx";
 import {
@@ -42,6 +44,7 @@ import { translateError } from "../utils/errors.ts";
 import { buildTree } from "../utils/tree.ts";
 import { useDocumentTitle } from "../utils/useDocumentTitle.ts";
 import { boardTitle } from "../utils/boardTitle.ts";
+import { isUnreadThreadItem, countsAsUnreadSource } from "../utils/threadSource.ts";
 
 // boardId is passed as a prop (not read from the URL internally) so this
 // component does NOT need a `key` to re-mount on navigation. All data
@@ -56,6 +59,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   // fed by the Sidebar's poll via the shared per-session store. null until the
   // board loads / the owner has reported.
   const usageLimits = useUsageLimits(data?.board.session_id ?? null);
+  const sessionModel = useSessionModel(data?.board.session_id ?? null);
   const [error, setError] = useState<string | null>(null);
   const [flashingNodes, setFlashingNodes] = useState<Set<string>>(new Set());
   const [activitiesBySession, setActivitiesBySession] = useState<
@@ -98,7 +102,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
       if (n.kind !== "item") continue;
       if (isNodeVisible(n.status, nodeStatusFilter)) continue;
       const hasUnread = (data.threads[n.id] ?? []).some(
-        (it) => it.source === "cc" && !it.read_at,
+        (it) => isUnreadThreadItem(it),
       );
       if (hasUnread) sticky.add(n.id);
     }
@@ -297,7 +301,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
         if (!latest || it.created_at > latest.at) {
           latest = { nodeId, at: it.created_at };
         }
-        if (it.source === "cc" && !it.read_at) {
+        if (isUnreadThreadItem(it)) {
           if (!oldestUnread || it.created_at < oldestUnread.at) {
             oldestUnread = { nodeId, at: it.created_at };
           }
@@ -396,7 +400,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
       if (msg) {
         if (
           msg.type === "thread-update" &&
-          msg.source === "cc" &&
+          countsAsUnreadSource(msg.source) &&
           typeof msg.node_id === "string"
         ) {
           const id: string = msg.node_id;
@@ -587,7 +591,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
         kids.filter((n) => {
           if (n.kind !== "item") return true;
           const hasUnread = (data.threads[n.id] ?? []).some(
-            (it) => it.source === "cc" && !it.read_at,
+            (it) => isUnreadThreadItem(it),
           );
           return isNodeVisibleWithUnread(
             n.status,
@@ -613,7 +617,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   );
   const logUnreadCount = logItem
     ? (data.threads[logItem.id] ?? []).filter(
-        (it) => it.source === "cc" && !it.read_at,
+        (it) => isUnreadThreadItem(it),
       ).length
     : 0;
   const ownerAlive = data.owner_alive !== false; // default to true if undefined (legacy)
@@ -661,6 +665,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
         {/* Account-global 5h/7d usage, just right of Context (matches the old
             statusline userscript's spot). */}
         <UsageLimitsChip limits={usageLimits} />
+        <ModelChip model={sessionModel} />
         {!ownerAlive && (
           <span
             className="owner-warning"
@@ -702,7 +707,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           {(() => {
             const unread = Object.values(data.threads)
               .flat()
-              .filter((it) => it.source === "cc" && !it.read_at).length;
+              .filter((it) => isUnreadThreadItem(it)).length;
             if (unread === 0) return null;
             return (
               <button

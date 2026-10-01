@@ -57,6 +57,7 @@ import {
   resolveDistAsset,
 } from "./broker/web-dist.ts";
 import { routes as contextUsageRoutes } from "./broker/context-usage.ts";
+import { routes as sessionModelRoutes } from "./broker/session-model.ts";
 import {
   cleanStaleSessions,
   handleListSessions,
@@ -67,6 +68,7 @@ import {
   resweepUnackedMessages,
   purgeOldDeliveredMessages,
 } from "./broker/threads.ts";
+import { routes as externalNotifyRoutes } from "./broker/external-notify.ts";
 import { routes as uploadsRoutes } from "./broker/uploads.ts";
 import { routes as spawnRoutes } from "./broker/spawn.ts";
 import {
@@ -130,6 +132,10 @@ const POST_ROUTES: Record<string, RouteHandler> = {
   ...checklistRoutes,
   ...nodesRoutes,
   ...threadsRoutes,
+  // /notify-session is called by non-browser relay scripts. It IS in
+  // ORIGIN_GUARDED_PATHS below: relays send no Origin header (allowed), while a
+  // cross-site page in the user's browser could otherwise inject agent input.
+  ...externalNotifyRoutes,
   ...activityRoutes,
   ...uploadsRoutes,
   ...feedbackRoutes,
@@ -138,6 +144,7 @@ const POST_ROUTES: Record<string, RouteHandler> = {
   ...tmuxIntegrationRoutes,
   ...readsRoutes,
   ...contextUsageRoutes,
+  ...sessionModelRoutes,
   ...favoritesRoutes,
   ...globalBannerRoutes,
   ...mapRoutes,
@@ -153,11 +160,13 @@ const POST_ROUTES: Record<string, RouteHandler> = {
 // pane) — i.e. they can cause code execution on the host. They get a same-origin
 // check below. Plain data routes are intentionally not guarded (no auth on the
 // broker by design); these are the ones where a CSRF would be more than data
-// tampering.
+// tampering. /notify-session is guarded too: it feeds text straight to an agent,
+// and its legitimate callers (local relay scripts) send no Origin header.
 const ORIGIN_GUARDED_PATHS = new Set([
   "/spawn-config",
   "/spawn-session",
   "/cli-send",
+  "/notify-session",
 ]);
 
 // Same-origin guard for the tmux routes: those can exec on the host, so reject a

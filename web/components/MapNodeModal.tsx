@@ -12,6 +12,7 @@ import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { MapNodeKind, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
+import { SenderName } from "./SenderName.tsx";
 import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
 import { TimerSendButton } from "./TimerSendButton.tsx";
 import { renderSystemMessage } from "./SystemMessage.tsx";
@@ -208,9 +209,7 @@ export function MapNodeModal({
                     data-thread-item-id={it.id}
                   >
                     <div className="modal-who">
-                      {it.source === "user"
-                        ? t("item_card.you")
-                        : t("item_card.claude")}
+                      <SenderName source={it.source} label={it.sender_label} />
                       <span className="thread-msg-time" title={it.created_at}>
                         {formatThreadTimestamp(it.created_at)}
                       </span>

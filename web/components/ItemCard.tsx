@@ -19,6 +19,7 @@ import { useAnyPreviewModalOpen } from "../utils/previewModalLock.ts";
 import { useSettings } from "../utils/settings.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 import { LIVE_REGION_COUNT } from "../utils/estimateMessageHeight.ts";
+import { isUnreadThreadItem } from "../utils/threadSource.ts";
 
 export function ItemCard({
   node,
@@ -73,7 +74,7 @@ export function ItemCard({
   const cardRef = useRef<HTMLDivElement>(null);
   const flashing = flashingNodes.has(node.id);
   const isActive = !!(activity && activity.node_id === node.id);
-  const hasUnread = myThread.some((t) => t.source === "cc" && !t.read_at);
+  const hasUnread = myThread.some((t) => isUnreadThreadItem(t));
   const [settings] = useSettings();
   const showManualReadButton = !settings.autoReadEnabled && hasUnread;
 
@@ -84,7 +85,7 @@ export function ItemCard({
 
   const markNodeRead = () => {
     const ids = myThread
-      .filter((t) => t.source === "cc" && !t.read_at)
+      .filter((t) => isUnreadThreadItem(t))
       .map((t) => t.id);
     if (ids.length === 0) return;
     fetch("/mark-thread-items-read", {

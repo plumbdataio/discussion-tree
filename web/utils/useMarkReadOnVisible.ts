@@ -1,5 +1,6 @@
 import type { ThreadItem } from "../../shared/types.ts";
 import { useVisibleDwell } from "./useVisibleDwell.ts";
+import { isUnreadThreadItem } from "./threadSource.ts";
 
 // Marks a card's unread CC messages read once the card has been genuinely on
 // screen long enough. We watch the CARD as a whole (not each message) because
@@ -21,7 +22,7 @@ export function useMarkReadOnVisible(
   // Re-arm whenever the unread set shifts so we don't keep posting the same
   // ids over and over.
   const unreadIds = items
-    .filter((i) => i.source === "cc" && !i.read_at)
+    .filter((i) => isUnreadThreadItem(i))
     .map((i) => i.id)
     .sort((a, b) => a - b);
   const dep = unreadIds.join(",");

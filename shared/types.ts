@@ -10,7 +10,8 @@ export type NodeStatus =
   | "rejected"
   | "needs-reply"
   | "done";
-export type ThreadSource = "user" | "cc" | "system";
+// "external" = an automated relay posted via /notify-session (NOT the user).
+export type ThreadSource = "user" | "cc" | "system" | "external";
 
 // --- Node status classification ---
 //
@@ -175,6 +176,8 @@ export interface ThreadItem {
   text: string;
   created_at: string;
   read_at?: string | null;
+  // source="external" only: the relay's sanitized label (e.g. "sentry-relay").
+  sender_label?: string | null;
 }
 
 // --- Maps (divergent-discussion mind-map) ---
@@ -361,6 +364,9 @@ export interface PendingMessage {
   // in the pending query (broker/db.ts); the poller turns a long enough gap
   // into channel meta `since_last_message`. NULL when the node is brand new.
   prev_message_at?: string | null;
+  // kind="external_notify" only: the relay's sanitized label, joined from the
+  // linked thread item. NULL for every other kind.
+  sender_label?: string | null;
 }
 
 // Broker request/response types.
@@ -583,6 +589,11 @@ export interface SessionListItem {
   // statusline-command.sh). null when no report has arrived yet, or
   // when the CC session is dead.
   context_usage?: { remaining_pct: number; set_at: string } | null;
+  // Claude model this session is running, as the raw API id from the session
+  // transcript's latest assistant entry (e.g. "claude-opus-5-5"). Reported by
+  // the PostToolUse hook only when it changes, so it follows a `/model` switch
+  // on the next tool call. null until the first report.
+  model?: { id: string; set_at: string } | null;
   // In-flight Bash run_in_background:true tasks the broker has not yet
   // seen reported done. Frontend renders a BG marker next to the
   // working spinner whenever this is > 0.

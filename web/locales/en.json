@@ -111,6 +111,8 @@
     "mark_read_default_title": "Mark unread items as read",
     "you": "You",
     "claude": "Claude",
+    "external": "External",
+    "external_with_label": "External ({{label}})",
     "sending": "Sending…",
     "send_button": "Send",
     "send_failed": "Send failed: {{message}}",
@@ -503,7 +505,8 @@
     },
     "source": {
       "user": "You",
-      "cc": "CC"
+      "cc": "CC",
+      "external": "External"
     },
     "timeline_more": "Show all",
     "timeline_less": "Collapse",

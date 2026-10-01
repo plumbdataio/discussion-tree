@@ -61,7 +61,9 @@ import { buildTimelineEntries } from "../utils/timeline.ts";
 import { AppLayout } from "./AppShell.tsx";
 import { ContextMeter } from "./ContextMeter.tsx";
 import { UsageLimitsChip } from "./UsageLimitsChip.tsx";
+import { ModelChip } from "./ModelChip.tsx";
 import { useUsageLimits } from "../utils/usageLimits.ts";
+import { useSessionModel } from "../utils/sessionModel.ts";
 import { ActivityBadge } from "./ActivityBadge.tsx";
 import { ThreadMessage } from "./ThreadMessage.tsx";
 import { useHeaderActivity } from "../utils/useHeaderActivity.ts";
@@ -165,6 +167,7 @@ export function MapView({ mapId }: { mapId: string }) {
   // by the Sidebar's poll via the shared per-session store. null until the map
   // loads / the owner has reported.
   const usageLimits = useUsageLimits(view?.map.session_id ?? null);
+  const sessionModel = useSessionModel(view?.map.session_id ?? null);
   const [notFound, setNotFound] = useState(false);
   const [rfNodes, setRfNodes] = useState<RFNode[]>([]);
   const [rfEdges, setRfEdges] = useState<RFEdge[]>([]);
@@ -947,6 +950,7 @@ export function MapView({ mapId }: { mapId: string }) {
           {/* Account-global 5h/7d usage, just right of Context (matches the old
               statusline userscript's spot). */}
           <UsageLimitsChip limits={usageLimits} />
+          <ModelChip model={sessionModel} />
           {!ownerAlive && (
             <span className="owner-warning" title={t("header.owner_warning_title")}>
               {t("header.owner_warning")}

@@ -19,6 +19,7 @@ import {
   getUsageLimitsForAccount,
 } from "./context-usage.ts";
 import { DIAGRAM_CHAT_NODE } from "./diagrams.ts";
+import { getSessionModel } from "./session-model.ts";
 import { pendingScheduledCountForSession } from "./scheduled-messages.ts";
 import {
   db,
@@ -590,13 +591,15 @@ export function handleListSessions() {
       // thread item stranded on a concern would leave the sidebar's
       // unread dot stuck on a board the user can't possibly clear.
       // post_to_node also rejects concern targets to prevent new ones.
+      // 'external' (automated relay notices, /notify-session) counts too: the
+      // user only watches dt, so a notice must light the dot like a CC post.
       const unreadRow = db
         .prepare(
           `SELECT COUNT(*) AS cnt FROM thread_items t
            JOIN nodes n ON n.board_id = t.board_id AND n.id = t.node_id
            WHERE t.board_id = ?
              AND t.read_at IS NULL
-             AND t.source = 'cc'
+             AND t.source IN ('cc', 'external')
              AND n.deleted_at IS NULL
              AND n.kind = 'item'`,
         )
@@ -732,6 +735,8 @@ export function handleListSessions() {
       compacting: s.alive === 1 && !!s.compacting_at,
       activity,
       context_usage,
+      // Latest Claude model id this CC reported (from its transcript), or null.
+      model: getSessionModel(s.id),
       bg_task_count: bgTaskCountForSession(s.id),
       running_subagents: runningSubagentCountForSession(s.id),
       scheduled_send_at: scheduledSendAtForSession(s.id),

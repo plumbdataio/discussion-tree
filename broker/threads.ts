@@ -53,8 +53,9 @@ import { markWorkingFromUserSubmit } from "./activity.ts";
 // so it rejoins the sidebar's active group. Node-level analog:
 // bumpStatusToDiscussing. NOTE: nodes.ts has its OWN copy of this helper
 // WITHOUT the revert — a bare node-status change must NOT resurface a shelved
-// board; only an actual post does.
-function syncBoardStatus(
+// board; only an actual post does. Exported for /notify-session
+// (broker/external-notify.ts), which is a third kind of post.
+export function syncBoardStatus(
   boardId: string,
 ): { from: string; to: string } | null {
   const before = db

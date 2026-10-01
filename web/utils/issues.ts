@@ -290,6 +290,8 @@ export type IssueTimelineMessage = {
   at: string;
   text: string;
   read_at?: string | null;
+  /** source="external" only: which relay posted it. */
+  sender_label?: string | null;
   surface: "board" | "map" | "diagram" | "unknown";
   container_id: string;
   node_id: string;

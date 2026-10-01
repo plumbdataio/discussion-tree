@@ -3,7 +3,8 @@
 //
 // Reports this CC session's current context-free % AND its subscription's
 // native 5h / 7d usage-limit windows to the broker, so the sidebar can show a
-// per-session context meter and a per-subscription usage chip.
+// per-session context meter and a per-subscription usage chip. Also reports the
+// session's current Claude model (read from the transcript tail) when it changes.
 //
 // WHY A PORT. The .sh version shells out to jq + curl and cannot run on Windows
 // (Claude Code cannot exec a bare .sh there), so on pd-002 the hook is a no-op
@@ -21,6 +22,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { brokerBaseUrl } from "./broker-url.ts";
+import { modelFromTranscript } from "./transcript-model.ts";
 
 // Where the CC statusline writes claude-sl-<sid>-pct / -limits.json.
 //
@@ -69,8 +71,76 @@ async function postBestEffort(
   }
 }
 
+// --- Current Claude model ------------------------------------------------------
+// The model is read from the session transcript (NOT the user's statusline,
+// which is outside this repo and differs per platform) and POSTed only when it
+// changed, so the common case costs one small file read and no request. The
+// last successfully reported value lives in a tiny per-session cache file next
+// to the statusline's files. It is written only when the broker answered ok
+// (so a report made before the session registered is retried on the next tool
+// call), and it is re-sent after MODEL_RESEND_MS even if unchanged, so a broker
+// that lost the value (e.g. a fresh broker session for a resumed CC) recovers.
+export const MODEL_RESEND_MS = 10 * 60 * 1000;
+
+export function modelCacheFile(sid: string, tmp: string): string {
+  return path.join(tmp, `claude-sl-${sid}-model`);
+}
+
+// POST that returns the parsed JSON body (or null on any failure).
+async function postJsonBestEffort(
+  url: string,
+  body: unknown,
+  timeoutMs = 1000,
+): Promise<any> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    return await res.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+export async function reportModel(
+  sid: string,
+  transcriptPath: string,
+  base: string,
+  tmp: string,
+  now: number = Date.now(),
+): Promise<void> {
+  const model = modelFromTranscript(transcriptPath);
+  if (!model) return;
+  const cacheFile = modelCacheFile(sid, tmp);
+  try {
+    const st = fs.statSync(cacheFile);
+    const cached = fs.readFileSync(cacheFile, "utf8").trim();
+    if (cached === model && now - st.mtimeMs < MODEL_RESEND_MS) return;
+  } catch {
+    /* no cache yet — report */
+  }
+  const res = await postJsonBestEffort(`${base}/report-model`, {
+    cc_session_id: sid,
+    model,
+  });
+  if (res && res.ok === true) {
+    try {
+      fs.writeFileSync(cacheFile, model + "\n");
+    } catch {
+      /* unwritable temp dir — we just report again next time */
+    }
+  }
+}
+
 export async function runContextReport(
-  input: { session_id?: string } = {},
+  input: { session_id?: string; transcript_path?: string } = {},
   env: Record<string, string | undefined> = process.env,
 ): Promise<void> {
   const sid = String(input?.session_id ?? "");
@@ -133,6 +203,16 @@ export async function runContextReport(
   } catch {
     /* unreadable / malformed limits file — skip, best-effort */
   }
+
+  // --- Current model (from the transcript tail) ---------------------------------
+  const transcriptPath = input?.transcript_path;
+  if (typeof transcriptPath === "string" && transcriptPath) {
+    try {
+      await reportModel(sid, transcriptPath, base, tmp);
+    } catch {
+      /* best-effort */
+    }
+  }
 }
 
 function readStdin(): Promise<string> {
@@ -148,7 +228,7 @@ function readStdin(): Promise<string> {
 async function main(): Promise<void> {
   try {
     const raw = await readStdin();
-    let input: { session_id?: string } = {};
+    let input: { session_id?: string; transcript_path?: string } = {};
     try {
       input = JSON.parse(raw || "{}");
     } catch {

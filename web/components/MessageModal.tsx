@@ -3,15 +3,19 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { MDView } from "./MDView.tsx";
+import { SenderName } from "./SenderName.tsx";
 import { usePreviewModalLock } from "../utils/previewModalLock.ts";
 
 export function MessageModal({
   text,
   source,
+  senderLabel,
   onClose,
 }: {
   text: string;
   source: string;
+  // source="external" only: the relay's name.
+  senderLabel?: string | null;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -26,13 +30,13 @@ export function MessageModal({
   }, [onClose]);
 
   const who =
-    source === "user"
-      ? t("item_card.you")
-      : source === "cc"
-        ? t("item_card.claude")
-        : source === "system"
-          ? "system"
-          : source;
+    source === "user" || source === "cc" || source === "external" ? (
+      <SenderName source={source} label={senderLabel} />
+    ) : source === "system" ? (
+      "system"
+    ) : (
+      source
+    );
 
   // Portal through to document.body so ancestor stacking contexts (e.g.
   // .board-container's container-type) can't trap the backdrop in a sub-area.

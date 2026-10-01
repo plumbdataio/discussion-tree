@@ -19,6 +19,7 @@ import { SessionActivityIcons } from "./SessionActivityIcons.tsx";
 import { SpawnModal } from "./SpawnModal.tsx";
 import { IssueTrackerButton } from "./IssueTrackerButton.tsx";
 import { setSharedUsageLimits } from "../utils/usageLimits.ts";
+import { setSharedSessionModels } from "../utils/sessionModel.ts";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type {
@@ -509,6 +510,11 @@ export function Sidebar({
             [...data.sessions, ...(data.inactive_sessions ?? [])],
             data.usage_limits ?? null,
           );
+          // Same feed for each header's ModelChip.
+          setSharedSessionModels([
+            ...data.sessions,
+            ...(data.inactive_sessions ?? []),
+          ]);
           setError(null);
           // Seed the activity map from the just-fetched sessions so we have
           // an initial value even before any WS frame arrives. WS updates

@@ -16,6 +16,7 @@ import { useAnyPreviewModalOpen } from "../utils/previewModalLock.ts";
 import { useSettings } from "../utils/settings.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 import { LIVE_REGION_COUNT } from "../utils/estimateMessageHeight.ts";
+import { isUnreadThreadItem } from "../utils/threadSource.ts";
 
 // Default conversation board: a single fixed item, no concern column / no
 // items-row chrome. The whole main pane becomes one tall thread with a
@@ -70,11 +71,11 @@ export function DefaultBoardLayout({
   useMarkReadOnVisible(rootRef, myThread, !previewOpen);
 
   const [settings] = useSettings();
-  const hasUnread = myThread.some((t) => t.source === "cc" && !t.read_at);
+  const hasUnread = myThread.some((t) => isUnreadThreadItem(t));
   const showManualReadButton = !settings.autoReadEnabled && hasUnread;
   const markNodeRead = () => {
     const ids = myThread
-      .filter((t) => t.source === "cc" && !t.read_at)
+      .filter((t) => isUnreadThreadItem(t))
       .map((t) => t.id);
     if (ids.length === 0) return;
     fetch("/mark-thread-items-read", {
@@ -295,6 +296,7 @@ export function DefaultBoardLayout({
         <MessageModal
           text={expandedMsg.text}
           source={expandedMsg.source}
+          senderLabel={expandedMsg.sender_label}
           onClose={() => setExpandedMsg(null)}
         />
       )}

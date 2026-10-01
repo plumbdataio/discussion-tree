@@ -14,6 +14,7 @@ import { MDView } from "./MDView.tsx";
 import { showToast } from "./Toast.tsx";
 import { formatThreadTimestamp } from "../utils/format.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
+import { senderLabel } from "../utils/threadSource.ts";
 
 const LS_FILTER_SESSION = "dt-anchor-filter-session";
 const LS_SORT_DIR = "dt-anchor-sort-dir";
@@ -222,8 +223,7 @@ export function AnchorListModal({
               const path = segs
                 .filter((s, i) => i === 0 || s !== segs[i - 1])
                 .join(" › ");
-              const sourceLabel =
-                fav.source === "user" ? t("item_card.you") : t("item_card.claude");
+              const sourceLabel = senderLabel(t, fav.source);
               return (
                 <div
                   key={fav.id}

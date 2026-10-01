@@ -111,6 +111,8 @@
     "mark_read_default_title": "未読を既読にする",
     "you": "あなた",
     "claude": "Claude",
+    "external": "外部通知",
+    "external_with_label": "外部通知（{{label}}）",
     "sending": "送信中…",
     "send_button": "送信",
     "send_failed": "送信失敗: {{message}}",
@@ -503,7 +505,8 @@
     },
     "source": {
       "user": "あなた",
-      "cc": "CC"
+      "cc": "CC",
+      "external": "外部通知"
     },
     "timeline_more": "全文を表示",
     "timeline_less": "折りたたむ",
