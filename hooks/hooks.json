@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/tool-activity-hook.sh"
+            "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/tool-activity-hook.ts"
           }
         ]
       },
@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/blocked-on-user-hook.sh start"
+            "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/blocked-on-user-hook.ts start"
           }
         ]
       }
@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/blocked-on-user-hook.sh clear"
+            "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/blocked-on-user-hook.ts clear"
           }
         ]
       },
@@ -43,11 +43,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/ensure-broker-running.sh"
-          },
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/session-start-hook.sh"
+            "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/ensure-broker-running.ts"
           },
           {
             "type": "command",
@@ -80,7 +76,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/pre-compact-hook.sh"
+            "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/pre-compact-hook.ts"
           }
         ]
       }
@@ -90,7 +86,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/tool-activity-clear-hook.sh"
+            "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/tool-activity-clear-hook.ts"
           },
           {
             "type": "command",
@@ -98,7 +94,7 @@
           },
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/bg-task-reconcile-hook.sh"
+            "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/bg-task-reconcile-hook.ts"
           }
         ]
       }
@@ -108,7 +104,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/subagent-stop-hook.sh"
+            "command": "bun ${CLAUDE_PLUGIN_ROOT}/scripts/subagent-stop-hook.ts"
           }
         ]
       }

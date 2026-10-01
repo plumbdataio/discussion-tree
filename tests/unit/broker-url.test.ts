@@ -36,4 +36,10 @@ describe("brokerBaseUrl", () => {
       brokerBaseUrl({ DISCUSSION_TREE_BROKER_URL: "http://mac.tailnet:7898///" }),
     ).toBe("http://mac.tailnet:7898");
   });
+
+  test("empty env vars are treated as unset (like bash ${VAR:-default})", () => {
+    expect(
+      brokerBaseUrl({ DISCUSSION_TREE_BROKER_URL: "", DISCUSSION_TREE_PORT: "" }),
+    ).toBe("http://127.0.0.1:7898");
+  });
 });

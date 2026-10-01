@@ -13,9 +13,12 @@
 export function brokerBaseUrl(
   env: Record<string, string | undefined> = process.env,
 ): string {
+  // `||`, not `??`: an EMPTY env var means "unset", like the .sh hooks'
+  // `${VAR:-default}`. With `??` an empty DISCUSSION_TREE_BROKER_URL made every
+  // hook POST to a bare "/endpoint" and silently fail.
   const base =
-    env.DISCUSSION_TREE_BROKER_URL ??
-    `http://127.0.0.1:${env.DISCUSSION_TREE_PORT ?? "7898"}`;
+    env.DISCUSSION_TREE_BROKER_URL ||
+    `http://127.0.0.1:${env.DISCUSSION_TREE_PORT || "7898"}`;
   // Strip trailing slashes so `${brokerBaseUrl()}/endpoint` never doubles up.
   return base.replace(/\/+$/, "");
 }

@@ -10,8 +10,13 @@
 // Pure Bun: no shell-isms, no jq/curl, same temp-dir logic as the hooks. It runs
 // identically on macOS and Windows, so this is what proves the scripts work on
 // pd-002 (run: `bun scripts/hooks-smoke.ts`). Exits non-zero on any failure.
+//
+// ensure-broker-running.ts is only exercised on its two no-spawn paths (mock
+// already healthy; remote DISCUSSION_TREE_BROKER_URL) against a temp state home,
+// so the smoke run can never launch a real broker.
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { statuslineTmpDir } from "./cc-context-report-hook.ts";
 
@@ -61,10 +66,11 @@ async function runHook(
   script: string,
   stdin: string,
   extraEnv: Record<string, string> = {},
+  args: string[] = [],
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   received = [];
   const scriptPath = path.join(import.meta.dir, script);
-  const proc = Bun.spawn(["bun", scriptPath], {
+  const proc = Bun.spawn(["bun", scriptPath, ...args], {
     env: { ...process.env, DISCUSSION_TREE_BROKER_URL: BASE, ...extraEnv },
     stdin: "pipe",
     stdout: "pipe",
@@ -253,6 +259,151 @@ async function checkUnansweredScenario(): Promise<void> {
   );
 }
 
+async function toolActivityScenario(): Promise<void> {
+  console.log("tool-activity-hook.ts");
+  let r = await runHook(
+    "tool-activity-hook.ts",
+    JSON.stringify({
+      session_id: "smoke-ta",
+      tool_name: "Bash",
+      tool_input: { command: "sleep 1", run_in_background: true },
+      tool_use_id: "toolu_smoke",
+    }),
+  );
+  check("exits 0, no stdout", r.code === 0 && r.stdout === "", `code=${r.code} stdout=${r.stdout}`);
+  check(
+    "POST /heartbeat-tool {tool: Bash}",
+    subset(got("/heartbeat-tool")?.body, { cc_session_id: "smoke-ta", tool: "Bash" }),
+    JSON.stringify(received),
+  );
+  check(
+    "POST /bg-task-start {task_id: tool_use_id}",
+    subset(got("/bg-task-start")?.body, { cc_session_id: "smoke-ta", task_id: "toolu_smoke" }),
+    JSON.stringify(received),
+  );
+  r = await runHook(
+    "tool-activity-hook.ts",
+    JSON.stringify({ session_id: "smoke-ta", tool_name: "Read", agent_id: "ag1", agent_type: "general-purpose" }),
+  );
+  check(
+    "subagent: only POST /heartbeat-subagent",
+    received.length === 1 &&
+      subset(got("/heartbeat-subagent")?.body, {
+        cc_session_id: "smoke-ta",
+        agent_id: "ag1",
+        agent_type: "general-purpose",
+      }),
+    JSON.stringify(received),
+  );
+  r = await runHook("tool-activity-hook.ts", "not json");
+  check("malformed stdin: exits 0, no POST", r.code === 0 && received.length === 0, JSON.stringify(received));
+}
+
+async function blockedOnUserScenario(): Promise<void> {
+  console.log("blocked-on-user-hook.ts");
+  let r = await runHook(
+    "blocked-on-user-hook.ts",
+    JSON.stringify({ session_id: "smoke-bu", tool_input: { plan: "The plan" } }),
+    {},
+    ["start"],
+  );
+  check("start: exits 0", r.code === 0, `code=${r.code} stderr=${r.stderr.trim()}`);
+  check(
+    "start: POST /blocked-on-user-start {question: plan}",
+    subset(got("/blocked-on-user-start")?.body, { cc_session_id: "smoke-bu", question: "The plan" }),
+    JSON.stringify(received),
+  );
+  r = await runHook(
+    "blocked-on-user-hook.ts",
+    JSON.stringify({ session_id: "smoke-bu" }),
+    {},
+    ["clear"],
+  );
+  check(
+    "clear: POST /blocked-on-user-clear",
+    r.code === 0 && subset(got("/blocked-on-user-clear")?.body, { cc_session_id: "smoke-bu" }),
+    JSON.stringify(received),
+  );
+}
+
+async function singlePostScenarios(): Promise<void> {
+  const cases: Array<[string, Record<string, unknown>, string, Record<string, unknown>]> = [
+    ["pre-compact-hook.ts", { session_id: "smoke-pre" }, "/session-compacting", { cc_session_id: "smoke-pre" }],
+    ["tool-activity-clear-hook.ts", { session_id: "smoke-tac" }, "/clear-tool-activity", { cc_session_id: "smoke-tac" }],
+    ["subagent-stop-hook.ts", { session_id: "smoke-ss", agent_id: "ag9" }, "/subagent-stop", { cc_session_id: "smoke-ss", agent_id: "ag9" }],
+  ];
+  for (const [script, input, endpoint, want] of cases) {
+    console.log(script);
+    const r = await runHook(script, JSON.stringify(input));
+    check("exits 0, no stdout", r.code === 0 && r.stdout === "", `code=${r.code} stdout=${r.stdout}`);
+    check(
+      `POST ${endpoint} ${JSON.stringify(want)}`,
+      received.length === 1 && JSON.stringify(got(endpoint)?.body) === JSON.stringify(want),
+      JSON.stringify(received),
+    );
+  }
+}
+
+async function bgReconcileScenario(): Promise<void> {
+  console.log("bg-task-reconcile-hook.ts");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dt-smoke-bg-"));
+  try {
+    const transcript = path.join(dir, "t.jsonl");
+    fs.writeFileSync(
+      transcript,
+      [
+        JSON.stringify({ m: "<task-notification><tool-use-id>toolu_B</tool-use-id><status>completed</status></task-notification>" }),
+        JSON.stringify({ m: "<task-notification><tool-use-id>toolu_R</tool-use-id><status>running</status></task-notification>" }),
+        JSON.stringify({ m: '<task-notification status="completed"><tool-use-id>toolu_A</tool-use-id></task-notification>' }),
+      ].join("\n") + "\n",
+    );
+    const r = await runHook(
+      "bg-task-reconcile-hook.ts",
+      JSON.stringify({ session_id: "smoke-bg", transcript_path: transcript }),
+    );
+    check("exits 0, no stdout", r.code === 0 && r.stdout === "", `code=${r.code} stdout=${r.stdout}`);
+    check(
+      "POST /bg-task-done {task_ids: [toolu_A, toolu_B]} (running one excluded)",
+      JSON.stringify(got("/bg-task-done")?.body) ===
+        JSON.stringify({ cc_session_id: "smoke-bg", task_ids: ["toolu_A", "toolu_B"] }),
+      JSON.stringify(received),
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+async function ensureBrokerScenarios(): Promise<void> {
+  console.log("ensure-broker-running.ts");
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "dt-smoke-ensure-"));
+  const spawnedTraces = () =>
+    fs.existsSync(path.join(home, "broker.log")) ||
+    fs.existsSync(path.join(home, ".broker-launch.lock"));
+  try {
+    // The mock answers GET /health, so it reads as an already-running broker.
+    let r = await runHook("ensure-broker-running.ts", "{}", {
+      DISCUSSION_TREE_HOME: home,
+      DISCUSSION_TREE_PORT: String(server.port),
+    });
+    check("healthy: exits 0", r.code === 0, `code=${r.code} stderr=${r.stderr.trim()}`);
+    check("healthy: probed GET /health", received.some((x) => x.path === "/health"), JSON.stringify(received));
+    check("healthy: no spawn (no broker.log / lock in home)", !spawnedTraces());
+
+    // A remote broker URL: nothing to start here — not even a health probe of
+    // the local port (which the mock would have recorded).
+    r = await runHook("ensure-broker-running.ts", "{}", {
+      DISCUSSION_TREE_HOME: home,
+      DISCUSSION_TREE_PORT: String(server.port),
+      DISCUSSION_TREE_BROKER_URL: "https://remote-broker.invalid:7898",
+    });
+    check("remote: exits 0", r.code === 0, `code=${r.code} stderr=${r.stderr.trim()}`);
+    check("remote: no local /health probe", received.length === 0, JSON.stringify(received));
+    check("remote: no spawn (no broker.log / lock in home)", !spawnedTraces());
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+}
+
 // ---- Run --------------------------------------------------------------------
 try {
   await contextScenario();
@@ -260,6 +411,11 @@ try {
   await stopFailureScenario();
   await postCompactScenario();
   await checkUnansweredScenario();
+  await toolActivityScenario();
+  await blockedOnUserScenario();
+  await singlePostScenarios();
+  await bgReconcileScenario();
+  await ensureBrokerScenarios();
 } finally {
   server.stop(true);
 }
