@@ -7,6 +7,7 @@ import {
   BROKER_IS_REMOTE,
   BROKER_SCRIPT,
   BROKER_URL,
+  HOME_DIR,
   LAUNCH_LOCK_DIR,
   LAUNCH_LOCK_STALE_MS,
 } from "./config.ts";
@@ -16,6 +17,7 @@ import {
   tryAcquireLock,
 } from "./launch-lock.ts";
 import { log } from "./log.ts";
+import { isSupervisorRunning } from "./supervisor-lock.ts";
 import { dirname } from "node:path";
 
 export async function brokerFetch<T>(
@@ -151,7 +153,17 @@ async function spawnBrokerAndWait(): Promise<void> {
   throw new Error("Failed to start broker daemon after 6 seconds");
 }
 
-export async function ensureBroker(): Promise<void> {
+// How long ensureBroker waits for a SUPERVISOR to bring the broker back
+// instead of spawning one. A supervisor between restarts answers within ~1-2s
+// (1s backoff after a long run, plus startup). Only a broker that keeps
+// crashing reaches the supervisor's longer backoffs (up to 60s), and then a
+// spawn from here would crash too. Kept under Claude Code's MCP startup
+// timeout, since server.ts awaits this before registering.
+export const SUPERVISED_WAIT_MS = 20_000;
+
+export async function ensureBroker(
+  opts: { supervisedWaitMs?: number } = {},
+): Promise<void> {
   if (await isBrokerAlive()) {
     log("Broker already running");
     return;
@@ -165,6 +177,23 @@ export async function ensureBroker(): Promise<void> {
     throw new Error(
       `Broker at ${BROKER_URL} is not reachable, and it is not on this machine so it cannot be started from here. ` +
         "Check that it is running, that DISCUSSION_TREE_BIND lets it accept non-loopback connections, and that the network between the two machines is up.",
+    );
+  }
+
+  // A broker supervisor (scripts/broker-supervisor.ts) owns this home: it
+  // restarts the broker itself. Spawning here would put an UNSUPERVISED broker
+  // on the port (the supervisor would then only stand by), so wait for the
+  // supervisor's broker instead. Same check as the SessionStart hook
+  // (server/supervisor-lock.ts).
+  if (isSupervisorRunning(HOME_DIR)) {
+    log("Broker down but a broker supervisor is running; waiting for it");
+    const waitMs = opts.supervisedWaitMs ?? SUPERVISED_WAIT_MS;
+    if (await waitForBroker(Math.max(1, Math.ceil(waitMs / 200)), 200)) {
+      log("Broker is back (restarted by the supervisor)");
+      return;
+    }
+    throw new Error(
+      `Broker is down and the broker supervisor did not bring it back within ${Math.round(waitMs / 1000)}s; see ${HOME_DIR}/supervisor.log and broker.log`,
     );
   }
 

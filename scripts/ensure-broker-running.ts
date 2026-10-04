@@ -35,6 +35,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { spawn } from "node:child_process";
 import { releaseLock, tryAcquireLock } from "../server/launch-lock.ts";
+import { isSupervisorRunning } from "../server/supervisor-lock.ts";
 
 type Env = Record<string, string | undefined>;
 
@@ -114,6 +115,7 @@ export function launchDetached(
 export type EnsureResult =
   | "remote"
   | "healthy"
+  | "supervised"
   | "no-broker-script"
   | "locked"
   | "spawned";
@@ -123,6 +125,7 @@ export async function ensureBrokerRunning(
   deps: {
     launch?: typeof launchDetached;
     healthy?: (url: string) => Promise<boolean>;
+    supervised?: (home: string) => boolean;
     pollTries?: number;
     pollIntervalMs?: number;
   } = {},
@@ -136,11 +139,17 @@ export async function ensureBrokerRunning(
   const health = healthUrl(env);
   if (await healthy(health)) return "healthy";
 
+  // Down, but a broker supervisor (scripts/broker-supervisor.ts) owns this
+  // home: it restarts the broker itself (within ~1s, at most its 60s backoff).
+  // Spawning here would put an UNSUPERVISED broker on the port, which the
+  // supervisor would then merely stand by for. Leave it to the supervisor.
+  const home = resolveHome(env);
+  if ((deps.supervised ?? isSupervisorRunning)(home)) return "supervised";
+
   const root = resolveRoot(env);
   const broker = path.join(root, "broker.ts");
   if (!fs.existsSync(broker)) return "no-broker-script";
 
-  const home = resolveHome(env);
   fs.mkdirSync(home, { recursive: true });
   // Single-launcher lock. We do NOT wait on it: a missed launch is recovered
   // by the next SessionStart (or the MCP server's ensureBroker, which also
