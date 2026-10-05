@@ -227,13 +227,17 @@ export async function postCliSend(
 
 export type SpawnSettings = {
   base_args: string[];
-  // Login shell to launch claude through; "" means the broker's $SHELL.
+  // Login shell to launch claude through; "" means the broker's $SHELL (on a
+  // win32 broker: a PowerShell executable; "" means pwsh, else powershell).
   shell: string;
   tmux_bin: string;
   enter_count: number;
   enter_interval_ms: number;
 };
 export type SpawnConfigResponse = {
+  // The broker's process.platform ("darwin", "linux", "win32", ...). Optional
+  // so an older broker without the field reads as POSIX.
+  platform?: string;
   settings: SpawnSettings | null;
   defaults: SpawnSettings;
   known_cwds: string[];

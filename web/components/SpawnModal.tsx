@@ -1,7 +1,7 @@
 // Sidebar "+" modal: create (or resume) a Claude Code session in a detached
 // tmux session, driven entirely from discussion-tree. claude is launched
-// through the user's login shell, so their normal claude environment (PATH, any
-// cwd -> CLAUDE_CONFIG_DIR wrapper) applies — dt only needs the launch flags,
+// through the user's login shell (PowerShell on a Windows broker), so their
+// normal claude environment (PATH, any cwd -> CLAUDE_CONFIG_DIR wrapper) applies — dt only needs the launch flags,
 // which are authored here once and persisted server-side. First run shows the
 // options section expanded; afterwards it collapses and you just pick a cwd (or
 // a session to resume). Gated behind the tmux-integration setting in the sidebar.
@@ -119,6 +119,9 @@ export function SpawnModal({ onClose }: { onClose: () => void }) {
   const resumable = boot?.resumable ?? [];
   const knownCwds = boot?.known_cwds ?? [];
   const selectedResume = resumable.find((r) => r.cc_session_id === resumeCcId);
+  // A Windows broker launches claude through PowerShell and takes Windows paths,
+  // so the path / shell hints follow the broker's platform, not the browser's.
+  const isWin = boot?.platform === "win32";
 
   return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
@@ -167,7 +170,9 @@ export function SpawnModal({ onClose }: { onClose: () => void }) {
               list="spawn-cwds"
               value={cwd}
               onChange={(e) => setCwd(e.target.value)}
-              placeholder="/Users/you/Code/project"
+              placeholder={
+                isWin ? "C:\\Users\\you\\Code\\project" : "/Users/you/Code/project"
+              }
             />
             <datalist id="spawn-cwds">
               {knownCwds.map((c) => (
@@ -242,14 +247,18 @@ export function SpawnModal({ onClose }: { onClose: () => void }) {
                 <p className="spawn-hint">{t("spawn.base_args_hint")}</p>
               </div>
               <div className="cli-command-field">
-                <label className="settings-label">{t("spawn.shell_label")}</label>
+                <label className="settings-label">
+                  {t(isWin ? "spawn.shell_label_win32" : "spawn.shell_label")}
+                </label>
                 <input
                   className="settings-input"
                   value={shell}
                   onChange={(e) => setShell(e.target.value)}
-                  placeholder="$SHELL"
+                  placeholder={isWin ? "pwsh" : "$SHELL"}
                 />
-                <p className="spawn-hint">{t("spawn.shell_hint")}</p>
+                <p className="spawn-hint">
+                  {t(isWin ? "spawn.shell_hint_win32" : "spawn.shell_hint")}
+                </p>
               </div>
               <div className="cli-command-field">
                 <label className="settings-label">

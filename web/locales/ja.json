@@ -252,6 +252,8 @@
     "base_args_hint": "毎回 claude に渡されます。既定は discussion-tree 自身のフラグ。個人の追加 (例: 別の MCP) はここに。",
     "shell_label": "ログインシェル",
     "shell_hint": "claude を起動する際に噛ませるシェル (rc が適用されます)。空欄なら broker の $SHELL。",
+    "shell_label_win32": "PowerShell",
+    "shell_hint_win32": "claudeを起動する際に噛ませるPowerShell(プロファイルが適用されます)。空欄ならpwsh、無ければWindows PowerShell。",
     "tmux_bin_label": "tmux バイナリ",
     "spawn": "起動",
     "confirm_spawn": "起動する",

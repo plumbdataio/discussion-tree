@@ -252,6 +252,8 @@
     "base_args_hint": "Passed to claude on every spawn. Defaults to discussion-tree's own flags; add your own (e.g. extra MCPs) here.",
     "shell_label": "Login shell",
     "shell_hint": "Shell claude is launched through (so your rc applies). Blank uses the broker's $SHELL.",
+    "shell_label_win32": "PowerShell",
+    "shell_hint_win32": "PowerShell executable claude is launched through (so your profile applies). Blank uses pwsh, or Windows PowerShell if pwsh isn't installed.",
     "tmux_bin_label": "tmux binary",
     "spawn": "Spawn",
     "confirm_spawn": "Spawn now",
