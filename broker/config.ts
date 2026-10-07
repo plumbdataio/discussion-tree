@@ -19,8 +19,10 @@ export const PORT = parseInt(
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { HEARTBEAT_INTERVAL_MS } from "../shared/config.ts";
+// `||`, not `??`: an EMPTY DISCUSSION_TREE_HOME (seen as a blank user env var
+// on Windows) must mean "unset", or state lands in a relative path.
 export const HOME_DIR =
-  process.env.DISCUSSION_TREE_HOME ?? join(homedir(), ".discussion-tree");
+  process.env.DISCUSSION_TREE_HOME || join(homedir(), ".discussion-tree");
 
 // DISCUSSION_TREE_DB takes precedence; otherwise the DB lives at the unified
 // path under HOME_DIR.

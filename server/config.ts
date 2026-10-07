@@ -75,8 +75,10 @@ export const BROKER_SCRIPT = fileURLToPath(
 // byte-for-byte identical so the auto-spawn lock below lands in the same place
 // the broker and hooks use. os.homedir() — not process.env.HOME — because HOME
 // is unset on stock Windows shells.
+// `||`, not `??`: an EMPTY DISCUSSION_TREE_HOME (seen as a blank user env var
+// on Windows) must mean "unset", or state lands in a relative path.
 export const HOME_DIR =
-  process.env.DISCUSSION_TREE_HOME ?? join(homedir(), ".discussion-tree");
+  process.env.DISCUSSION_TREE_HOME || join(homedir(), ".discussion-tree");
 
 // Single-launcher lock directory for ensureBroker()'s auto-spawn. SAME path the
 // shell SessionStart hook (scripts/ensure-broker-running.sh) uses, so the two

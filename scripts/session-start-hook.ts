@@ -49,8 +49,10 @@ const cwd = String(input.cwd ?? process.cwd());
 // Must resolve identically in the broker, the MCP server and here — the broker
 // reads cc-sessions/ from this directory to auto-attach, so a hint written
 // anywhere else fails silently. Keep in sync with broker/config.ts HOME_DIR.
+// `||`, not `??`: an EMPTY DISCUSSION_TREE_HOME (seen as a blank user env var
+// on Windows) must mean "unset", or state lands in a relative path.
 const home =
-  process.env.DISCUSSION_TREE_HOME ??
+  process.env.DISCUSSION_TREE_HOME ||
   path.join(os.homedir(), ".discussion-tree");
 const dir = path.join(home, "cc-sessions");
 
