@@ -21,8 +21,11 @@ export const BROKER_PORT = parseInt(
 // below. Set the broker's own DISCUSSION_TREE_BIND to something reachable
 // (Tailscale) — that side has NO authentication, so whatever can reach the port
 // can drive every tool.
+// `||`, not `??`: an EMPTY value must mean "unset". Windows can hand a process
+// the variable as "" after it is deleted from the user environment, and with
+// `??` the server then targeted a blank URL and refused to start.
 export const BROKER_URL = (
-  process.env.DISCUSSION_TREE_BROKER_URL ?? `http://127.0.0.1:${BROKER_PORT}`
+  process.env.DISCUSSION_TREE_BROKER_URL || `http://127.0.0.1:${BROKER_PORT}`
 ).replace(/\/+$/, "");
 
 // A remote broker is somebody else's process: it is not ours to start, and
