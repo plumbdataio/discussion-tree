@@ -1086,6 +1086,28 @@ body {
   color: var(--accent);
 }
 
+/* A board that holds an issue's conversation: the board icon fades to a pale
+   sky blue (mixed into the panel colour so it stays faint in both themes) and
+   a small clipboard — the issue tracker's icon — sits on its lower right. The
+   clipboard gets an opaque panel background so the tree lines underneath do
+   not show through it. */
+.sidebar-board-icon-issue {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+.sidebar-board-icon-issue .sidebar-board-icon {
+  color: color-mix(in srgb, #38bdf8 45%, var(--panel));
+}
+.sidebar-board-icon-issue-badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  color: var(--accent);
+  background: var(--panel);
+  border-radius: 2px;
+}
+
 .sidebar-board-status {
   font-size: 9px;
   padding: 1px 6px;

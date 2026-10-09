@@ -278,6 +278,22 @@ function SessionItem({
                           size={13}
                           strokeWidth={1.75}
                         />
+                      ) : b.is_issue_chat ? (
+                        <span
+                          className="sidebar-board-icon-issue"
+                          title={t("sidebar.issue_chat_board_title")}
+                        >
+                          <Network
+                            className="sidebar-board-icon"
+                            size={13}
+                            strokeWidth={1.75}
+                          />
+                          <ClipboardList
+                            className="sidebar-board-icon-issue-badge"
+                            size={9}
+                            strokeWidth={2.25}
+                          />
+                        </span>
                       ) : (
                         <Network
                           className="sidebar-board-icon"

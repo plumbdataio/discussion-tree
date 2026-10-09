@@ -29,6 +29,7 @@
     "no_boards": "(ボードなし)",
     "unread_dot_title": "未読 {{count}} 件",
     "needs_reply_title": "返答求む {{count}} 件",
+    "issue_chat_board_title": "issueの会話",
     "scheduled_send_title": "{{time}} に送信予約あり",
     "scheduled_send_aria": "送信予約あり",
     "subagent_running_title": "サブエージェント {{count}} 個が実行中 — クリックでクリア",

@@ -629,7 +629,7 @@ export function handleListSessions() {
         // from the issue and from here. Hiding it meant a reply written there
         // raised no unread dot, which is the failure this surface exists to
         // prevent.
-        "SELECT id, title, closed, status, is_default FROM boards WHERE session_id = ? AND archived = 0 ORDER BY is_default DESC, created_at",
+        "SELECT id, title, closed, status, is_default, EXISTS (SELECT 1 FROM issues i WHERE i.chat_board_id = boards.id AND i.deleted_at IS NULL) AS is_issue_chat FROM boards WHERE session_id = ? AND archived = 0 ORDER BY is_default DESC, created_at",
       )
       .all(s.id) as {
       id: string;
@@ -637,10 +637,11 @@ export function handleListSessions() {
       closed: number;
       status: string;
       is_default: number;
+      is_issue_chat: number;
     }[];
     const archivedBoards = db
       .prepare(
-        "SELECT id, title, closed, status, is_default FROM boards WHERE session_id = ? AND archived = 1 ORDER BY created_at",
+        "SELECT id, title, closed, status, is_default, EXISTS (SELECT 1 FROM issues i WHERE i.chat_board_id = boards.id AND i.deleted_at IS NULL) AS is_issue_chat FROM boards WHERE session_id = ? AND archived = 1 ORDER BY created_at",
       )
       .all(s.id) as {
       id: string;
@@ -648,6 +649,7 @@ export function handleListSessions() {
       closed: number;
       status: string;
       is_default: number;
+      is_issue_chat: number;
     }[];
     // Include the live activity entry (if any) so the sidebar can render a
     // per-session indicator without needing a separate poll. The WS activity

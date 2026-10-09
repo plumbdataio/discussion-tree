@@ -29,6 +29,7 @@
     "no_boards": "(no boards)",
     "unread_dot_title": "{{count}} unread",
     "needs_reply_title": "{{count}} awaiting your reply",
+    "issue_chat_board_title": "Issue conversation",
     "scheduled_send_title": "Message scheduled to send at {{time}}",
     "scheduled_send_aria": "scheduled send",
     "subagent_running_title": "{{count}} subagent(s) running — click to clear",

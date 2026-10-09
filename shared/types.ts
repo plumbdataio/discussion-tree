@@ -564,6 +564,9 @@ export interface BoardListItem {
   status: BoardStatus;
   stats: BoardStats;
   is_default?: number;
+  // 1 when some issue's conversation lives on this board (issues.chat_board_id);
+  // the sidebar marks those boards so they read apart from hand-made ones.
+  is_issue_chat?: number;
   unread_count?: number;
 }
 
