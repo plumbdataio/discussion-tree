@@ -787,11 +787,16 @@ export function cleanStaleSessions() {
       const seen = Date.parse(s.last_seen);
       dead = Number.isFinite(seen) && seen < staleBefore;
     } else {
+      // EPERM means the process exists but this broker may not signal it. On
+      // Windows that is the normal case when the broker runs at standard
+      // integrity (a Task Scheduler task) and the CC was started from an
+      // elevated shell (an SSH login): treating it as dead flipped such
+      // sessions to alive=0 on every sweep.
       try {
         process.kill(s.pid, 0);
         dead = false;
-      } catch {
-        dead = true;
+      } catch (e) {
+        dead = (e as NodeJS.ErrnoException)?.code !== "EPERM";
       }
     }
     if (dead) {
