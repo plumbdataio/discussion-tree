@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Daily discussion-tree DB backup on macOS (launchd).
+
+  1. Copy to ~/Library/LaunchAgents/discussion-tree-backup.plist
+  2. Replace every /ABSOLUTE/PATH/... below (launchd does not expand ~ or $HOME):
+       - the bun binary      (`which bun`, e.g. /Users/you/.bun/bin/bun)
+       - this repo's scripts/backup-db.ts
+       - BACKUP_DIR          (where snapshots go, e.g. a cloud-synced folder)
+       - the log file
+  3. launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/discussion-tree-backup.plist
+
+  Every run writes ~/.discussion-tree/backup-status.json; the dt UI shows a
+  banner when the last run failed or no run succeeded for 36 hours.
+  If launchd misses 11:30 because the Mac was asleep, it runs on wake.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>discussion-tree-backup</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/ABSOLUTE/PATH/TO/bun</string>
+		<string>/ABSOLUTE/PATH/TO/discussion-tree/scripts/backup-db.ts</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>BACKUP_DIR</key>
+		<string>/ABSOLUTE/PATH/TO/BACKUP_DIR</string>
+	</dict>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>11</integer>
+		<key>Minute</key>
+		<integer>30</integer>
+	</dict>
+	<key>StandardOutPath</key>
+	<string>/ABSOLUTE/PATH/TO/discussion-tree-backup.log</string>
+	<key>StandardErrorPath</key>
+	<string>/ABSOLUTE/PATH/TO/discussion-tree-backup.log</string>
+</dict>
+</plist>

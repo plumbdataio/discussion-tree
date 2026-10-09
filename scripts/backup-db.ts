@@ -1,14 +1,16 @@
 #!/usr/bin/env bun
-// discussion-tree SQLite backup — cross-platform port of backup-db.sh.
+// discussion-tree SQLite backup — the one backup script for every OS.
 //
 // Takes a consistent snapshot of the broker's SQLite DB into BACKUP_DIR as
-// discussion-tree-YYYYMMDD.sqlite (local date) and prunes old snapshots with
-// the same two-tier retention as the .sh. Runs daily from Task Scheduler on
-// Windows (scripts/windows/dt-tasks.ps1) or by hand anywhere.
+// discussion-tree-YYYYMMDD.sqlite (local date) and prunes old snapshots with a
+// two-tier retention. Runs daily from Task Scheduler on Windows
+// (scripts/windows/dt-tasks.ps1), from launchd on macOS
+// (scripts/macos/discussion-tree-backup.plist.example), or by hand anywhere.
 //
-// WHY A PORT. The .sh needs bash + the sqlite3 CLI + BSD `date -j` + osascript,
-// none of which exist on stock Windows. bun:sqlite ships with Bun, so this has
-// no external dependency.
+// It replaced the macOS-only backup-db.sh (bash + the sqlite3 CLI + BSD
+// `date -j` + osascript). bun:sqlite ships with Bun, so this has no external
+// dependency, and it writes the status file the dt UI reads — the .sh never did,
+// so its failures stayed silent.
 //
 // Snapshot: `VACUUM INTO` on a READ-ONLY connection with a busy timeout. It
 // reads inside one read transaction, so the result is a consistent snapshot
@@ -18,7 +20,7 @@
 // typically a cloud-synced drive: we never let a half-written file appear
 // under the final name, and never write SQLite pages directly onto it).
 //
-// Same-day rule (from the .sh): if today's file already exists it is kept and
+// Same-day rule: if today's file already exists it is kept and
 // the run skips the snapshot — never overwrite. On the Mac this mattered for
 // Bitdefender SafeFiles; here it also means a re-run cannot replace a good
 // snapshot with a worse one.
@@ -93,7 +95,7 @@ export function dayIndex(yyyymmdd: string): number | null {
   return Math.round(t / 86_400_000);
 }
 
-// Two-tier retention, identical to backup-db.sh:
+// Two-tier retention (unchanged from the old backup-db.sh):
 //   - keep the newest `keep` snapshots, ordered by the DATE IN THE NAME (not
 //     mtime: a salvaged copy has a fresh mtime that says nothing about the day
 //     it captured);
@@ -142,7 +144,7 @@ function posInt(v: string | undefined, d: number, name: string): number {
 }
 
 // Resolve config from flags + env. `||` (not `??`) so an EMPTY env var means
-// unset, like the .sh's ${VAR:-default}. Throws on missing/invalid input; the
+// unset, like a shell's ${VAR:-default}. Throws on missing/invalid input; the
 // caller still writes a failure status in that case.
 export function resolveConfig(argv: string[], env: Env = process.env): BackupConfig {
   const { values } = parseArgs({

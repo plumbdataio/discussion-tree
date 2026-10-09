@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { Database } from "bun:sqlite";
 import {
@@ -24,14 +25,13 @@ import {
   type BackupStatus,
 } from "../../scripts/backup-db.ts";
 
-// backup-db.ts replaces backup-db.sh on Windows. These lock: a consistent
-// snapshot while a writer is active, the never-overwrite same-day rule, the
-// two-tier retention (identical to the .sh — checked against the .sh itself on
-// macOS), and that backup-status.json is written on success AND on every
-// failure (the dt UI will surface failures from it).
+// backup-db.ts is the only backup script (the macOS-only backup-db.sh it was
+// ported from is gone). These lock: a consistent snapshot while a writer is
+// active, the never-overwrite same-day rule, the two-tier retention, and that
+// backup-status.json is written on success AND on every failure (the dt UI
+// surfaces failures from it).
 
-const SCRIPT = new URL("../../scripts/backup-db.ts", import.meta.url).pathname;
-const SH = new URL("../../scripts/backup-db.sh", import.meta.url).pathname;
+const SCRIPT = fileURLToPath(new URL("../../scripts/backup-db.ts", import.meta.url));
 
 function days(from: string, to: string): string[] {
   const out: string[] = [];
@@ -113,35 +113,6 @@ describe("retention (planPrune)", () => {
     expect(planPrune([], 14, 14)).toEqual([]);
   });
 
-  test("matches backup-db.sh exactly (macOS only: the .sh needs BSD date)", () => {
-    if (process.platform !== "darwin") return;
-    const dir = mkdtempSync(join(tmpdir(), "dt-bk-parity-"));
-    try {
-      const fixture = [
-        ...days("20260801", "20261020").filter((_, i) => i % 3 !== 1), // gappy, 3 months
-        "20251231", // oldest -> origin
-      ];
-      for (const s of fixture) writeFileSync(join(dir, name(s)), "");
-      // Run ONLY the .sh's prune section, printing instead of deleting (its real
-      // delete goes through Finder/osascript).
-      const sh = readFileSync(SH, "utf8");
-      const start = sh.indexOf("_oldest=");
-      const body = sh
-        .slice(start)
-        .replace(/osascript -e [^\n]*\\\n[^\n]*\n/, 'echo "$(basename "$f")"\n');
-      expect(body).toContain('echo "$(basename "$f")"');
-      const r = spawnSync("bash", ["-c", `set -uo pipefail\nBACKUP_DIR='${dir}'\nKEEP=14\nARCHIVE_EVERY_DAYS=14\n${body}`], {
-        encoding: "utf8",
-      });
-      expect(r.status).toBe(0);
-      const shDeletes = r.stdout.split("\n").filter(Boolean).sort();
-      const tsDeletes = planPrune(readdirSync(dir), 14, 14).sort();
-      expect(shDeletes.length).toBeGreaterThan(10);
-      expect(tsDeletes).toEqual(shDeletes);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
 });
 
 describe("runBackup", () => {
