@@ -894,7 +894,13 @@ export async function handleCliSend(body: any) {
   // runs send-keys on its OWN pane (server/poll.ts + shared/tmux-inject.ts). The
   // default-board notice is deferred to the MCP's ack so it reflects an actual
   // run on the far machine.
-  if (sess.is_remote) {
+  //
+  // Windows broker: route LOCAL sessions through the same queue. psmux runs a
+  // separate server per session and the socket path it puts in $TMUX
+  // (/tmp/psmux-<pid>/default) is not something `tmux -S` from the broker can
+  // reach, so a direct inject reported the pane as gone. The CC's MCP server
+  // runs inside the pane's own environment, where psmux resolves its server.
+  if (sess.is_remote || process.platform === "win32") {
     insertCliInject.run(
       sessionId,
       command,
