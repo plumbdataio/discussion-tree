@@ -1,7 +1,10 @@
 import "./happydom.ts";
 import { describe, test, expect, beforeAll } from "bun:test";
 import i18n from "../../web/i18n.ts";
-import { formatThreadTimestamp } from "../../web/utils/format.ts";
+import {
+  formatThreadTimestamp,
+  formatShortLocalDateTime,
+} from "../../web/utils/format.ts";
 
 beforeAll(async () => {
   // i18n.init() is async — wait until it's ready before any test changes
@@ -67,5 +70,24 @@ describe("formatThreadTimestamp", () => {
   test("does not throw on edge ISO timestamps", async () => {
     await setLang("en");
     expect(() => formatThreadTimestamp("1970-01-01T00:00:00.000Z")).not.toThrow();
+  });
+});
+
+describe("formatShortLocalDateTime", () => {
+  // Built from local-time components so the expectation holds in any TZ.
+  const now = new Date(2026, 9, 9, 15, 0);
+
+  test("same year → M/D HH:mm, no year, zero-padded time", () => {
+    const iso = new Date(2026, 9, 9, 11, 5).toISOString();
+    expect(formatShortLocalDateTime(iso, now)).toBe("10/9 11:05");
+  });
+
+  test("different year → year prefixed", () => {
+    const iso = new Date(2025, 0, 2, 3, 4).toISOString();
+    expect(formatShortLocalDateTime(iso, now)).toBe("2025/1/2 03:04");
+  });
+
+  test("invalid input → empty string", () => {
+    expect(formatShortLocalDateTime("garbage", now)).toBe("");
   });
 });

@@ -30,6 +30,10 @@ import { routes as checklistRoutes } from "./broker/checklist.ts";
 import { routes as favoritesRoutes } from "./broker/favorites.ts";
 import { routes as feedbackRoutes } from "./broker/feedback.ts";
 import { routes as globalBannerRoutes } from "./broker/global-banner.ts";
+import {
+  routes as backupHealthRoutes,
+  startBackupHealthPoller,
+} from "./broker/backup-health.ts";
 import { routes as mapRoutes, getMapView } from "./broker/maps.ts";
 import {
   routes as diagramsRoutes,
@@ -116,6 +120,8 @@ startActivityWatchdog();
 initPower();
 initCliVerbosity();
 initTmuxIntegration();
+// Surface a failed / overdue DB backup (reads <home>/backup-status.json).
+startBackupHealthPoller(HOME_DIR);
 
 // --- POST route registry ---
 //
@@ -147,6 +153,7 @@ const POST_ROUTES: Record<string, RouteHandler> = {
   ...sessionModelRoutes,
   ...favoritesRoutes,
   ...globalBannerRoutes,
+  ...backupHealthRoutes,
   ...mapRoutes,
   ...mapChecklistRoutes,
   ...diagramsRoutes,

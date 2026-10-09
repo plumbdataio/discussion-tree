@@ -12,8 +12,11 @@
 import { rmSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const BROKER_SCRIPT = new URL("../../broker.ts", import.meta.url).pathname;
+// fileURLToPath, not URL#pathname: on Windows pathname is "/C:/...", which
+// bun cannot open, so no api test could start there.
+const BROKER_SCRIPT = fileURLToPath(new URL("../../broker.ts", import.meta.url));
 
 export type BrokerHandle = {
   url: string;            // e.g. "http://127.0.0.1:54321"

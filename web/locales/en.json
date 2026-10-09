@@ -549,5 +549,15 @@
     "available": "A newer version is available",
     "reload": "Reload",
     "reload_title": "Load the latest UI. Unsent drafts are kept."
+  },
+  "backup": {
+    "failed": "The DB backup failed ({{time}})",
+    "failed_no_time": "The DB backup failed",
+    "stale": "The DB backup has not run for over {{hours}} hours",
+    "last_success": "Last success",
+    "unreadable": "Cannot read the backup result file",
+    "prune_errors": "Failed to delete old backups ({{count}})",
+    "log_hint": "Details: {{path}}",
+    "dismiss": "Dismiss"
   }
 }

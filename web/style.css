@@ -3452,12 +3452,19 @@ body.concern-resizing * {
    intended use cases; the colour swing is intentional so warn / error
    read at a glance from across the screen. z-index higher than the
    corner FABs (1300) but lower than the toast layer (9999). */
-.global-banner {
+/* Fixed container for the banner rows (backup health + the generic banner):
+   rows stack downward instead of overlapping at top:0. Empty = zero height, so
+   it takes no space and swallows no clicks when nothing is shown. */
+.global-banner-stack {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 2000;
+  display: flex;
+  flex-direction: column;
+}
+.global-banner {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3485,6 +3492,19 @@ body.concern-resizing * {
 }
 .global-banner-message {
   flex: 0 1 auto;
+}
+/* Secondary text in a banner row (an error message, a timestamp): smaller and
+   lighter than the main message, separated by spacing rather than a symbol. */
+.global-banner-detail {
+  flex: 0 1 auto;
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}
+.global-banner-detail-label {
+  margin-right: 6px;
+  opacity: 0.8;
 }
 .global-banner-dismiss {
   background: transparent;

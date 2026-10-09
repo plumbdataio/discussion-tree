@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { X } from "lucide-react";
-import type { GlobalBanner as GlobalBannerData } from "../../shared/types.ts";
+import type {
+  BackupHealth,
+  GlobalBanner as GlobalBannerData,
+} from "../../shared/types.ts";
 import { useLiveSocket } from "../utils/liveSocket.ts";
+import { BackupHealthBanner } from "./BackupHealthBanner.tsx";
 
 // Renders the single broker-side global banner at the top of every
 // page. Maintains its own dedicated WS connection (channel name
@@ -12,6 +16,10 @@ import { useLiveSocket } from "../utils/liveSocket.ts";
 // Local dismiss state hides the banner without telling the broker —
 // other tabs / devices still see it until the broker-side
 // expires_at fires or someone calls /clear-global-banner.
+//
+// A second, independent row shows DB backup health (BackupHealthBanner). It is
+// fed from /get-backup-health + "backup-health-update", never from the generic
+// banner slot, so an external tool overwriting that slot cannot hide it.
 
 // Broadcast types that change something the sidebar renders. GlobalBanner is
 // the only socket mounted on every page, so it forwards these to the sidebar
@@ -28,6 +36,7 @@ const SIDEBAR_REFRESH_TYPES = new Set([
 export function GlobalBanner() {
   const [banner, setBanner] = useState<GlobalBannerData | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(null);
+  const [backupHealth, setBackupHealth] = useState<BackupHealth | null>(null);
 
   // Pull the current banner. Runs on mount AND after every (re)connect — a
   // banner set or cleared while the socket was down would otherwise never
@@ -46,6 +55,20 @@ export function GlobalBanner() {
       .catch(() => {
         /* tolerate — the WS carries the next update anyway */
       });
+    // Same pull-on-(re)connect rule for backup health. The broker recomputes on
+    // this request, so a page load also catches a backup that just went stale.
+    fetch("/get-backup-health", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j?.health) setBackupHealth(j.health);
+      })
+      .catch(() => {
+        /* tolerate — the 5-minute broker poll pushes the next change */
+      });
   }, []);
 
   // This socket is mounted on EVERY page and is the sole forwarder of sidebar
@@ -57,6 +80,8 @@ export function GlobalBanner() {
     onMessage: (msg) => {
       if (msg?.type === "global-banner-update") {
         setBanner(msg.banner ?? null);
+      } else if (msg?.type === "backup-health-update") {
+        setBackupHealth(msg.health ?? null);
       } else if (
         msg?.type === "session-reattached" &&
         typeof msg.session_id === "string"
@@ -116,27 +141,33 @@ export function GlobalBanner() {
     return () => clearTimeout(t);
   }, [banner?.expires_at]);
 
-  if (!banner) return null;
   // Per-instance dismiss key: the dismiss state should reset every time
   // a fresh banner arrives. set_at is the natural identifier.
-  if (dismissed === banner.set_at) return null;
+  const showBanner = banner !== null && dismissed !== banner.set_at;
 
+  // Both rows share one fixed stack so they sit one under the other instead of
+  // overlapping at top:0. Each row renders nothing when it has nothing to say.
   return (
-    <div
-      className={`global-banner global-banner-${banner.tone}`}
-      role="status"
-      aria-live="polite"
-    >
-      <span className="global-banner-message">{banner.message}</span>
-      <button
-        type="button"
-        className="global-banner-dismiss"
-        title="Dismiss"
-        aria-label="Dismiss"
-        onClick={() => setDismissed(banner.set_at)}
-      >
-        <X size={14} strokeWidth={2} />
-      </button>
+    <div className="global-banner-stack">
+      <BackupHealthBanner health={backupHealth} />
+      {showBanner && (
+        <div
+          className={`global-banner global-banner-${banner.tone}`}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="global-banner-message">{banner.message}</span>
+          <button
+            type="button"
+            className="global-banner-dismiss"
+            title="Dismiss"
+            aria-label="Dismiss"
+            onClick={() => setDismissed(banner.set_at)}
+          >
+            <X size={14} strokeWidth={2} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

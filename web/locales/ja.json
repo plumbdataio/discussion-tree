@@ -549,5 +549,15 @@
     "available": "新しいバージョンがあります",
     "reload": "再読み込み",
     "reload_title": "最新のUIを読み込みます。書きかけの下書きは保持されます"
+  },
+  "backup": {
+    "failed": "DBのバックアップに失敗しました({{time}})",
+    "failed_no_time": "DBのバックアップに失敗しました",
+    "stale": "DBのバックアップが{{hours}}時間以上動いていません",
+    "last_success": "最後の成功",
+    "unreadable": "バックアップの結果ファイルを読めません",
+    "prune_errors": "古いバックアップの削除に{{count}}件失敗しました",
+    "log_hint": "詳細: {{path}}",
+    "dismiss": "閉じる"
   }
 }

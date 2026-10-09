@@ -30,3 +30,14 @@ export function formatThreadTimestamp(iso: string): string {
     hour12: false,
   }).format(d);
 }
+
+// Short local "M/D HH:mm" (e.g. "10/9 11:30"), for banners that name a recent
+// moment. The year is prepended only when it is not the current one. Same
+// shape in every locale — it reads naturally in both ja and en.
+export function formatShortLocalDateTime(iso: string, now: Date = new Date()): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  const md = `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return d.getFullYear() === now.getFullYear() ? md : `${d.getFullYear()}/${md}`;
+}

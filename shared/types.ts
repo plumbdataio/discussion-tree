@@ -322,6 +322,25 @@ export interface GlobalBanner {
   set_at: string;
 }
 
+// DB backup health (= the broker's reading of <home>/backup-status.json, which
+// scripts/backup-db.ts writes after every run). Shown as its own banner row,
+// separate from GlobalBanner. "none" = no status file (backup not set up on
+// this machine) → nothing is shown. prune_errors > 0 only ever accompanies
+// "ok" (a mild warning: today's snapshot is fine, old ones were not removed).
+export type BackupHealthState = "none" | "ok" | "failed" | "stale" | "unreadable";
+export interface BackupHealth {
+  state: BackupHealthState;
+  // ISO time the last run finished (success or failure). For "stale" this is
+  // the last successful run.
+  finished_at: string | null;
+  error: string | null;
+  dest: string | null;
+  prune_errors: number;
+  stale_after_hours: number;
+  // <home>/backup.log, for a hover hint; null when state is "none".
+  log_path: string | null;
+}
+
 // Anchor (= per-session pinned thread item). Stored as `favorites` in the
 // DB; the user-facing UI calls them "anchors".
 //
