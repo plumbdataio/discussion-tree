@@ -138,17 +138,40 @@ the most honest evidence. The upload path below is the same for any PNG.
 
 dt serves a static asset folder: the broker exposes
 `~/.discussion-tree/uploads/<board_id>/` on the web at `/uploads/<board_id>/…`
-— that's where the user's pasted images live too. So there is nothing to
-"upload" and no base64 to encode: you copy the finished PNG into that folder and
-link it. **The file being in the folder IS the publish step.**
+— that's where the user's pasted images live too. How you get a PNG there
+depends on where the broker runs:
+
+- **Broker on this machine** (`DISCUSSION_TREE_BROKER_URL` unset, or pointing
+  at 127.0.0.1/localhost): copy the PNG into that folder. **The file being in
+  the folder IS the publish step** — no API call, no base64.
+- **Broker on another machine** (`DISCUSSION_TREE_BROKER_URL` names a remote
+  host, e.g. a Tailscale URL): the folder above is on THAT machine, so a local
+  copy is silently invisible to the user. POST the image to the broker's
+  `/upload-image` instead.
+
+The snippet below picks the right path by itself:
 
 ```bash
 # <board_id> = the board / map / diagram id you're about to post to.
-DIR="${DISCUSSION_TREE_HOME:-$HOME/.discussion-tree}/uploads/<board_id>"
-mkdir -p "$DIR"
+BOARD=<board_id>; IMG=out.png
 NAME="agent_$(date +%s)_$RANDOM.png"   # unique; agent_ marks it as yours
-cp out.png "$DIR/$NAME"
-echo "/uploads/<board_id>/$NAME"       # <- the URL to embed
+URL="${DISCUSSION_TREE_BROKER_URL:-}"
+if [ -z "$URL" ] || echo "$URL" | grep -Eq '^https?://(127\.0\.0\.1|localhost|\[::1\])(:|/|$)'; then
+  DIR="${DISCUSSION_TREE_HOME:-$HOME/.discussion-tree}/uploads/$BOARD"
+  mkdir -p "$DIR" && cp "$IMG" "$DIR/$NAME" && echo "/uploads/$BOARD/$NAME"
+else
+  # Remote broker: send base64 through the shell, never through your context.
+  python3 - "$URL" "$BOARD" "$NAME" "$IMG" <<'PY'
+import sys, json, base64, urllib.request
+url, board, name, img = sys.argv[1:]
+body = json.dumps({"board_id": board, "filename": name,
+                   "data_base64": base64.b64encode(open(img, "rb").read()).decode()}).encode()
+req = urllib.request.Request(url.rstrip("/") + "/upload-image", data=body,
+                             headers={"Content-Type": "application/json"}, method="POST")
+print(json.load(urllib.request.urlopen(req, timeout=30))["url"])
+PY
+fi
+# <- the printed path is the URL to embed
 ```
 
 Then put that URL in the message body, at the point in the argument where it
@@ -171,13 +194,12 @@ post_to_node(board_id=..., node_id=..., message="""
 - The broker serves ONLY from inside that folder (path traversal is blocked),
   so writing there is safe and self-contained — no API call, no base64, nothing
   lands in your context.
-- Off-box fallback (rare — e.g. the broker's home dir isn't reachable): POST
-  base64 to the broker's `/upload-image` (`{board_id, filename, data_base64}`)
-  and use the returned url. Same result, more steps; pipe base64 through the
-  shell, never into your context. The direct copy above is preferred.
+- On a remote broker the snippet uses `/upload-image`
+  (`{board_id, filename, data_base64}`); the result is the same `/uploads/…`
+  url. Never paste base64 into your own context.
 
 A matplotlib PNG is typically ~100 KB; there's no practical size ceiling on the
-direct copy (the `/upload-image` fallback caps at 10 MB).
+direct copy (`/upload-image` caps at 10 MB).
 
 ## 5. Before you send
 
