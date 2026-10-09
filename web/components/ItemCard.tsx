@@ -234,43 +234,44 @@ export function ItemCard({
           and avoids the per-card jitter where empty threads pulled the
           input up to the title).
 
-          column-reverse: tentativeText is the first DOM child (= visual
-          bottom under reverse), then myThread iterated newest→oldest,
-          giving the same on-screen order as before with the browser's
-          anchored-scrolling holding the bottom in place. */}
+          Outer .thread = column-reverse with ONE child (.thread-rows), a
+          normal top-to-bottom column holding the rows in natural order
+          (oldest → newest → pending timer-send preview → tentative). The
+          single child keeps column-reverse's bottom-anchored scrolling, and
+          DOM order == visual order so drag selection / copy across messages
+          run top-to-bottom. */}
       <div className="thread" ref={threadRef}>
-        {/* In-flow at the visual bottom (first DOM child under column-reverse),
-            co-located with tentativeText: the pending timer-send preview scrolls
-            with the thread and is bounded by this scroll container, so a tall
-            scheduled message no longer squeezes the thread or pushes the input
-            row off-screen. The `.thread > :first-child { margin-bottom:auto }`
-            top-align rule still applies (now to this chip when present, and it
-            returns null → falls through to the newest message otherwise). */}
-        <ScheduledPinned scheduled={scheduledForNode} />
-        {tentativeText && (
-          <div className="thread-msg from-user pending">
-            <span className="who">
-              {t("item_card.you")} <span className="loading-spinner" />{" "}
-              {t("item_card.sending")}
-            </span>
-            <MDView text={tentativeText} />
-          </div>
-        )}
-        {/* Reversed: index 0 is the newest row (visual bottom under
-            column-reverse). Deep-history rows past the live region opt into
-            content-visibility:auto; most node threads are short enough that
-            nothing is contained. */}
-        {[...myThread].reverse().map((it, i) => (
-          <ThreadMessage
-            key={it.id}
-            item={it}
-            boardId={node.board_id}
-            nodeId={node.id}
-            sessionId={ownerSessionId}
-            contained={i >= LIVE_REGION_COUNT}
-            onExpand={openExpandedMsg}
-          />
-        ))}
+        <div className="thread-rows">
+          {/* Natural order. Deep-history rows (older than the newest
+              LIVE_REGION_COUNT) opt into content-visibility:auto; most node
+              threads are short enough that nothing is contained. */}
+          {myThread.map((it, i) => (
+            <ThreadMessage
+              key={it.id}
+              item={it}
+              boardId={node.board_id}
+              nodeId={node.id}
+              sessionId={ownerSessionId}
+              contained={i < myThread.length - LIVE_REGION_COUNT}
+              onExpand={openExpandedMsg}
+            />
+          ))}
+          {/* In-flow at the visual bottom, co-located with tentativeText: the
+              pending timer-send preview scrolls with the thread and is
+              bounded by this scroll container, so a tall scheduled message
+              no longer squeezes the thread or pushes the input row
+              off-screen. */}
+          <ScheduledPinned scheduled={scheduledForNode} />
+          {tentativeText && (
+            <div className="thread-msg from-user pending">
+              <span className="who">
+                {t("item_card.you")} <span className="loading-spinner" />{" "}
+                {t("item_card.sending")}
+              </span>
+              <MDView text={tentativeText} />
+            </div>
+          )}
+        </div>
       </div>
       <ScrollToBottomButton scrollRef={threadRef} reversed />
 

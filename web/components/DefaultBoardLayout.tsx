@@ -201,44 +201,51 @@ export function DefaultBoardLayout({
           {t("default_board.message_count", { count: messageCount })}
         </span>
       </div>
-      {/* column-reverse: the first DOM child renders at the visual
-          bottom. So tentativeText (= the optimistic in-flight message)
-          comes first in source order, then myThread iterated newest →
-          oldest. The result on screen is oldest at top, newest at
-          bottom, exactly like before — but the browser's anchor
-          behaviour keeps the bottom in view without any JS. */}
+      {/* Outer scroller = column-reverse with ONE child (.thread-rows), a
+          normal top-to-bottom column. With a single child, column-reverse
+          still puts the scroll origin at the visual bottom (the browser
+          keeps the bottom in view without any JS), while the rows inside
+          are in natural order: oldest → newest → pending timer-send preview
+          → tentative. DOM order == visual order, so a drag selection across
+          messages and the copied text both run top-to-bottom. (Rendering
+          the rows directly under column-reverse in newest-first order made
+          selection follow the reversed DOM — dragging from an older message
+          to a newer one selected the wrong span.) */}
       <div className="default-board-thread" ref={threadRef}>
-        {/* In-flow at the visual bottom (first DOM child under column-reverse),
-            co-located with tentativeText: the pending timer-send preview now
-            scrolls with the thread and its height is bounded by this scroll
-            container, so a tall (image / long-text) scheduled message can no
-            longer squeeze the thread to nothing or push the input row
-            off-screen — which is what happened when it was a pinned sibling
-            outside the scroll container. */}
-        <ScheduledPinned scheduled={scheduledForNode} />
-        {tentativeText && (
-          <div className="thread-msg from-user pending">
-            <span className="who">
-              {t("item_card.you")} <span className="loading-spinner" />{" "}
-              {t("item_card.sending")}
-            </span>
-            <MDView text={tentativeText} />
-          </div>
-        )}
-        {/* Reversed: index 0 is the newest row (visual bottom under
-            column-reverse). The newest LIVE_REGION_COUNT rows render normally;
-            older "deep history" rows opt into content-visibility:auto. */}
-        {[...myThread].reverse().map((it, i) => (
-          <ThreadMessage
-            key={it.id}
-            item={it}
-            boardId={data.board.id}
-            nodeId={node.id}
-            sessionId={ownerSessionId}
-            contained={i >= LIVE_REGION_COUNT}
-            onExpand={openExpandedMsg}
-          />
-        ))}
+        <div className="thread-rows">
+          {/* Natural order: the oldest rows come first. Rows older than the
+              newest LIVE_REGION_COUNT ("deep history") opt into
+              content-visibility:auto; the live edge at the bottom renders
+              normally. */}
+          {myThread.map((it, i) => (
+            <ThreadMessage
+              key={it.id}
+              item={it}
+              boardId={data.board.id}
+              nodeId={node.id}
+              sessionId={ownerSessionId}
+              contained={i < myThread.length - LIVE_REGION_COUNT}
+              onExpand={openExpandedMsg}
+            />
+          ))}
+          {/* In-flow at the visual bottom, co-located with tentativeText: the
+              pending timer-send preview scrolls with the thread and its
+              height is bounded by this scroll container, so a tall (image /
+              long-text) scheduled message can no longer squeeze the thread
+              to nothing or push the input row off-screen — which is what
+              happened when it was a pinned sibling outside the scroll
+              container. */}
+          <ScheduledPinned scheduled={scheduledForNode} />
+          {tentativeText && (
+            <div className="thread-msg from-user pending">
+              <span className="who">
+                {t("item_card.you")} <span className="loading-spinner" />{" "}
+                {t("item_card.sending")}
+              </span>
+              <MDView text={tentativeText} />
+            </div>
+          )}
+        </div>
       </div>
       {/* Floating ▼ goes OUTSIDE the thread because the thread is
           column-reverse — making it a thread child would either put it

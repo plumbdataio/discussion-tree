@@ -14,9 +14,11 @@ import { createElement, act } from "react";
 // off-screen. In-flow it scrolls with the thread and its height is bounded by
 // the scroll container.
 //
-// The thread is `flex-direction: column-reverse`, so the FIRST DOM child is the
-// visual BOTTOM. With no in-flight (tentative) message and an empty thread, the
-// ScheduledPinned chip is therefore expected to be the thread's firstElementChild.
+// The thread is a `flex-direction: column-reverse` scroller with ONE child
+// (.thread-rows) holding the rows in natural top-to-bottom order, so the LAST
+// child of .thread-rows is the visual BOTTOM. With no in-flight (tentative)
+// message, the ScheduledPinned chip is expected to be that last child — after
+// every real message.
 
 const fireAt = new Date(Date.now() + 3_600_000).toISOString();
 const scheduled = [{ id: "sc1", node_id: "n1", fire_at: fireAt, text: "queued message" }];
@@ -69,7 +71,12 @@ describe("ScheduledPinned in-flow placement", () => {
           created_at: "t",
         },
       ],
-      threads: { n1: [] },
+      threads: {
+        n1: [
+          { id: 1, node_id: "n1", source: "cc", text: "older", created_at: "t1" },
+          { id: 2, node_id: "n1", source: "user", text: "newer", created_at: "t2" },
+        ],
+      },
       scheduled,
     };
     const m = await mount(
@@ -88,8 +95,19 @@ describe("ScheduledPinned in-flow placement", () => {
     expect(chip).toBeTruthy();
     // In-flow: descendant of the scroll container (not a sibling after it).
     expect(thread.contains(chip)).toBe(true);
-    // column-reverse → first DOM child is the visual bottom.
-    expect(thread.firstElementChild).toBe(chip);
+    // Single inner wrapper; the chip is its last child (= visual bottom).
+    expect(thread.children.length).toBe(1);
+    const rows = thread.firstElementChild as HTMLElement;
+    expect(rows.className).toBe("thread-rows");
+    expect(rows.lastElementChild).toBe(chip);
+    // DOM order == visual order: oldest first, so selection / copy read
+    // top-to-bottom.
+    const texts = Array.from(rows.querySelectorAll(".thread-msg")).map(
+      (el) => el.textContent ?? "",
+    );
+    expect(texts.findIndex((x) => x.includes("older"))).toBeLessThan(
+      texts.findIndex((x) => x.includes("newer")),
+    );
     // The preview text is actually rendered.
     expect(chip.textContent).toContain("queued message");
     await m.unmount();
@@ -127,7 +145,8 @@ describe("ScheduledPinned in-flow placement", () => {
     expect(thread).toBeTruthy();
     expect(chip).toBeTruthy();
     expect(thread.contains(chip)).toBe(true);
-    expect(thread.firstElementChild).toBe(chip);
+    expect(thread.children.length).toBe(1);
+    expect((thread.firstElementChild as HTMLElement).lastElementChild).toBe(chip);
     expect(chip.textContent).toContain("queued message");
     await m.unmount();
   });

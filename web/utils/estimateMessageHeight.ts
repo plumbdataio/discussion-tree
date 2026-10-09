@@ -38,10 +38,10 @@ const MIN_PX = 52;
 const MAX_PX = 4000;
 
 // How many of the newest rows stay FULLY rendered (no containment) at the
-// bottom of a thread — the "live region". Under column-reverse the reversed
-// list's indices 0..N-1 are the newest rows and sit at the visual bottom, where
-// the user actively reads and where recoil is most damaging; only rows at index
-// >= this threshold ("deep history") get `content-visibility: auto`.
+// bottom of a thread — the "live region". The newest N rows sit at the visual
+// bottom, where the user actively reads and where recoil is most damaging; only
+// rows older than that ("deep history", index < length - N in the oldest-first
+// list) get `content-visibility: auto`.
 //
 // 60 is comfortably more than a viewport of recent messages plus a scroll-up
 // buffer, so the live edge is always stable; on a 3k-message board it still

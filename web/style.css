@@ -1485,13 +1485,15 @@ a.session-name:hover {
   min-height: 0;
   overflow-y: auto;
   display: flex;
-  /* column-reverse + DOM source ordered (tentative-first, then
-     newest→oldest of myThread) yields the same visible order as
-     before (oldest at top, newest at bottom) with NO JS scroll
-     pinning. Under column-reverse the scroll origin is the visual
-     bottom (scrollTop ≈ 0), so a freshly-prepended newest message
-     keeps the viewport glued to the bottom while the user is there,
-     and leaves their position untouched once they scroll up. */
+  /* column-reverse around a SINGLE child (.thread-rows, a normal column
+     holding the rows oldest → newest) gives bottom pinning with NO JS.
+     Under column-reverse the scroll origin is the visual bottom
+     (scrollTop ≈ 0), so a newly appended newest message keeps the
+     viewport glued to the bottom while the user is there, and leaves
+     their position untouched once they scroll up. The rows live in the
+     inner wrapper — not directly under column-reverse — so that DOM
+     order matches visual order; otherwise text selection and copy
+     across messages follow the reversed DOM and come out inverted. */
   flex-direction: column-reverse;
   /* NOTE: deliberately NO justify-content:flex-end here (unlike the node
      thread). The default/general board is a long-running chat that's
@@ -1509,7 +1511,6 @@ a.session-name:hover {
      chat behaviour we want: 0 stays 0 (follow the bottom), -1000
      stays -1000 (stay where the user scrolled). */
   overflow-anchor: none;
-  gap: 8px;
   padding: 4px 2px;
   scrollbar-width: none;
   /* iOS Safari momentum scroll for nested overflow containers. */
@@ -1517,6 +1518,14 @@ a.session-name:hover {
 }
 .default-board-thread::-webkit-scrollbar {
   display: none;
+}
+/* The one child of the column-reverse scroller: rows in natural top-to-bottom
+   order. flex: none so the scroller never shrinks it below its content. */
+.default-board-thread > .thread-rows {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .default-board-thread .thread-msg {
@@ -2556,15 +2565,15 @@ body.concern-resizing * {
   min-height: 200px;
   overflow-y: auto;
   /* column-reverse pins the visual bottom with no JS chase — same
-     trick the default board uses. JSX renders tentative-first then
-     newest→oldest so the on-screen order matches what users expect.
+     trick the default board uses: a SINGLE child (.thread-rows, a normal
+     column with the rows oldest → newest), so DOM order matches visual
+     order and selection / copy across messages run top-to-bottom.
      overflow-anchor: none is REQUIRED here too: the browser's
      default scroll anchoring fights column-reverse and shoves new
      messages off the bottom instead of following them. */
   display: flex;
   flex-direction: column-reverse;
   overflow-anchor: none;
-  gap: 6px;
   /* iOS Safari momentum scrolling inside this nested overflow box. */
   -webkit-overflow-scrolling: touch;
   /* Code blocks (`<pre>`) request their content's intrinsic width as
@@ -2581,14 +2590,21 @@ body.concern-resizing * {
   scrollbar-width: thin;
   scrollbar-gutter: stable;
 }
-/* Top-align a short thread without breaking overflow scroll. An auto margin on
-   the main-start child (column-reverse → the visual BOTTOM, i.e. the newest /
-   tentative message) absorbs the free space when the thread is short, pushing
-   the messages to the visual top; when the thread overflows it resolves to 0,
-   so scrolling is untouched. This is the scroll-safe alternative to
+/* The one child of the column-reverse scroller: rows in natural top-to-bottom
+   order. flex: none so the scroller never shrinks it below its content.
+
+   margin-bottom:auto top-aligns a short thread without breaking overflow
+   scroll: the wrapper is the main-start item (column-reverse → the visual
+   BOTTOM), so the auto margin absorbs the free space when the thread is short,
+   pushing the rows to the visual top; when the thread overflows it resolves to
+   0, so scrolling is untouched. This is the scroll-safe alternative to
    justify-content:flex-end, which on a column-reverse scroll container clips
    the overflow and makes the newest messages unreachable. */
-.item-card > .thread > :first-child {
+.item-card > .thread > .thread-rows {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   margin-bottom: auto;
 }
 .item-card > .thread::-webkit-scrollbar {
@@ -3059,12 +3075,20 @@ body.concern-resizing * {
       row's first reveal is a small nudge, not a 100px→800px jump.
    3. Containment is applied to DEEP HISTORY ONLY. The newest LIVE_REGION_COUNT
       rows at the bottom — the live edge the user actively reads, where recoil
-      hurt most — render with NO containment (the class is only added for
-      index >= threshold in DefaultBoardLayout / ItemCard). Any residual
+      hurt most — render with NO containment (the class is only added to rows
+      older than that in DefaultBoardLayout / ItemCard). Any residual
       correction is confined to rarely-scrolled history.
    4. overflow-anchor stays OFF and column-reverse is unchanged; the seed's
       tall bias means residual corrections settle content DOWNWARD (away from
       the eye), the harmless direction.
+   5. Rows are NOT flex items of the overflowing column-reverse scroller; they
+      sit inside its single `.thread-rows` child, which is never shrunk. A
+      skipped row is size-contained, so as a direct flex item its automatic
+      minimum height dropped to zero and flex-shrink squeezed it to its
+      padding (~18px) the moment it left the viewport, then it grew back on
+      reveal: the view jumped by hundreds of px on EVERY pass over the same
+      history (measured in Chrome and WebKit, 2026-10-09), and the remembered
+      `auto` size could never help.
    The class is attached per-row by ThreadMessage; this rule only bites where
    that component sets `contained`. */
 .thread-msg.cv-contained {
