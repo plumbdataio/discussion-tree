@@ -423,7 +423,7 @@ describe.skipIf(!dbIsScratch || process.platform === "win32")(
       expect(calls()).toEqual([]);
     });
 
-    test("win32 resume: recorded Windows cwd, -r <id> appended, Enter by window id", async () => {
+    test("win32 resume: recorded Windows cwd, -r <id> appended, Enter by session name", async () => {
       reset();
       db.prepare(
         "INSERT INTO sessions (id, pid, cwd, registered_at, last_seen, alive, cc_session_id, name) VALUES (?, ?, ?, ?, ?, 0, ?, ?)",
@@ -470,9 +470,10 @@ describe.skipIf(!dbIsScratch || process.platform === "win32")(
         "powershell.exe",
       ]);
       expect(decodeEncoded(create[12]!)).toBe("& claude '--z' '-r' 'cc-win-1'");
-      // The startup-dialog Enter goes to the window id new-session printed.
+      // The startup-dialog Enter goes to the session NAME on win32: psmux
+      // numbers windows per server, so "@7" could be any session's window.
       await Bun.sleep(900);
-      expect(calls()[2]).toEqual(["send-keys", "-t", "@7", "Enter"]);
+      expect(calls()[2]).toEqual(["send-keys", "-t", "Zumenta-work", "Enter"]);
     });
   },
 );

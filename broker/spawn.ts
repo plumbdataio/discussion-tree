@@ -468,10 +468,18 @@ export async function handleSpawnSession(body: any, deps: SpawnDeps = {}) {
   // --dangerously-skip-permissions acceptance) by sending Enter a few times,
   // spaced out. An extra Enter past the dialogs is a harmless empty submit at
   // claude's prompt, so over-sending is safe.
+  //
+  // Target: on win32 (psmux) the SESSION NAME, not the window id. psmux runs a
+  // separate server per session and numbers windows per server, so every
+  // session's first window is "@1" — `-t @1` is ambiguous and the Enters went
+  // to some other session while the new one sat at its startup dialog. The
+  // name is unique (uniqueSessionName above). tmux's window ids are global, so
+  // other platforms keep the exact window id.
+  const enterTarget = platform === "win32" ? sessionName : windowId;
   if (windowId) {
     for (let i = 1; i <= cfg.enter_count; i++) {
       setTimeout(() => {
-        tmux(cfg, ["send-keys", "-t", windowId, "Enter"], platform);
+        tmux(cfg, ["send-keys", "-t", enterTarget, "Enter"], platform);
       }, i * cfg.enter_interval_ms);
     }
   }
