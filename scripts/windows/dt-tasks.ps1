@@ -74,7 +74,15 @@ param(
   [int]$Port = 7898,
   [string]$BackupTime = "11:30",
   [switch]$NoBackup,
-  [switch]$StartNow
+  [switch]$StartNow,
+  # Run the broker task with highest privileges (RunLevel Highest). Needed when
+  # the Claude Code sessions run elevated - e.g. started from an OpenSSH login,
+  # which is elevated for an administrator account. A non-elevated broker
+  # cannot see or reach an elevated psmux server: `psmux ls` from it omits
+  # those sessions, so cli-send and the spawn startup Enters cannot reach them,
+  # and a psmux "restore if no other session is running" hook triggered by a
+  # broker spawn wrongly finds none and recreates live sessions.
+  [switch]$Elevated
 )
 
 Set-StrictMode -Version 2
@@ -140,6 +148,9 @@ New-Item -ItemType Directory -Force -Path $DtHome | Out-Null
 
 $conhost = Join-Path $env:SystemRoot "System32\conhost.exe"
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+# Only the broker needs elevation (see -Elevated); the backup stays Limited.
+$brokerRunLevel = if ($Elevated) { "Highest" } else { "Limited" }
+$brokerPrincipal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel $brokerRunLevel
 
 # ---- broker supervisor task
 $supArgs = @(
@@ -162,7 +173,7 @@ $brokerSettings = New-ScheduledTaskSettingsSet `
   -Priority 4
 Register-ScheduledTask -TaskName $brokerTask -Force `
   -Description "discussion-tree broker supervisor (keeps the broker on 127.0.0.1:$Port running). Logs: $DtHome\supervisor.log, $DtHome\broker.log" `
-  -Action $brokerAction -Trigger $brokerTrigger -Settings $brokerSettings -Principal $principal | Out-Null
+  -Action $brokerAction -Trigger $brokerTrigger -Settings $brokerSettings -Principal $brokerPrincipal | Out-Null
 Write-Host "Registered $brokerTask : $conhost $supArgs"
 
 # ---- daily backup task
