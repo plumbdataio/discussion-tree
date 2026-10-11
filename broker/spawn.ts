@@ -43,6 +43,12 @@ import { homedir } from "node:os";
 import * as path from "node:path";
 import { db } from "./db.ts";
 import { defaultSessionName, sanitizeSessionName } from "./spawn-names.ts";
+import {
+  DEFAULT_DIALOG_TIMING,
+  runDialogWatcher,
+  type DialogWatchResult,
+  type DialogWatchTiming,
+} from "./spawn-dialogs.ts";
 
 db.run(
   `CREATE TABLE IF NOT EXISTS spawn_config (
@@ -54,6 +60,8 @@ db.run(
 
 const DEFAULT_ENTER_COUNT = 2;
 const DEFAULT_ENTER_INTERVAL_MS = 5000;
+const DEFAULT_DIALOG_TIMEOUT_MS = DEFAULT_DIALOG_TIMING.timeoutMs;
+const MIN_DIALOG_TIMEOUT_MS = 5000;
 
 // First-run defaults for the modal. Only dt's OWN flags are defaulted; personal
 // additions (e.g. a private peers MCP) are left for the user to append.
@@ -67,6 +75,7 @@ const APP_DEFAULTS: SpawnConfig = {
   tmux_bin: "tmux",
   enter_count: DEFAULT_ENTER_COUNT,
   enter_interval_ms: DEFAULT_ENTER_INTERVAL_MS,
+  dialog_timeout_ms: DEFAULT_DIALOG_TIMEOUT_MS,
 };
 
 export interface SpawnConfig {
@@ -76,8 +85,14 @@ export interface SpawnConfig {
   // back to Windows PowerShell.
   shell: string;
   tmux_bin: string;
+  // Legacy fields from when startup dialogs were cleared by blind Enters. Kept
+  // (and still parsed) so old stored configs and the modal round-trip cleanly:
+  // enter_count 0 now means "don't touch the startup dialogs at all", any other
+  // value enables the screen-reading answerer; enter_interval_ms is unused.
   enter_count: number;
   enter_interval_ms: number;
+  // How long the startup-dialog answerer keeps watching the new pane.
+  dialog_timeout_ms: number;
 }
 
 // Injection points for the platform-dependent parts, so tests can drive the
@@ -91,7 +106,16 @@ export interface SpawnDeps {
   // Make sure a new-mode cwd exists as a directory; returns an error message,
   // or null when the directory is ready.
   ensureDir?: (cwd: string) => string | null;
+  // Startup-dialog answerer overrides (tests shorten the timings and wait for
+  // the result; the broker leaves both unset).
+  dialogTiming?: Partial<DialogWatchTiming>;
+  onDialogWatchDone?: (r: DialogWatchResult) => void;
+  // Replaces the tmux process call (argv after the binary). Tests use it to
+  // drive the whole flow on any host without spawning anything.
+  runTmux?: (args: string[]) => TmuxResult;
 }
+
+type TmuxResult = { ok: boolean; stdout: string; stderr: string };
 
 function expandHome(
   p: string,
@@ -248,6 +272,11 @@ function normalize(raw: any): SpawnConfig {
       Number.isFinite(raw?.enter_interval_ms) && raw.enter_interval_ms >= 500
         ? Math.floor(raw.enter_interval_ms)
         : APP_DEFAULTS.enter_interval_ms,
+    dialog_timeout_ms:
+      Number.isFinite(raw?.dialog_timeout_ms) &&
+      raw.dialog_timeout_ms >= MIN_DIALOG_TIMEOUT_MS
+        ? Math.floor(raw.dialog_timeout_ms)
+        : APP_DEFAULTS.dialog_timeout_ms,
   };
 }
 
@@ -300,7 +329,9 @@ function tmux(
   cfg: SpawnConfig,
   args: string[],
   platform: NodeJS.Platform = process.platform,
-): { ok: boolean; stdout: string; stderr: string } {
+  deps: SpawnDeps = {},
+): TmuxResult {
+  if (deps.runTmux) return deps.runTmux(args);
   const r = Bun.spawnSync([resolveTmuxBin(cfg, platform), ...args], {
     stdout: "pipe",
     stderr: "pipe",
@@ -317,8 +348,9 @@ function tmux(
 function existingSessions(
   cfg: SpawnConfig,
   platform: NodeJS.Platform,
+  deps: SpawnDeps,
 ): Set<string> {
-  const r = tmux(cfg, ["list-sessions", "-F", "#{session_name}"], platform);
+  const r = tmux(cfg, ["list-sessions", "-F", "#{session_name}"], platform, deps);
   if (!r.ok) return new Set();
   return new Set(
     r.stdout
@@ -335,8 +367,9 @@ function uniqueSessionName(
   cfg: SpawnConfig,
   base: string,
   platform: NodeJS.Platform,
+  deps: SpawnDeps,
 ): string {
-  const taken = existingSessions(cfg, platform);
+  const taken = existingSessions(cfg, platform, deps);
   if (!taken.has(base)) return base;
   for (let i = 2; i < 100; i++) {
     const candidate = `${base}-${i}`;
@@ -440,7 +473,7 @@ export async function handleSpawnSession(body: any, deps: SpawnDeps = {}) {
   const baseName = requestedName
     ? sanitizeSessionName(requestedName)
     : defaultSessionName(nameHint, cwd, platform);
-  const sessionName = uniqueSessionName(cfg, baseName, platform);
+  const sessionName = uniqueSessionName(cfg, baseName, platform, deps);
   const spawnArgs = [
     "new-session",
     "-d",
@@ -453,7 +486,7 @@ export async function handleSpawnSession(body: any, deps: SpawnDeps = {}) {
     "#{window_id}",
     ...launch,
   ];
-  const res = tmux(cfg, spawnArgs, platform);
+  const res = tmux(cfg, spawnArgs, platform, deps);
   if (!res.ok) {
     return { ok: false, error: `tmux failed: ${res.stderr || "unknown error"}` };
   }
@@ -464,10 +497,11 @@ export async function handleSpawnSession(body: any, deps: SpawnDeps = {}) {
   // wiping good stored settings.
   if (body?.config) saveStoredConfig(cfg);
 
-  // Clear claude's startup dialogs (folder-trust + the
-  // --dangerously-skip-permissions acceptance) by sending Enter a few times,
-  // spaced out. An extra Enter past the dialogs is a harmless empty submit at
-  // claude's prompt, so over-sending is safe.
+  // Answer claude's startup dialogs (folder trust, the
+  // --dangerously-skip-permissions acceptance, the development-channels
+  // warning) by reading the pane, in the background: the spawn returns now.
+  // Blind Enters were wrong — the trust and bypass menus highlight "No, exit"
+  // by default, so Enter there quits claude. See spawn-dialogs.ts.
   //
   // Target: on win32 (psmux) the SESSION NAME, not the window id. psmux runs a
   // separate server per session and numbers windows per server, so every
@@ -476,12 +510,33 @@ export async function handleSpawnSession(body: any, deps: SpawnDeps = {}) {
   // name is unique (uniqueSessionName above). tmux's window ids are global, so
   // other platforms keep the exact window id.
   const enterTarget = platform === "win32" ? sessionName : windowId;
-  if (windowId) {
-    for (let i = 1; i <= cfg.enter_count; i++) {
-      setTimeout(() => {
-        tmux(cfg, ["send-keys", "-t", enterTarget, "Enter"], platform);
-      }, i * cfg.enter_interval_ms);
-    }
+  if (windowId && cfg.enter_count > 0) {
+    const tag = `[spawn] ${sessionName}:`;
+    void runDialogWatcher(
+      {
+        capture: () => {
+          const r = tmux(cfg, ["capture-pane", "-p", "-t", enterTarget], platform, deps);
+          return r.ok ? r.stdout : null;
+        },
+        // One key per send-keys call: psmux/ConPTY can merge keys sent together
+        // (an Escape followed by a key turns into Alt+key).
+        sendKey: (key) => {
+          tmux(cfg, ["send-keys", "-t", enterTarget, key], platform, deps);
+        },
+        log: (msg) => console.error(`${tag} ${msg}`),
+      },
+      {
+        ...DEFAULT_DIALOG_TIMING,
+        timeoutMs: cfg.dialog_timeout_ms,
+        ...deps.dialogTiming,
+      },
+    ).then((r) => {
+      console.error(
+        `${tag} startup dialogs: ${r.outcome}` +
+          (r.answered.length ? ` (answered: ${r.answered.join(", ")})` : ""),
+      );
+      deps.onDialogWatchDone?.(r);
+    });
   }
 
   return {

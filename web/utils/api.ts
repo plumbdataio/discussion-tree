@@ -233,6 +233,8 @@ export type SpawnSettings = {
   tmux_bin: string;
   enter_count: number;
   enter_interval_ms: number;
+  // Optional: a broker older than this field omits it.
+  dialog_timeout_ms?: number;
 };
 export type SpawnConfigResponse = {
   // The broker's process.platform ("darwin", "linux", "win32", ...). Optional

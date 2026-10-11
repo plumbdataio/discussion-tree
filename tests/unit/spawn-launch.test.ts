@@ -48,6 +48,7 @@ const cfg = (over: Partial<SpawnConfig> = {}): SpawnConfig => ({
   tmux_bin: "tmux",
   enter_count: 0,
   enter_interval_ms: 5000,
+  dialog_timeout_ms: 60000,
   ...over,
 });
 
@@ -260,6 +261,191 @@ describe("defaultSessionName per platform", () => {
   });
 });
 
+// --- startup dialogs, with an in-process fake tmux (runs on every host) ------
+
+const DEV_CHANNELS = [
+  "│ WARNING: Loading development channels │",
+  "│ ❯ 1. I am using this for local development │",
+  "│   2. Exit │",
+  "  Enter to confirm · Esc to cancel",
+].join("\r\n");
+const trust = (yes: boolean) =>
+  [
+    " Accessing workspace:",
+    " Quick safety check: Is this a project you created or one you trust?",
+    yes ? "   No, exit" : " ❯ No, exit",
+    yes ? " ❯ Yes, I trust this folder" : "   Yes, I trust this folder",
+    " Enter to confirm · Esc to cancel",
+  ].join("\r\n");
+const PROMPT = "❯ \r\n  ⏵⏵ bypass permissions on (shift+tab to cycle)";
+
+// A stateful fake: records every call and moves through the screens the way
+// claude would in reaction to the keys sent.
+function inProcessTmux(first: string, react: (screen: string, key: string) => string) {
+  let screen = first;
+  const log: string[][] = [];
+  const run = (args: string[]) => {
+    log.push(args);
+    switch (args[0]) {
+      case "list-sessions":
+        return { ok: true, stdout: "", stderr: "" };
+      case "new-session":
+        return { ok: true, stdout: "@1", stderr: "" };
+      case "capture-pane":
+        return { ok: true, stdout: screen, stderr: "" };
+      case "send-keys":
+        screen = react(screen, args[3]!);
+        return { ok: true, stdout: "", stderr: "" };
+    }
+    return { ok: false, stdout: "", stderr: "unexpected" };
+  };
+  return { run, log };
+}
+
+async function waitFor<T>(get: () => T | null, ms = 3000): Promise<T> {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    const v = get();
+    if (v) return v;
+    await Bun.sleep(10);
+  }
+  throw new Error("timed out waiting");
+}
+
+describe.skipIf(!dbIsScratch)(
+  "handleSpawnSession answers startup dialogs by reading the pane",
+  () => {
+    test("win32: trust (Down, then Enter) -> dev channels (Enter) -> prompt, by session name", async () => {
+      const t = inProcessTmux(trust(false), (s, k) => {
+        if (s === trust(false) && k === "Down") return trust(true);
+        if (s === trust(true) && k === "Enter") return DEV_CHANNELS;
+        if (s === DEV_CHANNELS && k === "Enter") return PROMPT;
+        throw new Error(`unexpected key ${k}`);
+      });
+      let watched: any = null;
+      const r: any = await handleSpawnSession(
+        { mode: "new", cwd: "C:\\work\\proj", config: { base_args: [], enter_count: 2 } },
+        {
+          platform: "win32",
+          which: () => null,
+          ensureDir: () => null,
+          runTmux: t.run,
+          dialogTiming: { pollMs: 5 },
+          onDialogWatchDone: (w) => (watched = w),
+        },
+      );
+      // The spawn returns before any dialog is handled.
+      expect(r).toMatchObject({ ok: true, tmux_session: "proj", window: "@1" });
+      expect(watched).toBeNull();
+      expect(await waitFor(() => watched)).toEqual({
+        outcome: "ready",
+        answered: ["trust", "dev_channels"],
+      });
+      expect(t.log.filter((a) => a[0] === "send-keys")).toEqual([
+        ["send-keys", "-t", "proj", "Down"],
+        ["send-keys", "-t", "proj", "Enter"],
+        ["send-keys", "-t", "proj", "Enter"],
+      ]);
+      const captures = t.log.filter((a) => a[0] === "capture-pane");
+      expect(captures.length).toBeGreaterThan(0);
+      for (const c of captures) expect(c).toEqual(["capture-pane", "-p", "-t", "proj"]);
+    });
+
+    test("darwin targets the window id", async () => {
+      const t = inProcessTmux(DEV_CHANNELS, (_s, k) => {
+        if (k === "Enter") return PROMPT;
+        throw new Error(`unexpected key ${k}`);
+      });
+      let watched: any = null;
+      await handleSpawnSession(
+        {
+          mode: "new",
+          cwd: "/work/darwin-dialogs",
+          config: { base_args: [], enter_count: 2 },
+        },
+        {
+          platform: "darwin",
+          env: { SHELL: "/bin/zsh" },
+          ensureDir: () => null,
+          runTmux: t.run,
+          dialogTiming: { pollMs: 5 },
+          onDialogWatchDone: (w) => (watched = w),
+        },
+      );
+      expect(await waitFor(() => watched)).toEqual({
+        outcome: "ready",
+        answered: ["dev_channels"],
+      });
+      expect(t.log.filter((a) => a[0] === "send-keys")).toEqual([
+        ["send-keys", "-t", "@1", "Enter"],
+      ]);
+    });
+
+    test("an unknown dialog gets no keys and the watch times out", async () => {
+      const t = inProcessTmux(
+        " Something new\r\n ❯ 1. Maybe\r\n   2. Perhaps\r\n Enter to confirm · Esc to cancel",
+        () => {
+          throw new Error("must not send keys");
+        },
+      );
+      let watched: any = null;
+      await handleSpawnSession(
+        { mode: "new", cwd: "C:\\work\\unknown", config: { base_args: [], enter_count: 2 } },
+        {
+          platform: "win32",
+          which: () => null,
+          ensureDir: () => null,
+          runTmux: t.run,
+          dialogTiming: { pollMs: 5, timeoutMs: 100 },
+          onDialogWatchDone: (w) => (watched = w),
+        },
+      );
+      expect(await waitFor(() => watched)).toEqual({ outcome: "timeout", answered: [] });
+      expect(t.log.some((a) => a[0] === "send-keys")).toBe(false);
+    });
+
+    test("enter_count 0 leaves the pane alone entirely", async () => {
+      const t = inProcessTmux(trust(false), () => {
+        throw new Error("must not send keys");
+      });
+      await handleSpawnSession(
+        { mode: "new", cwd: "C:\\work\\off", config: { base_args: [], enter_count: 0 } },
+        {
+          platform: "win32",
+          which: () => null,
+          ensureDir: () => null,
+          runTmux: t.run,
+          dialogTiming: { pollMs: 5 },
+        },
+      );
+      await Bun.sleep(50);
+      expect(t.log.map((a) => a[0])).toEqual(["list-sessions", "new-session"]);
+    });
+
+    test("a stored dialog_timeout_ms survives normalize; junk falls back to 60s", async () => {
+      const t = inProcessTmux(PROMPT, (s) => s);
+      await handleSpawnSession(
+        {
+          mode: "new",
+          cwd: "C:\\work\\cfg",
+          config: { base_args: [], enter_count: 2, dialog_timeout_ms: 90000 },
+        },
+        { platform: "win32", which: () => null, ensureDir: () => null, runTmux: t.run },
+      );
+      expect((spawn.handleSpawnConfig().settings as any).dialog_timeout_ms).toBe(90000);
+      await handleSpawnSession(
+        {
+          mode: "new",
+          cwd: "C:\\work\\cfg2",
+          config: { base_args: [], enter_count: 2, dialog_timeout_ms: 10 },
+        },
+        { platform: "win32", which: () => null, ensureDir: () => null, runTmux: t.run },
+      );
+      expect((spawn.handleSpawnConfig().settings as any).dialog_timeout_ms).toBe(60000);
+    });
+  },
+);
+
 // --- handleSpawnSession against a fake tmux ---------------------------------
 
 const fakeDir = path.join(scratch, "bin");
@@ -267,8 +453,8 @@ const logFile = path.join(fakeDir, "tmux.log");
 const fakeTmux = path.join(fakeDir, "tmux");
 
 // One record per invocation: args separated by \037, records by \036. It
-// answers list-sessions with one taken name (CRLF, as psmux may print) and
-// new-session with a window id.
+// answers list-sessions with one taken name (CRLF, as psmux may print),
+// new-session with a window id, and capture-pane with claude's input prompt.
 function installFakeTmux() {
   fs.mkdirSync(fakeDir, { recursive: true });
   fs.writeFileSync(
@@ -279,6 +465,7 @@ printf '\\036' >> '${logFile}'
 case "$1" in
   list-sessions) printf 'taken\\r\\n'; exit 0 ;;
   new-session) printf '@7\\r\\n'; exit 0 ;;
+  capture-pane) printf '> \\r\\n  ? for shortcuts\\r\\n'; exit 0 ;;
 esac
 exit 0
 `,
@@ -423,7 +610,7 @@ describe.skipIf(!dbIsScratch || process.platform === "win32")(
       expect(calls()).toEqual([]);
     });
 
-    test("win32 resume: recorded Windows cwd, -r <id> appended, Enter by session name", async () => {
+    test("win32 resume: recorded Windows cwd, -r <id> appended, pane read by session name", async () => {
       reset();
       db.prepare(
         "INSERT INTO sessions (id, pid, cwd, registered_at, last_seen, alive, cc_session_id, name) VALUES (?, ?, ?, ?, ?, 0, ?, ?)",
@@ -436,6 +623,7 @@ describe.skipIf(!dbIsScratch || process.platform === "win32")(
         "cc-win-1",
         "Zumenta work",
       );
+      let watched: any = null;
       const r: any = await handleSpawnSession(
         {
           mode: "resume",
@@ -447,7 +635,12 @@ describe.skipIf(!dbIsScratch || process.platform === "win32")(
             enter_interval_ms: 500,
           },
         },
-        { platform: "win32", which: () => null },
+        {
+          platform: "win32",
+          which: () => null,
+          dialogTiming: { pollMs: 50 },
+          onDialogWatchDone: (w) => (watched = w),
+        },
       );
       expect(r).toMatchObject({
         ok: true,
@@ -470,10 +663,13 @@ describe.skipIf(!dbIsScratch || process.platform === "win32")(
         "powershell.exe",
       ]);
       expect(decodeEncoded(create[12]!)).toBe("& claude '--z' '-r' 'cc-win-1'");
-      // The startup-dialog Enter goes to the session NAME on win32: psmux
-      // numbers windows per server, so "@7" could be any session's window.
-      await Bun.sleep(900);
-      expect(calls()[2]).toEqual(["send-keys", "-t", "Zumenta-work", "Enter"]);
+      // The startup-dialog answerer reads the pane by session NAME on win32:
+      // psmux numbers windows per server, so "@7" could be any session's window.
+      for (let i = 0; i < 80 && !watched; i++) await Bun.sleep(25);
+      expect(watched).toEqual({ outcome: "ready", answered: [] });
+      expect(calls()[2]).toEqual(["capture-pane", "-p", "-t", "Zumenta-work"]);
+      // The prompt was already up: no key was sent.
+      expect(calls().length).toBe(3);
     });
   },
 );

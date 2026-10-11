@@ -32,6 +32,7 @@ export function SpawnModal({ onClose }: { onClose: () => void }) {
   // Carried through unchanged.
   const [enterCount, setEnterCount] = useState(2);
   const [enterIntervalMs, setEnterIntervalMs] = useState(5000);
+  const [dialogTimeoutMs, setDialogTimeoutMs] = useState(60000);
 
   // Per-spawn choices.
   const [mode, setMode] = useState<"new" | "resume">("new");
@@ -67,6 +68,7 @@ export function SpawnModal({ onClose }: { onClose: () => void }) {
       setTmuxBin(s.tmux_bin ?? "");
       setEnterCount(s.enter_count ?? 2);
       setEnterIntervalMs(s.enter_interval_ms ?? 5000);
+      setDialogTimeoutMs(s.dialog_timeout_ms ?? 60000);
       // First run (nothing saved) → reveal the options section.
       setConfigOpen(b.settings === null);
     });
@@ -84,6 +86,7 @@ export function SpawnModal({ onClose }: { onClose: () => void }) {
     tmux_bin: tmuxBin.trim(),
     enter_count: enterCount,
     enter_interval_ms: enterIntervalMs,
+    dialog_timeout_ms: dialogTimeoutMs,
   });
 
   const canSpawn =
