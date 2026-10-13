@@ -165,6 +165,81 @@ function escapeLineEmphasis(line: string): string {
   return res;
 }
 
+// End a list / blockquote at the first line that is not visibly part of it.
+//
+// CommonMark's "lazy continuation" rule glues an UNINDENTED line onto the
+// paragraph of the list item (or blockquote) right above it when no blank line
+// separates them. With remark-breaks that line then renders as a second line
+// INSIDE the last bullet. Authors (mostly CC) write
+//
+//   - point A
+//   - point B
+//   If this is fine I'll go ahead.
+//
+// meaning the last line as a standalone closing sentence, and readers saw it
+// tucked under bullet B. dt's rule: a line belongs to a list item only if it is
+// indented (or is itself an item); a line belongs to a blockquote only if it
+// starts with `>`. Anything else gets a blank line inserted before it, so it
+// starts its own paragraph. Fenced code is copied verbatim.
+const LIST_ITEM_RE = /^\s*(?:[-*+]|\d{1,9}[.)])(?:\s|$)/;
+const QUOTE_RE = /^\s{0,3}>/;
+
+export function breakLazyContinuation(src: string): string {
+  if (!src.includes("\n")) return src;
+  const lines = src.split("\n");
+  const out: string[] = [];
+  let fence: string | null = null;
+  let inList = false; // previous line is a list item or its indented continuation
+  let inQuote = false; // previous line is a blockquote line
+
+  for (const line of lines) {
+    const fenceMatch = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
+    if (fence) {
+      if (fenceMatch && fenceMatch[1][0] === fence[0] && fenceMatch[1].length >= fence.length) {
+        fence = null;
+      }
+      out.push(line);
+      continue;
+    }
+
+    const blank = line.trim() === "";
+    const indented = /^\s/.test(line);
+    const isItem = LIST_ITEM_RE.test(line);
+    const isQuote = QUOTE_RE.test(line);
+
+    if (!blank) {
+      const lazyAfterList = inList && !indented && !isItem && !isQuote;
+      const lazyAfterQuote = inQuote && !isQuote;
+      const prevBlank = out.length > 0 && out[out.length - 1].trim() === "";
+      if ((lazyAfterList || lazyAfterQuote) && !prevBlank) out.push("");
+    }
+
+    if (fenceMatch) {
+      // An opening fence inside a list item (indented) stays in the item; a
+      // flush one ended it above. Either way the block is verbatim from here.
+      fence = fenceMatch[1];
+      inList = inList && indented;
+      inQuote = false;
+      out.push(line);
+      continue;
+    }
+
+    if (blank) {
+      // A blank line keeps an indented continuation possible (a second
+      // paragraph inside an item), so only a flush line ends the list.
+      inQuote = false;
+    } else if (isQuote) {
+      inQuote = true;
+      inList = false;
+    } else {
+      inQuote = false;
+      inList = isItem || (inList && indented);
+    }
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
 function findClosingBackticks(line: string, from: number, n: number): number {
   for (let i = from; i < line.length; i++) {
     if (line[i] !== "`") continue;

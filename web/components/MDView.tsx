@@ -8,7 +8,7 @@ import { MarkdownAnchor, urlTransform } from "./MarkdownAnchor.tsx";
 // swallow their own delimiters, and show the reader a path that does not exist.
 // `**bold**` and `_italic_` survive — one spelling each. Same call already made
 // for `~` via singleTilde:false; emphasis has no such option, hence the escape.
-import { escapeCodeHostileEmphasis } from "../utils/markdownText.ts";
+import { escapeCodeHostileEmphasis, breakLazyContinuation } from "../utils/markdownText.ts";
 import { ISSUE_ID_RE } from "../utils/issues.ts";
 import { IssueIdLink } from "./IssueIdLink.tsx";
 // Linkifies RAW (un-backticked) iss_/bd_ ids in message text. People kept
@@ -162,7 +162,9 @@ function MDViewImpl({
           },
         }}
       >
-        {escapeCodeHostileEmphasis(text)}
+        {/* breakLazyContinuation: an unindented line right after a bullet
+            or quote starts its own paragraph instead of being glued onto it. */}
+        {escapeCodeHostileEmphasis(breakLazyContinuation(text))}
       </ReactMarkdown>
     </div>
   );
