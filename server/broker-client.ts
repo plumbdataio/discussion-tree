@@ -18,6 +18,7 @@ import {
 } from "./launch-lock.ts";
 import { log } from "./log.ts";
 import { isSupervisorRunning } from "./supervisor-lock.ts";
+import { spawn } from "node:child_process";
 import { dirname } from "node:path";
 
 export async function brokerFetch<T>(
@@ -137,10 +138,17 @@ async function spawnBrokerAndWait(): Promise<void> {
   // dir). ensure-broker-running.sh already cds before launching; this is the
   // same fix for the MCP-server auto-spawn path. --smol matches restart-broker.sh
   // and the shell hook (keeps the long-lived broker's JSC heap small).
-  const proc = Bun.spawn(["bun", "--smol", BROKER_SCRIPT], {
+  //
+  // node:child_process rather than Bun.spawn so this also works when the MCP
+  // server itself runs under Node. The broker is always launched with bun (it
+  // needs bun:sqlite / Bun.serve), whatever runtime this process is.
+  const proc = spawn("bun", ["--smol", BROKER_SCRIPT], {
     cwd: dirname(BROKER_SCRIPT),
     stdio: ["ignore", "ignore", "inherit"],
   });
+  // A missing bun binary surfaces as an async 'error' event; without a listener
+  // that would be an uncaught exception. The health wait below reports it.
+  proc.on("error", (e) => log(`Broker spawn failed: ${e.message}`));
   proc.unref();
 
   // 30 × 200ms = 6s ceiling. SQLite open + Bun.serve startup is <100ms on a

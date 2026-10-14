@@ -7,6 +7,8 @@
 // has a single home. No shell anywhere: argv only, so the buffer text can never
 // be interpreted as a command.
 
+import { spawn } from "node:child_process";
+
 // A CLI command must be a single slash-token (args ride a separate field). The
 // command is pasted into the user's OWN CC pane (argv, no shell), so any
 // well-formed slash command grants nothing the user couldn't type themselves.
@@ -18,28 +20,45 @@ export function isValidCliCommand(command: string): boolean {
 // Run a tmux subprocess (argv -- no shell, so the buffer text can't inject).
 // Optionally pipe `input` to stdin (used by load-buffer to carry arbitrary,
 // possibly multiline, text without ARG_MAX limits).
+//
+// node:child_process rather than Bun.spawn: this module is shared by the broker
+// (Bun) and the per-CC MCP server, which may run under Node to keep its memory
+// floor low. Bun implements node:child_process natively, so the broker's
+// behaviour is unchanged.
 async function runTmux(
   argv: string[],
   input?: string,
 ): Promise<{ code: number; stdout: string }> {
-  try {
-    const proc = Bun.spawn(argv, {
-      stdin: input != null ? "pipe" : "ignore",
-      stdout: "pipe",
-      stderr: "ignore",
-    });
-    if (input != null && proc.stdin) {
-      proc.stdin.write(input);
-      await proc.stdin.end();
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (code: number, stdout: string) => {
+      if (settled) return;
+      settled = true;
+      resolve({ code, stdout });
+    };
+    try {
+      const [cmd, ...args] = argv;
+      const proc = spawn(cmd!, args, {
+        stdio: [input != null ? "pipe" : "ignore", "pipe", "ignore"],
+      });
+      const chunks: Buffer[] = [];
+      proc.stdout?.on("data", (c: Buffer) => chunks.push(c));
+      // tmux not installed / spawn failed -- treat as "command unavailable" so
+      // the caller reports pane_gone rather than 500-ing.
+      proc.on("error", () => done(127, ""));
+      proc.on("close", (code) =>
+        done(code ?? 1, Buffer.concat(chunks).toString("utf8")),
+      );
+      if (input != null && proc.stdin) {
+        proc.stdin.on("error", () => {
+          /* reported via close/error above */
+        });
+        proc.stdin.end(input);
+      }
+    } catch {
+      done(127, "");
     }
-    const stdout = await new Response(proc.stdout).text();
-    const code = await proc.exited;
-    return { code, stdout };
-  } catch {
-    // tmux not installed / spawn failed -- treat as "command unavailable" so the
-    // caller reports pane_gone rather than 500-ing.
-    return { code: 127, stdout: "" };
-  }
+  });
 }
 
 // Shells we must NOT paste a command into -- if the pane's foreground process is
