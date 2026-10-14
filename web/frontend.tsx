@@ -18,7 +18,7 @@ import { IssueTrackerModal } from "./components/IssueTrackerModal.tsx";
 import { SessionDashboard } from "./components/SessionDashboard.tsx";
 import { ToastContainer } from "./components/Toast.tsx";
 import { useSettings } from "./utils/settings.ts";
-import { installLinkInterceptor, useRoute } from "./utils/router.ts";
+import { installLastRouteResume, installLinkInterceptor, useRoute } from "./utils/router.ts";
 import {
   getBoardIdFromUrl,
   getDiagramIdFromUrl,
@@ -28,6 +28,7 @@ import {
 
 // Hook the click interceptor before React even mounts so the very first link
 // click is already SPA-style (no full HTTP reload).
+installLastRouteResume();
 installLinkInterceptor();
 
 function App() {
