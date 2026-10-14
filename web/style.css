@@ -207,6 +207,20 @@ body {
   .app {
     position: fixed;
     inset: 0;
+    /* Follow the VISUAL viewport (set from web/frontend.tsx) so the iOS
+       keyboard shrinks the shell instead of covering its bottom composer.
+       Falls back to the full layout viewport when the vars are unset. */
+    top: var(--vv-top, 0px);
+    bottom: auto;
+    height: var(--vv-height, 100%);
+  }
+  /* Keyboard open on the diagram page: the canvas is not usable then anyway,
+     so hand the whole height to the chat and its composer. */
+  html.kb-open .diagram-main .diagram-left {
+    display: none;
+  }
+  html.kb-open .diagram-main .map-chat {
+    flex: 1 1 auto;
   }
   /* Bounce-off for every internal scroll container we surface on mobile.
      overscroll-behavior: contain prevents scroll chaining; combined

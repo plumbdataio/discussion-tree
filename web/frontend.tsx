@@ -148,5 +148,27 @@ if (typeof document !== "undefined" && !document.querySelector("link[rel=manifes
   document.head.appendChild(link);
 }
 
+// Keep inputs above the on-screen keyboard on phones. On mobile the .app shell
+// is position:fixed to the layout viewport (see style.css, it stops iOS from
+// scrolling the header away), and iOS Safari does NOT shrink the layout
+// viewport when the keyboard opens - it only shrinks the visual viewport and
+// overlays the keyboard. So a composer at the bottom of .app ended up under the
+// keyboard. Mirror the visual viewport into CSS vars (--vv-top / --vv-height)
+// that size .app on mobile, and flag html.kb-open while the keyboard takes a
+// big bite of the screen so pages can give the composer the room (the diagram
+// page hides its canvas then).
+if (typeof window !== "undefined" && window.visualViewport) {
+  const vv = window.visualViewport;
+  const html = document.documentElement;
+  const sync = () => {
+    html.style.setProperty("--vv-top", `${vv.offsetTop}px`);
+    html.style.setProperty("--vv-height", `${vv.height}px`);
+    html.classList.toggle("kb-open", vv.height < window.innerHeight * 0.75);
+  };
+  vv.addEventListener("resize", sync);
+  vv.addEventListener("scroll", sync);
+  sync();
+}
+
 const root = createRoot(document.getElementById("root")!);
 root.render(<App />);
