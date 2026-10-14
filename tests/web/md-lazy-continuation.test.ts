@@ -69,6 +69,30 @@ describe("breakLazyContinuation", () => {
     expect(breakLazyContinuation("2026. text\nbar")).toBe("2026. text\n\nbar");
   });
 
+  test("a pipe-less line right after a table ends the table", () => {
+    const src = ["| a | b |", "|---|---|", "| 1 | 2 |", "after the table"].join("\n");
+    expect(breakLazyContinuation(src)).toBe(
+      ["| a | b |", "|---|---|", "| 1 | 2 |", "", "after the table"].join("\n"),
+    );
+  });
+
+  test("a table inside a list item: the indented line after it stays in the item as a new paragraph", () => {
+    const src = ["- item", "  | a | b |", "  |---|---|", "  | 1 | 2 |", "  closing line"].join("\n");
+    expect(breakLazyContinuation(src)).toBe(
+      ["- item", "  | a | b |", "  |---|---|", "  | 1 | 2 |", "", "  closing line"].join("\n"),
+    );
+  });
+
+  test("table rows without outer pipes keep the table going", () => {
+    const src = ["a | b", "--- | ---", "1 | 2", "3 | 4"].join("\n");
+    expect(breakLazyContinuation(src)).toBe(src);
+  });
+
+  test("a pipe in prose without a delimiter row is not a table", () => {
+    const src = "x | y\nnext";
+    expect(breakLazyContinuation(src)).toBe(src);
+  });
+
   test("single-line text is returned unchanged", () => {
     expect(breakLazyContinuation("- a")).toBe("- a");
   });

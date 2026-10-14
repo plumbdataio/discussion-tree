@@ -183,6 +183,10 @@ function escapeLineEmphasis(line: string): string {
 // starts its own paragraph. Fenced code is copied verbatim.
 const LIST_ITEM_RE = /^\s*(?:[-*+]|\d{1,9}[.)])(?:\s|$)/;
 const QUOTE_RE = /^\s{0,3}>/;
+// GFM table delimiter row (| --- | :-: |). A table runs from here while lines
+// keep containing a pipe; GFM would otherwise turn the next pipe-less line into
+// one more table row, so dt ends the table there too.
+const TABLE_DELIM_RE = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
 
 export function breakLazyContinuation(src: string): string {
   if (!src.includes("\n")) return src;
@@ -191,6 +195,7 @@ export function breakLazyContinuation(src: string): string {
   let fence: string | null = null;
   let inList = false; // previous line is a list item or its indented continuation
   let inQuote = false; // previous line is a blockquote line
+  let inTable = false; // previous line is a table delimiter row or table row
 
   for (const line of lines) {
     const fenceMatch = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
@@ -210,8 +215,9 @@ export function breakLazyContinuation(src: string): string {
     if (!blank) {
       const lazyAfterList = inList && !indented && !isItem && !isQuote;
       const lazyAfterQuote = inQuote && !isQuote;
+      const lazyAfterTable = inTable && !line.includes("|");
       const prevBlank = out.length > 0 && out[out.length - 1].trim() === "";
-      if ((lazyAfterList || lazyAfterQuote) && !prevBlank) out.push("");
+      if ((lazyAfterList || lazyAfterQuote || lazyAfterTable) && !prevBlank) out.push("");
     }
 
     if (fenceMatch) {
@@ -223,6 +229,10 @@ export function breakLazyContinuation(src: string): string {
       out.push(line);
       continue;
     }
+
+    if (blank) inTable = false;
+    else if (TABLE_DELIM_RE.test(line) && line.includes("|")) inTable = true;
+    else inTable = inTable && line.includes("|");
 
     if (blank) {
       // A blank line keeps an indented continuation possible (a second
