@@ -18,7 +18,14 @@ import { join, resolve } from "node:path";
 //     and grew back on reveal, so the view jumped by hundreds of px on every
 //     pass);
 //   - the thread opens pinned to the bottom and stays pinned when a new
-//     message arrives.
+//     message arrives;
+//   - deep history (grouped into content-visibility:auto chunks) is still all
+//     in the DOM and reachable: a message in a far, never-rendered chunk can be
+//     found with window.find() and scrolled into view;
+//   - typing in the composer of a long thread stays cheap per keystroke
+//     (content-visibility on every row made the browser re-check thousands of
+//     elements per keystroke; the draft living in the thread component made
+//     each keystroke re-render the whole list).
 //
 // Runs against its own broker (temp DISCUSSION_TREE_HOME + DB, OS-assigned
 // port), never a running one. Run with:
@@ -30,6 +37,12 @@ let base: string;
 let defaultBoardId: string;
 let defaultNodeId: string;
 let itemBoardId: string;
+let longBoardId: string;
+
+// Size of the long thread used by the typing-latency check. Large enough that
+// per-row containment or a per-keystroke re-render of the list shows up
+// clearly in the per-keystroke time.
+const LONG_THREAD_MESSAGES = 3000;
 
 async function post(path: string, body: unknown): Promise<any> {
   const r = await fetch(base + path, {
@@ -92,7 +105,7 @@ const SELECTION_TRIO = ["A", "B", "C"].map(
 );
 
 test.beforeAll(async () => {
-  test.setTimeout(180_000);
+  test.setTimeout(600_000);
   const port = await startBroker();
   base = `http://127.0.0.1:${port}`;
 
@@ -154,6 +167,36 @@ test.beforeAll(async () => {
       status: "discussing",
     });
   }
+
+  // A second session's default board with a long thread, for the typing
+  // latency check. Posted a few at a time; order does not matter there.
+  const reg2 = await post("/register", { pid: process.pid, cwd: home });
+  await post("/attach-cc-session", {
+    session_id: reg2.session_id,
+    cc_session_id: "cc-thread-e2e-long",
+  });
+  const sessions2 = await get("/api/sessions");
+  const me2 = sessions2.sessions.find((s: any) => s.id === reg2.session_id);
+  longBoardId = me2.boards.find((b: any) => b.is_default).id;
+  const longView = await get(`/api/board/${longBoardId}`);
+  const longNodeId = longView.nodes.find(
+    (n: any) => n.kind === "item" && n.parent_id !== null,
+  ).id;
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: 8 }, async () => {
+      while (next < LONG_THREAD_MESSAGES) {
+        const i = next++;
+        await post("/post-to-node", {
+          issue_ids: [],
+          board_id: longBoardId,
+          node_id: longNodeId,
+          message: body(i),
+          status: "discussing",
+        });
+      }
+    }),
+  );
 });
 
 test.afterAll(async () => {
@@ -361,5 +404,143 @@ test.describe("chat thread", () => {
     console.log("wheel errors pass2", JSON.stringify(second));
     expect(second.length).toBeGreaterThan(20);
     expect(Math.max(...second)).toBeLessThanOrEqual(4);
+  });
+
+  test("default board: a message in a far, never-rendered chunk is findable and reachable", async ({ page, browserName }) => {
+    await openDefaultBoard(page);
+    const root = ".default-board-thread";
+    // MSG-005 is in the oldest chunk, thousands of px above the bottom the
+    // thread opened at, so that chunk has never been rendered.
+    const needle = "MSG-005 short";
+    const before = await page.evaluate(
+      ({ root, needle }) => {
+        const el = document.querySelector(root)!;
+        const chunk = el.querySelector(".thread-chunk") as HTMLElement | null;
+        if (!chunk) return null;
+        const row = Array.from(chunk.querySelectorAll<HTMLElement>("[data-thread-item-id]")).find(
+          (r) => r.textContent?.includes(needle),
+        );
+        return {
+          inChunk: !!row,
+          // false = the row sits in a skipped (not rendered) chunk; null where
+          // the browser cannot report it.
+          rendered:
+            row && typeof (row as any).checkVisibility === "function"
+              ? row.checkVisibility({ contentVisibilityAuto: true } as any)
+              : null,
+          chunks: el.querySelectorAll(".thread-chunk").length,
+        };
+      },
+      { root, needle },
+    );
+    expect(before, "deep history is not chunked").not.toBeNull();
+    expect(before!.inChunk).toBe(true);
+    expect(before!.chunks).toBeGreaterThanOrEqual(2);
+    console.log(`[${browserName}] row in the oldest chunk rendered before find:`, before!.rendered);
+    if (before!.rendered !== null) expect(before!.rendered).toBe(false);
+
+    // window.find() is non-standard (Chromium and WebKit implement it); it is
+    // the closest scriptable stand-in for the browser's own find bar.
+    const found = await page.evaluate((needle) => {
+      window.getSelection()?.removeAllRanges();
+      const f = (window as any).find;
+      if (typeof f !== "function") return null;
+      const ok = f.call(window, needle, true, false, true);
+      const sel = window.getSelection();
+      const row = sel?.anchorNode?.parentElement?.closest("[data-thread-item-id]");
+      return { ok, selected: sel?.toString() ?? "", inChunk: !!row?.closest(".thread-chunk") };
+    }, needle);
+    console.log(`[${browserName}] window.find:`, JSON.stringify(found));
+    expect(found, "window.find is unavailable").not.toBeNull();
+    expect(found!.ok).toBe(true);
+    expect(found!.selected).toBe(needle);
+    expect(found!.inChunk).toBe(true);
+
+    // Scrolling the row into view renders it at its real size inside the
+    // scroller (what a find-bar match or a favorites jump does).
+    const shown = await page.evaluate(
+      ({ root, needle }) => {
+        const el = document.querySelector(root) as HTMLElement;
+        const row = Array.from(el.querySelectorAll<HTMLElement>("[data-thread-item-id]")).find(
+          (r) => r.textContent?.includes(needle),
+        )!;
+        row.scrollIntoView({ block: "center" });
+        return new Promise<{ inView: boolean; height: number; text: boolean }>((done) =>
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+              const s = el.getBoundingClientRect();
+              const b = row.getBoundingClientRect();
+              done({
+                inView: b.top >= s.top - 1 && b.bottom <= s.bottom + 1,
+                height: b.height,
+                text: (row.innerText ?? "").includes(needle),
+              });
+            }),
+          ),
+        );
+      },
+      { root, needle },
+    );
+    expect(shown.inView).toBe(true);
+    // Rendered, not a collapsed placeholder (a bare row's padding is ~16px).
+    expect(shown.height).toBeGreaterThan(30);
+    expect(shown.text).toBe(true);
+  });
+
+  test("long thread: typing in the composer stays cheap per keystroke", async ({ page, browserName }) => {
+    test.setTimeout(240_000);
+    await page.goto(`${base}/board/${longBoardId}`);
+    const root = ".default-board-thread";
+    await page.locator(`${root} .thread-msg`).first().waitFor({ timeout: 120_000 });
+    await page.waitForTimeout(2000);
+    const rows = await page.locator(`${root} [data-thread-item-id]`).count();
+    expect(rows).toBe(LONG_THREAD_MESSAGES);
+
+    // Chromium: emulate a slow phone (6x CPU throttle) so the check has
+    // headroom to catch a regression. WebKit cannot be throttled here and
+    // runs unthrottled.
+    let cdp: any = null;
+    if (browserName === "chromium") {
+      cdp = await page.context().newCDPSession(page);
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
+    }
+    const ta = page.locator(".default-board-input textarea.answer-input");
+    await ta.click();
+    await page.waitForTimeout(500);
+    // Per keystroke: keydown -> the next frame has run (rAF, then a task).
+    await page.evaluate(() => {
+      const w = window as any;
+      w.__lat = [];
+      document
+        .querySelector(".default-board-input textarea.answer-input")!
+        .addEventListener(
+          "keydown",
+          (e) => {
+            const ts = e.timeStamp;
+            requestAnimationFrame(() =>
+              setTimeout(() => w.__lat.push(performance.now() - ts), 0),
+            );
+          },
+          true,
+        );
+    });
+    await page.keyboard.type("abcdefghijklmnopqrst", { delay: 250 });
+    await page.waitForTimeout(1000);
+    if (cdp) await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+    const lat: number[] = await page.evaluate(() => (window as any).__lat);
+    // Clear the typed text without sending.
+    await ta.fill("");
+    const sorted = [...lat].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    console.log(
+      `[${browserName}] per-keystroke ms (${LONG_THREAD_MESSAGES} msgs): median ${median.toFixed(1)}, max ${sorted[sorted.length - 1].toFixed(1)}`,
+    );
+    expect(lat.length).toBeGreaterThanOrEqual(15);
+    // Loose, per engine. Measured on pd-002 (2026-10-14) with this thread:
+    // chromium 6x ~38ms after the fix vs ~102ms with per-row containment and
+    // the draft in the thread component; webkit ~13ms vs ~76ms. (On the
+    // 4,400-message production thread: chromium 6x ~40 vs ~150, webkit ~29 vs
+    // ~186.)
+    expect(median).toBeLessThan(browserName === "chromium" ? 70 : 45);
   });
 });

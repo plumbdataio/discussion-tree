@@ -1,6 +1,4 @@
 import React, { useCallback, useRef, useState } from "react";
-import { ResizableTextarea } from "./ResizableTextarea.tsx";
-import { TimerSendButton } from "./TimerSendButton.tsx";
 import { ScheduledPinned } from "./ScheduledPinned.tsx";
 import { confirmBeforeSend } from "../utils/timerConfirm.ts";
 import { useTranslation } from "react-i18next";
@@ -8,14 +6,12 @@ import type { BoardView, Node, ThreadItem } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
 import { MessageModal } from "./MessageModal.tsx";
 import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
-import { ThreadMessage } from "./ThreadMessage.tsx";
-import { extractImageFiles, uploadImage } from "../utils/api.ts";
-import { useDraft } from "../utils/drafts.ts";
+import { ThreadComposer } from "./ThreadComposer.tsx";
+import { ThreadRows } from "./ThreadRows.tsx";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useAnyPreviewModalOpen } from "../utils/previewModalLock.ts";
 import { useSettings } from "../utils/settings.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
-import { LIVE_REGION_COUNT } from "../utils/estimateMessageHeight.ts";
 import { isUnreadThreadItem } from "../utils/threadSource.ts";
 
 // Default conversation board: a single fixed item, no concern column / no
@@ -56,14 +52,13 @@ export function DefaultBoardLayout({
     (m: any) => m.node_id === node.id,
   );
 
-  // Persisted-on-localStorage draft (cleared on successful send).
-  const [draft, setDraft] = useDraft(data.board.id, node.id);
-  const [submitting, setSubmitting] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  // The draft lives in ThreadComposer, so a keystroke re-renders only the
+  // composer — never this component or its 1000s-of-rows thread.
   const [tentativeText, setTentativeText] = useState<string | null>(null);
   const [expandedMsg, setExpandedMsg] = useState<ThreadItem | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
+  const rowsRef = useRef<HTMLDivElement>(null);
 
   // Pause auto-read while a preview modal (e.g. an expanded message) occludes
   // the thread behind it.
@@ -93,91 +88,18 @@ export function DefaultBoardLayout({
   // column-reverse in CSS — no JS follow loop needed.
   useSnapToBottom(threadRef, { reversed: true, deps: [tentativeText] });
 
-  const handleImageFiles = async (files: File[]) => {
-    if (files.length === 0) return;
-    setUploading(true);
-    try {
-      const uploaded: { url: string; path: string }[] = [];
-      for (const f of files) {
-        try {
-          uploaded.push(await uploadImage(f, data.board.id));
-        } catch (e) {
-          alert(
-            t("item_card.image_upload_failed", {
-              message: e instanceof Error ? e.message : String(e),
-            }),
-          );
-        }
-      }
-      if (uploaded.length > 0) {
-        setDraft((prev) => {
-          const sep = prev && !prev.endsWith("\n") ? "\n" : "";
-          const block = uploaded
-            .map((u) => `![image](${u.url})\n[image] [${u.path}](${u.url})`)
-            .join("\n\n");
-          return prev + sep + block + "\n";
-        });
-      }
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = extractImageFiles(e.clipboardData?.items ?? null);
-    if (files.length > 0) {
-      e.preventDefault();
-      handleImageFiles(files);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
-    const files = extractImageFiles(e.dataTransfer?.files ?? null);
-    if (files.length > 0) {
-      e.preventDefault();
-      handleImageFiles(files);
-    }
-  };
-
-  const handleSubmit = async () => {
-    const text = draft.trim();
-    if (!text) return;
-    // If this session has an armed pending timer send, confirm before sending
-    // a LIVE message (once — showing the confirm disarms it).
-    const proceed = await confirmBeforeSend(
+  // Confirm a live send while this session has an armed pending timer send
+  // (once — showing the confirm disarms it).
+  const confirmSend = () =>
+    confirmBeforeSend(
       !!(data as any).owner_timer_confirm_armed,
       data.board.session_id,
       (data as any).owner_scheduled_count ?? 0,
     );
-    if (!proceed) return;
-    setSubmitting(true);
-    setTentativeText(text);
-    setDraft("");
-    try {
-      await onSubmit(node.id, text);
-      setTentativeText(null);
-    } catch (e) {
-      setTentativeText(null);
-      setDraft(text);
-      alert(
-        t("item_card.send_failed", {
-          message: e instanceof Error ? e.message : String(e),
-        }),
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const sendToNode = (text: string) => onSubmit(node.id, text);
 
-  const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
-
-  // Stable identity so memoized ThreadMessage skips reconciliation
-  // on every keystroke in the draft textarea.
+  // Stable identity so the memoized thread rows skip reconciliation when this
+  // component re-renders (sending, a pending timer send, …).
   const openExpandedMsg = useCallback((it: ThreadItem) => {
     setExpandedMsg(it);
   }, []);
@@ -212,22 +134,20 @@ export function DefaultBoardLayout({
           selection follow the reversed DOM — dragging from an older message
           to a newer one selected the wrong span.) */}
       <div className="default-board-thread" ref={threadRef}>
-        <div className="thread-rows">
-          {/* Natural order: the oldest rows come first. Rows older than the
-              newest LIVE_REGION_COUNT ("deep history") opt into
-              content-visibility:auto; the live edge at the bottom renders
-              normally. */}
-          {myThread.map((it, i) => (
-            <ThreadMessage
-              key={it.id}
-              item={it}
-              boardId={data.board.id}
-              nodeId={node.id}
-              sessionId={ownerSessionId}
-              contained={i < myThread.length - LIVE_REGION_COUNT}
-              onExpand={openExpandedMsg}
-            />
-          ))}
+        <div className="thread-rows" ref={rowsRef}>
+          {/* Natural order: the oldest rows come first. Deep history is
+              grouped into content-visibility chunks; the live edge at the
+              bottom renders normally (see ThreadRows). gapPx mirrors the
+              `.default-board-thread > .thread-rows` gap. */}
+          <ThreadRows
+            items={myThread}
+            rowsRef={rowsRef}
+            gapPx={8}
+            boardId={data.board.id}
+            nodeId={node.id}
+            sessionId={ownerSessionId}
+            onExpand={openExpandedMsg}
+          />
           {/* In-flow at the visual bottom, co-located with tentativeText: the
               pending timer-send preview scrolls with the thread and its
               height is bounded by this scroll container, so a tall (image /
@@ -254,23 +174,22 @@ export function DefaultBoardLayout({
           relative to .default-board (which is position: relative). */}
       <ScrollToBottomButton scrollRef={threadRef} reversed />
 
-      <div className="default-board-input">
-        <ResizableTextarea
-          className="answer-input"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={handleKey}
-          onPaste={handlePaste}
-          onDrop={handleDrop}
-          disabled={!ownerAlive}
-          placeholder={
-            ownerAlive
-              ? t("item_card.input_placeholder_default")
-              : t("item_card.input_disabled")
-          }
-        />
-        <div className="actions">
-          {showManualReadButton && (
+      <ThreadComposer
+        className="default-board-input"
+        draftBoardId={data.board.id}
+        timerBoardId={data.board.id}
+        nodeId={node.id}
+        ownerAlive={ownerAlive}
+        placeholder={
+          ownerAlive
+            ? t("item_card.input_placeholder_default")
+            : t("item_card.input_disabled")
+        }
+        confirmSend={confirmSend}
+        onSend={sendToNode}
+        onTentative={setTentativeText}
+        extraActions={
+          showManualReadButton && (
             <button
               type="button"
               className="mark-node-read"
@@ -279,25 +198,9 @@ export function DefaultBoardLayout({
             >
               {t("item_card.mark_read_button")}
             </button>
-          )}
-          {uploading && (
-            <span className="upload-status">
-              {t("item_card.image_uploading")}
-            </span>
-          )}
-          <TimerSendButton
-            sendLabel={t("item_card.send_button")}
-            sendDisabled={
-              submitting || uploading || !draft.trim() || !ownerAlive
-            }
-            onSend={handleSubmit}
-            boardId={data.board.id}
-            nodeId={node.id}
-            getText={() => draft}
-            onScheduled={() => setDraft("")}
-          />
-        </div>
-      </div>
+          )
+        }
+      />
 
       {expandedMsg && (
         <MessageModal

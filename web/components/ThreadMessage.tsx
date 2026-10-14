@@ -7,7 +7,6 @@ import { renderSystemMessage } from "./SystemMessage.tsx";
 import { showToast } from "./Toast.tsx";
 import { formatThreadTimestamp } from "../utils/format.ts";
 import { toggleFavorite, useFavorited } from "../utils/favorites.ts";
-import { estimateMessageHeight } from "../utils/estimateMessageHeight.ts";
 import { isUnreadThreadItem } from "../utils/threadSource.ts";
 import { SenderName } from "./SenderName.tsx";
 
@@ -29,7 +28,6 @@ function ThreadMessageImpl({
   sessionId,
   enableAnchor = true,
   compact = false,
-  contained = false,
   onExpand,
 }: {
   item: ThreadItem;
@@ -42,14 +40,6 @@ function ThreadMessageImpl({
   // "no bookmark / no timestamp / no status" requirement). Defaults off, so
   // every existing board call site is unchanged.
   compact?: boolean;
-  // Deep-history rows (older than the live region near the bottom) opt into
-  // `content-visibility: auto` so the browser skips their layout + paint while
-  // off-screen — the whole point of this component's memoization plus the
-  // containment is to keep a 3k-message thread cheap without dropping any row
-  // from the DOM (Ctrl+F must still find them). The live edge is passed
-  // `contained={false}` so recoil can never touch the rows the user actively
-  // reads. See estimateMessageHeight.ts for why the seed errs tall.
-  contained?: boolean;
   onExpand: (item: ThreadItem) => void;
 }) {
   const { t } = useTranslation();
@@ -58,25 +48,13 @@ function ThreadMessageImpl({
   // can't be pinned and the comparator skips re-renders anyway.
   const isPinned = useFavorited(item.id);
 
-  // When contained, enable `content-visibility: auto` (via the class) and seed
-  // `contain-intrinsic-size` with the `auto` keyword: the browser reuses each
-  // row's LAST REAL rendered height as the estimate after first paint, so
-  // scrolling back over already-seen history reuses an EXACT size — no
-  // estimate->real swap at the viewport edge, no recoil. The px seed only
-  // biases the very first reveal of a never-yet-painted row.
-  const containClass = contained ? " cv-contained" : "";
-  const containStyle: React.CSSProperties | undefined = contained
-    ? { containIntrinsicSize: `auto ${estimateMessageHeight(item.text)}px` }
-    : undefined;
-
   if (item.source === "system") {
     // A cli_command marker (e.g. "cli_command:/compact") renders as a distinct
     // pale-green "system command" chip rather than the muted status-change line.
     const isCommand = item.text.startsWith("cli_command:");
     return (
       <div
-        className={`thread-msg from-system${isCommand ? " is-command" : ""}${containClass}`}
-        style={containStyle}
+        className={`thread-msg from-system${isCommand ? " is-command" : ""}`}
       >
         {renderSystemMessage(item.text)}
       </div>
@@ -103,8 +81,7 @@ function ThreadMessageImpl({
 
   return (
     <div
-      className={`thread-msg from-${item.source}${isUnread ? " unread" : ""}${isPinned ? " is-pinned" : ""}${containClass}`}
-      style={containStyle}
+      className={`thread-msg from-${item.source}${isUnread ? " unread" : ""}${isPinned ? " is-pinned" : ""}`}
       data-unread-id={isUnread ? item.id : undefined}
       data-thread-item-id={item.id}
     >
@@ -149,23 +126,28 @@ function ThreadMessageImpl({
 // useFavorited subscribes to the store directly so a pin/unpin
 // triggers React's normal hook re-render without needing the parent
 // to feed a new prop.
+// Whether two versions of a thread item render identically. Shared with
+// ThreadRows' chunk comparator, so a broker update that hands over fresh item
+// objects with unchanged content re-renders neither a row nor its chunk.
+export function sameRenderedThreadItem(a: ThreadItem, b: ThreadItem): boolean {
+  return (
+    a.id === b.id &&
+    a.text === b.text &&
+    a.read_at === b.read_at &&
+    a.source === b.source &&
+    a.sender_label === b.sender_label &&
+    a.created_at === b.created_at
+  );
+}
+
 export const ThreadMessage = React.memo(
   ThreadMessageImpl,
   (prev, next) =>
-    prev.item.id === next.item.id &&
-    prev.item.text === next.item.text &&
-    prev.item.read_at === next.item.read_at &&
-    prev.item.source === next.item.source &&
-    prev.item.sender_label === next.item.sender_label &&
-    prev.item.created_at === next.item.created_at &&
+    sameRenderedThreadItem(prev.item, next.item) &&
     prev.boardId === next.boardId &&
     prev.nodeId === next.nodeId &&
     prev.sessionId === next.sessionId &&
     prev.enableAnchor === next.enableAnchor &&
     prev.compact === next.compact &&
-    // A new message shifts older rows across the live-region boundary, flipping
-    // their `contained` state — must re-render so the containment attaches /
-    // detaches. Only the one boundary-crossing row re-renders.
-    prev.contained === next.contained &&
     prev.onExpand === next.onExpand,
 );

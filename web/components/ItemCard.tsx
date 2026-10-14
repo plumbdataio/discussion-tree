@@ -1,7 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
-import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { ScheduledPinned } from "./ScheduledPinned.tsx";
-import { TimerSendButton } from "./TimerSendButton.tsx";
 import { confirmBeforeSend } from "../utils/timerConfirm.ts";
 import { Maximize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -10,15 +8,13 @@ import { ActivityBadge } from "./ActivityBadge.tsx";
 import { MDView } from "./MDView.tsx";
 import { NodeModal } from "./NodeModal.tsx";
 import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
-import { ThreadMessage } from "./ThreadMessage.tsx";
-import { extractImageFiles, uploadImage } from "../utils/api.ts";
-import { useDraft } from "../utils/drafts.ts";
+import { ThreadComposer } from "./ThreadComposer.tsx";
+import { ThreadRows } from "./ThreadRows.tsx";
 import { getBoardIdFromUrl } from "../utils/url.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useAnyPreviewModalOpen } from "../utils/previewModalLock.ts";
 import { useSettings } from "../utils/settings.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
-import { LIVE_REGION_COUNT } from "../utils/estimateMessageHeight.ts";
 import { isUnreadThreadItem } from "../utils/threadSource.ts";
 
 export function ItemCard({
@@ -53,11 +49,8 @@ export function ItemCard({
 }) {
   const { t } = useTranslation();
   const boardId = getBoardIdFromUrl() ?? "misc";
-  // Persisted-on-localStorage draft so a refresh / SPA-nav / accidental tab
-  // close doesn't lose what the user was typing. Cleared on successful send.
-  const [draft, setDraft] = useDraft(boardId, node.id);
-  const [submitting, setSubmitting] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  // The draft lives in ThreadComposer, so a keystroke re-renders only the
+  // composer — never this card or its thread.
   // Optimistic in-flight message: shown as a faded card with a spinner. Set
   // when the user clicks Send, cleared on success / failure. On failure we
   // also restore the text into the textarea so they can retry without retyping.
@@ -71,6 +64,7 @@ export function ItemCard({
     (m: any) => m.node_id === node.id,
   );
   const threadRef = useRef<HTMLDivElement>(null);
+  const rowsRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const flashing = flashingNodes.has(node.id);
   const isActive = !!(activity && activity.node_id === node.id);
@@ -97,8 +91,8 @@ export function ItemCard({
     });
   };
 
-  // Stable identity so memoized ThreadMessage doesn't re-render on every
-  // parent re-render (i.e. every keystroke in the draft textarea).
+  // Stable identity so the memoized thread rows skip reconciliation when this
+  // card re-renders (sending, activity, a pending timer send, …).
   const openExpandedMsg = useCallback((it: ThreadItem) => {
     setMsgTarget(it.id);
     setNodeExpanded(true);
@@ -109,92 +103,14 @@ export function ItemCard({
   // handled by column-reverse in CSS.
   useSnapToBottom(threadRef, { reversed: true, deps: [tentativeText] });
 
-  const handleImageFiles = async (files: File[]) => {
-    if (files.length === 0) return;
-    const boardId = getBoardIdFromUrl() ?? "misc";
-    setUploading(true);
-    try {
-      const uploaded: { url: string; path: string }[] = [];
-      for (const f of files) {
-        try {
-          uploaded.push(await uploadImage(f, boardId));
-        } catch (e) {
-          alert(
-            t("item_card.image_upload_failed", {
-              message: e instanceof Error ? e.message : String(e),
-            }),
-          );
-        }
-      }
-      if (uploaded.length > 0) {
-        setDraft((prev) => {
-          const sep = prev && !prev.endsWith("\n") ? "\n" : "";
-          // Markdown image syntax (rendered inline via broker's /uploads/ route)
-          // + a clickable link that opens the same URL in a new browser tab so the
-          // user can see the original at full size. The display text shows the
-          // absolute filesystem path so Claude Code can extract it via its Read tool.
-          const block = uploaded
-            .map((u) => `![image](${u.url})\n[image] [${u.path}](${u.url})`)
-            .join("\n\n");
-          return prev + sep + block + "\n";
-        });
-      }
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = extractImageFiles(e.clipboardData?.items ?? null);
-    if (files.length > 0) {
-      e.preventDefault();
-      handleImageFiles(files);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
-    const files = extractImageFiles(e.dataTransfer?.files ?? null);
-    if (files.length > 0) {
-      e.preventDefault();
-      handleImageFiles(files);
-    }
-  };
-
-  const handleSubmit = async () => {
-    const text = draft.trim();
-    if (!text) return;
-    // Confirm a live send while this session has an armed pending timer send.
-    const proceed = await confirmBeforeSend(
+  // Confirm a live send while this session has an armed pending timer send.
+  const confirmSend = () =>
+    confirmBeforeSend(
       !!ownerConfirmArmed,
       ownerSessionId,
       scheduled?.length ?? 0,
     );
-    if (!proceed) return;
-    setSubmitting(true);
-    setTentativeText(text);
-    setDraft("");
-    try {
-      await onSubmit(node.id, text);
-      setTentativeText(null);
-    } catch (e) {
-      setTentativeText(null);
-      setDraft(text);
-      alert(
-        t("item_card.send_failed", {
-          message: e instanceof Error ? e.message : String(e),
-        }),
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
+  const sendToNode = (text: string) => onSubmit(node.id, text);
 
   return (
     <div
@@ -241,21 +157,19 @@ export function ItemCard({
           DOM order == visual order so drag selection / copy across messages
           run top-to-bottom. */}
       <div className="thread" ref={threadRef}>
-        <div className="thread-rows">
-          {/* Natural order. Deep-history rows (older than the newest
-              LIVE_REGION_COUNT) opt into content-visibility:auto; most node
-              threads are short enough that nothing is contained. */}
-          {myThread.map((it, i) => (
-            <ThreadMessage
-              key={it.id}
-              item={it}
-              boardId={node.board_id}
-              nodeId={node.id}
-              sessionId={ownerSessionId}
-              contained={i < myThread.length - LIVE_REGION_COUNT}
-              onExpand={openExpandedMsg}
-            />
-          ))}
+        <div className="thread-rows" ref={rowsRef}>
+          {/* Natural order. Deep history is grouped into content-visibility
+              chunks (see ThreadRows); most node threads are short enough that
+              nothing is chunked. gapPx mirrors the item-card .thread-rows gap. */}
+          <ThreadRows
+            items={myThread}
+            rowsRef={rowsRef}
+            gapPx={6}
+            boardId={node.board_id}
+            nodeId={node.id}
+            sessionId={ownerSessionId}
+            onExpand={openExpandedMsg}
+          />
           {/* In-flow at the visual bottom, co-located with tentativeText: the
               pending timer-send preview scrolls with the thread and is
               bounded by this scroll container, so a tall scheduled message
@@ -275,40 +189,21 @@ export function ItemCard({
       </div>
       <ScrollToBottomButton scrollRef={threadRef} reversed />
 
-      <div className="input-row">
-        <ResizableTextarea
-          className="answer-input"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={handleKey}
-          onPaste={handlePaste}
-          onDrop={handleDrop}
-          disabled={!ownerAlive}
-          placeholder={
-            ownerAlive
-              ? t("item_card.input_placeholder")
-              : t("item_card.input_disabled")
-          }
-        />
-        <div className="actions">
-          {uploading && (
-            <span className="upload-status">
-              {t("item_card.image_uploading")}
-            </span>
-          )}
-          <TimerSendButton
-            sendLabel={t("item_card.send_button")}
-            sendDisabled={
-              submitting || uploading || !draft.trim() || !ownerAlive
-            }
-            onSend={handleSubmit}
-            boardId={node.board_id}
-            nodeId={node.id}
-            getText={() => draft}
-            onScheduled={() => setDraft("")}
-          />
-        </div>
-      </div>
+      <ThreadComposer
+        className="input-row"
+        draftBoardId={boardId}
+        timerBoardId={node.board_id}
+        nodeId={node.id}
+        ownerAlive={ownerAlive}
+        placeholder={
+          ownerAlive
+            ? t("item_card.input_placeholder")
+            : t("item_card.input_disabled")
+        }
+        confirmSend={confirmSend}
+        onSend={sendToNode}
+        onTentative={setTentativeText}
+      />
 
       {nodeExpanded && (
         <NodeModal

@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -9,8 +8,7 @@ import { SenderName } from "./SenderName.tsx";
 import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
 import { renderSystemMessage } from "./SystemMessage.tsx";
 import { getBoardIdFromUrl } from "../utils/url.ts";
-import { extractImageFiles, uploadImage } from "../utils/api.ts";
-import { useDraft } from "../utils/drafts.ts";
+import { ThreadComposer } from "./ThreadComposer.tsx";
 import { formatThreadTimestamp } from "../utils/format.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 import { usePreviewModalLock } from "../utils/previewModalLock.ts";
@@ -39,12 +37,10 @@ export function NodeModal({
   // (a node occluded by the preview isn't something the user is reading).
   usePreviewModalLock();
   const boardId = getBoardIdFromUrl() ?? "misc";
-  // Persisted-on-localStorage draft (shared key with the underlying ItemCard
-  // for the same node — they back the same conversation, so the draft
-  // follows whichever surface the user types in).
-  const [draft, setDraft] = useDraft(boardId, node.id);
-  const [submitting, setSubmitting] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  // The draft lives in ThreadComposer (same persisted key as the underlying
+  // ItemCard for this node — they back the same conversation, so the draft
+  // follows whichever surface the user types in), so a keystroke re-renders
+  // only the composer, not this modal's thread.
   const [tentativeText, setTentativeText] = useState<string | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
 
@@ -94,85 +90,8 @@ export function NodeModal({
     return () => clearTimeout(tid);
   }, [scrollToItemId]);
 
-  const handleImageFiles = async (files: File[]) => {
-    if (files.length === 0) return;
-    const boardId = getBoardIdFromUrl() ?? "misc";
-    setUploading(true);
-    try {
-      const uploaded: { url: string; path: string }[] = [];
-      for (const f of files) {
-        try {
-          uploaded.push(await uploadImage(f, boardId));
-        } catch (e) {
-          alert(
-            t("item_card.image_upload_failed", {
-              message: e instanceof Error ? e.message : String(e),
-            }),
-          );
-        }
-      }
-      if (uploaded.length > 0) {
-        setDraft((prev) => {
-          const sep = prev && !prev.endsWith("\n") ? "\n" : "";
-          // Markdown image syntax (rendered inline via broker's /uploads/ route)
-          // + a clickable link that opens the same URL in a new browser tab so the
-          // user can see the original at full size. The display text shows the
-          // absolute filesystem path so Claude Code can extract it for its Read tool.
-          const block = uploaded
-            .map((u) => `![image](${u.url})\n[image] [${u.path}](${u.url})`)
-            .join("\n\n");
-          return prev + sep + block + "\n";
-        });
-      }
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = extractImageFiles(e.clipboardData?.items ?? null);
-    if (files.length > 0) {
-      e.preventDefault();
-      handleImageFiles(files);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
-    const files = extractImageFiles(e.dataTransfer?.files ?? null);
-    if (files.length > 0) {
-      e.preventDefault();
-      handleImageFiles(files);
-    }
-  };
-
-  const handleSubmit = async () => {
-    const text = draft.trim();
-    if (!text) return;
-    setSubmitting(true);
-    setTentativeText(text);
-    setDraft("");
-    try {
-      await onSubmit(node.id, text);
-      setTentativeText(null);
-    } catch (e) {
-      setTentativeText(null);
-      setDraft(text);
-      alert(
-        t("item_card.send_failed", {
-          message: e instanceof Error ? e.message : String(e),
-        }),
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
+  const sendToNode = (text: string) => onSubmit(node.id, text);
+  const noConfirm = async () => true;
 
   // Portal into document.body so .board-container's layout containment
   // (container-type: inline-size) can't trap the fixed backdrop.
@@ -243,35 +162,22 @@ export function NodeModal({
           )}
           <ScrollToBottomButton scrollRef={threadRef} />
         </div>
-        <div className="node-modal-input">
-          <ResizableTextarea
-            className="answer-input"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={handleKey}
-            onPaste={handlePaste}
-            onDrop={handleDrop}
-            disabled={!ownerAlive}
-            placeholder={
-              ownerAlive
-                ? t("item_card.input_placeholder")
-                : t("item_card.input_disabled")
-            }
-          />
-          <div className="actions">
-            {uploading && (
-              <span className="upload-status">
-                {t("item_card.image_uploading")}
-              </span>
-            )}
-            <button
-              onClick={handleSubmit}
-              disabled={submitting || uploading || !draft.trim() || !ownerAlive}
-            >
-              {t("item_card.send_button")}
-            </button>
-          </div>
-        </div>
+        <ThreadComposer
+          className="node-modal-input"
+          draftBoardId={boardId}
+          timerBoardId={boardId}
+          nodeId={node.id}
+          ownerAlive={ownerAlive}
+          placeholder={
+            ownerAlive
+              ? t("item_card.input_placeholder")
+              : t("item_card.input_disabled")
+          }
+          confirmSend={noConfirm}
+          onSend={sendToNode}
+          onTentative={setTentativeText}
+          timerSend={false}
+        />
       </div>
     </div>,
     document.body,
