@@ -4312,6 +4312,59 @@ body.concern-resizing * {
   margin-bottom: 6px;
 }
 
+/* Phone width: the thread preview gets every pixel. The desktop framing
+   (24px backdrop gutter + 28px modal padding + 14px message padding) left a
+   ~60%-wide column on a phone, and 90vh cut the send button off under the
+   iOS toolbar. Full-screen sheet instead: no backdrop gutter, dvh height so
+   the bottom bar never hides the input, tight paddings everywhere. */
+@media (max-width: 768px) {
+  .modal-backdrop:has(> .node-modal) {
+    padding: 0;
+    align-items: stretch;
+  }
+  .node-modal {
+    max-width: none;
+    max-height: none;
+    height: 100dvh;
+    border-radius: 0;
+    border-left-width: 3px;
+    padding: 10px 8px calc(8px + env(safe-area-inset-bottom));
+  }
+  .node-modal .modal-close {
+    top: 4px;
+    right: 4px;
+  }
+  .node-modal-header {
+    padding-right: 32px; /* keep the title clear of the close button */
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+  }
+  .node-modal-title {
+    font-size: 16px;
+  }
+  .node-modal-scroll {
+    padding-right: 0;
+  }
+  .node-modal-context {
+    padding: 8px 10px;
+    margin-bottom: 10px;
+  }
+  .node-modal-thread {
+    gap: 8px;
+  }
+  .node-modal-msg {
+    padding: 8px 10px;
+  }
+  .node-modal-input {
+    margin-top: 8px;
+    padding-top: 8px;
+    gap: 6px;
+  }
+  .node-modal-input .answer-input {
+    min-height: 56px;
+  }
+}
+
 .thread-msg.from-user {
   background: var(--user);
   border: 1px solid var(--user-border);
