@@ -5,6 +5,7 @@ import * as path from "node:path";
 
 import { jqRaw, parseHookInput } from "../../scripts/hook-io.ts";
 import { runToolActivity } from "../../scripts/tool-activity-hook.ts";
+import { runPromptActivity } from "../../scripts/prompt-activity-hook.ts";
 import { runBlockedOnUser } from "../../scripts/blocked-on-user-hook.ts";
 import { runPreCompact } from "../../scripts/pre-compact-hook.ts";
 import { runToolActivityClear } from "../../scripts/tool-activity-clear-hook.ts";
@@ -70,6 +71,20 @@ describe("hook-io jq compatibility", () => {
     expect(parseHookInput("[1,2]")).toEqual({});
     expect(parseHookInput('"s"')).toEqual({});
     expect(parseHookInput('{"session_id":"x"}')).toEqual({ session_id: "x" });
+  });
+});
+
+describe("prompt-activity-hook (UserPromptSubmit)", () => {
+  test("a turn start -> /heartbeat-tool with an empty tool", async () => {
+    await runPromptActivity({ session_id: "s1", prompt: "hello" }, ENV);
+    expect(received).toEqual([
+      { path: "/heartbeat-tool", body: { cc_session_id: "s1", tool: "" } },
+    ]);
+  });
+
+  test("no session_id -> no POST", async () => {
+    await runPromptActivity({ prompt: "hello" }, ENV);
+    expect(received).toEqual([]);
   });
 });
 
