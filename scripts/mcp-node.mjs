@@ -9,9 +9,9 @@
 // `bun build --target=node` and imports it in-process.
 //
 // Freshness: the bundle is keyed by a content fingerprint of everything that
-// goes into it (server.ts, server/, shared/, package.json, bun.lock, this
-// file). A git pull or local edit changes the key, and the next session start
-// rebuilds (~0.1 s). The bun build runs in a short-lived child, so its memory
+// goes into it (server.ts, server/, shared/, package.json, bun.lock, the
+// launcher files). A git pull or local edit changes the key, and the next
+// session start rebuilds (~0.1 s). The bun build runs in a short-lived child, so its memory
 // is not kept by this process.
 //
 // Cache: <repo>/.mcp-dist/server-<key>.mjs. Exactly ONE directory below the
@@ -20,85 +20,26 @@
 // Publication is atomic (write to a temp name, then rename), so concurrent
 // session starts on a cold cache cannot import a half-written file.
 //
+// The build itself (and why it goes through a stub entry and rejects bundles
+// with a module included twice) lives in scripts/mcp-node-build.mjs.
+//
 // This file must never write to stdout: stdout is the MCP JSON-RPC channel.
 
-import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { buildBundle, findDuplicateModules, fingerprint } from "./mcp-node-build.mjs";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CACHE = path.join(REPO, ".mcp-dist");
 const PRUNE_AGE_MS = 60 * 60 * 1000;
+const LAUNCHER_FILES = [
+  fileURLToPath(import.meta.url),
+  fileURLToPath(new URL("./mcp-node-build.mjs", import.meta.url)),
+];
 
 function log(msg) {
   process.stderr.write(`[discussion-tree mcp-node] ${msg}\n`);
-}
-
-function listTs(dir) {
-  const out = [];
-  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, ent.name);
-    if (ent.isDirectory()) out.push(...listTs(p));
-    else if (ent.name.endsWith(".ts")) out.push(p);
-  }
-  return out;
-}
-
-function fingerprint() {
-  const files = [
-    path.join(REPO, "server.ts"),
-    ...listTs(path.join(REPO, "server")),
-    ...listTs(path.join(REPO, "shared")),
-    path.join(REPO, "package.json"),
-    path.join(REPO, "bun.lock"),
-    fileURLToPath(import.meta.url),
-  ].sort();
-  const h = createHash("sha256");
-  for (const f of files) {
-    h.update(path.relative(REPO, f).replace(/\\/g, "/"));
-    h.update("\0");
-    try {
-      h.update(fs.readFileSync(f));
-    } catch {
-      h.update("<missing>");
-    }
-    h.update("\0");
-  }
-  return h.digest("hex").slice(0, 16);
-}
-
-function build(target) {
-  const tmp = `${target}.${process.pid}.tmp.mjs`;
-  const res = spawnSync(
-    "bun",
-    ["build", path.join(REPO, "server.ts"), "--target=node", "--outfile", tmp],
-    {
-      cwd: REPO,
-      stdio: ["ignore", "ignore", "pipe"],
-      windowsHide: true,
-      timeout: 120_000,
-    },
-  );
-  if (res.status !== 0 || !fs.existsSync(tmp)) {
-    try {
-      fs.rmSync(tmp, { force: true });
-    } catch {
-      /* ignore */
-    }
-    const why = res.error
-      ? res.error.message
-      : String(res.stderr ?? "").trim().slice(-500);
-    throw new Error(`bun build failed: ${why}`);
-  }
-  try {
-    fs.renameSync(tmp, target);
-  } catch (e) {
-    // Another session published the same key first; theirs is identical.
-    fs.rmSync(tmp, { force: true });
-    if (!fs.existsSync(target)) throw e;
-  }
 }
 
 function prune(keep) {
@@ -121,6 +62,7 @@ function newestBundle() {
         .readdirSync(CACHE)
         .filter((n) => /^server-[0-9a-f]+\.mjs$/.test(n))
         .map((n) => path.join(CACHE, n))
+        .filter((p) => findDuplicateModules(fs.readFileSync(p, "utf8")).length === 0)
         .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0] ??
       null
     );
@@ -129,11 +71,11 @@ function newestBundle() {
   }
 }
 
-let bundle = path.join(CACHE, `server-${fingerprint()}.mjs`);
+let bundle = path.join(CACHE, `server-${fingerprint(REPO, LAUNCHER_FILES)}.mjs`);
 try {
   fs.mkdirSync(CACHE, { recursive: true });
   if (!fs.existsSync(bundle)) {
-    build(bundle);
+    buildBundle(path.join(REPO, "server.ts"), bundle, { cwd: REPO });
     log(`built ${path.basename(bundle)}`);
   }
   prune(bundle);
