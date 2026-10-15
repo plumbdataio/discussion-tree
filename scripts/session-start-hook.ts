@@ -23,6 +23,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { logHookFailure } from "./hook-io.ts";
 
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
@@ -67,9 +68,11 @@ if (sid) {
         written_at: Math.floor(Date.now() / 1000),
       }),
     );
-  } catch {
+  } catch (e) {
     // Same reasoning: a failed write must not take the session down with it.
-    // The MCP server retries and self-heals on its heartbeat.
+    // The MCP server retries and self-heals on its heartbeat. Logged because a
+    // missing hint is exactly what makes auto-attach fail silently.
+    logHookFailure({ step: "write-session-hint", error: e, session_id: sid });
   }
 }
 

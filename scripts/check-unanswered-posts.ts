@@ -27,6 +27,12 @@
 
 import * as fs from "node:fs";
 import { brokerBaseUrl } from "./broker-url.ts";
+import {
+  logHookFailure,
+  postJsonBestEffort,
+  readStdin,
+  setHookSessionId,
+} from "./hook-io.ts";
 
 type UnansweredNode = {
   node_path?: unknown;
@@ -95,27 +101,14 @@ export function buildUnansweredOutput(resp: unknown): string {
 }
 
 // Best-effort POST returning the parsed JSON, or {} on any failure (connection
-// error / timeout / non-JSON body). Mirrors `curl ... || echo '{}'`.
+// error / timeout / non-JSON body). Mirrors `curl ... || echo '{}'`. Failures
+// are logged by hook-io.
 async function postJson(
   url: string,
   body: unknown,
   timeoutMs = 1000,
 ): Promise<unknown> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
-    return await res.json();
-  } catch {
-    return {};
-  } finally {
-    clearTimeout(t);
-  }
+  return (await postJsonBestEffort(url, body, timeoutMs)) ?? {};
 }
 
 export async function runCheckUnanswered(
@@ -140,16 +133,6 @@ export async function runCheckUnanswered(
   return out;
 }
 
-function readStdin(): Promise<string> {
-  return new Promise((resolve) => {
-    let data = "";
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (c) => (data += c));
-    process.stdin.on("end", () => resolve(data));
-    process.stdin.on("error", () => resolve(data));
-  });
-}
-
 async function main(): Promise<void> {
   let out = "";
   try {
@@ -160,8 +143,10 @@ async function main(): Promise<void> {
     } catch {
       /* malformed stdin: the .sh's jq fails and nothing is printed */
     }
+    setHookSessionId(input?.session_id);
     out = await runCheckUnanswered(input);
-  } catch {
+  } catch (e) {
+    logHookFailure({ step: "main", error: e });
     /* best-effort: allow the stop */
   }
   // Synchronous write to fd 1 guarantees the bytes flush before process.exit.

@@ -36,6 +36,7 @@ import * as path from "node:path";
 import { spawn } from "node:child_process";
 import { releaseLock, tryAcquireLock } from "../server/launch-lock.ts";
 import { isSupervisorRunning } from "../server/supervisor-lock.ts";
+import { logHookFailure } from "./hook-io.ts";
 
 type Env = Record<string, string | undefined>;
 
@@ -102,8 +103,10 @@ export function launchDetached(
       windowsHide: true,
       stdio: ["ignore", fd, fd],
     });
-    child.on("error", () => {
-      /* spawn failure is best-effort: nothing to report to */
+    child.on("error", (e) => {
+      // Spawn failure is best-effort (nothing to report to the session), but it
+      // is recorded so a broker that never came up leaves a trace.
+      logHookFailure({ step: "spawn-broker", error: e });
     });
     child.unref();
   } finally {
@@ -170,11 +173,25 @@ export async function ensureBrokerRunning(
     });
 
     // Give it a moment to bind, then confirm. We don't fail the hook either way.
+    // A probe that fails BEFORE the spawn is the normal "not up yet" case and is
+    // not logged; still failing after the whole poll is a genuine failure.
     const tries = deps.pollTries ?? 10;
     const interval = deps.pollIntervalMs ?? 300;
+    const started = Date.now();
+    let up = false;
     for (let i = 0; i < tries; i++) {
-      if (await healthy(health)) break;
+      if (await healthy(health)) {
+        up = true;
+        break;
+      }
       await Bun.sleep(interval);
+    }
+    if (!up) {
+      logHookFailure({
+        step: health,
+        detail: "spawned broker did not answer /health",
+        elapsed_ms: Date.now() - started,
+      });
     }
   } finally {
     releaseLock(lock);
@@ -185,8 +202,9 @@ export async function ensureBrokerRunning(
 if (import.meta.main) {
   try {
     await ensureBrokerRunning();
-  } catch {
-    /* best-effort: never block session start */
+  } catch (e) {
+    // best-effort: never block session start
+    logHookFailure({ step: "main", error: e });
   }
   process.exit(0);
 }

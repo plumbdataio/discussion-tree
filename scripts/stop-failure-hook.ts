@@ -15,31 +15,16 @@
 //
 // WHY A PORT. The .sh needs jq + curl and cannot exec on Windows, so on pd-002
 // the stall indicator never lights. Bun is spawned directly and needs neither.
-// Best-effort — any failure is swallowed so it never affects the session; always
-// exits 0 (observation-only).
+// Best-effort — any failure is swallowed (and logged via hook-io) so it never
+// affects the session; always exits 0 (observation-only).
 
 import { brokerBaseUrl } from "./broker-url.ts";
-
-async function postBestEffort(
-  url: string,
-  body: unknown,
-  timeoutMs = 1000,
-): Promise<void> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
-  } catch {
-    /* broker down / timeout — swallow, best-effort */
-  } finally {
-    clearTimeout(t);
-  }
-}
+import {
+  logHookFailure,
+  postBestEffort,
+  readStdin,
+  setHookSessionId,
+} from "./hook-io.ts";
 
 export async function runStopFailure(
   input: { session_id?: string; transcript_path?: string } = {},
@@ -55,16 +40,6 @@ export async function runStopFailure(
   });
 }
 
-function readStdin(): Promise<string> {
-  return new Promise((resolve) => {
-    let data = "";
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (c) => (data += c));
-    process.stdin.on("end", () => resolve(data));
-    process.stdin.on("error", () => resolve(data));
-  });
-}
-
 async function main(): Promise<void> {
   try {
     const raw = await readStdin();
@@ -74,9 +49,10 @@ async function main(): Promise<void> {
     } catch {
       /* tolerate empty / malformed stdin */
     }
+    setHookSessionId(input?.session_id);
     await runStopFailure(input);
-  } catch {
-    /* best-effort: never let the hook throw */
+  } catch (e) {
+    logHookFailure({ step: "main", error: e });
   } finally {
     process.exit(0);
   }

@@ -21,6 +21,12 @@
 
 import * as fs from "node:fs";
 import { brokerBaseUrl } from "./broker-url.ts";
+import {
+  logHookFailure,
+  postJsonBestEffort,
+  readStdin,
+  setHookSessionId,
+} from "./hook-io.ts";
 
 // The unconditional static notice. Reproduces the .sh's `cat <<'EOF' ... EOF`
 // exactly, including the trailing newline after the final line.
@@ -82,28 +88,15 @@ function reviewNotice(rcount: number): string {
 
 // Best-effort POST that returns the parsed JSON response, or {} on any failure
 // (connection error / timeout / non-JSON body). Mirrors the .sh's
-// `curl ... || echo '{}'` piped into jq. Never throws.
+// `curl ... || echo '{}'` piped into jq. Never throws; failures are logged by
+// hook-io.
 async function postJson(
   url: string,
   body: unknown,
   timeoutMs = 1000,
 ): Promise<Record<string, unknown>> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
-    const j = (await res.json()) as unknown;
-    return j && typeof j === "object" ? (j as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  } finally {
-    clearTimeout(t);
-  }
+  const j = await postJsonBestEffort(url, body, timeoutMs);
+  return j && typeof j === "object" ? (j as Record<string, unknown>) : {};
 }
 
 export async function runPostCompact(
@@ -162,16 +155,6 @@ export async function runPostCompact(
   return out;
 }
 
-function readStdin(): Promise<string> {
-  return new Promise((resolve) => {
-    let data = "";
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (c) => (data += c));
-    process.stdin.on("end", () => resolve(data));
-    process.stdin.on("error", () => resolve(data));
-  });
-}
-
 async function main(): Promise<void> {
   let out = STATIC_NOTICE;
   try {
@@ -182,8 +165,10 @@ async function main(): Promise<void> {
     } catch {
       /* tolerate empty / malformed stdin */
     }
+    setHookSessionId(input?.session_id);
     out = await runPostCompact(input);
-  } catch {
+  } catch (e) {
+    logHookFailure({ step: "main", error: e });
     /* best-effort: the static notice still prints below */
   }
   // Synchronous write to fd 1 guarantees the bytes flush before process.exit.

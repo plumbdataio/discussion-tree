@@ -1,12 +1,16 @@
 // Shared I/O helpers for the Bun hook ports that replaced the bash hooks
 // (tool-activity, blocked-on-user, pre-compact, tool-activity-clear,
-// bg-task-reconcile, subagent-stop).
+// bg-task-reconcile, subagent-stop, and the broker calls of the other hooks).
 //
-// One copy of "read stdin", "fire-and-forget POST" and "what would the .sh's jq
-// have produced" instead of one per hook, so the jq-compatibility rules cannot
-// drift between hooks. Dependency-free (no server/broker imports) so a hook that
-// runs on every tool call stays cheap to load, and so it runs unchanged on
-// Windows.
+// One copy of "read stdin", "fire-and-forget POST", "record a failure" and "what
+// would the .sh's jq have produced" instead of one per hook, so the rules cannot
+// drift between hooks. Dependency-free (node builtins only, no server/broker
+// imports) so a hook that runs on every tool call stays cheap to load, and so it
+// runs unchanged on Windows.
+
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 
 export type HookEnv = Record<string, string | undefined>;
 
@@ -48,28 +52,220 @@ export function jqRaw(v: unknown): string {
   return s.replace(/\n+$/, "");
 }
 
-// Best-effort POST: 1s timeout (the .sh's `curl --max-time 1`), every failure
-// swallowed. The body is compact JSON; the .sh sent jq's pretty-printed JSON,
-// which parses to the same value (the broker JSON-parses it).
-export async function postBestEffort(
+// --- Failure log ----------------------------------------------------------------
+// Every broker call from a hook is best-effort and its failure is swallowed (a
+// hook must never break the tool call / turn it rides on). That left NO trace
+// when hooks could not reach the broker (e.g. a remote Mac session whose Stop
+// hook failed for minutes, leaving the "working" spinner stuck). So each failure
+// appends ONE JSON line to a small log file in the OS temp dir. It never writes
+// to stdout/stderr: hook stdout is fed to the model or parsed as a decision.
+
+export const HOOK_FAILURE_LOG_MAX_BYTES = 1024 * 1024;
+
+// Override with DT_HOOK_FAILURE_LOG (tests, or to move it). Returns "" (= do not
+// log) under `bun test` without an explicit override, so unit tests that mock
+// fetch with failing responses do not pollute the real diagnostic log.
+export function hookFailureLogPath(env: HookEnv = process.env): string {
+  if (env.DT_HOOK_FAILURE_LOG) return env.DT_HOOK_FAILURE_LOG;
+  if (env.NODE_ENV === "test") return "";
+  return path.join(os.tmpdir(), "dt-hook-failures.log");
+}
+
+// "tool-activity-hook.ts", or "blocked-on-user-hook.ts start" when the hook was
+// registered with a mode argument.
+export function hookName(argv: string[] = process.argv): string {
+  const script = argv[1] ? path.basename(argv[1]) : "unknown";
+  return argv[2] ? `${script} ${argv[2]}` : script;
+}
+
+// The cc session the current hook process serves; set once by runHookMain (or a
+// hook's own main) so failures that are not tied to a request body still carry
+// it.
+let currentSessionId = "";
+export function setHookSessionId(sid: unknown): void {
+  if (typeof sid === "string") currentSessionId = sid;
+}
+
+// name + message + the system-level code (Bun puts e.g. ConnectionRefused /
+// CERT_HAS_EXPIRED on the error itself; Node puts ECONNREFUSED on error.cause).
+export function describeError(e: unknown): Record<string, unknown> {
+  if (!e || typeof e !== "object") return { message: String(e) };
+  const err = e as Record<string, any>;
+  const out: Record<string, unknown> = {
+    name: String(err.name ?? "Error"),
+    message: String(err.message ?? ""),
+  };
+  if (err.code !== undefined && typeof err.code !== "number") {
+    out.code = String(err.code);
+  }
+  const cause = err.cause;
+  if (cause && typeof cause === "object") {
+    if (cause.code !== undefined) out.cause_code = String(cause.code);
+    if (cause.message) out.cause_message = String(cause.message);
+  } else if (cause !== undefined) {
+    out.cause_message = String(cause);
+  }
+  return out;
+}
+
+export type HookFailure = {
+  // What failed: a URL (for a broker call) or a step name ("main", "spawn", ...).
+  step: string;
+  error?: unknown;
+  status?: number;
+  elapsed_ms?: number;
+  session_id?: string;
+  // Extra context (e.g. "ok:false", "timeout after 1000ms", an http error).
+  detail?: string;
+};
+
+// Size cap: past maxBytes the file is renamed to <log>.1 (replacing the previous
+// one). rename can fail on Windows (another process has the file open; seen
+// inside psmux-launched processes), so fall back to truncating in place —
+// losing old lines beats growing without bound.
+function rotateIfNeeded(file: string, maxBytes: number): void {
+  let size = 0;
+  try {
+    size = fs.statSync(file).size;
+  } catch {
+    return; // missing = nothing to rotate
+  }
+  if (size <= maxBytes) return;
+  try {
+    fs.renameSync(file, file + ".1");
+  } catch {
+    try {
+      fs.writeFileSync(file, "");
+    } catch {
+      /* give up silently */
+    }
+  }
+}
+
+// Append one JSON line describing a hook failure. Never throws, never prints.
+export function logHookFailure(
+  f: HookFailure,
+  env: HookEnv = process.env,
+  maxBytes: number = HOOK_FAILURE_LOG_MAX_BYTES,
+): void {
+  try {
+    const file = hookFailureLogPath(env);
+    if (!file) return;
+    const line: Record<string, unknown> = {
+      ts: new Date().toISOString(),
+      hook: hookName(),
+      pid: process.pid,
+      session_id: f.session_id || currentSessionId || undefined,
+      step: f.step,
+    };
+    if (f.status !== undefined) line.status = f.status;
+    if (f.detail) line.detail = f.detail;
+    if (f.error !== undefined) line.error = describeError(f.error);
+    if (f.elapsed_ms !== undefined) line.elapsed_ms = f.elapsed_ms;
+    rotateIfNeeded(file, maxBytes);
+    fs.appendFileSync(file, JSON.stringify(line) + "\n");
+  } catch {
+    /* logging is best-effort too */
+  }
+}
+
+// --- Broker POST ------------------------------------------------------------------
+
+function sessionFromBody(body: unknown): string | undefined {
+  if (body && typeof body === "object") {
+    const sid = (body as Record<string, unknown>).cc_session_id;
+    if (typeof sid === "string" && sid) return sid;
+  }
+  return undefined;
+}
+
+function errorField(parsed: unknown): string | undefined {
+  if (parsed && typeof parsed === "object") {
+    const e = (parsed as Record<string, unknown>).error;
+    if (e !== undefined && e !== null) return String(e);
+  }
+  return undefined;
+}
+
+// Best-effort POST returning the parsed JSON body, or null on any failure. The
+// timeout covers reading the body too. Logged as failures: network error /
+// timeout, non-2xx, a 2xx body that is not JSON, and `{ ok: false }` (the
+// broker's answer when e.g. no alive session matches the cc_session_id).
+// Never throws.
+export async function postJsonBestEffort(
   url: string,
   body: unknown,
   timeoutMs = 1000,
-): Promise<void> {
+): Promise<unknown> {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  let timedOut = false;
+  const t = setTimeout(() => {
+    timedOut = true;
+    ctrl.abort();
+  }, timeoutMs);
+  const started = Date.now();
+  const session_id = sessionFromBody(body);
+  let status: number | undefined;
+  const fail = (detail?: string, error?: unknown) =>
+    logHookFailure({
+      step: url,
+      status,
+      detail,
+      error,
+      elapsed_ms: Date.now() - started,
+      session_id,
+    });
   try {
-    await fetch(url, {
+    const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       signal: ctrl.signal,
     });
-  } catch {
-    /* broker down / timeout — swallow, best-effort */
+    status = res.status;
+    const text = await res.text();
+    let parsed: unknown = null;
+    let parseFailed = false;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parseFailed = true;
+    }
+    if (!res.ok) {
+      const err = errorField(parsed);
+      fail(err !== undefined ? `http error: ${err}` : "http error");
+      return parseFailed ? null : parsed;
+    }
+    if (parseFailed) {
+      fail(`non-JSON body: ${text.slice(0, 120)}`);
+      return null;
+    }
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      (parsed as Record<string, unknown>).ok === false
+    ) {
+      const err = errorField(parsed);
+      fail(err !== undefined ? `ok:false (${err})` : "ok:false");
+    }
+    return parsed;
+  } catch (e) {
+    fail(timedOut ? `timeout after ${timeoutMs}ms` : undefined, e);
+    return null;
   } finally {
     clearTimeout(t);
   }
+}
+
+// Best-effort POST: 1s timeout (the .sh's `curl --max-time 1`), every failure
+// swallowed (but logged, see postJsonBestEffort). The body is compact JSON; the
+// .sh sent jq's pretty-printed JSON, which parses to the same value.
+export async function postBestEffort(
+  url: string,
+  body: unknown,
+  timeoutMs = 1000,
+): Promise<void> {
+  await postJsonBestEffort(url, body, timeoutMs);
 }
 
 // Standard hook entry point: read stdin, run, ALWAYS exit 0 (an observation-only
@@ -78,9 +274,11 @@ export async function runHookMain(
   run: (input: Record<string, unknown>) => Promise<void>,
 ): Promise<void> {
   try {
-    await run(parseHookInput(await readStdin()));
-  } catch {
-    /* best-effort: never let the hook throw */
+    const input = parseHookInput(await readStdin());
+    setHookSessionId(input.session_id);
+    await run(input);
+  } catch (e) {
+    logHookFailure({ step: "main", error: e });
   } finally {
     process.exit(0);
   }

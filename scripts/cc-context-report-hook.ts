@@ -11,8 +11,8 @@
 // and the sidebar meters go dark. Bun is spawned directly, needs no bash / jq /
 // curl, and handles ${CLAUDE_PLUGIN_ROOT} regardless of slash direction. This
 // file mirrors the .sh byte-for-byte in behavior: same endpoints, same payload
-// shapes, same best-effort semantics (every failure swallowed; never blocks a
-// tool call; ~1s fetch timeout via AbortController).
+// shapes, same best-effort semantics (every failure swallowed but logged via
+// hook-io; never blocks a tool call; ~1s fetch timeout via AbortController).
 //
 // The CC statusline (a separate, non-OSS user setup) already writes the live
 // free % and the rate-limit windows to temp files on every PostToolUse. This
@@ -22,6 +22,13 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { brokerBaseUrl } from "./broker-url.ts";
+import {
+  logHookFailure,
+  postBestEffort,
+  postJsonBestEffort,
+  readStdin,
+  setHookSessionId,
+} from "./hook-io.ts";
 import { modelFromTranscript } from "./transcript-model.ts";
 
 // Where the CC statusline writes claude-sl-<sid>-pct / -limits.json.
@@ -48,29 +55,6 @@ export function accountKey(
   return env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
 }
 
-// Best-effort POST: short AbortController timeout, every failure swallowed.
-// Never throws — a hook that throws could disrupt the tool call it rode in on.
-async function postBestEffort(
-  url: string,
-  body: unknown,
-  timeoutMs = 1000,
-): Promise<void> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
-  } catch {
-    /* broker down / timeout / anything — swallow, best-effort */
-  } finally {
-    clearTimeout(t);
-  }
-}
-
 // --- Current Claude model ------------------------------------------------------
 // The model is read from the session transcript (NOT the user's statusline,
 // which is outside this repo and differs per platform) and POSTed only when it
@@ -84,29 +68,6 @@ export const MODEL_RESEND_MS = 10 * 60 * 1000;
 
 export function modelCacheFile(sid: string, tmp: string): string {
   return path.join(tmp, `claude-sl-${sid}-model`);
-}
-
-// POST that returns the parsed JSON body (or null on any failure).
-async function postJsonBestEffort(
-  url: string,
-  body: unknown,
-  timeoutMs = 1000,
-): Promise<any> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
-    return await res.json();
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(t);
-  }
 }
 
 export async function reportModel(
@@ -126,10 +87,10 @@ export async function reportModel(
   } catch {
     /* no cache yet — report */
   }
-  const res = await postJsonBestEffort(`${base}/report-model`, {
+  const res = (await postJsonBestEffort(`${base}/report-model`, {
     cc_session_id: sid,
     model,
-  });
+  })) as { ok?: unknown } | null;
   if (res && res.ok === true) {
     try {
       fs.writeFileSync(cacheFile, model + "\n");
@@ -209,20 +170,10 @@ export async function runContextReport(
   if (typeof transcriptPath === "string" && transcriptPath) {
     try {
       await reportModel(sid, transcriptPath, base, tmp);
-    } catch {
-      /* best-effort */
+    } catch (e) {
+      logHookFailure({ step: "report-model", error: e, session_id: sid });
     }
   }
-}
-
-function readStdin(): Promise<string> {
-  return new Promise((resolve) => {
-    let data = "";
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (c) => (data += c));
-    process.stdin.on("end", () => resolve(data));
-    process.stdin.on("error", () => resolve(data));
-  });
 }
 
 async function main(): Promise<void> {
@@ -234,9 +185,10 @@ async function main(): Promise<void> {
     } catch {
       /* tolerate empty / malformed stdin */
     }
+    setHookSessionId(input?.session_id);
     await runContextReport(input);
-  } catch {
-    /* best-effort: never let the hook throw */
+  } catch (e) {
+    logHookFailure({ step: "main", error: e });
   } finally {
     process.exit(0);
   }
