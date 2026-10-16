@@ -632,3 +632,119 @@ describe("getUsageLimitsForAccount — per-account grouping", () => {
     rmSync(home, { recursive: true, force: true });
   });
 });
+
+// --- Extra usage windows (UsageLimits.extra) ---------------------------------
+// Optional windows beyond 5h / 7d, forwarded by the hook from the statusline's
+// extra-limits file. Stored per session, combined per account (freshest row
+// that carried the field wins as a set), windows past their reset dropped.
+describe("extra usage windows", () => {
+  const future = () => Math.floor(Date.now() / 1000) + 86400;
+
+  test("extra windows are stored and surfaced on the session's usage_limits", async () => {
+    const sid = await registerSession(broker.url);
+    const cc = await attachCC(broker.url, sid);
+    const a = acct("extra");
+    const r = await post<{ ok: boolean }>(`${broker.url}/report-usage-limits`, {
+      cc_session_id: cc,
+      seven_day_pct: 40,
+      account: a,
+      extra: [
+        { label: "ModelX", pct: 77, resets_at: future() },
+        { label: "bad", pct: 500 },
+      ],
+    });
+    expect(r.json.ok).toBe(true);
+    const ul = await readSessionLimits(broker, sid);
+    expect(ul.seven_day_pct).toBe(40);
+    expect(ul.extra).toEqual([
+      { label: "ModelX", pct: 77, resets_at: expect.any(Number) },
+    ]);
+  });
+
+  test("no extra field → usage_limits has no extra (unchanged shape)", async () => {
+    const sid = await registerSession(broker.url);
+    const cc = await attachCC(broker.url, sid);
+    await post(`${broker.url}/report-usage-limits`, {
+      cc_session_id: cc,
+      five_hour_pct: 10,
+      account: acct("noextra"),
+    });
+    const ul = await readSessionLimits(broker, sid);
+    expect(ul.extra).toBeUndefined();
+  });
+
+  test("a window past its resets_at is dropped", async () => {
+    const sid = await registerSession(broker.url);
+    const cc = await attachCC(broker.url, sid);
+    await post(`${broker.url}/report-usage-limits`, {
+      cc_session_id: cc,
+      seven_day_pct: 1,
+      account: acct("past"),
+      extra: [
+        { label: "Old", pct: 99, resets_at: Math.floor(Date.now() / 1000) - 60 },
+        { label: "New", pct: 5, resets_at: future() },
+      ],
+    });
+    const ul = await readSessionLimits(broker, sid);
+    expect(ul.extra.map((w: any) => w.label)).toEqual(["New"]);
+  });
+
+  test("extra-only report is accepted; a later empty array clears the windows", async () => {
+    const sid = await registerSession(broker.url);
+    const cc = await attachCC(broker.url, sid);
+    const a = acct("clear");
+    const r1 = await post<{ ok: boolean }>(`${broker.url}/report-usage-limits`, {
+      cc_session_id: cc,
+      account: a,
+      extra: [{ label: "M", pct: 50, resets_at: future() }],
+    });
+    expect(r1.json.ok).toBe(true);
+    expect((await readSessionLimits(broker, sid)).extra).toHaveLength(1);
+    await post(`${broker.url}/report-usage-limits`, {
+      cc_session_id: cc,
+      account: a,
+      extra: [],
+    });
+    expect(await readSessionLimits(broker, sid)).toBeNull();
+  });
+
+  test("an empty report (no 5h / 7d / extra) is still rejected", async () => {
+    const sid = await registerSession(broker.url);
+    const cc = await attachCC(broker.url, sid);
+    const r = await post<{ ok: boolean }>(`${broker.url}/report-usage-limits`, {
+      cc_session_id: cc,
+      extra: "nope",
+    });
+    expect(r.json.ok).toBe(false);
+  });
+
+  test("extra windows survive a broker restart (DB-persisted)", async () => {
+    const home = mkdtempSync(join(tmpdir(), "pd-extra-persist-"));
+    const env = {
+      DISCUSSION_TREE_HOME: home,
+      DISCUSSION_TREE_DB: join(home, "db.sqlite"),
+    };
+    const a = await startBroker(env);
+    const reg = await post<{ session_id: string }>(`${a.url}/register`, {
+      pid: process.pid,
+      cwd: "/tmp/pd-extra-persist",
+    });
+    const sid = reg.json.session_id;
+    const ccId = await attachCC(a.url, sid);
+    await post(`${a.url}/report-usage-limits`, {
+      cc_session_id: ccId,
+      seven_day_pct: 60,
+      account: "/cfg/persist",
+      extra: [{ label: "P", pct: 33, resets_at: future() }],
+    });
+    await a.kill();
+    const b = await startBroker(env);
+    await post(`${b.url}/heartbeat`, { session_id: sid });
+    const ul = await readSessionLimits(b, sid);
+    expect(ul.extra).toEqual([
+      { label: "P", pct: 33, resets_at: expect.any(Number) },
+    ]);
+    await b.kill();
+    rmSync(home, { recursive: true, force: true });
+  });
+});

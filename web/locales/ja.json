@@ -58,7 +58,9 @@
     "five_hour_full": "5時間枠: {{pct}}%使用。リセット{{time}}",
     "five_hour_no_reset": "5時間枠: {{pct}}%使用",
     "seven_day_full": "7日枠: {{pct}}%使用。リセット{{time}}",
-    "seven_day_no_reset": "7日枠: {{pct}}%使用"
+    "seven_day_no_reset": "7日枠: {{pct}}%使用",
+    "extra_full": "{{label}}枠: {{pct}}%使用。リセット{{time}}",
+    "extra_no_reset": "{{label}}枠: {{pct}}%使用"
   },
   "session_dashboard": {
     "back_to_top": "← トップへ戻る",

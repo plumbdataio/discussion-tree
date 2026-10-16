@@ -582,8 +582,22 @@ export interface UsageLimits {
   five_hour_resets_at?: number;
   seven_day_pct?: number;
   seven_day_resets_at?: number;
+  // Optional EXTRA usage windows beyond 5h / 7d (e.g. a per-model weekly
+  // window), supplied by the user's own statusline setup via a temp file (see
+  // scripts/cc-context-report-hook.ts). dt treats them generically: a label, a
+  // used% and a reset time. Absent / empty → the chip shows only 5h / 7d.
+  extra?: ExtraUsageWindow[];
   // ISO timestamp of the last report, so the UI can dim / hide a stale value.
   set_at: string;
+}
+
+export interface ExtraUsageWindow {
+  // Short display label, e.g. "Opus". Trimmed, length-capped broker-side.
+  label: string;
+  // used% 0..100.
+  pct: number;
+  // Unix epoch SECONDS. A window is dropped once this has passed.
+  resets_at?: number;
 }
 
 export interface SessionListItem {

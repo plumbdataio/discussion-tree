@@ -194,20 +194,24 @@ db.run(`
 // throw "no such column" at import on an un-migrated DB and the broker would
 // never start.
 safeAlter("ALTER TABLE usage_limits ADD COLUMN account TEXT");
+// Optional extra usage windows (JSON array of {label, pct, resets_at}), see
+// broker/extra-usage.ts. NULL = the report carried no `extra` field.
+safeAlter("ALTER TABLE usage_limits ADD COLUMN extra_json TEXT");
 export const upsertUsageLimits = db.prepare(
   `INSERT INTO usage_limits
-     (session_id, five_hour_pct, five_hour_resets_at, seven_day_pct, seven_day_resets_at, account, set_at)
-   VALUES (?, ?, ?, ?, ?, ?, ?)
+     (session_id, five_hour_pct, five_hour_resets_at, seven_day_pct, seven_day_resets_at, account, extra_json, set_at)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
    ON CONFLICT(session_id) DO UPDATE SET
      five_hour_pct = excluded.five_hour_pct,
      five_hour_resets_at = excluded.five_hour_resets_at,
      seven_day_pct = excluded.seven_day_pct,
      seven_day_resets_at = excluded.seven_day_resets_at,
      account = excluded.account,
+     extra_json = excluded.extra_json,
      set_at = excluded.set_at`,
 );
 export const selectAllUsageLimits = db.prepare(
-  `SELECT session_id, five_hour_pct, five_hour_resets_at, seven_day_pct, seven_day_resets_at, account, set_at
+  `SELECT session_id, five_hour_pct, five_hour_resets_at, seven_day_pct, seven_day_resets_at, account, extra_json, set_at
      FROM usage_limits`,
 );
 export const deleteUsageLimits = db.prepare(

@@ -146,6 +146,43 @@ describe("cc-context-report-hook", () => {
     await runContextReport({}, ENV);
     expect(calls.length).toBe(0);
   });
+
+  test("extra-limits file rides along on the usage-limits POST as `extra`", async () => {
+    installFetch();
+    const sid = `ctx-extra-${Date.now()}`;
+    seed(`claude-sl-${sid}-limits.json`, JSON.stringify({ seven_day_pct: 50 }));
+    const extra = [{ label: "Opus", pct: 80, resets_at: 1900000000 }];
+    seed(`claude-sl-${sid}-extra-limits.json`, JSON.stringify(extra));
+    await runContextReport({ session_id: sid }, ENV);
+    expect(callTo("/report-usage-limits")!.body).toMatchObject({
+      seven_day_pct: 50,
+      extra,
+      cc_session_id: sid,
+    });
+  });
+
+  test("extra-limits file alone (no limits file) still POSTs", async () => {
+    installFetch();
+    const sid = `ctx-extra-only-${Date.now()}`;
+    seed(`claude-sl-${sid}-extra-limits.json`, "[]");
+    await runContextReport({ session_id: sid }, ENV);
+    const c = callTo("/report-usage-limits");
+    expect(c).toBeTruthy();
+    expect(c!.body.extra).toEqual([]);
+  });
+
+  test("malformed / non-array extra-limits file is ignored", async () => {
+    installFetch();
+    const sid = `ctx-extra-bad-${Date.now()}`;
+    seed(`claude-sl-${sid}-extra-limits.json`, JSON.stringify({ label: "x" }));
+    await runContextReport({ session_id: sid }, ENV);
+    expect(callTo("/report-usage-limits")).toBeUndefined();
+    const sid2 = `ctx-extra-bad2-${Date.now()}`;
+    seed(`claude-sl-${sid2}-limits.json`, JSON.stringify({ a: 1 }));
+    seed(`claude-sl-${sid2}-extra-limits.json`, "not json");
+    await runContextReport({ session_id: sid2 }, ENV);
+    expect("extra" in callTo("/report-usage-limits")!.body).toBe(false);
+  });
 });
 
 describe("stop-failure-hook", () => {

@@ -18,7 +18,8 @@ import {
   upsertContextUsage,
   upsertUsageLimits,
 } from "./db.ts";
-import type { UsageLimits } from "../shared/types.ts";
+import type { ExtraUsageWindow, UsageLimits } from "../shared/types.ts";
+import { cleanExtraWindows, liveExtraWindows } from "./extra-usage.ts";
 
 export type ContextUsage = {
   // Free %, 0..100. Matches the file written by statusline-command.sh
@@ -121,13 +122,23 @@ for (const row of selectAllUsageLimits.all() as {
   seven_day_pct: number | null;
   seven_day_resets_at: number | null;
   account: string | null;
+  extra_json: string | null;
   set_at: string;
 }[]) {
+  let extra: ExtraUsageWindow[] | undefined;
+  if (row.extra_json) {
+    try {
+      extra = cleanExtraWindows(JSON.parse(row.extra_json));
+    } catch {
+      extra = undefined;
+    }
+  }
   limits.set(row.session_id, {
     five_hour_pct: row.five_hour_pct ?? undefined,
     five_hour_resets_at: row.five_hour_resets_at ?? undefined,
     seven_day_pct: row.seven_day_pct ?? undefined,
     seven_day_resets_at: row.seven_day_resets_at ?? undefined,
+    extra,
     account: row.account ?? null,
     set_at: row.set_at,
   });
@@ -166,6 +177,7 @@ export function handleReportUsageLimits(body: {
   seven_day_pct?: number;
   seven_day_resets_at?: number;
   account?: string;
+  extra?: unknown;
 }): { ok: boolean; session_id?: string } {
   if (!body.cc_session_id) return { ok: false };
   const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
@@ -175,10 +187,17 @@ export function handleReportUsageLimits(body: {
   const sevenDayPct = cleanPct(body.seven_day_pct);
   const sevenDayResetsAt = cleanResetsAt(body.seven_day_resets_at);
   const account = cleanAccount(body.account);
+  // undefined = the report carried no extra-window info; [] = "there are none".
+  const extra = cleanExtraWindows(body.extra);
   // Reject a report that carries no usable field at all — nothing to store, and
   // it would otherwise overwrite a good row with an empty, freshly-dated one and
-  // let it win the "freshest" pick with blank numbers.
-  if (fiveHourPct === undefined && sevenDayPct === undefined) {
+  // let it win the "freshest" pick with blank numbers. An extra-only report is
+  // fine: the 5h / 7d windows are picked per-window from rows that carry them.
+  if (
+    fiveHourPct === undefined &&
+    sevenDayPct === undefined &&
+    extra === undefined
+  ) {
     return { ok: false };
   }
   const setAt = new Date().toISOString();
@@ -187,6 +206,7 @@ export function handleReportUsageLimits(body: {
     five_hour_resets_at: fiveHourResetsAt,
     seven_day_pct: sevenDayPct,
     seven_day_resets_at: sevenDayResetsAt,
+    extra,
     account,
     set_at: setAt,
   };
@@ -198,6 +218,7 @@ export function handleReportUsageLimits(body: {
     sevenDayPct ?? null,
     sevenDayResetsAt ?? null,
     account,
+    extra === undefined ? null : JSON.stringify(extra),
     setAt,
   );
   return { ok: true, session_id: sessionId };
@@ -283,16 +304,30 @@ function combineLimits(entries: Iterable<StoredUsageLimits>): UsageLimits | null
     SEVEN_DAY_MS,
   );
 
-  // Neither window had any snapshot with a pct → nothing to show.
-  if (!five && !seven) return null;
+  // Extra windows: taken as a set from the freshest snapshot that carried the
+  // field at all (an empty array there means "none now" and wins over older
+  // rows), then windows past their own reset time are dropped.
+  let extraSrc: StoredUsageLimits | null = null;
+  for (const v of all) {
+    if (v.extra === undefined) continue;
+    if (!extraSrc || Date.parse(v.set_at) > Date.parse(extraSrc.set_at)) {
+      extraSrc = v;
+    }
+  }
+  const extra = extraSrc
+    ? liveExtraWindows(extraSrc.extra ?? [], extraSrc.set_at)
+    : [];
+
+  // No window had any snapshot with a pct → nothing to show.
+  if (!five && !seven && extra.length === 0) return null;
 
   // set_at: the greatest set_at among the snapshots that actually contributed.
   let setAt = "";
-  for (const r of [five, seven]) {
-    if (!r) continue;
-    if (setAt === "" || Date.parse(r.set_at) > Date.parse(setAt)) {
-      setAt = r.set_at;
-    }
+  const contributors = [five?.set_at, seven?.set_at];
+  if (extra.length > 0) contributors.push(extraSrc!.set_at);
+  for (const s of contributors) {
+    if (!s) continue;
+    if (setAt === "" || Date.parse(s) > Date.parse(setAt)) setAt = s;
   }
 
   return {
@@ -300,6 +335,7 @@ function combineLimits(entries: Iterable<StoredUsageLimits>): UsageLimits | null
     five_hour_resets_at: five ? five.resets_at : undefined,
     seven_day_pct: seven ? seven.pct : undefined,
     seven_day_resets_at: seven ? seven.resets_at : undefined,
+    ...(extra.length > 0 ? { extra } : {}),
     set_at: setAt,
   };
 }

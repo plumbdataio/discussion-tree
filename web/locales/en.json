@@ -58,7 +58,9 @@
     "five_hour_full": "5-hour window: {{pct}}% used, resets {{time}}",
     "five_hour_no_reset": "5-hour window: {{pct}}% used",
     "seven_day_full": "7-day window: {{pct}}% used, resets {{time}}",
-    "seven_day_no_reset": "7-day window: {{pct}}% used"
+    "seven_day_no_reset": "7-day window: {{pct}}% used",
+    "extra_full": "{{label}} window: {{pct}}% used, resets {{time}}",
+    "extra_no_reset": "{{label}} window: {{pct}}% used"
   },
   "session_dashboard": {
     "back_to_top": "← Back to top",

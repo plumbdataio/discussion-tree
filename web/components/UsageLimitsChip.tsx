@@ -1,6 +1,7 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import type { UsageLimits } from "../../shared/types.ts";
+import { sameExtraWindows } from "../utils/usageLimits.ts";
 
 // @reusable-ui UsageLimitsChip — USE WHEN: showing a session's Claude
 // subscription usage (the native 5h / 7d rate-limit windows Claude Code exposes
@@ -8,7 +9,8 @@ import type { UsageLimits } from "../../shared/types.ts";
 // per-account (one subscription per CLAUDE_CONFIG_DIR), so feed it the current
 // page's value from the shared useUsageLimits(sessionId) store
 // (web/utils/usageLimits.ts, populated by the Sidebar's poll) and render it in a
-// page header next to the ContextMeter.
+// page header next to the ContextMeter. Optional extra windows
+// (UsageLimits.extra, e.g. a per-model weekly window) render after 5h / 7d.
 
 // used% severity rank: the more of a window is consumed, the more it matters.
 // >= 90% used is the "almost out" red band; >= 75% is caution; below that stays
@@ -50,8 +52,11 @@ function UsageLimitsChipImpl({
   if (!limits) return null;
   const hasFive = typeof limits.five_hour_pct === "number";
   const hasSeven = typeof limits.seven_day_pct === "number";
+  // Optional extra windows (e.g. a per-model weekly window) from the user's
+  // statusline setup; the broker already dropped ones past their reset.
+  const extra = limits.extra ?? [];
   // Nothing usable to show — don't render an empty chip.
-  if (!hasFive && !hasSeven) return null;
+  if (!hasFive && !hasSeven && extra.length === 0) return null;
 
   // Hover title: one line per present window, with its reset time when known.
   const titleParts: string[] = [];
@@ -74,14 +79,27 @@ function UsageLimitsChipImpl({
     );
   }
 
-  // The chip shows two windows that can differ in severity; color the whole
+  for (const w of extra) {
+    const rt = formatResetTime(w.resets_at);
+    const pct = Math.round(w.pct);
+    titleParts.push(
+      rt
+        ? t("usage_limits.extra_full", { label: w.label, pct, time: rt })
+        : t("usage_limits.extra_no_reset", { label: w.label, pct }),
+    );
+  }
+
+  // The chip shows several windows that can differ in severity; color the whole
   // chip background with the STRONGEST present window's severity so a near-limit
   // window reads at a glance as danger, while the per-window value below still
   // tints to say WHICH window is the offender.
   const fiveSev = usedSeverity(limits.five_hour_pct);
   const sevenSev = usedSeverity(limits.seven_day_pct);
-  const chipSev =
-    severityRank(fiveSev) >= severityRank(sevenSev) ? fiveSev : sevenSev;
+  const extraSevs = extra.map((w) => usedSeverity(w.pct));
+  let chipSev: Severity = "";
+  for (const s of [fiveSev, sevenSev, ...extraSevs]) {
+    if (severityRank(s) > severityRank(chipSev)) chipSev = s;
+  }
 
   return (
     <div
@@ -112,18 +130,28 @@ function UsageLimitsChipImpl({
           </span>
         </span>
       )}
+      {extra.map((w, i) => (
+        <span
+          key={w.label}
+          className={"usage-limits-unit" + severityClass(extraSevs[i])}
+        >
+          <span className="usage-limits-label">{w.label}</span>
+          <span className="usage-limits-value">{Math.round(w.pct)}%</span>
+        </span>
+      ))}
     </div>
   );
 }
 
 // Memoized so it doesn't re-render on every Sidebar state change (the sidebar
 // re-renders on each /api/sessions poll and activity update). The rendered
-// output depends only on the four numeric fields.
+// output depends only on the four numeric fields and the extra windows.
 export const UsageLimitsChip = React.memo(
   UsageLimitsChipImpl,
   (prev, next) =>
     prev.limits?.five_hour_pct === next.limits?.five_hour_pct &&
     prev.limits?.seven_day_pct === next.limits?.seven_day_pct &&
     prev.limits?.five_hour_resets_at === next.limits?.five_hour_resets_at &&
-    prev.limits?.seven_day_resets_at === next.limits?.seven_day_resets_at,
+    prev.limits?.seven_day_resets_at === next.limits?.seven_day_resets_at &&
+    sameExtraWindows(prev.limits?.extra, next.limits?.extra),
 );

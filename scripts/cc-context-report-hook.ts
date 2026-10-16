@@ -100,6 +100,50 @@ export async function reportModel(
   }
 }
 
+// The statusline's 5h / 7d file: a non-empty plain object (jq: type == "object"
+// and length > 0). Arrays, null, scalars, unreadable or malformed → null.
+export function readLimitsFile(file: string): Record<string, unknown> | null {
+  try {
+    if (!fs.existsSync(file)) return null;
+    const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      Object.keys(parsed as Record<string, unknown>).length > 0
+    ) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    /* unreadable / malformed — skip, best-effort */
+  }
+  return null;
+}
+
+// --- Optional extra usage windows -------------------------------------------
+// A user's statusline setup MAY also write claude-sl-<sid>-extra-limits.json:
+// a JSON array of { label, pct, resets_at } (pct = used% 0..100, resets_at =
+// epoch seconds or an ISO string) for usage windows beyond 5h / 7d. dt does not
+// care where they come from; the broker validates them (broker/extra-usage.ts)
+// and the header chip shows each one after 5h / 7d. An EMPTY array is forwarded
+// too (it means "none right now"). A missing / malformed file sends nothing.
+export const MAX_FORWARDED_EXTRA = 8;
+
+export function extraLimitsFile(sid: string, tmp: string): string {
+  return path.join(tmp, `claude-sl-${sid}-extra-limits.json`);
+}
+
+export function readExtraLimitsFile(file: string): unknown[] | null {
+  try {
+    if (!fs.existsSync(file)) return null;
+    const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!Array.isArray(parsed)) return null;
+    return parsed.slice(0, MAX_FORWARDED_EXTRA);
+  } catch {
+    return null;
+  }
+}
+
 export async function runContextReport(
   input: { session_id?: string; transcript_path?: string } = {},
   env: Record<string, string | undefined> = process.env,
@@ -132,37 +176,23 @@ export async function runContextReport(
     /* unreadable pct file — skip, best-effort */
   }
 
-  // --- Native 5h / 7d subscription-usage limits -------------------------------
-  const limitsFile = path.join(tmp, `claude-sl-${sid}-limits.json`);
-  try {
-    if (fs.existsSync(limitsFile)) {
-      const rawLimits = fs.readFileSync(limitsFile, "utf8");
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(rawLimits);
-      } catch {
-        parsed = undefined;
-      }
-      // Require a non-empty plain object (jq: type == "object" and length > 0).
-      // Arrays are rejected (type "array" in jq); so are null / scalars.
-      if (
-        parsed &&
-        typeof parsed === "object" &&
-        !Array.isArray(parsed) &&
-        Object.keys(parsed as Record<string, unknown>).length > 0
-      ) {
-        // Tag with cc_session_id (binds the report to the session) and account
-        // (groups usage_limits by subscription). The .sh spreads these AFTER
-        // the file's fields so they override any same-named key — same here.
-        await postBestEffort(`${base}/report-usage-limits`, {
-          ...(parsed as Record<string, unknown>),
-          cc_session_id: sid,
-          account: accountKey(env),
-        });
-      }
+  // --- Native 5h / 7d subscription-usage limits (+ optional extra windows) -----
+  const limits = readLimitsFile(path.join(tmp, `claude-sl-${sid}-limits.json`));
+  const extra = readExtraLimitsFile(extraLimitsFile(sid, tmp));
+  if (limits || extra) {
+    try {
+      // Tag with cc_session_id (binds the report to the session) and account
+      // (groups usage_limits by subscription). The .sh spread these AFTER the
+      // file's fields so they override any same-named key — same here.
+      await postBestEffort(`${base}/report-usage-limits`, {
+        ...(limits ?? {}),
+        ...(extra ? { extra } : {}),
+        cc_session_id: sid,
+        account: accountKey(env),
+      });
+    } catch {
+      /* best-effort */
     }
-  } catch {
-    /* unreadable / malformed limits file — skip, best-effort */
   }
 
   // --- Current model (from the transcript tail) ---------------------------------

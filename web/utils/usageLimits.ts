@@ -8,7 +8,11 @@
 // session's value with useUsageLimits(sessionId) instead of running its own
 // fetch. A no-arg call returns the account-agnostic global fallback.
 import { useCallback, useSyncExternalStore } from "react";
-import type { SessionListItem, UsageLimits } from "../../shared/types.ts";
+import type {
+  ExtraUsageWindow,
+  SessionListItem,
+  UsageLimits,
+} from "../../shared/types.ts";
 
 type Listener = () => void;
 
@@ -19,7 +23,23 @@ let bySession: Record<string, UsageLimits | null> = {};
 let globalLimits: UsageLimits | null = null;
 const listeners = new Set<Listener>();
 
-// Only the four displayed fields matter. When none changed we keep the same
+// Extra windows compare by value (label / pct / reset), order included.
+export function sameExtraWindows(
+  a: ExtraUsageWindow[] | undefined,
+  b: ExtraUsageWindow[] | undefined,
+): boolean {
+  const x = a ?? [];
+  const y = b ?? [];
+  if (x.length !== y.length) return false;
+  return x.every(
+    (w, i) =>
+      w.label === y[i].label &&
+      w.pct === y[i].pct &&
+      w.resets_at === y[i].resets_at,
+  );
+}
+
+// Only the displayed fields matter (the four 5h / 7d fields + extra windows). When none changed we keep the same
 // object reference and skip notifying, so useSyncExternalStore subscribers
 // don't re-render on a poll that returned identical numbers.
 function sameLimits(a: UsageLimits | null, b: UsageLimits | null): boolean {
@@ -29,7 +49,8 @@ function sameLimits(a: UsageLimits | null, b: UsageLimits | null): boolean {
     a.five_hour_pct === b.five_hour_pct &&
     a.seven_day_pct === b.seven_day_pct &&
     a.five_hour_resets_at === b.five_hour_resets_at &&
-    a.seven_day_resets_at === b.seven_day_resets_at
+    a.seven_day_resets_at === b.seven_day_resets_at &&
+    sameExtraWindows(a.extra, b.extra)
   );
 }
 
