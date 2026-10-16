@@ -27,6 +27,7 @@ import {
   uploadImage,
 } from "../utils/api.ts";
 import { showToast } from "./Toast.tsx";
+import { useDetachOnUnmount } from "../utils/useDetachOnUnmount.ts";
 
 export function MapNodeModal({
   mapId,
@@ -70,6 +71,9 @@ export function MapNodeModal({
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
+  // Empty on unmount so a textarea kept by Chrome's autofill cannot keep
+  // this content alive (see useDetachOnUnmount).
+  useDetachOnUnmount(threadRef);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

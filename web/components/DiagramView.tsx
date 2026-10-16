@@ -38,6 +38,7 @@ import {
   uploadImage,
 } from "../utils/api.ts";
 import { showToast } from "./Toast.tsx";
+import { useDetachOnUnmount } from "../utils/useDetachOnUnmount.ts";
 
 // Synthetic node id for the diagram's chat thread (matches the broker's
 // DIAGRAM_CHAT_NODE so thread_items / read-state line up).
@@ -84,6 +85,9 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
   const [error, setError] = useState<string | null>(null);
   const renderSeq = useRef(0);
   const canvasRef = useRef<HTMLDivElement>(null);
+  // Empty on unmount so a textarea kept by Chrome's autofill cannot keep
+  // this content alive (see useDetachOnUnmount).
+  useDetachOnUnmount(canvasRef);
   const pzRef = useRef<{
     dispose: () => void;
     moveTo: (x: number, y: number) => void;
@@ -554,6 +558,9 @@ function DiagramChat({
   const [uploading, setUploading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  // Empty on unmount so a textarea kept by Chrome's autofill cannot keep
+  // this content alive (see useDetachOnUnmount).
+  useDetachOnUnmount(bodyRef);
   // Whole-thread preview — reuses the map's node modal (with the diagram chat
   // endpoint), optionally scrolled to one message.
   const [expanded, setExpanded] = useState(false);

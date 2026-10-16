@@ -228,3 +228,68 @@ describe("mergeBoardDelta", () => {
     ).toBeNull();
   });
 });
+
+// A delta that brings nothing new must hand back the SAME view object: the
+// caller (BoardApp syncDelta) then skips setData and the cache write, so a
+// no-op live event re-renders nothing.
+describe("mergeBoardDelta no-op identity", () => {
+  test("nothing new returns the exact view (fresh board row / dims objects included)", () => {
+    const v = view({ i1: [item(1, "i1"), item(2, "i1")] });
+    const d = delta({
+      // Same values, new objects — as every JSON response is.
+      board: { ...v.board },
+      image_dims: { "/uploads/bd_x/a.png": { w: 1, h: 2 } },
+    });
+    expect(mergeBoardDelta(v, d, 2)).toBe(v);
+  });
+
+  test("an already-held item in the delta is still a no-op", () => {
+    const v = view({ i1: [item(1, "i1"), item(2, "i1")] });
+    expect(mergeBoardDelta(v, delta({ threads: [item(2, "i1")] }), 1)).toBe(v);
+  });
+
+  test("a changed header field yields a new view that reuses unchanged parts", () => {
+    const v = view({ i1: [item(1, "i1")] });
+    const m = mergeBoardDelta(v, delta({ owner_bg_task_count: 2 }), 1)!;
+    expect(m).not.toBe(v);
+    expect(m.owner_bg_task_count).toBe(2);
+    expect(m.board).toBe(v.board);
+    expect(m.threads).toBe(v.threads);
+    expect(m.nodes).toBe(v.nodes);
+    expect(m.image_dims).toBe(v.image_dims);
+  });
+
+  test("a changed board row or a new image dim is a change", () => {
+    const v = view({});
+    const renamed = mergeBoardDelta(
+      v,
+      delta({ board: { ...v.board, title: "U" } as BoardView["board"] }),
+      0,
+    )!;
+    expect(renamed).not.toBe(v);
+    expect(renamed.board.title).toBe("U");
+    const dims = mergeBoardDelta(
+      v,
+      delta({ image_dims: { "/uploads/bd_x/b.png": { w: 3, h: 4 } } }),
+      0,
+    )!;
+    expect(dims).not.toBe(v);
+    expect(dims.image_dims).toEqual({
+      "/uploads/bd_x/a.png": { w: 1, h: 2 },
+      "/uploads/bd_x/b.png": { w: 3, h: 4 },
+    });
+  });
+
+  test("a read-state flip or a node status move is a change", () => {
+    const v = view({ i1: [item(1, "i1", "cc", null)] });
+    expect(mergeBoardDelta(v, delta({ unread_ids: [] }), 1)).not.toBe(v);
+    const s = view({});
+    expect(
+      mergeBoardDelta(
+        s,
+        delta({ node_statuses: { c1: "pending", i1: "needs-reply", i2: "discussing" } }),
+        0,
+      ),
+    ).not.toBe(s);
+  });
+});

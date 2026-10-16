@@ -16,6 +16,7 @@ import { useAnyPreviewModalOpen } from "../utils/previewModalLock.ts";
 import { useSettings } from "../utils/settings.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 import { isUnreadThreadItem } from "../utils/threadSource.ts";
+import { useDetachOnUnmount } from "../utils/useDetachOnUnmount.ts";
 
 export function ItemCard({
   node,
@@ -65,6 +66,9 @@ export function ItemCard({
   );
   const threadRef = useRef<HTMLDivElement>(null);
   const rowsRef = useRef<HTMLDivElement>(null);
+  // Empty on unmount so a textarea kept by Chrome's autofill cannot keep
+  // this content alive (see useDetachOnUnmount).
+  useDetachOnUnmount(rowsRef);
   const cardRef = useRef<HTMLDivElement>(null);
   const flashing = flashingNodes.has(node.id);
   const isActive = !!(activity && activity.node_id === node.id);

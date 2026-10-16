@@ -84,7 +84,6 @@ describe("ScheduledPinned in-flow placement", () => {
         data,
         ownerAlive: true,
         onSubmit: noop,
-        flashingNodes: new Set<string>(),
         ownerSessionId: "s1",
       }),
     );

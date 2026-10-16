@@ -37,6 +37,7 @@ import {
 import { useTmuxIntegration } from "../utils/tmuxIntegration.ts";
 import { openScheduledList } from "../utils/scheduledList.ts";
 import { boardTitle } from "../utils/boardTitle.ts";
+import { coalesce } from "../utils/coalesce.ts";
 
 // Module-scope cache so Sidebar remounts during SPA navigation don't show a
 // "Loading…" flash — the previous fetch result is reused as initial state
@@ -579,11 +580,16 @@ export function Sidebar({
       if (!document.hidden) fetchSessions();
     };
     document.addEventListener("visibilitychange", onVisibility);
-    // BoardApp dispatches this when the broker tells it unread counts shifted.
-    const onRefresh = () => fetchSessions();
+    // GlobalBanner (and a few pages) dispatch this when the broker says
+    // something the sidebar shows changed. A burst of nudges (the broker often
+    // sends two in a row) collapses into one /api/sessions fetch.
+    const onRefresh = coalesce(() => {
+      if (!cancelled) fetchSessions();
+    });
     window.addEventListener("pd-sidebar-refresh", onRefresh);
     return () => {
       cancelled = true;
+      onRefresh.cancel();
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pd-sidebar-refresh", onRefresh);

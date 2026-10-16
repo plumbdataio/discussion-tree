@@ -13,6 +13,8 @@
 // ThreadMessage's memo then skip everything but what actually changed, and
 // appending never re-renders an older content-visibility chunk.
 //
+// Returns `view` itself when the delta changes nothing (see step 4).
+//
 // Returns null when the delta can't be applied safely (different board, or it
 // mentions a node this view doesn't have = the structure changed); the caller
 // then falls back to a full fetch.
@@ -120,7 +122,12 @@ export function mergeBoardDelta(
     );
   }
 
-  // 4. Header / owner fields + board row replace wholesale; image dims merge.
+  // 4. Header / owner fields + board row; image dims merge. A field whose
+  //    value is unchanged keeps the view's own object, and a delta that
+  //    changes nothing at all returns `view` itself — the caller then skips
+  //    setData and the cache write. Most live events (a second delta in a
+  //    burst, the submitter's own catch-up fetch) carry nothing new, and a
+  //    fresh object would re-render the whole board subtree for no change.
   const {
     threads: _t,
     unread_ids: _u,
@@ -128,13 +135,50 @@ export function mergeBoardDelta(
     image_dims,
     ...rest
   } = delta;
+  const header: Record<string, unknown> = {};
+  let headerChanged = false;
+  const prev = view as unknown as Record<string, unknown>;
+  for (const [key, value] of Object.entries(rest)) {
+    if (sameValue(prev[key], value)) {
+      header[key] = prev[key];
+    } else {
+      header[key] = value;
+      headerChanged = true;
+    }
+  }
+  let mergedDims = view.image_dims;
+  for (const [url, d] of Object.entries(image_dims ?? {})) {
+    if (!sameValue(view.image_dims?.[url], d)) {
+      mergedDims = { ...(view.image_dims ?? {}), ...(image_dims ?? {}) };
+      break;
+    }
+  }
+  if (
+    !headerChanged &&
+    touched.size === 0 &&
+    nodes === view.nodes &&
+    mergedDims === view.image_dims
+  ) {
+    return view;
+  }
   return {
     ...view,
-    ...rest,
+    ...header,
     nodes,
     threads: touched.size > 0 ? threads : view.threads,
-    image_dims: { ...(view.image_dims ?? {}), ...(image_dims ?? {}) },
-  };
+    image_dims: mergedDims ?? {},
+  } as BoardView;
+}
+
+// Structural equality for the small JSON values a delta carries (the board
+// row, activity, the scheduled list, image dims). Both sides come from JSON,
+// so key order is the broker's and stable; a plain stringify is enough.
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") {
+    return false;
+  }
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function isAscending(items: ThreadItem[]): boolean {

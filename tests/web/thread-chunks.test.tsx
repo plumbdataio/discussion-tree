@@ -207,7 +207,6 @@ describe("chunked thread DOM", () => {
         data: boardData(n),
         ownerAlive: true,
         onSubmit: async () => {},
-        flashingNodes: new Set<string>(),
         ownerSessionId: "s1",
       }),
     );
@@ -222,7 +221,6 @@ describe("chunked thread DOM", () => {
     const props = {
       ownerAlive: true,
       onSubmit: async () => {},
-      flashingNodes: new Set<string>(),
       ownerSessionId: "s1",
     };
     const m = await mount(createElement(DefaultBoardLayout, { data: boardData(n), ...props }));

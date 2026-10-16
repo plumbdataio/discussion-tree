@@ -13,6 +13,7 @@ import { formatThreadTimestamp } from "../utils/format.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 import { usePreviewModalLock } from "../utils/previewModalLock.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
+import { useDetachOnUnmount } from "../utils/useDetachOnUnmount.ts";
 
 export function NodeModal({
   node,
@@ -43,6 +44,9 @@ export function NodeModal({
   // only the composer, not this modal's thread.
   const [tentativeText, setTentativeText] = useState<string | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
+  // Empty on unmount so a textarea kept by Chrome's autofill cannot keep
+  // this content alive (see useDetachOnUnmount).
+  useDetachOnUnmount(threadRef);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

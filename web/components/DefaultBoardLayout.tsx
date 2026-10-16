@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { memo, useCallback, useMemo, useRef, useState } from "react";
 import { ScheduledPinned } from "./ScheduledPinned.tsx";
 import { confirmBeforeSend } from "../utils/timerConfirm.ts";
 import { useTranslation } from "react-i18next";
@@ -12,22 +12,26 @@ import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useAnyPreviewModalOpen } from "../utils/previewModalLock.ts";
 import { useSettings } from "../utils/settings.ts";
 import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
+import { useDetachOnUnmount } from "../utils/useDetachOnUnmount.ts";
 import { isUnreadThreadItem } from "../utils/threadSource.ts";
 
 // Default conversation board: a single fixed item, no concern column / no
 // items-row chrome. The whole main pane becomes one tall thread with a
 // textarea pinned at the bottom — closer to a chat UI than a board.
-export function DefaultBoardLayout({
+//
+// Memoized: BoardApp re-renders on every live activity / header event, and
+// all of this component's props are stable across those, so it only renders
+// when the board data (or owner liveness) actually changed. There is no
+// flash prop on purpose — the single thread has no flash styling.
+export const DefaultBoardLayout = memo(function DefaultBoardLayout({
   data,
   ownerAlive,
   onSubmit,
-  flashingNodes,
   ownerSessionId,
 }: {
   data: BoardView;
   ownerAlive: boolean;
   onSubmit: (nodeId: string, text: string) => Promise<void>;
-  flashingNodes: Set<string>;
   // Owner session_id of this default board — forwarded to ThreadMessage
   // for Anchor toggling.
   ownerSessionId: string;
@@ -43,7 +47,6 @@ export function DefaultBoardLayout({
     return <div className="empty">{t("board.conversation_node_missing")}</div>;
 
   const myThread: ThreadItem[] = data.threads[node.id] ?? [];
-  const flashing = flashingNodes.has(node.id);
   // Pending timer sends for this node, pinned below the thread until they fire.
   const scheduledForNode = ((data as any).scheduled ?? []).filter(
     (m: any) => m.node_id === node.id,
@@ -56,6 +59,9 @@ export function DefaultBoardLayout({
   const rootRef = useRef<HTMLDivElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const rowsRef = useRef<HTMLDivElement>(null);
+  // Cut the thousands of rows loose on unmount so a composer textarea that
+  // Chrome's autofill keeps a reference to cannot keep them alive.
+  useDetachOnUnmount(rowsRef);
 
   // Pause auto-read while a preview modal (e.g. an expanded message) occludes
   // the thread behind it.
@@ -65,19 +71,34 @@ export function DefaultBoardLayout({
   const [settings] = useSettings();
   const hasUnread = myThread.some((t) => isUnreadThreadItem(t));
   const showManualReadButton = !settings.autoReadEnabled && hasUnread;
-  const markNodeRead = () => {
-    const ids = myThread
-      .filter((t) => isUnreadThreadItem(t))
-      .map((t) => t.id);
-    if (ids.length === 0) return;
-    fetch("/mark-thread-items-read", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ thread_item_ids: ids }),
-    }).catch(() => {
-      /* network blip — UI stays unread */
-    });
-  };
+  // Memoized so the memoized ThreadComposer gets the same element while the
+  // thread is unchanged.
+  const manualReadButton = useMemo(() => {
+    if (!showManualReadButton) return null;
+    const markNodeRead = () => {
+      const ids = myThread
+        .filter((t) => isUnreadThreadItem(t))
+        .map((t) => t.id);
+      if (ids.length === 0) return;
+      fetch("/mark-thread-items-read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thread_item_ids: ids }),
+      }).catch(() => {
+        /* network blip — UI stays unread */
+      });
+    };
+    return (
+      <button
+        type="button"
+        className="mark-node-read"
+        title={t("item_card.mark_read_default_title")}
+        onClick={markNodeRead}
+      >
+        {t("item_card.mark_read_button")}
+      </button>
+    );
+  }, [showManualReadButton, myThread, t]);
 
   // Snap to the bottom on mount and when the user starts their own
   // post (tentativeText flip). Following incoming messages while at
@@ -87,13 +108,24 @@ export function DefaultBoardLayout({
 
   // Confirm a live send while this session has an armed pending timer send
   // (once — showing the confirm disarms it).
-  const confirmSend = () =>
-    confirmBeforeSend(
-      !!(data as any).owner_timer_confirm_armed,
-      data.board.session_id,
-      (data as any).owner_scheduled_count ?? 0,
-    );
-  const sendToNode = (text: string) => onSubmit(node.id, text);
+  // Stable callbacks: the composer is memoized, so new closures on every
+  // render would re-render it for nothing.
+  const timerConfirmArmed = !!(data as any).owner_timer_confirm_armed;
+  const ownerScheduledCount: number = (data as any).owner_scheduled_count ?? 0;
+  const confirmSend = useCallback(
+    () =>
+      confirmBeforeSend(
+        timerConfirmArmed,
+        data.board.session_id,
+        ownerScheduledCount,
+      ),
+    [timerConfirmArmed, data.board.session_id, ownerScheduledCount],
+  );
+  const nodeId = node.id;
+  const sendToNode = useCallback(
+    (text: string) => onSubmit(nodeId, text),
+    [onSubmit, nodeId],
+  );
 
   // Stable identity so the memoized thread rows skip reconciliation when this
   // component re-renders (sending, a pending timer send, …).
@@ -104,7 +136,7 @@ export function DefaultBoardLayout({
   return (
     <div
       ref={rootRef}
-      className={`default-board${flashing ? " flashing" : ""}`}
+      className="default-board"
     >
       {/* No welcome banner above the thread: it only repeated what the board
           is for and cost a row of height. The running message count lives in
@@ -174,18 +206,7 @@ export function DefaultBoardLayout({
         confirmSend={confirmSend}
         onSend={sendToNode}
         onTentative={setTentativeText}
-        extraActions={
-          showManualReadButton && (
-            <button
-              type="button"
-              className="mark-node-read"
-              title={t("item_card.mark_read_default_title")}
-              onClick={markNodeRead}
-            >
-              {t("item_card.mark_read_button")}
-            </button>
-          )
-        }
+        extraActions={manualReadButton}
       />
 
       {expandedMsg && (
@@ -198,4 +219,4 @@ export function DefaultBoardLayout({
       )}
     </div>
   );
-}
+});

@@ -61,6 +61,88 @@ export async function readBoardCache(
   }
 }
 
+// Coalesced cache writes. A write structured-clones the WHOLE view (~16ms and
+// a ~2.6M-character clone on the 4,600-message default board, measured
+// 2026-10-16), and a single post produces 2-3 live deltas — writing each one
+// was pure waste for a snapshot that only seeds the next cold start (which
+// always refetches anyway). So: keep the latest view per board, write it after
+// a quiet period, flush early when the tab is hidden or unloaded (the moment
+// iOS may discard it), and skip a view that was already written.
+export type BoardCacheWriter = {
+  schedule: (boardId: string, view: BoardView) => void;
+  flush: () => void;
+};
+
+export function createBoardCacheWriter(opts: {
+  write: (boardId: string, view: BoardView) => void;
+  delayMs?: number;
+  setTimer?: (fn: () => void, ms: number) => unknown;
+  clearTimer?: (handle: unknown) => void;
+}): BoardCacheWriter {
+  const delayMs = opts.delayMs ?? 3000;
+  const setTimer =
+    opts.setTimer ?? ((fn: () => void, ms: number) => setTimeout(fn, ms));
+  const clearTimer =
+    opts.clearTimer ??
+    ((h: unknown) => clearTimeout(h as ReturnType<typeof setTimeout>));
+  const pending = new Map<string, BoardView>();
+  // Views already written. Weak on purpose: holding the last view of every
+  // board visited would keep each one's whole thread in memory for the life
+  // of the tab.
+  const written = new WeakSet<BoardView>();
+  let timer: unknown = null;
+
+  const flush = () => {
+    if (timer !== null) {
+      clearTimer(timer);
+      timer = null;
+    }
+    for (const [boardId, view] of pending) {
+      if (written.has(view)) continue;
+      written.add(view);
+      opts.write(boardId, view);
+    }
+    pending.clear();
+  };
+
+  const schedule = (boardId: string, view: BoardView) => {
+    if (written.has(view) && !pending.has(boardId)) return;
+    pending.set(boardId, view);
+    // Trailing debounce: every new view pushes the write back.
+    if (timer !== null) clearTimer(timer);
+    timer = setTimer(() => {
+      timer = null;
+      flush();
+    }, delayMs);
+  };
+
+  return { schedule, flush };
+}
+
+let sharedWriter: BoardCacheWriter | null = null;
+
+// Queue `view` as board `boardId`'s cold-start snapshot (see
+// createBoardCacheWriter). Best effort, never throws.
+export function scheduleBoardCacheWrite(boardId: string, view: BoardView): void {
+  if (!sharedWriter) {
+    const writer = createBoardCacheWriter({
+      write: (id, v) => {
+        writeBoardCache(id, v).catch(() => {
+          /* best effort */
+        });
+      },
+    });
+    sharedWriter = writer;
+    if (typeof window !== "undefined") {
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") writer.flush();
+      });
+      window.addEventListener("pagehide", () => writer.flush());
+    }
+  }
+  sharedWriter.schedule(boardId, view);
+}
+
 export async function writeBoardCache(
   boardId: string,
   view: BoardView,

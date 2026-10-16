@@ -41,7 +41,7 @@ import {
 } from "../utils/nodeStatusFilter.ts";
 import { postSubmitAnswer } from "../utils/api.ts";
 import { maxThreadItemId, mergeBoardDelta } from "../utils/boardDelta.ts";
-import { readBoardCache, writeBoardCache } from "../utils/boardCache.ts";
+import { readBoardCache, scheduleBoardCacheWrite } from "../utils/boardCache.ts";
 import { setImageDims } from "../utils/imageDims.ts";
 import { useLiveSocket } from "../utils/liveSocket.ts";
 import { openScheduledList } from "../utils/scheduledList.ts";
@@ -152,9 +152,8 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
       dataRef.current = view;
       setData(view);
       // Persist for next cold start (iOS tab eviction / hard reload).
-      writeBoardCache(boardId, view).catch(() => {
-        /* best effort */
-      });
+      // Coalesced: see scheduleBoardCacheWrite.
+      scheduleBoardCacheWrite(boardId, view);
     } catch (e) {
       if (boardIdRef.current !== boardId) return;
       setError(e instanceof Error ? e.message : String(e));
@@ -206,12 +205,13 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           void fetchBoard();
           return;
         }
+        // Nothing changed (mergeBoardDelta handed back the same view): no
+        // re-render, no cache write.
+        if (merged === latest) continue;
         setImageDims(delta.image_dims);
         dataRef.current = merged;
         setData(merged);
-        writeBoardCache(boardId, merged).catch(() => {
-          /* best effort */
-        });
+        scheduleBoardCacheWrite(boardId, merged);
       } while (deltaAgainRef.current);
     };
     const p = run().finally(() => {
@@ -480,7 +480,10 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
         if (
           msg.type === "thread-update" &&
           countsAsUnreadSource(msg.source) &&
-          typeof msg.node_id === "string"
+          typeof msg.node_id === "string" &&
+          // The default board's single thread has no flash styling; setting
+          // the state there only re-rendered the board twice per CC post.
+          !dataRef.current?.board.is_default
         ) {
           const id: string = msg.node_id;
           setFlashingNodes((prev) => {
@@ -522,32 +525,24 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           // working→clear could land out of order and strand the spinner.
           return; // activity events don't affect board data
         } else if (msg.type === "sidebar-refresh") {
-          // Sidebar polls /api/sessions on its own schedule; nudge it to
-          // refetch immediately when unread counts shift.
-          window.dispatchEvent(new Event("pd-sidebar-refresh"));
+          // The sidebar refetch for this (and for the stall / compacting /
+          // bg-task / schedule-marker updates below) is nudged by GlobalBanner,
+          // whose socket is open on every page. Dispatching it here as well
+          // made every such event fetch /api/sessions twice.
           return;
         } else if (msg.type === "session-stall-update") {
-          // A session stalled on an API error (StopFailure) or recovered.
-          // Refresh the sidebar (per-session warning icon) and the board
-          // (header owner_stalled chip). Rare event, so a full refetch is fine.
-          window.dispatchEvent(new Event("pd-sidebar-refresh"));
-          // The owner_* header fields ride on the delta too.
+          // A session stalled on an API error (StopFailure) or recovered: the
+          // header's owner_stalled chip rides on the delta.
           void syncDelta();
           return;
         } else if (msg.type === "session-compacting-update") {
-          // A session started or finished compacting its context. Same shape as
-          // the stall update — refresh the sidebar (per-session badge) and the
-          // board (header owner_compacting chip).
-          window.dispatchEvent(new Event("pd-sidebar-refresh"));
+          // A session started or finished compacting its context: the header's
+          // owner_compacting chip rides on the delta.
           void syncDelta();
           return;
         } else if (msg.type === "bg-tasks-update") {
-          // BG marker rides on the same sidebar-poll pipe — nudge the
-          // sidebar to refetch /api/sessions (carries bg_task_count).
-          window.dispatchEvent(new Event("pd-sidebar-refresh"));
-          // The board header ALSO shows owner_bg_task_count, so refetch
-          // the board too — otherwise clearing the counter (or any
-          // change) leaves the header chip stale until a manual reload.
+          // The board header shows owner_bg_task_count — otherwise clearing
+          // the counter leaves the header chip stale until a manual reload.
           // The count is an owner field of the incremental delta.
           void syncDelta();
           return;
@@ -567,9 +562,8 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           return;
         } else if (msg.type === "schedule-marker-update") {
           // A scheduled-send marker was set or cleared — it rides on the
-          // sidebar's /api/sessions payload (scheduled_send_at), so just
-          // nudge the sidebar to refetch. No board-level data depends on it.
-          window.dispatchEvent(new Event("pd-sidebar-refresh"));
+          // sidebar's /api/sessions payload (scheduled_send_at), which
+          // GlobalBanner nudges. No board-level data depends on it.
           return;
         } else if (msg.type === "favorite-added" && msg.favorite) {
           // Update the local anchor store; don't trigger a board re-fetch.
@@ -966,7 +960,6 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
               data={data}
               ownerAlive={ownerAlive}
               onSubmit={handleSubmit}
-              flashingNodes={flashingNodes}
               ownerSessionId={ownerSessionId}
             />
           ) : (

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ResizableTextarea } from "./ResizableTextarea.tsx";
 import { TimerSendButton } from "./TimerSendButton.tsx";
@@ -11,8 +11,9 @@ import { useDraft } from "../utils/drafts.ts";
 // renders the thread — then every keystroke re-renders that component and
 // reconciles the whole message list (thousands of rows on a long board).
 // The draft (persisted per board/node by useDraft), upload and submitting
-// state all live here, so typing re-renders only this box.
-export function ThreadComposer({
+// state all live here, so typing re-renders only this box. Memoized: pass
+// stable callbacks (useCallback) and the parent's re-renders skip it too.
+export const ThreadComposer = memo(function ThreadComposer({
   className,
   draftBoardId,
   timerBoardId,
@@ -176,4 +177,4 @@ export function ThreadComposer({
       </div>
     </div>
   );
-}
+});

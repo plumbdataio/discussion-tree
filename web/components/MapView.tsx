@@ -87,6 +87,7 @@ import {
   uploadImage,
 } from "../utils/api.ts";
 import { showToast } from "./Toast.tsx";
+import { useDetachOnUnmount } from "../utils/useDetachOnUnmount.ts";
 
 const NODE_W_DEFAULT = 320;
 const NODE_H_DEFAULT = 340;
@@ -206,6 +207,9 @@ export function MapView({ mapId }: { mapId: string }) {
   const rf = useRef<any>(null);
   // The canvas element — used to compute the viewport centre when adding a frame.
   const canvasRef = useRef<HTMLDivElement>(null);
+  // Empty on unmount so a textarea kept by Chrome's autofill cannot keep
+  // this content alive (see useDetachOnUnmount).
+  useDetachOnUnmount(canvasRef);
   // Position of any node/frame captured at drag start, so onNodeDragStop can
   // record the pre-move position for undo.
   const dragStartPos = useRef<Record<string, { x: number; y: number }>>({});
@@ -1188,6 +1192,9 @@ function MapGeneralChat({
   const [uploading, setUploading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  // Empty on unmount so a textarea kept by Chrome's autofill cannot keep
+  // this content alive (see useDetachOnUnmount).
+  useDetachOnUnmount(bodyRef);
   // Whole-thread preview — the same affordance a node card has: opens the
   // general chat in a MapNodeModal, optionally scrolled to one message.
   const [expanded, setExpanded] = useState(false);
