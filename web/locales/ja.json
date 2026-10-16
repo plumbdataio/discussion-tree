@@ -287,7 +287,8 @@
   },
   "system_message": {
     "status_label": "ステータス:",
-    "cli_command": "コマンド送信: {{command}}"
+    "cli_command": "コマンド送信: {{command}}",
+    "stall_credits": "利用枠(クレジット)が切れたため停止しています。自動continueは送っていません。/model でモデルを切り替えるか /usage-credits を実行してください"
   },
   "node_status": {
     "pending": "未着手",

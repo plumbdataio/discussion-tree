@@ -9,6 +9,11 @@
 //                    the auto-continue timer uses to schedule that single resume).
 //   - "login"      : auth / login expired. Only the human can fix it (/login);
 //                    a nudge is futile — surface a notice instead.
+//   - "credits"    : out of usage credits for the current model (e.g. "You're
+//                    out of usage credits. Run /usage-credits to keep using
+//                    <model> or /model to switch models."). It does not reset on
+//                    a timer and a nudge just fails again, so only the human can
+//                    fix it (/model or /usage-credits) — surface a notice.
 //   - "transient"  : any other API error (a passing 429 "temporarily limiting
 //                    requests", "retry also failed", overloaded). A short
 //                    delayed "continue" is the right move here.
@@ -19,18 +24,34 @@
 
 import { openSync, fstatSync, readSync, closeSync } from "node:fs";
 
-export type StallReason = "rate_limit" | "login" | "transient";
+export type StallReason = "rate_limit" | "login" | "credits" | "transient";
+
+// Out-of-credits phrasing. Matched BEFORE the rate-limit patterns, but only
+// when the text names no reset time: a banner that says both "out of extra
+// usage" and "resets 3pm" is still a window cap that lifts on its own, so it
+// stays rate_limit (resume once at the reset), the pre-existing behavior.
+const CREDITS_PATTERNS: RegExp[] = [
+  /\bout of (usage |extra usage )?credits\b/,
+  /\bout of extra usage\b/,
+  /\/usage-credits\b/,
+  /\bcredits? (have been |has been |are |is )?(exhausted|depleted|used up)\b/,
+  /\bno (usage )?credits (left|remaining)\b/,
+];
+const RESET_MENTION = /\bresets? (at |on |today|tomorrow|\d)/;
 
 export function classifyStallText(text: string): StallReason {
   const t = (text ?? "").toLowerCase();
-  // Usage / rate cap FIRST. The cap banner itself contains
+  if (CREDITS_PATTERNS.some((re) => re.test(t)) && !RESET_MENTION.test(t)) {
+    return "credits";
+  }
+  // Usage / rate cap next. The cap banner itself contains
   // "/login to switch to an API usage-billed account", so a bare "/login" test
   // below would otherwise misread a rate-limit as a login problem.
   if (
     /hit your (session|weekly|usage|5-hour|five-hour) limit/.test(t) ||
     /\bhit your limit\b/.test(t) ||
     /usage limit reached/.test(t) ||
-    /\bresets? (at |on |today|tomorrow|\d)/.test(t) ||
+    RESET_MENTION.test(t) ||
     /\b(weekly|5-hour|five-hour) limit\b/.test(t)
   ) {
     return "rate_limit";
@@ -109,7 +130,8 @@ const TASK_FAILURE_CAP_B =
 
 // Scan the tail of a Claude Code transcript JSONL, newest-first, and return the
 // stop cause plus the exact text that decided it (used to parse the reset time).
-// A cap is recognized in EITHER form:
+// A "credits" stop, like "login", only ever comes from an isApiErrorMessage
+// entry. A cap is recognized in EITHER form:
 //   - an isApiErrorMessage:true entry (authoritative — this is also the ONLY
 //     source of a "login" classification, and its text is classified as today),
 //     OR

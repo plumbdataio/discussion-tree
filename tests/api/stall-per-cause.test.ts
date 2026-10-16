@@ -129,6 +129,30 @@ describe("stall per-cause auto-continue", () => {
     expect(notes2.length).toBe(1);
   });
 
+  test("credits → NO nudge, one localized-marker system notice (deduped)", async () => {
+    const { sessionId, ccId } = await freshSession();
+    const boardId = await defaultBoardId(sessionId);
+    const countNotes = async () => {
+      const board = await get<{ threads: Record<string, any[]> }>(
+        `${broker.url}/api/board/${boardId}`,
+      );
+      return (board.json.threads.main ?? []).filter(
+        (t) => t.source === "system" && t.text === "stall_notice:credits",
+      ).length;
+    };
+
+    for (let i = 0; i < 2; i++) {
+      const r = await post<{ ok: boolean }>(`${broker.url}/session-stalled`, {
+        cc_session_id: ccId,
+        reason: "credits",
+      });
+      expect(r.json.ok).toBe(true);
+      await sleep(220);
+    }
+    expect(await nudgeCount(sessionId)).toBe(0);
+    expect(await countNotes()).toBe(1);
+  });
+
   test("no reason + no transcript → transient nudge (backward compatible)", async () => {
     const { sessionId, ccId } = await freshSession();
     const r = await post<{ ok: boolean }>(`${broker.url}/session-stalled`, {

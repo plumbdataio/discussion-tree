@@ -57,6 +57,41 @@ describe("classifyStallText", () => {
     );
   });
 
+  // The exact banner Claude Code shows when the account is out of usage
+  // credits for the current model (observed 2026-10-16 on pd-002).
+  const CREDITS_BANNER =
+    "You're out of usage credits. Run /usage-credits to keep using Fable 5.1 or /model to switch models.";
+
+  test("out-of-usage-credits banner → credits (exact text)", () => {
+    expect(classifyStallText(CREDITS_BANNER)).toBe("credits");
+  });
+
+  test("close credits variants → credits", () => {
+    expect(classifyStallText("You're out of credits.")).toBe("credits");
+    expect(classifyStallText("You're out of extra usage.")).toBe("credits");
+    expect(classifyStallText("Run /usage-credits to continue")).toBe("credits");
+    expect(classifyStallText("Your usage credits are exhausted")).toBe(
+      "credits",
+    );
+    expect(classifyStallText("No credits remaining for this model")).toBe(
+      "credits",
+    );
+  });
+
+  test("a credits phrase WITH a reset time stays rate_limit (lifts on its own)", () => {
+    expect(
+      classifyStallText("You're out of extra usage · resets 3pm (Asia/Tokyo)"),
+    ).toBe("rate_limit");
+  });
+
+  test("the session cap banner is still rate_limit, not credits", () => {
+    expect(
+      classifyStallText(
+        "You've hit your session limit · resets 10:50pm (Asia/Tokyo)\n/login to switch to an API usage-billed account.",
+      ),
+    ).toBe("rate_limit");
+  });
+
   test("empty / undefined → transient (fail open)", () => {
     expect(classifyStallText("")).toBe("transient");
     expect(classifyStallText(undefined as unknown as string)).toBe("transient");
@@ -209,6 +244,42 @@ describe("classifyStallFromTranscript", () => {
     const c = classifyStall(p);
     expect(c.reason).toBe("login");
     expect(c.resetAt).toBeNull();
+  });
+
+  test("out-of-credits API error entry (real transcript shape) → credits, resetAt null", () => {
+    // Shape copied from a real Claude Code transcript: the banner is a
+    // synthetic assistant entry flagged isApiErrorMessage, error "rate_limit",
+    // HTTP 429 — so the TEXT, not the error field, must decide it.
+    const p = transcript("credits.jsonl", [
+      { type: "assistant", message: { content: "working" } },
+      {
+        type: "assistant",
+        isApiErrorMessage: true,
+        error: "rate_limit",
+        apiErrorStatus: 429,
+        message: {
+          model: "<synthetic>",
+          content: [
+            {
+              type: "text",
+              text: "You're out of usage credits. Run /usage-credits to keep using Fable 5.1 or /model to switch models.",
+            },
+          ],
+        },
+      },
+    ]);
+    expect(classifyStallFromTranscript(p)).toBe("credits");
+    const c = classifyStall(p);
+    expect(c.reason).toBe("credits");
+    expect(c.resetAt).toBeNull();
+  });
+
+  test("ordinary entry merely mentioning /usage-credits → transient", () => {
+    const p = transcript("credits-chatter.jsonl", [
+      { type: "assistant", message: { content: "hi" } },
+      { type: "user", message: { content: "maybe run /usage-credits later" } },
+    ]);
+    expect(classifyStallFromTranscript(p)).toBe("transient");
   });
 
   test("ordinary entry casually mentioning 'resets tomorrow' → transient (no false positive)", () => {

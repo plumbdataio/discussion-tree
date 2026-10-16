@@ -287,7 +287,8 @@
   },
   "system_message": {
     "status_label": "Status:",
-    "cli_command": "Command sent: {{command}}"
+    "cli_command": "Command sent: {{command}}",
+    "stall_credits": "This session stopped because it is out of usage credits for its model. Auto-continue was not sent. Run /model to switch models or /usage-credits in the terminal to resume."
   },
   "node_status": {
     "pending": "Pending",

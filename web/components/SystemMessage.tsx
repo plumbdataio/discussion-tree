@@ -7,7 +7,15 @@ import { useTranslation } from "react-i18next";
 export type ParsedSystemMessage =
   | { kind: "status_change"; from: string; to: string }
   | { kind: "cli_command"; command: string }
+  | { kind: "stall_notice"; reason: StallNoticeReason }
   | { kind: "text"; text: string };
+
+// Stall causes the broker drops a one-time notice for, stored as a marker
+// ("stall_notice:<reason>", see broker/activity.ts) and rendered here as a
+// localized sentence. Only known reasons are recognized; an unknown one falls
+// through to plain text.
+const STALL_NOTICE_REASONS = ["credits"] as const;
+export type StallNoticeReason = (typeof STALL_NOTICE_REASONS)[number];
 
 export function parseSystemMessage(text: string): ParsedSystemMessage {
   const m = text.match(/^status_change:([^:]+):([^:]+)$/);
@@ -15,6 +23,10 @@ export function parseSystemMessage(text: string): ParsedSystemMessage {
   // A CLI command issued from the WebUI (e.g. "cli_command:/compact").
   const cmd = text.match(/^cli_command:(.+)$/);
   if (cmd) return { kind: "cli_command", command: cmd[1] };
+  const stall = text.match(/^stall_notice:([a-z_]+)$/);
+  if (stall && (STALL_NOTICE_REASONS as readonly string[]).includes(stall[1])) {
+    return { kind: "stall_notice", reason: stall[1] as StallNoticeReason };
+  }
   return { kind: "text", text };
 }
 
@@ -25,9 +37,16 @@ export function renderSystemMessage(text: string): React.ReactNode {
       return <StatusChangeMessage from={parsed.from} to={parsed.to} />;
     case "cli_command":
       return <CliCommandMessage command={parsed.command} />;
+    case "stall_notice":
+      return <StallNoticeMessage reason={parsed.reason} />;
     default:
       return parsed.text;
   }
+}
+
+function StallNoticeMessage({ reason }: { reason: StallNoticeReason }) {
+  const { t } = useTranslation();
+  return <span>{t(`system_message.stall_${reason}`)}</span>;
 }
 
 function CliCommandMessage({ command }: { command: string }) {

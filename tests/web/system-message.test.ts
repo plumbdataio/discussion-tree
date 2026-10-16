@@ -29,6 +29,20 @@ describe("parseSystemMessage", () => {
     });
   });
 
+  test("classifies a known stall_notice marker", () => {
+    expect(parseSystemMessage("stall_notice:credits")).toEqual({
+      kind: "stall_notice",
+      reason: "credits",
+    });
+  });
+
+  test("an unknown stall_notice reason falls back to plain text", () => {
+    expect(parseSystemMessage("stall_notice:bogus")).toEqual({
+      kind: "text",
+      text: "stall_notice:bogus",
+    });
+  });
+
   test("falls back to plain text for an unrecognized marker", () => {
     expect(parseSystemMessage("just some note")).toEqual({
       kind: "text",

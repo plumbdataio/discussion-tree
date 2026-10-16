@@ -37,7 +37,8 @@ const toolHeartbeats = new Map<string, number>();
 // external cc-usage bridge this can live in dt itself. The delay lets a
 // transient "temporarily limiting requests" 429 clear before we resume.
 //
-// The cause is classified per-stall (rate_limit / login / transient) so only a
+// The cause is classified per-stall (rate_limit / login / credits / transient)
+// so only a
 // transient error is actually nudged. Classification is DEFERRED to fire time,
 // not done at receipt: the StopFailure hook can POST before the cap/error line
 // has settled as the last entry in the transcript jsonl (a write race), so
@@ -198,6 +199,14 @@ function scheduleAutoContinue(
         notifyLoginRequired(sessionId);
         return;
       }
+      if (reason === "credits") {
+        // Out of usage credits for the current model: no timer lifts it and a
+        // nudge just fails again (observed: "continue" every ~minute, each
+        // re-failing). Only the human can fix it (/model or /usage-credits) —
+        // don't nudge; drop a one-time UI notice instead.
+        notifyCreditsExhausted(sessionId);
+        return;
+      }
 
       // transient (or inconclusive → fail open): the streak-gated nudge. The
       // streak counts SENT nudges, so the cap check and increment live here at
@@ -355,6 +364,13 @@ export function handleSessionStalled(body: {
 // stall episode — so repeated StopFailure fires don't spam the board. Cleared
 // on genuine recovery (clearStall).
 const loginNoticeSent = new Set<string>();
+// Same one-notice-per-episode dedup for the "out of usage credits" notice.
+const creditsNoticeSent = new Set<string>();
+
+// System-message marker for the out-of-credits notice. The web UI renders it as
+// a localized sentence (system_message.stall_credits in web/locales), so the
+// stored text stays a language-neutral marker, like "status_change:a:b".
+export const STALL_CREDITS_MARKER = "stall_notice:credits";
 
 // Drop a one-time system note into the session's default board so the human
 // sees WHY it stopped (login expired) and that no auto-continue will save it —
@@ -381,6 +397,31 @@ function notifyLoginRequired(sessionId: string): void {
   });
 }
 
+// Drop a one-time system note into the session's default board saying it
+// stopped because it is out of usage credits for its model, that auto-continue
+// was NOT sent, and that /model or /usage-credits in the terminal resumes it.
+// Same plain "system" thread item as the login notice. Best-effort.
+function notifyCreditsExhausted(sessionId: string): void {
+  if (creditsNoticeSent.has(sessionId)) return;
+  creditsNoticeSent.add(sessionId);
+  const row = selectDefaultBoardForSession.get(sessionId) as
+    | { id: string }
+    | null;
+  if (!row) return;
+  insertThread.run(
+    row.id,
+    "main",
+    "system",
+    STALL_CREDITS_MARKER,
+    new Date().toISOString(),
+  );
+  broadcast(row.id, {
+    type: "thread-update",
+    node_id: "main",
+    source: "system",
+  });
+}
+
 // Clear the stall the moment a session shows life again — called from the
 // tool heartbeat (PreToolUse), the tool-activity clear (normal Stop), and
 // the SessionStart re-attach. Broadcasts only when something actually
@@ -398,6 +439,7 @@ export function clearStall(sessionId: string): void {
     autoContinueStreak.delete(sessionId);
     // A recovered session can raise a fresh login notice next time it expires.
     loginNoticeSent.delete(sessionId);
+    creditsNoticeSent.delete(sessionId);
     broadcastToAll({ type: "session-stall-update" });
   }
 }
