@@ -354,13 +354,6 @@ body {
     line-height: 1.4;
   }
 
-  /* Mobile: the default-board welcome banner ("Posts here are delivered as
-     direct messages to Claude Code.") is informational and adds zero
-     value once the user has used the board even once. Hide it entirely
-     so the conversation thread starts at the top of the visible area. */
-  .default-board-context {
-    display: none;
-  }
 
   /* Mobile: the live/offline WS indicator in the header takes up an
      entire chip and the same information is implicit when the user
@@ -1465,33 +1458,13 @@ a.session-name:hover {
   min-height: 0;
 }
 
-.default-board-context {
-  font-size: 13px;
+/* Default board's running message count, beside the header title. */
+.header-message-count {
+  flex: 0 0 auto;
+  font-size: 12px;
   color: var(--muted);
-  background: var(--bg);
-  border-radius: 8px;
-  padding: 8px 14px;
-  margin-bottom: 10px;
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-/* The welcome sentence sits at the left; it may wrap on a narrow board so let
-   it shrink rather than shove the count off the row. */
-.default-board-welcome {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-/* Running message count, pinned to the right end of the banner. */
-.default-board-count {
-  flex: 0 0 auto;
-  margin-left: auto;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  opacity: 0.85;
 }
 
 .default-board-thread {

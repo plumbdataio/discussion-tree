@@ -656,6 +656,20 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
         <h1>
           {boardTitle(data.board, t)}
         </h1>
+        {/* The default board is one flat thread with no timeline modal, so its
+            running message count sits beside the title. Real messages only —
+            system rows (status changes etc.) are not counted. */}
+        {Boolean(data.board.is_default) && (
+          <span className="header-message-count">
+            {t("default_board.message_count", {
+              count: Object.values(data.threads).reduce(
+                (n, items) =>
+                  n + items.filter((it) => it.source !== "system").length,
+                0,
+              ),
+            })}
+          </span>
+        )}
         {Boolean(data.board.closed) && (
           <span className="closed-badge" title={t("header.board_meta_closed")}>
             {t("header.board_meta_closed")}
