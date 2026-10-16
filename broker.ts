@@ -40,7 +40,8 @@ import {
   getDiagramView,
 } from "./broker/diagrams.ts";
 import { routes as mapChecklistRoutes } from "./broker/map-checklist.ts";
-import { getBoardView } from "./broker/helpers.ts";
+import { getBoardThreadDelta, getBoardView } from "./broker/helpers.ts";
+import { compressedAsset, jsonResponse } from "./broker/compress.ts";
 import { routes as issuesRoutes } from "./broker/issues.ts";
 import { routes as issueChatRoutes } from "./broker/issue-chat-routes.ts";
 import { routes as nodesRoutes } from "./broker/nodes.ts";
@@ -339,15 +340,32 @@ try {
       );
     }
 
+    // Incremental thread fetch: /api/board/<id>/threads?after=<thread_item_id>
+    // [&node=<node_id>] — only what changed since the client's newest item
+    // (see getBoardThreadDelta). Matched before the full-view route below,
+    // which would otherwise read "<id>/threads" as the board id.
+    if (
+      req.method === "GET" &&
+      path.startsWith("/api/board/") &&
+      path.endsWith("/threads")
+    ) {
+      const id = path.slice("/api/board/".length, -"/threads".length);
+      const after = Number(url.searchParams.get("after") ?? "0");
+      const node = url.searchParams.get("node");
+      const delta = getBoardThreadDelta(id, after, node);
+      if (!delta) return Response.json({ error: "Not found" }, { status: 404 });
+      return jsonResponse(req, delta);
+    }
+
     if (req.method === "GET" && path.startsWith("/api/board/")) {
       const id = path.slice("/api/board/".length);
       const view = getBoardView(id);
       if (!view) return Response.json({ error: "Not found" }, { status: 404 });
-      return Response.json(view);
+      return jsonResponse(req, view);
     }
 
     if (req.method === "GET" && path === "/api/sessions") {
-      return Response.json(handleListSessions());
+      return jsonResponse(req, handleListSessions());
     }
 
 
@@ -357,14 +375,14 @@ try {
       const id = path.slice("/api/map/".length);
       const view = getMapView(id);
       if (!view) return Response.json({ error: "Not found" }, { status: 404 });
-      return Response.json(view);
+      return jsonResponse(req, view);
     }
 
     if (req.method === "GET" && path.startsWith("/api/diagram/")) {
       const id = path.slice("/api/diagram/".length);
       const view = getDiagramView(id);
       if (!view) return Response.json({ error: "Not found" }, { status: 404 });
-      return Response.json(view);
+      return jsonResponse(req, view);
     }
 
     if (req.method === "GET" && path.startsWith("/uploads/")) {
@@ -400,7 +418,7 @@ try {
         );
       }
       try {
-        return Response.json(await handler(body));
+        return jsonResponse(req, await handler(body));
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return Response.json({ error: msg }, { status: 500 });
@@ -414,8 +432,8 @@ try {
     if (webDistDir && req.method === "GET") {
       const asset = resolveDistAsset(webDistDir, path);
       if (asset) {
-        return new Response(Bun.file(asset), {
-          headers: { "cache-control": "public, max-age=31536000, immutable" },
+        return compressedAsset(req, asset, {
+          "cache-control": "public, max-age=31536000, immutable",
         });
       }
     }

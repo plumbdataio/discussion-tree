@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Clock, Cog, ScrollText, Shrink, Wand2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { Activity, BoardView } from "../../shared/types.ts";
+import type {
+  Activity,
+  BoardThreadDelta,
+  BoardView,
+} from "../../shared/types.ts";
 import { ActivityBadge } from "./ActivityBadge.tsx";
 import { AppLayout } from "./AppShell.tsx";
 import { BoardStructureRequestModal } from "./BoardStructureRequestModal.tsx";
@@ -36,6 +40,7 @@ import {
   useNodeUnreadOverride,
 } from "../utils/nodeStatusFilter.ts";
 import { postSubmitAnswer } from "../utils/api.ts";
+import { maxThreadItemId, mergeBoardDelta } from "../utils/boardDelta.ts";
 import { readBoardCache, writeBoardCache } from "../utils/boardCache.ts";
 import { setImageDims } from "../utils/imageDims.ts";
 import { useLiveSocket } from "../utils/liveSocket.ts";
@@ -117,9 +122,18 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
   // stale responses. Updated on every render so it never lags the URL.
   const boardIdRef = useRef(boardId);
   boardIdRef.current = boardId;
+  // The view the incremental path merges into. Mirrors `data`, but is also
+  // written synchronously by commitView so back-to-back deltas each build on
+  // the previous merge rather than on a not-yet-rendered state.
+  const dataRef = useRef<BoardView | null>(data);
+  dataRef.current = data;
+  // Bumped whenever a full fetch starts. A delta that was requested before a
+  // full fetch began is dropped: the full view is at least as new.
+  const fullGenRef = useRef(0);
 
   const fetchBoard = useCallback(async () => {
     if (!boardId) return;
+    fullGenRef.current++;
     try {
       const res = await fetch(`/api/board/${boardId}`);
       // Navigated away while the request was in flight — drop the response.
@@ -135,6 +149,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
       // have each uploaded image's aspect box on the very first paint of the
       // new data (see web/utils/imageDims.ts).
       setImageDims(view.image_dims);
+      dataRef.current = view;
       setData(view);
       // Persist for next cold start (iOS tab eviction / hard reload).
       writeBoardCache(boardId, view).catch(() => {
@@ -146,6 +161,66 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     }
   }, [boardId, t]);
 
+  // Incremental refresh for live thread / status / read-state / owner-state
+  // events: fetch only what changed since the newest item held and merge it in
+  // (web/utils/boardDelta.ts). A full /api/board/<id> is MBs on a big board —
+  // re-downloading it per post was what made a post take ~30s on 4G. Single
+  // flight: events arriving while one is in flight collapse into one rerun.
+  // Falls back to fetchBoard when the view is missing / for another board, the
+  // delta mentions an unknown node (structure changed), or the request fails.
+  const deltaInFlightRef = useRef<Promise<void> | null>(null);
+  const deltaAgainRef = useRef(false);
+  const syncDelta = useCallback((): Promise<void> => {
+    if (!boardId) return Promise.resolve();
+    if (deltaInFlightRef.current) {
+      deltaAgainRef.current = true;
+      return deltaInFlightRef.current;
+    }
+    const run = async () => {
+      do {
+        deltaAgainRef.current = false;
+        const view = dataRef.current;
+        if (!view || view.board.id !== boardId) {
+          void fetchBoard();
+          return;
+        }
+        const after = maxThreadItemId(view);
+        const gen = fullGenRef.current;
+        let delta: BoardThreadDelta;
+        try {
+          const res = await fetch(
+            `/api/board/${boardId}/threads?after=${after}`,
+          );
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          delta = (await res.json()) as BoardThreadDelta;
+        } catch {
+          if (boardIdRef.current === boardId) void fetchBoard();
+          return;
+        }
+        if (boardIdRef.current !== boardId) return;
+        if (gen !== fullGenRef.current) continue; // a full fetch superseded it
+        const latest = dataRef.current;
+        if (!latest || latest.board.id !== boardId) return;
+        const merged = mergeBoardDelta(latest, delta, after);
+        if (!merged) {
+          void fetchBoard();
+          return;
+        }
+        setImageDims(delta.image_dims);
+        dataRef.current = merged;
+        setData(merged);
+        writeBoardCache(boardId, merged).catch(() => {
+          /* best effort */
+        });
+      } while (deltaAgainRef.current);
+    };
+    const p = run().finally(() => {
+      deltaInFlightRef.current = null;
+    });
+    deltaInFlightRef.current = p;
+    return p;
+  }, [boardId, fetchBoard]);
+
   useEffect(() => {
     if (!boardId) {
       setError(t("errors.not_found"));
@@ -153,6 +228,10 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
     }
     // Clear a previous board's error so it can't linger over the new one.
     setError(null);
+    // A delta still in flight belongs to the previous board (it drops its own
+    // result); don't let it swallow this board's first delta request.
+    deltaInFlightRef.current = null;
+    deltaAgainRef.current = false;
     // Stale-while-revalidate: render the cached snapshot immediately so
     // a reloaded tab has something on screen before the network round-
     // trip completes, then overwrite once the fresh fetch lands. On a board
@@ -418,6 +497,18 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
             });
           }, 1500);
           flashTimers.current.add(handle);
+        }
+        if (
+          msg.type === "thread-update" ||
+          msg.type === "status-update" ||
+          msg.type === "unread-update" ||
+          msg.type === "board-status-update" ||
+          msg.type === "scheduled-messages-update"
+        ) {
+          // New messages, node / board status, read state and pending timer
+          // sends are all in the incremental delta — no full board download.
+          void syncDelta();
+          return;
         } else if (msg.type === "activity") {
           const sid: string = msg.session_id;
           setActivitiesBySession((prev) => ({
@@ -440,14 +531,15 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           // Refresh the sidebar (per-session warning icon) and the board
           // (header owner_stalled chip). Rare event, so a full refetch is fine.
           window.dispatchEvent(new Event("pd-sidebar-refresh"));
-          fetchBoard();
+          // The owner_* header fields ride on the delta too.
+          void syncDelta();
           return;
         } else if (msg.type === "session-compacting-update") {
           // A session started or finished compacting its context. Same shape as
           // the stall update — refresh the sidebar (per-session badge) and the
           // board (header owner_compacting chip).
           window.dispatchEvent(new Event("pd-sidebar-refresh"));
-          fetchBoard();
+          void syncDelta();
           return;
         } else if (msg.type === "bg-tasks-update") {
           // BG marker rides on the same sidebar-poll pipe — nudge the
@@ -456,9 +548,22 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           // The board header ALSO shows owner_bg_task_count, so refetch
           // the board too — otherwise clearing the counter (or any
           // change) leaves the header chip stale until a manual reload.
-          // bg-tasks-update is infrequent, so a full board refetch is
-          // cheap enough.
-          fetchBoard();
+          // The count is an owner field of the incremental delta.
+          void syncDelta();
+          return;
+        } else if (msg.type === "session-reattached") {
+          // Owner liveness / cli-send capability may have changed — both are
+          // owner fields of the delta.
+          void syncDelta();
+          return;
+        } else if (
+          msg.type === "subagent-update" ||
+          msg.type === "global-banner-update" ||
+          msg.type === "backup-health-update"
+        ) {
+          // Broadcast to every socket but carried by nothing in the board
+          // view (GlobalBanner / the sidebar own them). These used to fall
+          // through to a full board refetch on every open board.
           return;
         } else if (msg.type === "schedule-marker-update") {
           // A scheduled-send marker was set or cleared — it rides on the
@@ -478,9 +583,11 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
           return;
         }
       }
+      // Structural or unknown events (node add / delete / move / edit, board
+      // closed / owner changed, …): the full view.
       fetchBoard();
     },
-    [fetchBoard],
+    [fetchBoard, syncDelta],
   );
 
   const wsConnected = useLiveSocket({
@@ -522,10 +629,13 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
         // failure reason in their preferred language.
         throw new Error(translateError(t, j, `HTTP ${res.status}`));
       }
-      // Optimistic refresh; WS will also nudge us.
-      fetchBoard();
+      // Pull the delivered message in BEFORE resolving: the composer drops its
+      // tentative "sending" bubble when this promise settles, so the real
+      // item should already be on screen by then (no gap, no duplicate). The
+      // WS thread-update usually got there first; this is then a no-op delta.
+      await syncDelta();
     },
-    [boardId, fetchBoard, t]
+    [boardId, syncDelta, t]
   );
 
   if (error) {
@@ -740,7 +850,7 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ board_id: data.board.id }),
                   })
-                    .then(() => fetchBoard())
+                    .then(() => syncDelta())
                     .catch(() => alert(t("header.mark_all_read_failed")));
                 }}
               >

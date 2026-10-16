@@ -666,6 +666,19 @@ export interface ImageDims {
   h: number;
 }
 
+// GET /api/board/<id>/threads?after=<id> — the incremental slice of a
+// BoardView a live thread event can change (see broker getBoardThreadDelta).
+// The owner_* / activity / scheduled fields mirror BoardView's.
+export interface BoardThreadDelta
+  extends Omit<BoardView, "nodes" | "threads"> {
+  // New items (id > after), ascending id. Same shape as BoardView.threads rows.
+  threads: ThreadItem[];
+  // Every still-unread item (read_at NULL) of an unread-capable source.
+  unread_ids: number[];
+  // Status of every live node on the board.
+  node_statuses: Record<string, string>;
+}
+
 export interface BoardView {
   board: Board;
   nodes: Node[];

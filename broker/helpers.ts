@@ -238,6 +238,89 @@ export function getBoardView(boardId: string) {
     ...threads.map((t) => t.text),
     ...nodes.map((n) => n.context),
   ]);
+  return {
+    board,
+    nodes,
+    threads: threadsByNode,
+    image_dims,
+    ...boardOwnerFields(board),
+  };
+}
+
+// Incremental counterpart of getBoardView for the live thread path (GET
+// /api/board/<id>/threads?after=<id>). A full view of a big board is several MB
+// (the default board measured 4.3MB at ~4,400 items) and used to be re-sent on
+// EVERY thread-update; this returns only what a thread-update / status-update /
+// mark-read can have changed:
+//   - threads: items with id > afterId (thread_items.id is a global
+//     AUTOINCREMENT, so "> the largest id I hold" is exactly "new since then";
+//     gaps are normal), optionally narrowed to one node. Same row shape as the
+//     full view (SELECT *).
+//   - image_dims for those new items only.
+//   - unread_ids: every item on the board still unread (read_at NULL) from an
+//     unread-capable source. Items are never edited or deleted, only marked
+//     read, so this set is all the client needs to reconcile read state on the
+//     items it already holds (small: unread items are few).
+//   - node_statuses: status per live node (a post can move a node's status).
+//     A node id the client doesn't know means the structure changed — the
+//     client falls back to a full fetch.
+//   - board (the row, for board status) + the owner fields the header shows.
+// Returns null for an unknown board.
+let _deltaAllStmt: ReturnType<typeof db.prepare> | null = null;
+let _deltaNodeStmt: ReturnType<typeof db.prepare> | null = null;
+let _unreadIdsStmt: ReturnType<typeof db.prepare> | null = null;
+let _nodeStatusStmt: ReturnType<typeof db.prepare> | null = null;
+export function getBoardThreadDelta(
+  boardId: string,
+  afterId: number,
+  nodeId?: string | null,
+) {
+  const board = selectBoard.get(boardId) as Board | null;
+  if (!board) return null;
+  _deltaAllStmt ??= db.prepare(
+    "SELECT * FROM thread_items WHERE board_id = ? AND id > ? ORDER BY id",
+  );
+  _deltaNodeStmt ??= db.prepare(
+    "SELECT * FROM thread_items WHERE board_id = ? AND node_id = ? AND id > ? ORDER BY id",
+  );
+  _unreadIdsStmt ??= db.prepare(
+    "SELECT id FROM thread_items WHERE board_id = ? AND read_at IS NULL AND source IN ('cc', 'external') ORDER BY id",
+  );
+  _nodeStatusStmt ??= db.prepare(
+    "SELECT id, status FROM nodes WHERE board_id = ? AND deleted_at IS NULL",
+  );
+  const after = Number.isFinite(afterId) && afterId > 0 ? Math.floor(afterId) : 0;
+  const threads = (
+    nodeId
+      ? _deltaNodeStmt.all(boardId, nodeId, after)
+      : _deltaAllStmt.all(boardId, after)
+  ) as ThreadItem[];
+  const unread_ids = (
+    _unreadIdsStmt.all(boardId) as { id: number }[]
+  ).map((r) => r.id);
+  const node_statuses: Record<string, string> = {};
+  for (const r of _nodeStatusStmt.all(boardId) as {
+    id: string;
+    status: string;
+  }[]) {
+    node_statuses[r.id] = r.status;
+  }
+  return {
+    board,
+    threads,
+    image_dims: collectImageDims(threads.map((t) => t.text)),
+    unread_ids,
+    node_statuses,
+    ...boardOwnerFields(board),
+  };
+}
+
+// Everything in the board view that is NOT the node tree or the thread
+// history: the owning session's live state (alive / stalled / compacting /
+// context meter / bg tasks / scheduled sends / activity). Shared by the full
+// view and the incremental thread delta so the header chips refresh on a
+// delta exactly as they used to on a full refetch.
+function boardOwnerFields(board: Board) {
   const activity = activities.get(board.session_id) ?? null;
   const ownerRow = db
     .prepare(
@@ -272,10 +355,6 @@ export function getBoardView(boardId: string) {
   const owner_scheduled_count = pendingScheduledCount(board.session_id);
   const owner_timer_confirm_armed = pendingArmedCount(board.session_id) > 0;
   return {
-    board,
-    nodes,
-    threads: threadsByNode,
-    image_dims,
     activity,
     owner_alive,
     owner_stalled,
