@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 import type { Node } from "../../shared/types.ts";
 import { MDView } from "./MDView.tsx";
 import { usePreviewModalLock } from "../utils/previewModalLock.ts";
+import { WidthResizeHandles } from "./WidthResizeHandles.tsx";
+import { THREAD_PREVIEW_WIDTH_KEY } from "../utils/resizableWidth.ts";
 
 // Read-only enlarged view of a concern (title + context only — child nodes
 // are intentionally omitted; concerns are category headers and their value as
@@ -39,6 +41,8 @@ export function ConcernPreviewModal({
         className="modal-content node-modal concern-preview-modal"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Same width as the thread previews (shared key). */}
+        <WidthResizeHandles storageKey={THREAD_PREVIEW_WIDTH_KEY} />
         <button
           className="modal-close"
           onClick={onClose}

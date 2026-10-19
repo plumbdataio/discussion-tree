@@ -11,6 +11,8 @@ import { MDView } from "./MDView.tsx";
 import { SenderName } from "./SenderName.tsx";
 import { formatThreadTimestamp } from "../utils/format.ts";
 import type { TimelineEntry } from "../utils/timeline.ts";
+import { WidthResizeHandles } from "./WidthResizeHandles.tsx";
+import { THREAD_PREVIEW_WIDTH_KEY } from "../utils/resizableWidth.ts";
 
 export function TimelineModal({
   entries,
@@ -46,6 +48,8 @@ export function TimelineModal({
         className="modal-content node-modal timeline-modal"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Same width as the thread previews (shared key). */}
+        <WidthResizeHandles storageKey={THREAD_PREVIEW_WIDTH_KEY} />
         <button
           className="modal-close"
           onClick={onClose}
