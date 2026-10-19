@@ -269,7 +269,8 @@
     "load_failed": "Couldn't load spawn config."
   },
   "modal": {
-    "close": "Close (Esc)"
+    "close": "Close (Esc)",
+    "resize_width": "Drag to resize the width (double-click to reset)"
   },
   "structure_request": {
     "trigger_label": "Ask to restructure board",

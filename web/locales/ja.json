@@ -269,7 +269,8 @@
     "load_failed": "spawn 設定の読み込みに失敗しました。"
   },
   "modal": {
-    "close": "閉じる (Esc)"
+    "close": "閉じる (Esc)",
+    "resize_width": "ドラッグで幅を変更(ダブルクリックで元の幅に戻す)"
   },
   "structure_request": {
     "trigger_label": "ボード構成変更を依頼",

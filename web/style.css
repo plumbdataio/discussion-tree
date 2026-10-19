@@ -4309,6 +4309,42 @@ body.concern-resizing * {
   margin-bottom: 6px;
 }
 
+/* WidthResizeHandles: drag strips on the left / right edge of a centered
+   panel (desktop only). The chosen width arrives as --resizable-w plus
+   [data-width-resized] on the panel; !important because it is an explicit
+   user override that must beat each surface's own width / max-width. */
+.width-resize-handle {
+  display: none;
+}
+@media (min-width: 769px) {
+  [data-width-resized] {
+    width: var(--resizable-w) !important;
+    max-width: none !important;
+  }
+  .width-resize-handle {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    z-index: 2;
+    cursor: ew-resize;
+    touch-action: none;
+    background: transparent;
+    transition: background-color 0.12s;
+  }
+  .width-resize-handle.edge-left {
+    left: 0;
+  }
+  .width-resize-handle.edge-right {
+    right: 0;
+  }
+  .width-resize-handle:hover,
+  .width-resize-handle.dragging {
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+}
+
 /* Phone width: the thread preview gets every pixel. The desktop framing
    (24px backdrop gutter + 28px modal padding + 14px message padding) left a
    ~60%-wide column on a phone, and 90vh cut the send button off under the

@@ -28,6 +28,8 @@ import {
 } from "../utils/api.ts";
 import { showToast } from "./Toast.tsx";
 import { useDetachOnUnmount } from "../utils/useDetachOnUnmount.ts";
+import { WidthResizeHandles } from "./WidthResizeHandles.tsx";
+import { THREAD_PREVIEW_WIDTH_KEY } from "../utils/resizableWidth.ts";
 
 export function MapNodeModal({
   mapId,
@@ -170,6 +172,7 @@ export function MapNodeModal({
         className="modal-content node-modal"
         onClick={(e) => e.stopPropagation()}
       >
+        <WidthResizeHandles storageKey={THREAD_PREVIEW_WIDTH_KEY} />
         <button
           className="modal-close"
           onClick={onClose}

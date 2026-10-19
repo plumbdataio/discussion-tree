@@ -14,6 +14,8 @@ import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
 import { usePreviewModalLock } from "../utils/previewModalLock.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { useDetachOnUnmount } from "../utils/useDetachOnUnmount.ts";
+import { WidthResizeHandles } from "./WidthResizeHandles.tsx";
+import { THREAD_PREVIEW_WIDTH_KEY } from "../utils/resizableWidth.ts";
 
 export function NodeModal({
   node,
@@ -105,6 +107,7 @@ export function NodeModal({
         className="modal-content node-modal"
         onClick={(e) => e.stopPropagation()}
       >
+        <WidthResizeHandles storageKey={THREAD_PREVIEW_WIDTH_KEY} />
         <button
           className="modal-close"
           onClick={onClose}
