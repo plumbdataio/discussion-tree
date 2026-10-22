@@ -5435,11 +5435,27 @@ button.secondary {
 /* No max-width override: this modal holds a history thread AND a composer, so
    it reads better at the same 880px the preview modals use. It used to be
    pinned to 640px, which made both halves cramped. */
+/* Fixed full height: growing the request textarea must shrink the history
+   pane above it, not grow the modal (which would just push it off screen). */
 .modal-structure-request {
   border-left-color: #a855f7;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  height: 90vh;
+  height: 90dvh;
+  overflow: hidden;
+}
+.modal-structure-request > * {
+  flex-shrink: 0;
+}
+.modal-structure-request > .modal-structure-history {
+  flex: 1 1 0;
+  min-height: 0;
+}
+/* Keep the buttons on screen however far the textarea is dragged. */
+.modal-structure-request .modal-textarea {
+  max-height: 60vh;
 }
 
 .modal-title {
@@ -5479,7 +5495,8 @@ button.secondary {
   font-style: italic;
 }
 .modal-structure-history-thread {
-  max-height: 240px;
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
