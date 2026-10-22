@@ -50,7 +50,8 @@ export const ALLOWED_IMAGE_EXTS = new Set([
   "gif",
   "webp",
 ]);
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+// 20 MB: a full-resolution phone photo is often over 10 MB.
+export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 // /submit-answer waits this long for the receiving CC to actually pick up the
 // pending message. Short enough that the user can retype quickly when no one
