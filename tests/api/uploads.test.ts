@@ -112,6 +112,171 @@ describe("uploads", () => {
     expect(res.status).toBe(404);
   });
 
+  // --- derived + original pair (client-side prep for Claude) ---------------
+
+  // A few bytes that only need to round-trip; the broker never decodes them.
+  const FAKE_HEIC_B64 = Buffer.from("....ftypheic fake heic body").toString(
+    "base64",
+  );
+  const SAFARI_UA =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15";
+  const IPHONE_UA =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+  const IPHONE_CHROME_UA =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/129.0.0.0 Mobile/15E148 Safari/604.1";
+  const CHROME_MAC_UA =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36";
+  const EDGE_WIN_UA =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0";
+
+  type UploadRes = {
+    ok: boolean;
+    path: string;
+    url: string;
+    original_path?: string;
+    original_url?: string;
+    error?: string;
+  };
+
+  async function fullSize(url: string, ua: string): Promise<string> {
+    const res = await fetch(`${broker.url}${url}?full=1`, {
+      headers: { "User-Agent": ua },
+      redirect: "manual",
+    });
+    if (res.status === 302) {
+      return new URL(res.headers.get("location")!, broker.url).pathname;
+    }
+    expect(res.status).toBe(200);
+    return url;
+  }
+
+  test("old clients (no original fields) get no original_* in the response", async () => {
+    const r = await post<UploadRes>(`${broker.url}/upload-image`, {
+      board_id: "bd_compat",
+      filename: "shot.png",
+      data_base64: TINY_PNG_B64,
+    });
+    expect(r.json.ok).toBe(true);
+    expect(r.json.original_url).toBeUndefined();
+    expect(r.json.original_path).toBeUndefined();
+    // ?full=1 on an image with no original serves the image itself.
+    expect(await fullSize(r.json.url, CHROME_MAC_UA)).toBe(r.json.url);
+  });
+
+  test("derived + original: both stored, named <id>.<ext> / <id>.orig.<ext>", async () => {
+    const r = await post<UploadRes>(`${broker.url}/upload-image`, {
+      board_id: "bd_pair",
+      filename: "IMG_0001.jpg",
+      data_base64: TINY_PNG_B64,
+      original_filename: "IMG_0001.HEIC",
+      original_base64: FAKE_HEIC_B64,
+    });
+    expect(r.json.ok).toBe(true);
+    const m = r.json.url.match(/^\/uploads\/bd_pair\/(img_[a-z0-9_]+)\.jpg$/);
+    expect(m).not.toBeNull();
+    expect(r.json.original_url).toBe(`/uploads/bd_pair/${m![1]}.orig.heic`);
+    expect(existsSync(r.json.path)).toBe(true);
+    expect(existsSync(r.json.original_path!)).toBe(true);
+    expect(readFileSync(r.json.original_path!).toString("base64")).toBe(
+      FAKE_HEIC_B64,
+    );
+    // The original is served with its real type.
+    const res = await fetch(`${broker.url}${r.json.original_url}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("image/heic");
+  });
+
+  test("?full=1 opens a HEIC original only on WebKit; others get the JPEG", async () => {
+    const r = await post<UploadRes>(`${broker.url}/upload-image`, {
+      board_id: "bd_full",
+      filename: "IMG_0002.jpg",
+      data_base64: TINY_PNG_B64,
+      original_filename: "IMG_0002.heic",
+      original_base64: FAKE_HEIC_B64,
+    });
+    const orig = r.json.original_url!;
+    expect(await fullSize(r.json.url, SAFARI_UA)).toBe(orig);
+    expect(await fullSize(r.json.url, IPHONE_UA)).toBe(orig);
+    expect(await fullSize(r.json.url, IPHONE_CHROME_UA)).toBe(orig);
+    expect(await fullSize(r.json.url, CHROME_MAC_UA)).toBe(r.json.url);
+    expect(await fullSize(r.json.url, EDGE_WIN_UA)).toBe(r.json.url);
+  });
+
+  test("?full=1 opens a JPEG original (pre-downscale) on every browser", async () => {
+    const r = await post<UploadRes>(`${broker.url}/upload-image`, {
+      board_id: "bd_full",
+      filename: "big.jpg",
+      data_base64: TINY_PNG_B64,
+      original_filename: "big.jpeg",
+      original_base64: TINY_PNG_B64,
+    });
+    expect(r.json.original_url).toMatch(/\.orig\.jpeg$/);
+    expect(await fullSize(r.json.url, EDGE_WIN_UA)).toBe(r.json.original_url!);
+    expect(await fullSize(r.json.url, SAFARI_UA)).toBe(r.json.original_url!);
+  });
+
+  test("a lone HEIC (browser could not convert) is stored as .heic, not .png", async () => {
+    const r = await post<UploadRes>(`${broker.url}/upload-image`, {
+      board_id: "bd_heic",
+      filename: "IMG_0003.HEIC",
+      data_base64: FAKE_HEIC_B64,
+    });
+    expect(r.json.ok).toBe(true);
+    expect(r.json.url).toMatch(/\.heic$/);
+    expect(r.json.original_url).toBeUndefined();
+  });
+
+  test("an original with an unknown extension is kept as .bin and not redirected to", async () => {
+    const r = await post<UploadRes>(`${broker.url}/upload-image`, {
+      board_id: "bd_bin",
+      filename: "x.jpg",
+      data_base64: TINY_PNG_B64,
+      original_filename: "x.raw",
+      original_base64: TINY_PNG_B64,
+    });
+    expect(r.json.original_url).toMatch(/\.orig\.bin$/);
+    expect(await fullSize(r.json.url, SAFARI_UA)).toBe(r.json.url);
+  });
+
+  test("an empty original_base64 is treated as not sent", async () => {
+    const r = await post<UploadRes>(`${broker.url}/upload-image`, {
+      board_id: "bd_emptyorig",
+      filename: "x.jpg",
+      data_base64: TINY_PNG_B64,
+      original_filename: "x.heic",
+      original_base64: "",
+    });
+    expect(r.json.ok).toBe(true);
+    expect(r.json.original_url).toBeUndefined();
+  });
+
+  test("an oversized original rejects the whole upload and writes nothing", async () => {
+    const big = Buffer.alloc(20 * 1024 * 1024 + 1, 1).toString("base64");
+    const r = await post<UploadRes>(`${broker.url}/upload-image`, {
+      board_id: "bd_bigorig",
+      filename: "x.jpg",
+      data_base64: TINY_PNG_B64,
+      original_filename: "x.heic",
+      original_base64: big,
+    });
+    expect(r.json.ok).toBe(false);
+    expect(r.json.error).toMatch(/original: file too large/);
+    expect(existsSync(`${broker.homeDir}/uploads/bd_bigorig`)).toBe(false);
+  });
+
+  test("?full=1 on the original itself just serves it", async () => {
+    const r = await post<UploadRes>(`${broker.url}/upload-image`, {
+      board_id: "bd_full",
+      filename: "y.jpg",
+      data_base64: TINY_PNG_B64,
+      original_filename: "y.jpg",
+      original_base64: TINY_PNG_B64,
+    });
+    expect(await fullSize(r.json.original_url!, SAFARI_UA)).toBe(
+      r.json.original_url!,
+    );
+  });
+
   test("/open-file rejects paths outside UPLOADS_DIR", async () => {
     const r = await post<{ ok: boolean; error?: string }>(
       `${broker.url}/open-file`,

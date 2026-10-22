@@ -121,6 +121,7 @@
     "send_failed": "Send failed: {{message}}",
     "image_uploading": "Uploading image…",
     "image_upload_failed": "Image upload failed: {{message}}",
+    "image_heic_unreadable": "This HEIC image could not be converted in this browser, so Claude cannot read it. It was attached as-is. Paste it from Safari (iPhone / Mac), or convert it to JPEG first.",
     "input_placeholder": "Enter your reply (⌘/Ctrl+Enter to send, paste/drop for images)",
     "input_placeholder_default": "Type a message (⌘/Ctrl+Enter to send, paste/drop for images)",
     "input_disabled": "CC is not attached — cannot post"

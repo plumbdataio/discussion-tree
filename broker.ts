@@ -74,7 +74,10 @@ import {
   purgeOldDeliveredMessages,
 } from "./broker/threads.ts";
 import { routes as externalNotifyRoutes } from "./broker/external-notify.ts";
-import { routes as uploadsRoutes } from "./broker/uploads.ts";
+import {
+  resolveFullSizeUpload,
+  routes as uploadsRoutes,
+} from "./broker/uploads.ts";
 import { routes as spawnRoutes } from "./broker/spawn.ts";
 import {
   routes as scheduledMessagesRoutes,
@@ -396,6 +399,13 @@ try {
       const file = Bun.file(`${UPLOADS_DIR}/${rel}`);
       if (!(await file.exists())) {
         return new Response("Not found", { status: 404 });
+      }
+      // ?full=1 is the "open full size" link on an inline image: go to the
+      // kept original (pre-downscale / pre-HEIC-conversion) when there is one
+      // this browser can show — see broker/uploads.ts.
+      if (url.searchParams.has("full")) {
+        const orig = resolveFullSizeUpload(rel, req.headers.get("user-agent"));
+        if (orig) return Response.redirect(orig, 302);
       }
       return new Response(file);
     }

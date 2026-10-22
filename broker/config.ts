@@ -43,6 +43,8 @@ export const PUBLIC_URL =
   process.env.DISCUSSION_TREE_PUBLIC_URL ?? `http://localhost:${PORT}`;
 
 export const UPLOADS_DIR = path.join(HOME_DIR, "uploads");
+// The formats Claude can read (Anthropic vision docs: JPEG / PNG / GIF / WebP).
+// The image a message embeds — the one CC is handed — should be one of these.
 export const ALLOWED_IMAGE_EXTS = new Set([
   "png",
   "jpg",
@@ -50,6 +52,11 @@ export const ALLOWED_IMAGE_EXTS = new Set([
   "gif",
   "webp",
 ]);
+// Formats the broker will STORE without Claude being able to read them: an
+// iPhone photo's original (HEIC/HEIF) is kept next to its JPEG derivative, and
+// a HEIC the browser could not convert is stored under its real extension
+// rather than mislabelled as .png.
+export const STORAGE_ONLY_IMAGE_EXTS = new Set(["heic", "heif"]);
 // 20 MB: a full-resolution phone photo is often over 10 MB.
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 

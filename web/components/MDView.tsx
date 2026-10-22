@@ -21,6 +21,7 @@ import { rehypeLinkifyIds } from "../utils/rehypeLinkifyIds.ts";
 // width/height on the <img> lets the browser reserve the aspect-ratio box
 // before a lazy image loads — see the `img` renderer + web/utils/imageDims.ts.
 import { getImageDims } from "../utils/imageDims.ts";
+import { fullSizeHref } from "../utils/imagePrep.ts";
 // @reusable-ui MDView — USE WHEN: rendering user- or CC-authored markdown text
 //   (GFM + CJK-aware bold/strikethrough). INSTEAD OF: raw text or
 //   dangerouslySetInnerHTML.
@@ -147,9 +148,12 @@ function MDViewImpl({
             // save), which is friendlier on a small screen than an in-app modal.
             // A drag (thread scroll) never fires the anchor's click, so this
             // does not fight scrolling. Only when we actually have a URL.
+            // An upload links with ?full=1: the broker then redirects to the
+            // kept original (pre-downscale, or the HEIC on Safari) when there
+            // is one, and otherwise serves this same image.
             return typeof props.src === "string" ? (
               <a
-                href={props.src}
+                href={fullSizeHref(props.src)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="md-img-link"

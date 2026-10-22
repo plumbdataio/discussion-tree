@@ -7,17 +7,63 @@ import * as path from "node:path";
 import {
   ALLOWED_IMAGE_EXTS,
   MAX_UPLOAD_BYTES,
+  STORAGE_ONLY_IMAGE_EXTS,
   UPLOADS_DIR,
 } from "./config.ts";
 import { generateRandomId } from "./helpers.ts";
+
+// Upload naming: the message image is `<id>.<ext>`; when the client also sends
+// the untouched original (a large photo it downscaled, or a HEIC it converted
+// to JPEG — see web/utils/imagePrep.ts) that is stored as `<id>.orig.<ext>` in
+// the same folder. The pairing lives in the file names only (no DB row), so it
+// survives reloads and old messages simply have no `.orig.` sibling.
+//
+// No server-side resizing: Bun has no image codec, and the one dependency that
+// would do it (sharp / libvips, native) is a heavy addition to a long-lived
+// broker that runs on two OSes. The images this path would catch are few —
+// browser uploads are already prepared client-side, and CC usually copies its
+// files straight into uploads/ without calling this endpoint at all.
+
+const ORIGINAL_MARK = ".orig.";
+
+function storableExt(ext: string): boolean {
+  return ALLOWED_IMAGE_EXTS.has(ext) || STORAGE_ONLY_IMAGE_EXTS.has(ext);
+}
+
+function extOf(filename: string): string {
+  return filename.split(".").pop()?.toLowerCase() ?? "";
+}
+
+function decodeB64(dataB64: string): Buffer | { error: string } {
+  let buf: Buffer;
+  try {
+    buf = Buffer.from(dataB64, "base64");
+  } catch {
+    return { error: "invalid base64" };
+  }
+  if (buf.length === 0) return { error: "empty payload" };
+  if (buf.length > MAX_UPLOAD_BYTES) {
+    return { error: `file too large (max ${MAX_UPLOAD_BYTES} bytes)` };
+  }
+  return buf;
+}
 
 export function handleUploadImage(body: {
   board_id?: string;
   filename?: string;
   data_base64?: string;
   mime?: string;
+  // Optional (newer clients): the untouched original of `data_base64`.
+  original_base64?: string;
+  original_filename?: string;
 }):
-  | { ok: true; path: string; url: string }
+  | {
+      ok: true;
+      path: string;
+      url: string;
+      original_path?: string;
+      original_url?: string;
+    }
   | { ok: false; error: string } {
   const dataB64 = body.data_base64;
   if (!dataB64) return { ok: false, error: "data_base64 required" };
@@ -26,21 +72,22 @@ export function handleUploadImage(body: {
   // in the filesystem.
   const safeBoard = (body.board_id ?? "misc").replace(/[^a-zA-Z0-9_-]/g, "_");
   const filename = body.filename ?? "image";
-  const extFromName = filename.split(".").pop()?.toLowerCase() ?? "";
-  const ext = ALLOWED_IMAGE_EXTS.has(extFromName) ? extFromName : "png";
+  const extFromName = extOf(filename);
+  const ext = storableExt(extFromName) ? extFromName : "png";
 
-  let buf: Buffer;
-  try {
-    buf = Buffer.from(dataB64, "base64");
-  } catch {
-    return { ok: false, error: "invalid base64" };
-  }
-  if (buf.length === 0) return { ok: false, error: "empty payload" };
-  if (buf.length > MAX_UPLOAD_BYTES) {
-    return {
-      ok: false,
-      error: `file too large (max ${MAX_UPLOAD_BYTES} bytes)`,
-    };
+  const buf = decodeB64(dataB64);
+  if (!Buffer.isBuffer(buf)) return { ok: false, error: buf.error };
+
+  let origBuf: Buffer | null = null;
+  let origExt = "";
+  if (body.original_base64) {
+    const o = decodeB64(body.original_base64);
+    if (!Buffer.isBuffer(o)) return { ok: false, error: `original: ${o.error}` };
+    origBuf = o;
+    const e = extOf(body.original_filename ?? "");
+    // An original whose type we don't know is still kept, under a neutral
+    // extension, so "open full size" can at least offer it for download.
+    origExt = storableExt(e) ? e : "bin";
   }
 
   const dir = path.join(UPLOADS_DIR, safeBoard);
@@ -48,9 +95,71 @@ export function handleUploadImage(body: {
   const id = generateRandomId("img");
   const filenameOnDisk = `${id}.${ext}`;
   const fullPath = path.join(dir, filenameOnDisk);
+  // Original first: if the derived write then fails, no message ever points
+  // at a half-written pair (an orphan original is harmless).
+  let original: { original_path: string; original_url: string } | {} = {};
+  if (origBuf) {
+    const origName = `${id}${ORIGINAL_MARK}${origExt}`;
+    const origPath = path.join(dir, origName);
+    fs.writeFileSync(origPath, origBuf);
+    original = {
+      original_path: origPath,
+      original_url: `/uploads/${safeBoard}/${origName}`,
+    };
+  }
   fs.writeFileSync(fullPath, buf);
   const url = `/uploads/${safeBoard}/${filenameOnDisk}`;
-  return { ok: true, path: fullPath, url };
+  return { ok: true, path: fullPath, url, ...original };
+}
+
+// Can this browser show a HEIC image in a tab? Only WebKit does: every iOS /
+// iPadOS browser (all WebKit), and Safari on the Mac. iPadOS in desktop mode
+// reports a Mac Safari UA, which is also right.
+export function uaCanDisplayHeic(ua: string | null | undefined): boolean {
+  const s = ua ?? "";
+  if (/\b(iPhone|iPad|iPod)\b/.test(s)) return true;
+  return (
+    /\bMacintosh\b/.test(s) &&
+    /\bVersion\/\d/.test(s) &&
+    /\bSafari\//.test(s) &&
+    !/\b(Chrome|Chromium|CriOS|Edg|EdgiOS|OPR|Firefox|FxiOS)\//.test(s)
+  );
+}
+
+/**
+ * "Open full size" for an uploaded image (GET /uploads/<rel>?full=1).
+ * Returns the /uploads/ URL to send the browser to: the stored original when
+ * one exists and this browser can display it, else null (= serve the
+ * requested file itself — old uploads and small images have no original).
+ */
+export function resolveFullSizeUpload(
+  rel: string,
+  ua: string | null | undefined,
+): string | null {
+  const slash = rel.lastIndexOf("/");
+  if (slash <= 0) return null;
+  const board = rel.slice(0, slash);
+  const name = rel.slice(slash + 1);
+  if (name.includes(ORIGINAL_MARK)) return null;
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0) return null;
+  const stem = name.slice(0, dot);
+  if (!/^[A-Za-z0-9_-]+$/.test(stem) || !/^[A-Za-z0-9_-]+$/.test(board)) {
+    return null;
+  }
+  const candidates = [
+    ...ALLOWED_IMAGE_EXTS,
+    ...STORAGE_ONLY_IMAGE_EXTS,
+    "bin",
+  ];
+  for (const e of candidates) {
+    const origName = `${stem}${ORIGINAL_MARK}${e}`;
+    if (!fs.existsSync(path.join(UPLOADS_DIR, board, origName))) continue;
+    if (STORAGE_ONLY_IMAGE_EXTS.has(e) && !uaCanDisplayHeic(ua)) return null;
+    if (e === "bin") return null;
+    return `/uploads/${board}/${origName}`;
+  }
+  return null;
 }
 
 export function handleOpenFile(body: { path?: string }):

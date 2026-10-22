@@ -121,6 +121,7 @@
     "send_failed": "送信失敗: {{message}}",
     "image_uploading": "画像アップロード中…",
     "image_upload_failed": "画像アップロード失敗: {{message}}",
+    "image_heic_unreadable": "このブラウザではHEIC画像を変換できなかったため、Claudeはこの画像を読めません。そのまま添付しました。Safari(iPhone/Mac)から貼るか、JPEGに変換してから貼ってください。",
     "input_placeholder": "この検討事項への回答を入力 (⌘/Ctrl+Enter で送信、画像は paste/drop)",
     "input_placeholder_default": "メッセージを入力 (⌘/Ctrl+Enter で送信、画像は paste/drop)",
     "input_disabled": "CC 未紐付けのため投稿できません"

@@ -1,3 +1,6 @@
+import i18n from "i18next";
+import { looksLikeImage, prepareImageForClaude } from "./imagePrep.ts";
+
 // fetch() only rejects on a NETWORK failure — a 4xx/5xx resolves, so a bare
 // .catch() sees nothing when the SERVER refused. Every caller that acts on
 // success (an optimistic UI update, a "done" toast) has to know the difference,
@@ -324,11 +327,8 @@ export async function getCliHistory(command: string): Promise<{
   }
 }
 
-export async function uploadImage(
-  file: File,
-  boardId: string,
-): Promise<{ url: string; path: string }> {
-  const data = await new Promise<string>((resolve, reject) => {
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
@@ -336,18 +336,49 @@ export async function uploadImage(
       resolve(idx >= 0 ? result.slice(idx + 1) : result);
     };
     reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(blob);
   });
+}
+
+// Uploads one pasted / dropped image. Before sending, the image is prepared
+// for Claude (web/utils/imagePrep.ts): a large or HEIC image becomes a
+// <= 2000px JPEG/PNG that goes into the message, and the untouched original is
+// sent alongside it (stored as <id>.orig.<ext>, opened by "view full size").
+// The returned url/path are always the image Claude should read.
+export async function uploadImage(
+  file: File,
+  boardId: string,
+): Promise<{ url: string; path: string }> {
+  const prepared = await prepareImageForClaude(file);
+  const name = file.name || "pasted";
+  let body: Record<string, string>;
+  if (prepared.kind === "derived") {
+    body = {
+      board_id: boardId,
+      filename: prepared.derivedName,
+      mime: prepared.derived.type,
+      data_base64: await blobToBase64(prepared.derived),
+      original_filename: name,
+      original_base64: await blobToBase64(prepared.original),
+    };
+  } else {
+    body = {
+      board_id: boardId,
+      filename: name,
+      mime: prepared.file.type,
+      data_base64: await blobToBase64(prepared.file),
+    };
+  }
+  if (prepared.kind === "undecodable") {
+    // Still upload it (the user keeps the file), but say plainly that Claude
+    // will not be able to see it.
+    alert(i18n.t("item_card.image_heic_unreadable"));
+  }
 
   const res = await fetch("/upload-image", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      board_id: boardId,
-      filename: file.name || "pasted",
-      mime: file.type,
-      data_base64: data,
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`upload failed: HTTP ${res.status}`);
   const json = (await res.json()) as {
@@ -370,7 +401,7 @@ export function extractImageFiles(
   if (items instanceof FileList) {
     for (let i = 0; i < items.length; i++) {
       const f = items[i];
-      if (f && f.type.startsWith("image/")) result.push(f);
+      if (f && looksLikeImage(f.type, f.name)) result.push(f);
     }
     return result;
   }
@@ -378,7 +409,7 @@ export function extractImageFiles(
     const it = items[i];
     if (it && it.kind === "file") {
       const f = it.getAsFile();
-      if (f && f.type.startsWith("image/")) result.push(f);
+      if (f && looksLikeImage(f.type, f.name)) result.push(f);
     }
   }
   return result;
