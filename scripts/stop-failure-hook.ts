@@ -21,6 +21,7 @@
 import { brokerBaseUrl } from "./broker-url.ts";
 import {
   logHookFailure,
+  ONCE_PER_TURN_POST,
   postBestEffort,
   readStdin,
   setHookSessionId,
@@ -34,10 +35,13 @@ export async function runStopFailure(
   // Always forwarded, empty string when absent — matches the .sh's --arg tp.
   const transcript = String(input?.transcript_path ?? "");
   if (!sid) return;
-  await postBestEffort(`${brokerBaseUrl(env)}/session-stalled`, {
-    cc_session_id: sid,
-    transcript_path: transcript,
-  });
+  // Once per failed turn, nothing re-sends it (and it drives auto-continue):
+  // the long timeout + one retry (hook-io ONCE_PER_TURN_POST).
+  await postBestEffort(
+    `${brokerBaseUrl(env)}/session-stalled`,
+    { cc_session_id: sid, transcript_path: transcript },
+    ONCE_PER_TURN_POST,
+  );
 }
 
 async function main(): Promise<void> {

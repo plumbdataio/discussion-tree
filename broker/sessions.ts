@@ -29,6 +29,7 @@ import {
   selectCliCommands,
   selectCliHistory,
   selectCliInject,
+  markCliInjectAcked,
   selectSessionTmux,
   setSessionCcPid,
   setSessionTmux,
@@ -931,18 +932,72 @@ export async function handleCliSend(body: any) {
 // ACTUAL execution on the far machine. The row was already marked delivered at
 // poll-drain, so this is purely the after-the-fact notice; a failed / no-tmux
 // run (ok=false) logs nothing.
+//
+// The outcome is stored on the row (ok / error / acked_at), and a failure is
+// pushed to every open page as a "cli-inject-result" event (GlobalBanner shows
+// it as a toast), so a send that did nothing is no longer silent.
 export function handleCliInjectAcked(body: {
   id?: number;
   ok?: boolean;
+  error?: string;
 }): { ok: boolean } {
   if (typeof body?.id !== "number") return { ok: false };
   const inj = selectCliInject.get(body.id) as
-    | { session_id: string; command: string }
+    | { session_id: string; command: string; acked_at: string | null }
     | undefined;
-  if (inj && body.ok) {
+  if (!inj) return { ok: true };
+  const ok = body.ok === true;
+  const error = ok
+    ? null
+    : String(body.error ?? "unknown").slice(0, 500) || "unknown";
+  markCliInjectAcked.run(ok ? 1 : 0, error, new Date().toISOString(), body.id);
+  clearCliInjectAckWatch(body.id);
+  if (ok) {
     logCliCommandOnDefaultBoard(inj.session_id, inj.command);
+  } else {
+    broadcastToAll({
+      type: "cli-inject-result",
+      inject_id: body.id,
+      session_id: inj.session_id,
+      command: inj.command,
+      status: "failed",
+      error,
+    });
   }
   return { ok: true };
+}
+
+// After a queued inject is handed to the MCP (poll drain), expect its ack
+// within CLI_INJECT_ACK_TIMEOUT_MS. No ack = the session's MCP is too old to
+// ack, hung, or died mid-send: tell the user instead of staying silent. The
+// timer is in-memory only (a broker restart drops it; the row keeps
+// acked_at NULL, which is still visible in the DB).
+export const CLI_INJECT_ACK_TIMEOUT_MS =
+  Number(process.env.DT_CLI_INJECT_ACK_TIMEOUT_MS) || 15_000;
+const cliInjectAckTimers = new Map<number, ReturnType<typeof setTimeout>>();
+export function watchCliInjectAck(id: number): void {
+  clearCliInjectAckWatch(id);
+  const timer = setTimeout(() => {
+    cliInjectAckTimers.delete(id);
+    const inj = selectCliInject.get(id) as
+      | { session_id: string; command: string; acked_at: string | null }
+      | undefined;
+    if (!inj || inj.acked_at) return;
+    broadcastToAll({
+      type: "cli-inject-result",
+      inject_id: id,
+      session_id: inj.session_id,
+      command: inj.command,
+      status: "no_ack",
+    });
+  }, CLI_INJECT_ACK_TIMEOUT_MS);
+  (timer as { unref?: () => void }).unref?.();
+  cliInjectAckTimers.set(id, timer);
+}
+function clearCliInjectAckWatch(id: number): void {
+  const t = cliInjectAckTimers.get(id);
+  if (t) clearTimeout(t);
+  cliInjectAckTimers.delete(id);
 }
 
 // The de-duplicated history of args used with a given CLI command (newest

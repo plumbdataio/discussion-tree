@@ -815,7 +815,9 @@ export function BoardApp({ boardId }: { boardId: string | null }) {
             which is right-anchored (margin-left:auto). So when Working or
             the BG marker appears/disappears, only the gap between the two
             groups resizes — the buttons never shift left-then-right. */}
-        {headerActivity && <ActivityBadge activity={headerActivity} />}
+        {headerActivity && (
+          <ActivityBadge activity={headerActivity} clearable />
+        )}
         <div className="header-right">
           {/* "Mark all read" unread indicator lives FIRST in this
               right-anchored cluster (.header-right has margin-left:auto, so it

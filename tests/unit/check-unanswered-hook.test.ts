@@ -137,8 +137,10 @@ describe("check-unanswered-posts hook", () => {
     installDownFetch();
     const out = await runCheckUnanswered({ session_id: "cc-down" }, ENV);
     expect(out).toBe("");
-    // Only the /get-unanswered attempt; no heartbeat because nothing blocks.
-    expect(calls.length).toBe(1);
+    // Only /get-unanswered (first attempt + the one once-per-turn retry on a
+    // network error); no heartbeat because nothing blocks.
+    expect(calls.length).toBe(2);
+    expect(calls.every((c) => c.url.includes("/get-unanswered"))).toBe(true);
   });
 
   test("no session_id -> no request, no output", async () => {

@@ -6,6 +6,8 @@ import type {
 } from "../../shared/types.ts";
 import { useLiveSocket } from "../utils/liveSocket.ts";
 import { BackupHealthBanner } from "./BackupHealthBanner.tsx";
+import { showToast } from "./Toast.tsx";
+import i18n from "../i18n.ts";
 
 // Renders the single broker-side global banner at the top of every
 // page. Maintains its own dedicated WS connection (channel name
@@ -80,6 +82,20 @@ export function GlobalBanner() {
     onMessage: (msg) => {
       if (msg?.type === "global-banner-update") {
         setBanner(msg.banner ?? null);
+      } else if (msg?.type === "cli-inject-result") {
+        // A queued cli-send (Windows-local or remote session) failed in the
+        // session's MCP, or the MCP never confirmed it. Without this the send
+        // looked successful ("will run within a few seconds") and did nothing.
+        const command = String(msg.command ?? "");
+        showToast(
+          msg.status === "no_ack"
+            ? i18n.t("cli.inject_no_ack", { command })
+            : i18n.t("cli.inject_failed", {
+                command,
+                reason: String(msg.error ?? ""),
+              }),
+          "error",
+        );
       } else if (msg?.type === "backup-health-update") {
         setBackupHealth(msg.health ?? null);
       } else if (

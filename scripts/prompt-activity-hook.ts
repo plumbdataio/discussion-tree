@@ -14,7 +14,13 @@
 // Best-effort — a broker failure is swallowed and never blocks the prompt.
 
 import { brokerBaseUrl } from "./broker-url.ts";
-import { jqRaw, postBestEffort, runHookMain, type HookEnv } from "./hook-io.ts";
+import {
+  jqRaw,
+  perToolCallPost,
+  postBestEffort,
+  runHookMain,
+  type HookEnv,
+} from "./hook-io.ts";
 
 export async function runPromptActivity(
   input: Record<string, unknown> = {},
@@ -22,10 +28,11 @@ export async function runPromptActivity(
 ): Promise<void> {
   const sid = jqRaw(input.session_id);
   if (!sid) return;
-  await postBestEffort(`${brokerBaseUrl(env)}/heartbeat-tool`, {
-    cc_session_id: sid,
-    tool: "",
-  });
+  // UserPromptSubmit runs BEFORE the turn starts, so CC waits on it: keep it
+  // short (1s loopback / 2s remote), no retry. A miss only delays the spinner
+  // to the first tool call's heartbeat.
+  const url = `${brokerBaseUrl(env)}/heartbeat-tool`;
+  await postBestEffort(url, { cc_session_id: sid, tool: "" }, perToolCallPost(url));
 }
 
 if (import.meta.main) runHookMain((input) => runPromptActivity(input));

@@ -236,6 +236,8 @@
     "err_pane_not_claude": "対象ペインで Claude Code が動いていないため送信を中止しました。",
     "err_invalid_command": "有効なコマンドではありません (単一の /コマンド 形式にしてください)。",
     "err_generic": "コマンドの送信に失敗しました。",
+    "inject_failed": "{{command}}を送れませんでした: {{reason}}",
+    "inject_no_ack": "{{command}}: セッションから実行の確認が返ってきません(実行されていない可能性があります)。",
     "history_title": "送信履歴 (クリックで引数欄に反映)"
   },
   "spawn": {
@@ -564,5 +566,9 @@
     "prune_errors": "古いバックアップの削除に{{count}}件失敗しました",
     "log_hint": "詳細: {{path}}",
     "dismiss": "閉じる"
+  },
+  "activity": {
+    "clear_working_hint": "クリックで作業中の表示を消す",
+    "clear_working_aria": "作業中の表示を消す"
   }
 }

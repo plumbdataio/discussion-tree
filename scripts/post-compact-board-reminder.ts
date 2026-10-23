@@ -23,7 +23,9 @@ import * as fs from "node:fs";
 import { brokerBaseUrl } from "./broker-url.ts";
 import {
   logHookFailure,
+  ONCE_PER_TURN_POST,
   postJsonBestEffort,
+  type PostOptions,
   readStdin,
   setHookSessionId,
 } from "./hook-io.ts";
@@ -90,12 +92,18 @@ function reviewNotice(rcount: number): string {
 // (connection error / timeout / non-JSON body). Mirrors the .sh's
 // `curl ... || echo '{}'` piped into jq. Never throws; failures are logged by
 // hook-io.
+//
+// Timeout: this SessionStart(compact) hook runs once per compaction, and its
+// /session-compacting-done is the only automatic clear of the "compacting"
+// badge, so ONCE_PER_TURN_POST (5s + one retry on timeout / network error)
+// instead of 1s. Worst case = 4 POSTs x ~10.2s ~= 41s, under CC's hook
+// timeout; an unreachable broker still degrades to the static notice.
 async function postJson(
   url: string,
   body: unknown,
-  timeoutMs = 1000,
+  opts: PostOptions = ONCE_PER_TURN_POST,
 ): Promise<Record<string, unknown>> {
-  const j = await postJsonBestEffort(url, body, timeoutMs);
+  const j = await postJsonBestEffort(url, body, opts);
   return j && typeof j === "object" ? (j as Record<string, unknown>) : {};
 }
 
@@ -148,7 +156,7 @@ export async function runPostCompact(
     head_chars: 60,
   };
   if (from) rbody.from = from;
-  const rResp = await postJson(`${base}/review-message-links`, rbody, 2000);
+  const rResp = await postJson(`${base}/review-message-links`, rbody);
   const rcount = Number(rResp.total ?? 0);
   if (Number.isInteger(rcount) && rcount > 0) out += reviewNotice(rcount);
 

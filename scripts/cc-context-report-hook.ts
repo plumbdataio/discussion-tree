@@ -12,7 +12,9 @@
 // curl, and handles ${CLAUDE_PLUGIN_ROOT} regardless of slash direction. This
 // file mirrors the .sh byte-for-byte in behavior: same endpoints, same payload
 // shapes, same best-effort semantics (every failure swallowed but logged via
-// hook-io; never blocks a tool call; ~1s fetch timeout via AbortController).
+// hook-io; never blocks a tool call). Timeout: the per-tool-call policy from
+// hook-io (1s loopback / 2s remote broker, no retry) — this runs after EVERY
+// tool call, and the next call re-sends the same numbers anyway.
 //
 // The CC statusline (a separate, non-OSS user setup) already writes the live
 // free % and the rate-limit windows to temp files on every PostToolUse. This
@@ -24,6 +26,7 @@ import * as path from "node:path";
 import { brokerBaseUrl } from "./broker-url.ts";
 import {
   logHookFailure,
+  perToolCallPost,
   postBestEffort,
   postJsonBestEffort,
   readStdin,
@@ -87,10 +90,11 @@ export async function reportModel(
   } catch {
     /* no cache yet — report */
   }
-  const res = (await postJsonBestEffort(`${base}/report-model`, {
-    cc_session_id: sid,
-    model,
-  })) as { ok?: unknown } | null;
+  const res = (await postJsonBestEffort(
+    `${base}/report-model`,
+    { cc_session_id: sid, model },
+    perToolCallPost(base),
+  )) as { ok?: unknown } | null;
   if (res && res.ok === true) {
     try {
       fs.writeFileSync(cacheFile, model + "\n");
@@ -165,10 +169,11 @@ export async function runContextReport(
       if (raw && /^[0-9.]+$/.test(raw)) {
         const pct = Number(raw);
         if (Number.isFinite(pct)) {
-          await postBestEffort(`${base}/report-context-usage`, {
-            cc_session_id: sid,
-            remaining_pct: pct,
-          });
+          await postBestEffort(
+            `${base}/report-context-usage`,
+            { cc_session_id: sid, remaining_pct: pct },
+            perToolCallPost(base),
+          );
         }
       }
     }
@@ -184,12 +189,16 @@ export async function runContextReport(
       // Tag with cc_session_id (binds the report to the session) and account
       // (groups usage_limits by subscription). The .sh spread these AFTER the
       // file's fields so they override any same-named key — same here.
-      await postBestEffort(`${base}/report-usage-limits`, {
-        ...(limits ?? {}),
-        ...(extra ? { extra } : {}),
-        cc_session_id: sid,
-        account: accountKey(env),
-      });
+      await postBestEffort(
+        `${base}/report-usage-limits`,
+        {
+          ...(limits ?? {}),
+          ...(extra ? { extra } : {}),
+          cc_session_id: sid,
+          account: accountKey(env),
+        },
+        perToolCallPost(base),
+      );
     } catch {
       /* best-effort */
     }

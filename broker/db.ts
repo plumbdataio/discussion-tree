@@ -316,6 +316,14 @@ db.run(`
     delivered INTEGER NOT NULL DEFAULT 0
   )
 `);
+// The MCP's ack of a delivered inject: whether the tmux send actually worked
+// and why not. Before this the ack's outcome was discarded, so a failed send
+// looked identical to a successful one (delivered=1 either way). ok stays NULL
+// until an ack arrives; acked_at NULL after delivery = the session never
+// confirmed (the broker's timeout notice keys off this).
+safeAlter("ALTER TABLE cli_injects ADD COLUMN ok INTEGER");
+safeAlter("ALTER TABLE cli_injects ADD COLUMN error TEXT");
+safeAlter("ALTER TABLE cli_injects ADD COLUMN acked_at TEXT");
 export const insertCliInject = db.prepare(
   "INSERT INTO cli_injects (session_id, command, args, created_at) VALUES (?, ?, ?, ?)",
 );
@@ -326,7 +334,10 @@ export const markCliInjectDelivered = db.prepare(
   "UPDATE cli_injects SET delivered = 1 WHERE id = ?",
 );
 export const selectCliInject = db.prepare(
-  "SELECT session_id, command FROM cli_injects WHERE id = ?",
+  "SELECT session_id, command, acked_at FROM cli_injects WHERE id = ?",
+);
+export const markCliInjectAcked = db.prepare(
+  "UPDATE cli_injects SET ok = ?, error = ?, acked_at = ? WHERE id = ?",
 );
 
 // running_subagents: which Task-worker subagents are currently running under a

@@ -16,6 +16,7 @@ import {
 import { brokerFetch } from "./broker-client.ts";
 import { BROKER_FETCH_TIMEOUT_MS, BROKER_URL } from "./config.ts";
 import { log } from "./log.ts";
+import { logFailureLine } from "../shared/failure-log.ts";
 import { gapSince } from "./message-gap.ts";
 import { getSessionId } from "./state.ts";
 import { rewriteUploadPaths } from "./upload-paths.ts";
@@ -324,25 +325,96 @@ export async function pollAndPushMessages(mcp: Server): Promise<void> {
 
 // Inject each queued slash-command into THIS process's own tmux pane, then ack
 // the broker with the outcome (the broker logs a default-board notice on
-// success). The pane/socket come from our OWN env, never from the broker, so a
-// compromised broker still can't target another pane. Non-slash commands are
-// rejected inside injectIntoPane. When CC isn't in tmux (no pane) we ack
-// ok:false rather than silently dropping.
-async function runCliInjects(injects: CliInject[]): Promise<void> {
-  const { pane, socket } = ownTmuxPaneFromEnv();
+// success, and tells the UI why on failure). The pane/socket come from our OWN
+// env, never from the broker, so a compromised broker still can't target
+// another pane. Non-slash commands are rejected inside injectIntoPane. When CC
+// isn't in tmux (no pane) we ack ok:false rather than silently dropping.
+// Failures are also appended to the hook failure log: log() goes to stderr,
+// which Claude Code does not keep. `deps` exists for tests (fake tmux / ack).
+export type CliInjectDeps = {
+  inject: typeof injectIntoPane;
+  ack: (body: { id: number; ok: boolean; error?: string }) => Promise<unknown>;
+  logFailure: (fields: Record<string, unknown>) => void;
+  env: NodeJS.ProcessEnv;
+};
+const defaultCliInjectDeps: CliInjectDeps = {
+  inject: injectIntoPane,
+  ack: (body) => brokerFetch("/cli-inject-acked", body),
+  logFailure: (fields) => logFailureLine("mcp cli-inject", fields),
+  env: process.env,
+};
+export async function runCliInjects(
+  injects: CliInject[],
+  deps: CliInjectDeps = defaultCliInjectDeps,
+): Promise<void> {
+  const { pane, socket, session } = ownTmuxPaneFromEnv(deps.env);
   for (const inj of injects) {
     let ok = false;
+    let error: string | undefined;
     if (pane) {
-      const res = await injectIntoPane(socket, pane, inj.command, inj.args);
-      ok = res.ok;
-      if (!res.ok) {
-        log(`cli-inject ${inj.id} (${inj.command}) failed: ${res.error}`);
-      } else {
-        log(`cli-inject ${inj.id} (${inj.command}) done`);
+      try {
+        const res = await deps.inject(
+          socket,
+          pane,
+          inj.command,
+          inj.args,
+          session,
+        );
+        ok = res.ok;
+        if (!res.ok) {
+          const f = res.failure;
+          error = f
+            ? `${res.error}: ${f.step} exited ${f.code}${f.stderr ? ` (${f.stderr})` : ""}`
+            : res.error || "unknown";
+          deps.logFailure({
+            session_id: getSessionId() || undefined,
+            step: f ? f.step : "probe",
+            detail: error,
+            inject_id: inj.id,
+            command: inj.command,
+            pane,
+            socket,
+            psmux_session: session,
+            argv: f?.argv,
+            status: f?.code,
+            stderr: f?.stderr,
+          });
+        }
+      } catch (e) {
+        error = `exception: ${e instanceof Error ? e.message : String(e)}`;
+        deps.logFailure({
+          session_id: getSessionId() || undefined,
+          step: "inject",
+          detail: error,
+          inject_id: inj.id,
+          command: inj.command,
+          pane,
+          socket,
+          psmux_session: session,
+        });
       }
+      log(
+        ok
+          ? `cli-inject ${inj.id} (${inj.command}) done`
+          : `cli-inject ${inj.id} (${inj.command}) failed: ${error}`,
+      );
     } else {
+      error = "not_in_tmux";
       log(`cli-inject ${inj.id} (${inj.command}) skipped: not inside tmux`);
+      deps.logFailure({
+        session_id: getSessionId() || undefined,
+        step: "skipped: not inside tmux",
+        detail: error,
+        inject_id: inj.id,
+        command: inj.command,
+        tmux: deps.env.TMUX ?? null,
+        tmux_pane: deps.env.TMUX_PANE ?? null,
+      });
     }
-    void brokerFetch("/cli-inject-acked", { id: inj.id, ok }).catch(() => {});
+    const body: { id: number; ok: boolean; error?: string } = { id: inj.id, ok };
+    if (!ok && error) body.error = error.slice(0, 500);
+    void Promise.resolve()
+      .then(() => deps.ack(body))
+      .catch(() => {});
   }
 }

@@ -367,7 +367,9 @@ export function DiagramView({ diagramId }: { diagramId: string }) {
             <span>{t("header.compacting")}</span>
           </span>
         )}
-        {headerActivity && <ActivityBadge activity={headerActivity} />}
+        {headerActivity && (
+          <ActivityBadge activity={headerActivity} clearable />
+        )}
         <div className="header-right">
           <CliCommandButton
             sessionId={view.diagram.session_id}

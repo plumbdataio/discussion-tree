@@ -12,7 +12,14 @@
 // it never blocks the user-facing prompt; always exits 0.
 
 import { brokerBaseUrl } from "./broker-url.ts";
-import { jqRaw, postBestEffort, runHookMain, type HookEnv } from "./hook-io.ts";
+import {
+  jqRaw,
+  ONCE_PER_TURN_POST,
+  perToolCallPost,
+  postBestEffort,
+  runHookMain,
+  type HookEnv,
+} from "./hook-io.ts";
 
 export async function runBlockedOnUser(
   mode: string,
@@ -33,12 +40,22 @@ export async function runBlockedOnUser(
       ti && typeof ti === "object" ? (ti as Record<string, unknown>) : {};
     const absent = (v: unknown) => v === undefined || v === null || v === false;
     const question = jqRaw(absent(t.question) ? t.plan : t.question);
-    await postBestEffort(`${base}/blocked-on-user-start`, {
-      cc_session_id: sid,
-      question,
-    });
+    // PreToolUse: the question is not shown until this returns, so keep it
+    // short (1s loopback / 2s remote), no retry.
+    await postBestEffort(
+      `${base}/blocked-on-user-start`,
+      { cc_session_id: sid, question },
+      perToolCallPost(base),
+    );
   } else {
-    await postBestEffort(`${base}/blocked-on-user-clear`, { cc_session_id: sid });
+    // PostToolUse after the user answered: rare, and nothing re-sends it — a
+    // missed clear leaves the "blocked" badge up (heartbeat-tool never
+    // overwrites "blocked"). So the long timeout + one retry.
+    await postBestEffort(
+      `${base}/blocked-on-user-clear`,
+      { cc_session_id: sid },
+      ONCE_PER_TURN_POST,
+    );
   }
 }
 

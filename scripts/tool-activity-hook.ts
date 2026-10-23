@@ -15,7 +15,13 @@
 // light. Same endpoints and payloads as the .sh.
 
 import { brokerBaseUrl } from "./broker-url.ts";
-import { jqRaw, postBestEffort, runHookMain, type HookEnv } from "./hook-io.ts";
+import {
+  jqRaw,
+  perToolCallPost,
+  postBestEffort,
+  runHookMain,
+  type HookEnv,
+} from "./hook-io.ts";
 
 export async function runToolActivity(
   input: Record<string, unknown> = {},
@@ -24,6 +30,9 @@ export async function runToolActivity(
   const sid = jqRaw(input.session_id);
   if (!sid) return;
   const base = brokerBaseUrl(env);
+  // PreToolUse runs before EVERY tool call: short timeout (1s loopback / 2s
+  // remote), no retry — the next tool call re-sends the heartbeat anyway.
+  const per = perToolCallPost(base);
 
   // A SUBAGENT (Task worker) tool call fires THIS SAME hook, under the parent's
   // session_id — but its stdin carries an agent_id that the parent's own tool
@@ -43,12 +52,12 @@ export async function runToolActivity(
       cc_session_id: sid,
       agent_id: agentId,
       agent_type: jqRaw(input.agent_type),
-    });
+    }, per);
     return;
   }
 
   const tool = jqRaw(input.tool_name);
-  await postBestEffort(`${base}/heartbeat-tool`, { cc_session_id: sid, tool });
+  await postBestEffort(`${base}/heartbeat-tool`, { cc_session_id: sid, tool }, per);
 
   // Track Bash run_in_background launches so the UI can show a BG marker next
   // to the working spinner. The broker holds a per-session set of in-flight BG
@@ -65,7 +74,7 @@ export async function runToolActivity(
   await postBestEffort(`${base}/bg-task-start`, {
     cc_session_id: sid,
     task_id: tu,
-  });
+  }, per);
 }
 
 if (import.meta.main) runHookMain((input) => runToolActivity(input));

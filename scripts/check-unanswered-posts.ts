@@ -21,7 +21,7 @@
 // WHY A PORT. The .sh needs bash + jq + curl and cannot exec on Windows, so on
 // pd-002 the nag never fires. Bun is spawned directly and needs none of them.
 // This mirrors the .sh: same endpoints (/get-unanswered, then /heartbeat-tool
-// only when blocking), same payloads, same 1s timeouts, same decision logic, and
+// only when blocking), same payloads, same decision logic, and
 // the same stdout bytes (jq's default 2-space pretty JSON plus trailing newline).
 // Broker unreachable / malformed reply => no output => the stop is allowed.
 
@@ -29,7 +29,9 @@ import * as fs from "node:fs";
 import { brokerBaseUrl } from "./broker-url.ts";
 import {
   logHookFailure,
+  ONCE_PER_TURN_POST,
   postJsonBestEffort,
+  type PostOptions,
   readStdin,
   setHookSessionId,
 } from "./hook-io.ts";
@@ -103,12 +105,19 @@ export function buildUnansweredOutput(resp: unknown): string {
 // Best-effort POST returning the parsed JSON, or {} on any failure (connection
 // error / timeout / non-JSON body). Mirrors `curl ... || echo '{}'`. Failures
 // are logged by hook-io.
+//
+// Timeout: Stop runs once per turn, so ONCE_PER_TURN_POST (5s + one retry on a
+// timeout / network error) instead of the .sh's 1s, which timed out against a
+// remote (tailnet) broker about half the time. Worst case for this hook = two
+// POSTs x (5s + 200ms + 5s) ~= 20.4s, well under CC's hook timeout (none is
+// set in hooks.json, so CC's default applies). Semantics are unchanged: an
+// unreachable broker still yields {} => no output => the stop is allowed.
 async function postJson(
   url: string,
   body: unknown,
-  timeoutMs = 1000,
+  opts: PostOptions = ONCE_PER_TURN_POST,
 ): Promise<unknown> {
-  return (await postJsonBestEffort(url, body, timeoutMs)) ?? {};
+  return (await postJsonBestEffort(url, body, opts)) ?? {};
 }
 
 export async function runCheckUnanswered(

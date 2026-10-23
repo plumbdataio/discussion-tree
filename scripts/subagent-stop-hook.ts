@@ -15,7 +15,13 @@
 // endpoint and payload as the .sh. Best-effort, always exits 0.
 
 import { brokerBaseUrl } from "./broker-url.ts";
-import { jqRaw, postBestEffort, runHookMain, type HookEnv } from "./hook-io.ts";
+import {
+  jqRaw,
+  ONCE_PER_TURN_POST,
+  postBestEffort,
+  runHookMain,
+  type HookEnv,
+} from "./hook-io.ts";
 
 export async function runSubagentStop(
   input: Record<string, unknown> = {},
@@ -26,7 +32,13 @@ export async function runSubagentStop(
   const agentId = jqRaw(input.agent_id);
   const body: Record<string, string> = { cc_session_id: sid };
   if (agentId) body.agent_id = agentId;
-  await postBestEffort(`${brokerBaseUrl(env)}/subagent-stop`, body);
+  // Once per subagent and nothing re-sends it (a miss strands the Bot marker),
+  // so the long timeout + one retry (hook-io ONCE_PER_TURN_POST).
+  await postBestEffort(
+    `${brokerBaseUrl(env)}/subagent-stop`,
+    body,
+    ONCE_PER_TURN_POST,
+  );
 }
 
 if (import.meta.main) runHookMain((input) => runSubagentStop(input));

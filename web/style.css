@@ -812,6 +812,19 @@ body {
 .session-activity-indicator.activity-blocked svg {
   animation: activity-badge-blink 1.6s ease-in-out infinite;
 }
+/* The "working" spinner is a <button> (click clears a stuck spinner). Strip the
+   form-control chrome so it looks exactly like the old <span>. */
+.session-activity-indicator.session-activity-clearable {
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.session-activity-indicator.session-activity-clearable:hover {
+  opacity: 0.7;
+}
 
 /* Transient "just re-attached" spinner — flashed for a few seconds when the
    MCP server's heartbeat self-heal re-binds a session whose broker binding was
@@ -2690,6 +2703,16 @@ body.concern-resizing * {
 
 .activity-msg {
   font-weight: 500;
+}
+
+/* Header "working" badge rendered as a <button> (click clears a stuck
+   spinner): keep the pill look, drop the form-control font. */
+.activity-badge.activity-badge-clearable {
+  font-family: inherit;
+  cursor: pointer;
+}
+.activity-badge.activity-badge-clearable:hover {
+  opacity: 0.75;
 }
 
 .header .activity-badge {

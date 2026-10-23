@@ -978,7 +978,9 @@ export function MapView({ mapId }: { mapId: string }) {
               <span>{t("header.compacting")}</span>
             </span>
           )}
-          {headerActivity && <ActivityBadge activity={headerActivity} />}
+          {headerActivity && (
+            <ActivityBadge activity={headerActivity} clearable />
+          )}
           <div className="header-right">
             <CliCommandButton
               sessionId={view.map.session_id}

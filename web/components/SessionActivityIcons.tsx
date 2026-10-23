@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import type { Activity, SessionListItem } from "../../shared/types.ts";
 import { HelpBubbleIcon } from "./HelpBubbleIcon.tsx";
 import { contextWarnBand } from "../utils/contextBand.ts";
+import { clearWorkingActivity } from "../utils/clearWorkingActivity.ts";
 
 // @reusable-ui SessionActivityIcons — USE WHEN: rendering the per-session live
 //   indicator cluster (stall / compacting / re-attach spinner / working-or-
@@ -130,7 +131,33 @@ export function SessionActivityIcons({
           <RefreshCw size={14} strokeWidth={2.75} />
         </span>
       )}
-      {liveActivity && (
+      {liveActivity && liveActivity.state === "working" && (
+        // Hook-managed "working" spinner: a <button> so a click/tap clears it.
+        // The Stop hook's clear can fail to reach the broker (remote CC whose
+        // hook timed out) and the idle watchdog is disabled, so without this
+        // a missed clear spun forever. The next tool call re-lights it.
+        <button
+          type="button"
+          className="session-activity-indicator activity-working session-activity-clearable"
+          title={
+            (liveActivity.message
+              ? `${liveActivity.state}: ${liveActivity.message}`
+              : liveActivity.state) +
+            "\n" +
+            t("activity.clear_working_hint")
+          }
+          aria-label={t("activity.clear_working_aria")}
+          onClick={(e) => {
+            // Inside the session-row link — don't navigate / select the row.
+            e.preventDefault();
+            e.stopPropagation();
+            void clearWorkingActivity(session.id);
+          }}
+        >
+          <RefreshCw size={14} strokeWidth={2.75} />
+        </button>
+      )}
+      {liveActivity && liveActivity.state !== "working" && (
         <span
           className={`session-activity-indicator activity-${liveActivity.state}`}
           title={
@@ -145,7 +172,8 @@ export function SessionActivityIcons({
               instead of the spinning refresh icon — a spinning icon
               reads as "still working" and was easy to overlook, and a
               generic warning triangle didn't convey "the assistant
-              wants to talk to you". */}
+              wants to talk to you". Explicit states are not clickable:
+              only the LLM / its hooks clear them. */}
           {liveActivity.state === "blocked" ? (
             <HelpBubbleIcon size={16} strokeWidth={2} />
           ) : (

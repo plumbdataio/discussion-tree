@@ -17,7 +17,13 @@
 // delays compaction).
 
 import { brokerBaseUrl } from "./broker-url.ts";
-import { jqRaw, postBestEffort, runHookMain, type HookEnv } from "./hook-io.ts";
+import {
+  jqRaw,
+  ONCE_PER_TURN_POST,
+  postBestEffort,
+  runHookMain,
+  type HookEnv,
+} from "./hook-io.ts";
 
 export async function runPreCompact(
   input: Record<string, unknown> = {},
@@ -25,9 +31,13 @@ export async function runPreCompact(
 ): Promise<void> {
   const sid = jqRaw(input.session_id);
   if (!sid) return;
-  await postBestEffort(`${brokerBaseUrl(env)}/session-compacting`, {
-    cc_session_id: sid,
-  });
+  // Once per compaction, nothing re-sends it: the long timeout + one retry
+  // (hook-io ONCE_PER_TURN_POST). Marking "compacting" is idempotent.
+  await postBestEffort(
+    `${brokerBaseUrl(env)}/session-compacting`,
+    { cc_session_id: sid },
+    ONCE_PER_TURN_POST,
+  );
 }
 
 if (import.meta.main) runHookMain((input) => runPreCompact(input));

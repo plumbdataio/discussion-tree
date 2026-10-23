@@ -2,6 +2,7 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import {
   startBroker,
   post,
+  get,
   registerSession,
   attachCC,
   type BrokerHandle,
@@ -138,6 +139,75 @@ describe("activity", () => {
     const r = await post<{ ok: boolean }>(
       `${broker.url}/blocked-on-user-start`,
       { cc_session_id: "no-such-cc", question: "?" },
+    );
+    expect(r.json.ok).toBe(false);
+  });
+});
+
+// UI escape hatch for a spinner whose Stop-hook clear never reached the broker
+// (remote CC, hook timed out). Keyed by the broker session id the UI holds.
+describe("/clear-working-activity", () => {
+  const activityOf = async () => {
+    const r = await get<{ sessions: any[] }>(`${broker.url}/api/sessions`);
+    return r.json.sessions.find((s) => s.id === sessionId)?.activity ?? null;
+  };
+
+  test("clears a hook-managed working state by broker session_id", async () => {
+    await post(`${broker.url}/heartbeat-tool`, {
+      cc_session_id: ccSessionId,
+      tool: "Bash",
+    });
+    expect((await activityOf())?.state).toBe("working");
+    const r = await post<{ ok: boolean; cleared: boolean }>(
+      `${broker.url}/clear-working-activity`,
+      { session_id: sessionId },
+    );
+    expect(r.json).toEqual({ ok: true, cleared: true });
+    expect(await activityOf()).toBeNull();
+  });
+
+  test("the next tool call re-lights the spinner", async () => {
+    await post(`${broker.url}/heartbeat-tool`, {
+      cc_session_id: ccSessionId,
+      tool: "Read",
+    });
+    expect((await activityOf())?.state).toBe("working");
+    await post(`${broker.url}/clear-working-activity`, { session_id: sessionId });
+  });
+
+  test("leaves an explicit non-working state (blocked) alone", async () => {
+    await post(`${broker.url}/set-activity`, {
+      session_id: sessionId,
+      state: "blocked",
+      message: "Awaiting OK",
+    });
+    const r = await post<{ ok: boolean; cleared: boolean }>(
+      `${broker.url}/clear-working-activity`,
+      { session_id: sessionId },
+    );
+    expect(r.json).toEqual({ ok: true, cleared: false });
+    expect((await activityOf())?.state).toBe("blocked");
+    await post(`${broker.url}/set-activity`, { session_id: sessionId });
+  });
+
+  test("does not clear the stall flag (unlike the Stop hook route)", async () => {
+    const stalled = async () => {
+      const r = await get<{ sessions: any[] }>(`${broker.url}/api/sessions`);
+      return !!r.json.sessions.find((s) => s.id === sessionId)?.stalled;
+    };
+    await post(`${broker.url}/session-stalled`, { cc_session_id: ccSessionId });
+    expect(await stalled()).toBe(true);
+    await post(`${broker.url}/clear-working-activity`, { session_id: sessionId });
+    expect(await stalled()).toBe(true);
+    // The Stop-hook route does clear it (clean up for later tests).
+    await post(`${broker.url}/clear-tool-activity`, { cc_session_id: ccSessionId });
+    expect(await stalled()).toBe(false);
+  });
+
+  test("missing session_id -> ok:false", async () => {
+    const r = await post<{ ok: boolean }>(
+      `${broker.url}/clear-working-activity`,
+      {},
     );
     expect(r.json.ok).toBe(false);
   });

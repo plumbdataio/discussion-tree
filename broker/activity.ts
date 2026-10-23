@@ -697,15 +697,44 @@ export function handleClearToolActivity(body: { cc_session_id?: string }): {
   // badge in case the post-compact hook didn't reach the broker.
   clearStall(sessionId);
   clearCompacting(sessionId);
+  clearWorkingState(sessionId);
+  return { ok: true };
+}
+
+// Drop the hook-managed "working" state for one broker session. Explicit
+// set_activity entries (e.g. "blocked") are preserved. Returns whether a
+// "working" entry was actually removed.
+function clearWorkingState(sessionId: string): boolean {
   toolHeartbeats.delete(sessionId);
-  // Only clear the hook-managed "working" state. Explicit set_activity
-  // entries (e.g. "blocked") are preserved.
   const cur = activities.get(sessionId);
   if (cur && cur.state === "working") {
     activities.delete(sessionId);
     broadcastActivity(sessionId, null);
+    return true;
   }
-  return { ok: true };
+  return false;
+}
+
+// UI escape hatch: the user clicked the "working" spinner (sidebar row or a
+// board/map/diagram header badge) to dismiss it. Needed because the spinner is
+// cleared only by the Stop hook's /clear-tool-activity, and that POST can fail
+// (a remote CC whose hook times out against the tailnet broker) — with the
+// idle watchdog intentionally disabled, the spinner would then spin forever.
+// Keyed by the BROKER session id (what the UI holds), unlike the hook route.
+// Deliberately narrower than /clear-tool-activity: it does NOT touch the stall
+// or compacting flags (those drive their own indicators and the auto-continue
+// nudge; a click on the spinner must not cancel them), and never clears an
+// explicit non-"working" state. A session that is genuinely still working
+// re-lights the spinner on its next tool call (/heartbeat-tool).
+export function handleClearWorkingActivity(body: { session_id?: string }): {
+  ok: boolean;
+  cleared: boolean;
+  error?: string;
+} {
+  if (!body.session_id) {
+    return { ok: false, cleared: false, error: "session_id required" };
+  }
+  return { ok: true, cleared: clearWorkingState(body.session_id) };
 }
 
 // PreToolUse(AskUserQuestion|ExitPlanMode) hook entry — Claude is now waiting
@@ -998,6 +1027,7 @@ export const routes = {
   "/heartbeat-cc-pid": handleHeartbeatCcPid,
   "/channel-pushed": handleChannelPushed,
   "/clear-tool-activity": handleClearToolActivity,
+  "/clear-working-activity": handleClearWorkingActivity,
   "/session-stalled": handleSessionStalled,
   "/session-compacting": handleSessionCompacting,
   "/session-compacting-done": handleSessionCompactingDone,

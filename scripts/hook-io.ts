@@ -187,16 +187,96 @@ function errorField(parsed: unknown): string | undefined {
   return undefined;
 }
 
-// Best-effort POST returning the parsed JSON body, or null on any failure. The
-// timeout covers reading the body too. Logged as failures: network error /
-// timeout, non-2xx, a 2xx body that is not JSON, and `{ ok: false }` (the
-// broker's answer when e.g. no alive session matches the cc_session_id).
-// Never throws.
-export async function postJsonBestEffort(
+// --- Timeout policy ---------------------------------------------------------------
+// Measured on the Mac (2026-10-23): 1,417 of 1,423 logged hook failures were
+// "timeout after 1000ms" against the REMOTE broker (https://hello.<tailnet>,
+// Tailscale serve). Every hook is a fresh bun process opening a fresh TLS
+// connection, so a request there takes ~1.0s median (max 2.4s) — the old flat
+// 1s timeout (the .sh's `curl --max-time 1`) sat right on the median. When the
+// Stop hook's /clear-tool-activity was the one that timed out, the sidebar
+// "working" spinner stayed forever (the broker's idle watchdog is disabled).
+//
+// Two classes of hook, two policies:
+//   - PER TOOL CALL (PreToolUse / PostToolUse / UserPromptSubmit): CC waits for
+//     the hook before running the tool / the turn, on EVERY call, so keep them
+//     short: 1s on loopback (the broker is local; 1s is already generous), 2s
+//     for a remote broker (above the measured median, under the 2.4s max — a
+//     miss there costs one stale heartbeat that the next call repairs). No
+//     retry: the next tool call re-sends the same signal anyway.
+//   - ONCE PER TURN / EVENT (Stop, SubagentStop, StopFailure, PreCompact,
+//     post-compact SessionStart, blocked-on-user clear): nothing re-sends
+//     these, so a single miss leaves a stuck badge. They run once per turn, so
+//     a longer wait is cheap: 5s, plus ONE retry on a timeout / network error
+//     (not on an HTTP error or `ok:false` — the broker answered, a retry would
+//     get the same answer). Worst case per POST = 5s + 200ms + 5s.
+
+export const PER_TOOL_TIMEOUT_LOOPBACK_MS = 1000;
+export const PER_TOOL_TIMEOUT_REMOTE_MS = 2000;
+export const ONCE_PER_TURN_TIMEOUT_MS = 5000;
+export const ONCE_PER_TURN_RETRIES = 1;
+export const RETRY_DELAY_MS = 200;
+
+export type PostOptions = {
+  // Per attempt. Default: perToolCallTimeoutMs(url).
+  timeoutMs?: number;
+  // Extra attempts after a timeout / network error. Default 0.
+  retries?: number;
+  // Pause before each retry (a broker mid-restart refuses instantly).
+  retryDelayMs?: number;
+};
+
+// localhost / 127.x / ::1 — the broker runs on this machine.
+export function isLoopbackUrl(url: string): boolean {
+  try {
+    const h = new URL(url).hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    return h === "localhost" || h === "::1" || /^127\./.test(h);
+  } catch {
+    return false;
+  }
+}
+
+export function perToolCallTimeoutMs(url: string): number {
+  return isLoopbackUrl(url)
+    ? PER_TOOL_TIMEOUT_LOOPBACK_MS
+    : PER_TOOL_TIMEOUT_REMOTE_MS;
+}
+
+// For per-tool-call hooks: short, no retry (see the policy above).
+export function perToolCallPost(url: string): PostOptions {
+  return { timeoutMs: perToolCallTimeoutMs(url), retries: 0 };
+}
+
+// For once-per-turn hooks: 5s + one retry (see the policy above).
+export const ONCE_PER_TURN_POST: Readonly<PostOptions> = Object.freeze({
+  timeoutMs: ONCE_PER_TURN_TIMEOUT_MS,
+  retries: ONCE_PER_TURN_RETRIES,
+  retryDelayMs: RETRY_DELAY_MS,
+});
+
+function resolvePostOptions(
+  url: string,
+  opts: number | PostOptions | undefined,
+): Required<PostOptions> {
+  const o: PostOptions = typeof opts === "number" ? { timeoutMs: opts } : opts ?? {};
+  return {
+    timeoutMs: o.timeoutMs ?? perToolCallTimeoutMs(url),
+    retries: Math.max(0, o.retries ?? 0),
+    retryDelayMs: o.retryDelayMs ?? RETRY_DELAY_MS,
+  };
+}
+
+type AttemptResult =
+  | { kind: "answered"; value: unknown }
+  | { kind: "unreachable" };
+
+// One HTTP attempt. "answered" = the broker replied (whatever it said; failures
+// of that kind are logged here). "unreachable" = timeout / network error.
+async function attemptPost(
   url: string,
   body: unknown,
-  timeoutMs = 1000,
-): Promise<unknown> {
+  timeoutMs: number,
+  attemptLabel: string,
+): Promise<AttemptResult> {
   const ctrl = new AbortController();
   let timedOut = false;
   const t = setTimeout(() => {
@@ -234,11 +314,11 @@ export async function postJsonBestEffort(
     if (!res.ok) {
       const err = errorField(parsed);
       fail(err !== undefined ? `http error: ${err}` : "http error");
-      return parseFailed ? null : parsed;
+      return { kind: "answered", value: parseFailed ? null : parsed };
     }
     if (parseFailed) {
       fail(`non-JSON body: ${text.slice(0, 120)}`);
-      return null;
+      return { kind: "answered", value: null };
     }
     if (
       parsed &&
@@ -248,24 +328,61 @@ export async function postJsonBestEffort(
       const err = errorField(parsed);
       fail(err !== undefined ? `ok:false (${err})` : "ok:false");
     }
-    return parsed;
+    return { kind: "answered", value: parsed };
   } catch (e) {
-    fail(timedOut ? `timeout after ${timeoutMs}ms` : undefined, e);
-    return null;
+    const what = timedOut ? `timeout after ${timeoutMs}ms` : "network error";
+    // Keep the single-attempt detail exactly as before ("timeout after Nms" /
+    // none) so existing log readers keep matching; tag retried attempts.
+    const detail = attemptLabel
+      ? `${what} (${attemptLabel})`
+      : timedOut
+        ? what
+        : undefined;
+    fail(detail, e);
+    return { kind: "unreachable" };
   } finally {
     clearTimeout(t);
   }
 }
 
-// Best-effort POST: 1s timeout (the .sh's `curl --max-time 1`), every failure
-// swallowed (but logged, see postJsonBestEffort). The body is compact JSON; the
-// .sh sent jq's pretty-printed JSON, which parses to the same value.
+// Best-effort POST returning the parsed JSON body, or null on any failure. The
+// timeout covers reading the body too. Logged as failures: network error /
+// timeout (each attempt), non-2xx, a 2xx body that is not JSON, and
+// `{ ok: false }` (the broker's answer when e.g. no alive session matches the
+// cc_session_id). `opts` is a timeout in ms (legacy) or PostOptions; omitted =
+// the per-tool-call policy. Only a timeout / network error is retried. NOTE a
+// timed-out attempt may still have been processed by the broker, so a retried
+// endpoint must tolerate a duplicate (every once-per-turn endpoint is an
+// idempotent clear/mark, except /get-unanswered, where a duplicate only advances
+// the nag-streak counter one step early). Never throws.
+export async function postJsonBestEffort(
+  url: string,
+  body: unknown,
+  opts?: number | PostOptions,
+): Promise<unknown> {
+  const { timeoutMs, retries, retryDelayMs } = resolvePostOptions(url, opts);
+  const attempts = retries + 1;
+  for (let i = 1; i <= attempts; i++) {
+    const label = attempts > 1 ? `attempt ${i}/${attempts}` : "";
+    const r = await attemptPost(url, body, timeoutMs, label);
+    if (r.kind === "answered") return r.value;
+    if (i < attempts && retryDelayMs > 0) {
+      await new Promise((res) => setTimeout(res, retryDelayMs));
+    }
+  }
+  return null;
+}
+
+// Best-effort POST, every failure swallowed (but logged, see
+// postJsonBestEffort). The body is compact JSON; the .sh sent jq's
+// pretty-printed JSON, which parses to the same value. Each hook passes the
+// policy for its class (perToolCallPost / ONCE_PER_TURN_POST).
 export async function postBestEffort(
   url: string,
   body: unknown,
-  timeoutMs = 1000,
+  opts?: number | PostOptions,
 ): Promise<void> {
-  await postJsonBestEffort(url, body, timeoutMs);
+  await postJsonBestEffort(url, body, opts);
 }
 
 // Standard hook entry point: read stdin, run, ALWAYS exit 0 (an observation-only

@@ -39,6 +39,7 @@ import { SUBMIT_DELIVERY_TIMEOUT_MS } from "./config.ts";
 import { buildNodePath } from "./helpers.ts";
 import { ensureBoardLogNode } from "./structure-log.ts";
 import { markWorkingFromUserSubmit } from "./activity.ts";
+import { watchCliInjectAck } from "./sessions.ts";
 
 // Same helper as broker/nodes.ts — node status mutations may flip the
 // parent board's auto-rollup, broadcast lets the sidebar follow. Returns
@@ -474,7 +475,10 @@ export function handlePollMessages(body: any) {
     command: string;
     args: string;
   }[];
-  for (const inj of cli_injects) markCliInjectDelivered.run(inj.id);
+  for (const inj of cli_injects) {
+    markCliInjectDelivered.run(inj.id);
+    watchCliInjectAck(inj.id);
+  }
   // Ride the current CLI-verbosity pref along with the drain so the poller can
   // inject the matching footer reminder without a second round-trip.
   return { messages, cli_verbosity: getCliVerbosity(), cli_injects };

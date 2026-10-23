@@ -6,10 +6,17 @@ import * as path from "node:path";
 import {
   describeError,
   hookFailureLogPath,
+  isLoopbackUrl,
   logHookFailure,
+  ONCE_PER_TURN_POST,
+  perToolCallPost,
+  perToolCallTimeoutMs,
   postBestEffort,
   postJsonBestEffort,
 } from "../../scripts/hook-io.ts";
+import { runToolActivityClear } from "../../scripts/tool-activity-clear-hook.ts";
+import { runToolActivity } from "../../scripts/tool-activity-hook.ts";
+import { runCheckUnanswered } from "../../scripts/check-unanswered-posts.ts";
 
 // Locks the hook failure log: every broker call a hook makes is best-effort and
 // swallowed, so this one-line-per-failure log in the temp dir is the only trace
@@ -31,13 +38,21 @@ function lines(): any[] {
 
 let server: ReturnType<typeof Bun.serve>;
 let reply: () => Response = () => Response.json({ ok: true });
+let hits = 0;
 
 beforeEach(() => {
   process.env.DT_HOOK_FAILURE_LOG = logFile;
   fs.rmSync(logFile, { force: true });
   fs.rmSync(logFile + ".1", { force: true });
   reply = () => Response.json({ ok: true });
-  server = Bun.serve({ port: 0, fetch: () => reply() });
+  hits = 0;
+  server = Bun.serve({
+    port: 0,
+    fetch: () => {
+      hits++;
+      return reply();
+    },
+  });
 });
 
 afterEach(() => {
@@ -179,5 +194,119 @@ describe("postBestEffort / postJsonBestEffort logging", () => {
     reply = () => Response.json({ count: 0 });
     await postBestEffort(`http://127.0.0.1:${server.port}/x`, {});
     expect(lines()).toEqual([]);
+  });
+});
+
+// Timeout policy (see hook-io "Timeout policy"): per-tool-call hooks stay short
+// (1s loopback / 2s remote, no retry); once-per-turn hooks get 5s + one retry on
+// a timeout / network error, because nothing re-sends them and a miss left the
+// "working" spinner stuck (Mac -> tailnet broker: ~1.0s median per request).
+describe("timeout policy", () => {
+  test("loopback detection", () => {
+    expect(isLoopbackUrl("http://127.0.0.1:7898/x")).toBe(true);
+    expect(isLoopbackUrl("http://localhost:7898")).toBe(true);
+    expect(isLoopbackUrl("http://[::1]:7898/x")).toBe(true);
+    expect(isLoopbackUrl("https://hello.tailc809ec.ts.net/x")).toBe(false);
+    expect(isLoopbackUrl("http://100.85.218.37:7898")).toBe(false);
+    expect(isLoopbackUrl("not a url")).toBe(false);
+  });
+
+  test("per-tool-call: 1s loopback, 2s remote, no retry", () => {
+    expect(perToolCallTimeoutMs("http://127.0.0.1:7898/heartbeat-tool")).toBe(1000);
+    expect(perToolCallTimeoutMs("https://hello.example.ts.net/heartbeat-tool")).toBe(2000);
+    expect(perToolCallPost("https://hello.example.ts.net")).toEqual({
+      timeoutMs: 2000,
+      retries: 0,
+    });
+  });
+
+  test("once-per-turn: 5s + one retry", () => {
+    expect(ONCE_PER_TURN_POST.timeoutMs).toBe(5000);
+    expect(ONCE_PER_TURN_POST.retries).toBe(1);
+  });
+});
+
+describe("retry", () => {
+  test("a timed-out attempt is retried and the second answer is returned", async () => {
+    let n = 0;
+    reply = () =>
+      ++n === 1
+        ? (new Promise<Response>(() => {}) as any)
+        : Response.json({ ok: true, second: true });
+    const out = await postJsonBestEffort(
+      `http://127.0.0.1:${server.port}/clear-tool-activity`,
+      { cc_session_id: "s" },
+      { timeoutMs: 50, retries: 1, retryDelayMs: 0 },
+    );
+    expect(out).toEqual({ ok: true, second: true });
+    expect(hits).toBe(2);
+    const ls = lines();
+    expect(ls.length).toBe(1);
+    expect(ls[0].detail).toBe("timeout after 50ms (attempt 1/2)");
+  });
+
+  test("both attempts time out -> null, two log lines", async () => {
+    reply = () => new Promise<Response>(() => {}) as any;
+    const out = await postJsonBestEffort(
+      `http://127.0.0.1:${server.port}/x`,
+      {},
+      { timeoutMs: 30, retries: 1, retryDelayMs: 0 },
+    );
+    expect(out).toBeNull();
+    expect(lines().map((l) => l.detail)).toEqual([
+      "timeout after 30ms (attempt 1/2)",
+      "timeout after 30ms (attempt 2/2)",
+    ]);
+  });
+
+  test("an HTTP error / ok:false is NOT retried (the broker answered)", async () => {
+    reply = () => Response.json({ error: "nope" }, { status: 500 });
+    await postJsonBestEffort(`http://127.0.0.1:${server.port}/x`, {}, {
+      timeoutMs: 200,
+      retries: 1,
+      retryDelayMs: 0,
+    });
+    expect(hits).toBe(1);
+    reply = () => Response.json({ ok: false });
+    await postJsonBestEffort(`http://127.0.0.1:${server.port}/x`, {}, ONCE_PER_TURN_POST);
+    expect(hits).toBe(2);
+  });
+
+  test("a number is still accepted as a plain single-attempt timeout", async () => {
+    reply = () => new Promise<Response>(() => {}) as any;
+    await postBestEffort(`http://127.0.0.1:${server.port}/slow`, {}, 40);
+    expect(hits).toBe(1);
+    expect(lines()[0].detail).toBe("timeout after 40ms");
+  });
+});
+
+describe("per-hook policy", () => {
+  const refusedEnv = () => ({
+    DISCUSSION_TREE_BROKER_URL: `http://127.0.0.1:${unusedPort()}`,
+  });
+
+  test("Stop: tool-activity-clear retries a refused connection once", async () => {
+    await runToolActivityClear({ session_id: "sid-stop" }, refusedEnv());
+    const ls = lines();
+    expect(ls.length).toBe(2);
+    expect(ls[0].step).toMatch(/\/clear-tool-activity$/);
+    expect(ls[0].detail).toBe("network error (attempt 1/2)");
+    expect(ls[1].detail).toBe("network error (attempt 2/2)");
+  });
+
+  test("Stop: check-unanswered still allows the stop when the broker is unreachable", async () => {
+    const out = await runCheckUnanswered({ session_id: "sid-cu" }, refusedEnv());
+    expect(out).toBe("");
+    expect(lines().length).toBe(2); // one /get-unanswered, retried once
+  });
+
+  test("PreToolUse: tool-activity makes a single attempt", async () => {
+    await runToolActivity(
+      { session_id: "sid-pre", tool_name: "Read" },
+      refusedEnv(),
+    );
+    const ls = lines();
+    expect(ls.length).toBe(1);
+    expect(ls[0].step).toMatch(/\/heartbeat-tool$/);
   });
 });

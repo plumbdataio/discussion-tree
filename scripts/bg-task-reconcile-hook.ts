@@ -21,7 +21,13 @@
 
 import * as fs from "node:fs";
 import { brokerBaseUrl } from "./broker-url.ts";
-import { jqRaw, postBestEffort, runHookMain, type HookEnv } from "./hook-io.ts";
+import {
+  jqRaw,
+  ONCE_PER_TURN_POST,
+  postBestEffort,
+  runHookMain,
+  type HookEnv,
+} from "./hook-io.ts";
 
 // The .sh pipeline, line by line:
 //   grep 'task-notification' | grep -E 'status>completed<|status=\\?"completed'
@@ -103,10 +109,13 @@ export async function runBgTaskReconcile(
   }
   const ids = extractCompletedBgTaskIds(transcript);
   if (ids.length === 0) return;
-  await postBestEffort(`${brokerBaseUrl(env)}/bg-task-done`, {
-    cc_session_id: sid,
-    task_ids: ids,
-  });
+  // Stop hook: once per turn, so the long timeout + one retry
+  // (hook-io ONCE_PER_TURN_POST). Marking tasks done is idempotent.
+  await postBestEffort(
+    `${brokerBaseUrl(env)}/bg-task-done`,
+    { cc_session_id: sid, task_ids: ids },
+    ONCE_PER_TURN_POST,
+  );
 }
 
 if (import.meta.main) runHookMain((input) => runBgTaskReconcile(input));

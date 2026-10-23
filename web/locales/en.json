@@ -236,6 +236,8 @@
     "err_pane_not_claude": "Aborted: Claude Code isn't running in the target pane.",
     "err_invalid_command": "That isn't a valid command (must be a single /command).",
     "err_generic": "Failed to send the command.",
+    "inject_failed": "{{command}} could not be sent: {{reason}}",
+    "inject_no_ack": "{{command}}: no confirmation from the session (it may not have run).",
     "history_title": "Recent prompts (click to fill)"
   },
   "spawn": {
@@ -564,5 +566,9 @@
     "prune_errors": "Failed to delete old backups ({{count}})",
     "log_hint": "Details: {{path}}",
     "dismiss": "Dismiss"
+  },
+  "activity": {
+    "clear_working_hint": "Click to clear the working indicator",
+    "clear_working_aria": "Clear the working indicator"
   }
 }
