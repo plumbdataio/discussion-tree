@@ -8,5 +8,10 @@ bun run scripts/check-no-japanese.ts || exit 1
 # Bun doesn't type-check at runtime, so a syntax error only surfaces when a
 # module fails to load — see scripts/check-build.sh for the full rationale.
 sh "$(dirname "$0")/../scripts/check-build.sh" || exit 1
+# MCP build tag: plugin.json's MCP args carry a hash of the MCP code so that
+# /reload-plugins restarts the MCP server when that code changes (see buildTag
+# in scripts/mcp-node-build.mjs). Refresh it in plugin.json and in the staged
+# copy; --stage stages only the tag, never other unstaged plugin.json edits.
+bun "$(dirname "$0")/../scripts/update-mcp-build-tag.mjs" --stage >&2 || exit 1
 # Then run any pre-commit from the hooks dir we superseded (global / other).
 exec "$(dirname "$0")/_delegate.sh" pre-commit "$@"

@@ -23,20 +23,26 @@
 // The build itself (and why it goes through a stub entry and rejects bundles
 // with a module included twice) lives in scripts/mcp-node-build.mjs.
 //
+// Arguments: plugin.json passes "--build <tag>" (see buildTag in
+// mcp-node-build.mjs). It exists only so /reload-plugins sees a config change
+// when the MCP code changes; nothing here or in the server reads argv.
+//
 // This file must never write to stdout: stdout is the MCP JSON-RPC channel.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { buildBundle, findDuplicateModules, fingerprint } from "./mcp-node-build.mjs";
+import {
+  buildBundle,
+  findDuplicateModules,
+  fingerprint,
+  launcherFiles,
+} from "./mcp-node-build.mjs";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CACHE = path.join(REPO, ".mcp-dist");
 const PRUNE_AGE_MS = 60 * 60 * 1000;
-const LAUNCHER_FILES = [
-  fileURLToPath(import.meta.url),
-  fileURLToPath(new URL("./mcp-node-build.mjs", import.meta.url)),
-];
+const LAUNCHER_FILES = launcherFiles(REPO);
 
 function log(msg) {
   process.stderr.write(`[discussion-tree mcp-node] ${msg}\n`);

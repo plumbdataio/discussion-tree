@@ -22,7 +22,12 @@ export function listTs(dir) {
 // Content fingerprint of everything that goes into the bundle (plus the
 // launcher files themselves, so a change to how we build invalidates bundles
 // built the old way).
-export function fingerprint(repo, extraFiles = []) {
+//
+// normalizeEol: hash CRLF as LF. The bundle cache key (mcp-node.mjs) hashes the
+// raw bytes; the build tag in plugin.json (buildTag below) normalizes, so a
+// CRLF checkout (Windows, core.autocrlf=true) and an LF checkout (Mac) of the
+// same commit produce the same tag and the tag does not flip between machines.
+export function fingerprint(repo, extraFiles = [], { normalizeEol = false } = {}) {
   const files = [
     path.join(repo, "server.ts"),
     ...listTs(path.join(repo, "server")),
@@ -36,13 +41,39 @@ export function fingerprint(repo, extraFiles = []) {
     h.update(path.relative(repo, f).replace(/\\/g, "/"));
     h.update("\0");
     try {
-      h.update(fs.readFileSync(f));
+      const buf = fs.readFileSync(f);
+      // latin1 round-trips every byte, so only CR LF pairs change.
+      h.update(
+        normalizeEol
+          ? Buffer.from(buf.toString("latin1").replace(/\r\n/g, "\n"), "latin1")
+          : buf,
+      );
     } catch {
       h.update("<missing>");
     }
     h.update("\0");
   }
   return h.digest("hex").slice(0, 16);
+}
+
+// The launcher files, which are part of every fingerprint (see above).
+export function launcherFiles(repo) {
+  return [
+    path.join(repo, "scripts", "mcp-node.mjs"),
+    path.join(repo, "scripts", "mcp-node-build.mjs"),
+  ];
+}
+
+// Build tag carried in plugin.json's MCP args ("--build <tag>").
+//
+// WHY: /reload-plugins restarts a plugin's MCP server only when its configured
+// command/args change. A change to the MCP code alone leaves running sessions
+// on the old server process until /mcp reconnect or a restart. Putting a
+// content hash of the MCP inputs into the args turns every code change into a
+// config change. Kept in sync by scripts/update-mcp-build-tag.mjs (pre-commit
+// hook and `bun run mcp:build-tag`). The launcher ignores the extra args.
+export function buildTag(repo) {
+  return fingerprint(repo, launcherFiles(repo), { normalizeEol: true }).slice(0, 12);
 }
 
 // Bun emits a "// <path>" comment before each module's code in a bundle. A
