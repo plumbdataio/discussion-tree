@@ -6,7 +6,7 @@ import { sameExtraWindows } from "../utils/usageLimits.ts";
 // @reusable-ui UsageLimitsChip — USE WHEN: showing a session's Claude
 // subscription usage (the native 5h / 7d rate-limit windows Claude Code exposes
 // on its statusline) INSTEAD OF hand-rolling a usage readout. These numbers are
-// per-account (one subscription per CLAUDE_CONFIG_DIR), so feed it the current
+// per-account (one subscription = one login; see accountKey in scripts/cc-context-report-hook.ts), so feed it the current
 // page's value from the shared useUsageLimits(sessionId) store
 // (web/utils/usageLimits.ts, populated by the Sidebar's poll) and render it in a
 // page header next to the ContextMeter. Optional extra windows

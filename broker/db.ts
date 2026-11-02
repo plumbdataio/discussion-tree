@@ -168,11 +168,12 @@ export const deleteContextUsage = db.prepare(
 
 // Native 5h / 7d subscription-usage limits, as delivered by Claude Code's
 // statusLine command (rate_limits.{five_hour,seven_day}) and forwarded by
-// scripts/cc-context-report-hook.sh to /report-usage-limits. Each window's two
+// scripts/cc-context-report-hook.ts to /report-usage-limits. Each window's two
 // fields are nullable: they arrive only after the first API response, only on
 // Pro/Max plans, and a window's fields drop out after it resets. Stored per
 // broker session_id (mirroring context_usage). `account` = the reporting
-// session's CLAUDE_CONFIG_DIR — different config dirs are different
+// session's subscription key (accountKey in the hook: the login's org + account
+// ids, else the config dir) — different logins are different
 // subscriptions with independent limits, so the numbers are per-account (NOT
 // machine-global): the getter combines only rows that share an account. Old
 // rows (reported before the account field existed) carry NULL. Persisted so a

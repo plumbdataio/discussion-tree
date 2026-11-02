@@ -435,7 +435,7 @@ describe("getGlobalUsageLimits — per-window, reset-driven staleness", () => {
 
 // --- Per-account usage limits (getUsageLimitsForAccount) ----------------------
 //
-// Each session reports its subscription (account = CLAUDE_CONFIG_DIR). The
+// Each session reports its subscription (account = the hook's accountKey). The
 // broker groups by account so a session's page shows ITS OWN subscription's 5h
 // / 7d, sessions on the same account share a value, and the reset-driven combine
 // still applies per account. /api/sessions carries this on each session row

@@ -575,7 +575,8 @@ export interface BoardListItem {
 // resets_at is a unix epoch in SECONDS. Every field is optional: a window's
 // data arrives only after the first API response, only on Pro/Max plans, and
 // drops out once that window resets. These numbers are PER-ACCOUNT (one
-// subscription per CLAUDE_CONFIG_DIR), so each page shows its own session's
+// subscription = one login; see accountKey in scripts/cc-context-report-hook.ts),
+// so each page shows its own session's
 // value (see SessionListItem.usage_limits), not a single machine-wide chip.
 export interface UsageLimits {
   five_hour_pct?: number;
@@ -648,8 +649,9 @@ export interface SessionListItem {
   // Cleared once the message goes out or the schedule is cancelled.
   scheduled_send_at?: string | null;
   // Native 5h / 7d subscription-usage limits for THIS session's account (its
-  // CLAUDE_CONFIG_DIR). Different config dirs are different subscriptions with
-  // independent limits, so each session's page shows its own account's value —
+  // login; see accountKey in scripts/cc-context-report-hook.ts). Different
+  // logins are different subscriptions with independent limits, so each
+  // session's page shows its own account's value —
   // sessions on the same account share it (an idle one gets a sibling's fresher
   // number). null when the session hasn't reported an account yet. The frontend
   // reads this per-page via useUsageLimits(sessionId), NOT the top-level global.

@@ -86,12 +86,12 @@ export function dropContextUsage(sessionId: string) {
 
 // --- Native 5h / 7d subscription-usage limits --------------------------------
 // Claude Code's statusLine command delivers rate_limits.{five_hour,seven_day}
-// (used_percentage 0..100 + resets_at unix seconds) plus `account` = the
-// session's CLAUDE_CONFIG_DIR. The user's statusline writes them to
-// /tmp/claude-sl-<cc_session_id>-limits.json and this repo's
-// cc-context-report-hook.sh POSTs them here. The numbers are PER-ACCOUNT (one
-// subscription per config dir) — NOT machine-global: two config dirs are two
-// different subscriptions with independent limits. Each session reports its own
+// (used_percentage 0..100 + resets_at unix seconds). The user's statusline
+// writes them to /tmp/claude-sl-<cc_session_id>-limits.json and this repo's
+// cc-context-report-hook.ts POSTs them here with `account` = the session's
+// subscription key (accountKey there: the login's org + account ids, else the
+// config dir). The numbers are PER-ACCOUNT — NOT machine-global: two logins are
+// two different subscriptions with independent limits. Each session reports its own
 // snapshot; we keep the latest per broker session, tagged with the account it
 // came from. getUsageLimitsForAccount() combines per window over only the rows
 // that share an account (so sessions on the same subscription share a value and
@@ -161,7 +161,7 @@ function cleanResetsAt(v: unknown): number | undefined {
   return Math.floor(v);
 }
 
-// account is the reporting session's CLAUDE_CONFIG_DIR. Keep a non-empty
+// account is the reporting session's subscription key. Keep a non-empty
 // trimmed string; anything else (absent, non-string, blank) is stored as NULL
 // and treated as "unknown account".
 function cleanAccount(v: unknown): string | null {
@@ -350,7 +350,7 @@ export function getGlobalUsageLimits(): UsageLimits | null {
 
 // Per-account combine: the same reset-driven logic as the global getter, but
 // over only the snapshots reported under `account`. This is what makes two
-// subscriptions (two CLAUDE_CONFIG_DIRs) show independent numbers, and lets an
+// subscriptions (two logins) show independent numbers, and lets an
 // idle session pick up a fresher value reported by a sibling on the SAME
 // account. Returns null when no row for the account carries a usable pct.
 export function getUsageLimitsForAccount(account: string): UsageLimits | null {

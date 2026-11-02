@@ -49,13 +49,52 @@ export function statuslineTmpDir(
   return "/tmp";
 }
 
-// The session's subscription key = its CLAUDE_CONFIG_DIR (each config dir has
-// its own OAuth token / plan). ${VAR:-default} semantics: empty OR unset falls
-// back to $HOME/.claude. Mirrors the .sh's acct resolution.
-export function accountKey(
+// The session's subscription key. Usage limits belong to the logged-in
+// subscription, not to a config dir: two config dirs logged into the same
+// account (e.g. on two machines, or two dirs on one machine) share one set of
+// 5h / 7d numbers, so they must share a key. Claude Code records the login in
+// its global config file as oauthAccount.{organizationUuid, accountUuid}; the
+// pair identifies one seat of one subscription. These are ids, not
+// credentials. The file is <CLAUDE_CONFIG_DIR>/.claude.json when the variable
+// is set, else ~/.claude.json.
+//
+// When the file or the ids cannot be read (API-key login, older CC, unreadable
+// file) the key falls back to the config dir itself: ${VAR:-default}
+// semantics, empty OR unset meaning $HOME/.claude.
+export function configDir(
   env: Record<string, string | undefined> = process.env,
 ): string {
   return env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
+}
+
+export function globalConfigFile(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  return env.CLAUDE_CONFIG_DIR
+    ? path.join(env.CLAUDE_CONFIG_DIR, ".claude.json")
+    : path.join(os.homedir(), ".claude.json");
+}
+
+export function oauthAccountKey(file: string): string | null {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as {
+      oauthAccount?: { organizationUuid?: unknown; accountUuid?: unknown };
+    };
+    const org = parsed?.oauthAccount?.organizationUuid;
+    const acct = parsed?.oauthAccount?.accountUuid;
+    if (typeof org === "string" && org && typeof acct === "string" && acct) {
+      return `oauth:${org}:${acct}`;
+    }
+  } catch {
+    /* missing / unreadable / malformed — fall back */
+  }
+  return null;
+}
+
+export function accountKey(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  return oauthAccountKey(globalConfigFile(env)) ?? configDir(env);
 }
 
 // --- Current Claude model ------------------------------------------------------

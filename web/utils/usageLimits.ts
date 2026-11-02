@@ -1,6 +1,6 @@
 // Shared client-side state for the native subscription usage limits — Claude's
 // 5h / 7d rate-limit windows, surfaced on the Claude Code statusline. These
-// numbers are PER-ACCOUNT (one subscription per CLAUDE_CONFIG_DIR), so the store
+// numbers are PER-ACCOUNT (one subscription = one login; see accountKey in scripts/cc-context-report-hook.ts), so the store
 // holds a map keyed by broker session_id: each session carries its OWN account's
 // value (sessions on the same account already share it, resolved broker-side).
 // Exactly ONE place polls — the Sidebar, from its /api/sessions fetch — and

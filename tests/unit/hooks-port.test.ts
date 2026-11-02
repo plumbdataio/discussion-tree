@@ -87,7 +87,8 @@ describe("cc-context-report-hook", () => {
       `claude-sl-${sid}-limits.json`,
       JSON.stringify({ five_hour: { used_pct: 12 }, seven_day: { used_pct: 34 } }),
     );
-    const acct = "/Users/x/.claude-pd";
+    // A config dir with no .claude.json -> the key falls back to the dir.
+    const acct = path.join(statuslineTmpDir(), `dt-no-config-${sid}`);
     await runContextReport(
       { session_id: sid },
       { ...ENV, CLAUDE_CONFIG_DIR: acct },
