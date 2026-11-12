@@ -3568,6 +3568,26 @@ body.concern-resizing * {
   opacity: 0.8;
   overflow-wrap: anywhere;
 }
+/* Session names in the login-required row: one link-chip per session, spaced
+   by gap rather than joined with a separator. */
+.global-banner-sessions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.global-banner-session {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+.global-banner-session:hover,
+.global-banner-session:focus-visible {
+  background: rgba(255, 255, 255, 0.9);
+  text-decoration: underline;
+}
 .global-banner-detail-label {
   margin-right: 6px;
   opacity: 0.8;

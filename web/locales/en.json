@@ -567,6 +567,11 @@
     "log_hint": "Details: {{path}}",
     "dismiss": "Dismiss"
   },
+  "login_required": {
+    "message": "Login required",
+    "hint": "Run /login in the session's terminal. dt does not auto-continue these sessions.",
+    "dismiss": "Dismiss"
+  },
   "activity": {
     "clear_working_hint": "Click to clear the working indicator",
     "clear_working_aria": "Clear the working indicator"

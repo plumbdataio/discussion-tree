@@ -567,6 +567,11 @@
     "log_hint": "詳細: {{path}}",
     "dismiss": "閉じる"
   },
+  "login_required": {
+    "message": "ログインが必要です",
+    "hint": "そのセッションの端末で /login を実行してください。自動の再開は送りません",
+    "dismiss": "閉じる"
+  },
   "activity": {
     "clear_working_hint": "クリックで作業中の表示を消す",
     "clear_working_aria": "作業中の表示を消す"

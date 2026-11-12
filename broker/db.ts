@@ -53,13 +53,23 @@ safeAlter("ALTER TABLE sessions ADD COLUMN name TEXT");
 // the CLI to notice a stall. Cleared the instant the session shows life again
 // (next tool use, normal Stop, or SessionStart re-attach).
 safeAlter("ALTER TABLE sessions ADD COLUMN stalled_at TEXT");
+// WHY the stall happened (a StallReason from broker/stall-reason.ts), once known:
+// set from the StopFailure hook's own error info on receipt, or by the
+// auto-continue timer's classification. NULL = not stalled or not yet known.
+// Lives and dies with stalled_at (every statement below writes both), so the
+// login-required banner (sessions stalled with 'login') survives a broker
+// restart and clears exactly when the stall does.
+safeAlter("ALTER TABLE sessions ADD COLUMN stall_reason TEXT");
 export const setSessionStalledStmt = db.prepare(
-  "UPDATE sessions SET stalled_at = ? WHERE id = ?",
+  "UPDATE sessions SET stalled_at = ?, stall_reason = ? WHERE id = ?",
+);
+export const setSessionStallReasonStmt = db.prepare(
+  "UPDATE sessions SET stall_reason = ? WHERE id = ? AND stalled_at IS NOT NULL",
 );
 // AND stalled_at IS NOT NULL so `changes` is 0 when nothing was actually
 // cleared — lets callers skip a redundant broadcast.
 export const clearSessionStalledStmt = db.prepare(
-  "UPDATE sessions SET stalled_at = NULL WHERE id = ? AND stalled_at IS NOT NULL",
+  "UPDATE sessions SET stalled_at = NULL, stall_reason = NULL WHERE id = ? AND stalled_at IS NOT NULL",
 );
 // Time-guarded clear: only wipe a stall recorded BEFORE the moment a channel
 // push provably resolved (used by /channel-pushed). A push that reached CC is
@@ -68,7 +78,7 @@ export const clearSessionStalledStmt = db.prepare(
 // a fresh problem a delayed ack must NOT wipe. changes === 0 when the current
 // stall is newer than the push, or there's nothing stalled.
 export const clearSessionStalledBeforeStmt = db.prepare(
-  "UPDATE sessions SET stalled_at = NULL WHERE id = ? AND stalled_at IS NOT NULL AND stalled_at < ?",
+  "UPDATE sessions SET stalled_at = NULL, stall_reason = NULL WHERE id = ? AND stalled_at IS NOT NULL AND stalled_at < ?",
 );
 // Set to an ISO timestamp while Claude Code is compacting its context (the
 // PreCompact hook fires) and cleared once it resumes (the post-compact

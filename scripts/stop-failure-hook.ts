@@ -9,9 +9,10 @@
 //
 // Message-agnostic by design: ANY error-stop raises the SAME warning. The stall
 // clears automatically the moment the session shows life again (next tool use /
-// clean Stop / next SessionStart re-attach). transcript_path is forwarded so the
-// broker can classify WHY the turn stopped (rate-limit / login-expired /
-// transient) from the tail and only auto-continue transient errors.
+// clean Stop / next SessionStart re-attach). The error type and text Claude Code
+// hands this hook, plus transcript_path, are forwarded so the broker can
+// classify WHY the turn stopped (rate-limit / login-expired / credits /
+// transient) and only auto-continue transient errors.
 //
 // WHY A PORT. The .sh needs jq + curl and cannot exec on Windows, so on pd-002
 // the stall indicator never lights. Bun is spawned directly and needs neither.
@@ -27,19 +28,46 @@ import {
   setHookSessionId,
 } from "./hook-io.ts";
 
+// What Claude Code passes a StopFailure hook besides the common fields: the
+// error type, optional details, and the rendered error text. Forwarded as-is so
+// the broker can tell WHY the turn stopped even when it cannot read the
+// transcript (a session on another machine).
+type StopFailureInput = {
+  session_id?: string;
+  transcript_path?: string;
+  error?: unknown;
+  error_details?: unknown;
+  last_assistant_message?: unknown;
+};
+
+// Keep only short strings; the broker classifies by a few phrases and a long
+// error body adds nothing but request size.
+const MAX_FORWARDED_TEXT = 2000;
+function shortString(v: unknown): string | undefined {
+  return typeof v === "string" && v ? v.slice(0, MAX_FORWARDED_TEXT) : undefined;
+}
+
 export async function runStopFailure(
-  input: { session_id?: string; transcript_path?: string } = {},
+  input: StopFailureInput = {},
   env: Record<string, string | undefined> = process.env,
 ): Promise<void> {
   const sid = String(input?.session_id ?? "");
   // Always forwarded, empty string when absent — matches the .sh's --arg tp.
   const transcript = String(input?.transcript_path ?? "");
   if (!sid) return;
+  const body: Record<string, string> = {
+    cc_session_id: sid,
+    transcript_path: transcript,
+  };
+  for (const key of ["error", "error_details", "last_assistant_message"] as const) {
+    const v = shortString(input?.[key]);
+    if (v !== undefined) body[key] = v;
+  }
   // Once per failed turn, nothing re-sends it (and it drives auto-continue):
   // the long timeout + one retry (hook-io ONCE_PER_TURN_POST).
   await postBestEffort(
     `${brokerBaseUrl(env)}/session-stalled`,
-    { cc_session_id: sid, transcript_path: transcript },
+    body,
     ONCE_PER_TURN_POST,
   );
 }
@@ -47,7 +75,7 @@ export async function runStopFailure(
 async function main(): Promise<void> {
   try {
     const raw = await readStdin();
-    let input: { session_id?: string; transcript_path?: string } = {};
+    let input: StopFailureInput = {};
     try {
       input = JSON.parse(raw || "{}");
     } catch {

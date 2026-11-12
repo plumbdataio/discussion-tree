@@ -7,8 +7,9 @@
 //                    just hammers. dt instead resumes ONCE shortly after the
 //                    cap's reset time (see classifyStall + parseResetAt, which
 //                    the auto-continue timer uses to schedule that single resume).
-//   - "login"      : auth / login expired. Only the human can fix it (/login);
-//                    a nudge is futile — surface a notice instead.
+//   - "login"      : auth / login expired (or another account problem only the
+//                    human can fix). A nudge is futile — surface a notice and
+//                    the login-required banner instead.
 //   - "credits"    : out of usage credits for the current model (e.g. "You're
 //                    out of usage credits. Run /usage-credits to keep using
 //                    <model> or /model to switch models."). It does not reset on
@@ -62,6 +63,34 @@ export function classifyStallText(text: string): StallReason {
     return "login";
   }
   return "transient";
+}
+
+// Classify from what the StopFailure hook itself received: Claude Code passes
+// the error type (`error`: rate_limit, authentication_failed, billing_error, …)
+// and the rendered error text (`last_assistant_message`, plus optional
+// `error_details`). This is the only source for a session on ANOTHER machine,
+// whose transcript path the broker cannot read (a Mac session reporting to the
+// broker on pd-002), and it needs no waiting for the transcript to settle.
+//   - An auth / account error can only be fixed by the human → "login".
+//   - billing_error → "credits" (unless its text names a reset time).
+//   - Anything else is classified by its text, exactly like a transcript entry
+//     (a rate_limit error whose text names no cap stays "transient": a passing
+//     429 is worth a short retry).
+// Absent / unknown input → "transient", the same fail-open default.
+const HUMAN_FIX_ERRORS = new Set([
+  "authentication_failed",
+  "oauth_org_not_allowed",
+  "account_on_hold",
+  "cloud_credential_error",
+]);
+
+export function classifyStopFailure(error: unknown, text: unknown): StallReason {
+  const e = typeof error === "string" ? error : "";
+  if (HUMAN_FIX_ERRORS.has(e)) return "login";
+  const byText = classifyStallText(typeof text === "string" ? text : "");
+  // A billing stop whose text names a reset time is still a window cap.
+  if (e === "billing_error") return byText === "rate_limit" ? byText : "credits";
+  return byText;
 }
 
 // Read up to the last `maxBytes` of a file synchronously, without slurping a

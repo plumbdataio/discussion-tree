@@ -3,9 +3,11 @@ import { X } from "lucide-react";
 import type {
   BackupHealth,
   GlobalBanner as GlobalBannerData,
+  LoginRequiredSession,
 } from "../../shared/types.ts";
 import { useLiveSocket } from "../utils/liveSocket.ts";
 import { BackupHealthBanner } from "./BackupHealthBanner.tsx";
+import { LoginRequiredBanner } from "./LoginRequiredBanner.tsx";
 import { showToast } from "./Toast.tsx";
 import i18n from "../i18n.ts";
 
@@ -22,6 +24,8 @@ import i18n from "../i18n.ts";
 // A second, independent row shows DB backup health (BackupHealthBanner). It is
 // fed from /get-backup-health + "backup-health-update", never from the generic
 // banner slot, so an external tool overwriting that slot cannot hide it.
+// A third row (LoginRequiredBanner) lists sessions stopped on an expired login,
+// refetched from /get-login-required on every stall change.
 
 // Broadcast types that change something the sidebar renders. GlobalBanner is
 // the only socket mounted on every page, so it forwards these to the sidebar
@@ -39,6 +43,25 @@ export function GlobalBanner() {
   const [banner, setBanner] = useState<GlobalBannerData | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [backupHealth, setBackupHealth] = useState<BackupHealth | null>(null);
+  const [loginRequired, setLoginRequired] = useState<LoginRequiredSession[]>(
+    [],
+  );
+
+  // The broker only says "a stall changed"; pull the current list each time.
+  const fetchLoginRequired = useCallback(() => {
+    fetch("/get-login-required", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (Array.isArray(j?.sessions)) setLoginRequired(j.sessions);
+      })
+      .catch(() => {
+        /* tolerate — the next stall change refetches */
+      });
+  }, []);
 
   // Pull the current banner. Runs on mount AND after every (re)connect — a
   // banner set or cleared while the socket was down would otherwise never
@@ -71,7 +94,8 @@ export function GlobalBanner() {
       .catch(() => {
         /* tolerate — the 5-minute broker poll pushes the next change */
       });
-  }, []);
+    fetchLoginRequired();
+  }, [fetchLoginRequired]);
 
   // This socket is mounted on EVERY page and is the sole forwarder of sidebar
   // activity, so it must survive freeze/resume and broker bounces — that whole
@@ -129,6 +153,14 @@ export function GlobalBanner() {
           }),
         );
       } else if (SIDEBAR_REFRESH_TYPES.has(msg?.type)) {
+        // A stall set / cleared, or a session came or went (sidebar-refresh):
+        // the login-required list may have changed.
+        if (
+          msg.type === "session-stall-update" ||
+          msg.type === "sidebar-refresh"
+        ) {
+          fetchLoginRequired();
+        }
         // GlobalBanner is mounted on EVERY page, so it's the only socket that
         // can nudge the sidebar on the map / session / home pages (BoardApp
         // forwards these only on a board page). Each of these message types
@@ -140,6 +172,14 @@ export function GlobalBanner() {
       }
     },
   });
+
+  // A listed session can also leave the list by dying (alive=0), which sends no
+  // stall broadcast. While anything is listed, re-check once a minute.
+  useEffect(() => {
+    if (loginRequired.length === 0) return;
+    const t = setInterval(fetchLoginRequired, 60_000);
+    return () => clearInterval(t);
+  }, [loginRequired.length, fetchLoginRequired]);
 
   // Auto-clear stale entries client-side too: the broker schedules its
   // own expiry timer but that's lost across broker restarts; this
@@ -165,6 +205,7 @@ export function GlobalBanner() {
   // overlapping at top:0. Each row renders nothing when it has nothing to say.
   return (
     <div className="global-banner-stack">
+      <LoginRequiredBanner sessions={loginRequired} />
       <BackupHealthBanner health={backupHealth} />
       {showBanner && (
         <div

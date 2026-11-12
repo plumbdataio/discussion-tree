@@ -8,7 +8,11 @@
 //     never overwritten or auto-cleared by the hook plumbing; only the LLM
 //     can clear them.
 
-import type { Activity, SetActivityRequest } from "../shared/types.ts";
+import type {
+  Activity,
+  LoginRequiredSession,
+  SetActivityRequest,
+} from "../shared/types.ts";
 import {
   clearSessionCompactingStmt,
   clearSessionStalledStmt,
@@ -19,12 +23,18 @@ import {
   selectAliveSessionByCcPid,
   setSessionCompactingStmt,
   setSessionStalledStmt,
+  setSessionStallReasonStmt,
   stopAllRunningSubagentsForSession,
   stopRunningSubagent,
   upsertRunningSubagent,
 } from "./db.ts";
 import { broadcast, broadcastToAll } from "./ws.ts";
-import { classifyStall, type StallReason } from "./stall-reason.ts";
+import {
+  classifyStall,
+  classifyStopFailure,
+  parseResetAt,
+  type StallReason,
+} from "./stall-reason.ts";
 import { getGlobalUsageLimits } from "./context-usage.ts";
 
 export const activities = new Map<string, Activity>();
@@ -148,10 +158,18 @@ function scheduleAutoContinue(
       // reliably settled in the transcript, so a 5h cap that looked "transient"
       // at the instant the hook fired is read correctly here. No transcript / no
       // recognizable banner → "transient" (fail open = old always-continue).
+      // The hook's own error info wins when it names a cause: it is the only
+      // source for a session on another machine (its transcript path is not
+      // readable here, which used to fail open to "transient" and nudge a
+      // logged-out Mac session every ~30s).
       let reason: StallReason;
       let parsedResetAt: number | null = null;
+      const hint = stallHints.get(sessionId);
       if (reasonOverride) {
         reason = reasonOverride;
+      } else if (hint && hint.reason !== "transient") {
+        reason = hint.reason;
+        parsedResetAt = reason === "rate_limit" ? parseResetAt(hint.text) : null;
       } else if (transcriptPath) {
         const c = classifyStall(transcriptPath);
         reason = c.reason;
@@ -159,6 +177,7 @@ function scheduleAutoContinue(
       } else {
         reason = "transient";
       }
+      recordStallReason(sessionId, reason);
 
       if (reason === "rate_limit") {
         // A cap won't lift on a nudge; resume ONCE, shortly after the window
@@ -324,16 +343,34 @@ function lookupAliveSessionByCcId(ccSessionId: string): string | null {
 // decides — it always schedules and passes the transcript through; the timer
 // classifies once it has settled. `reason` is a direct override used by tests
 // to inject a cause without staging a transcript file.
+//
+// `error` / `last_assistant_message` / `error_details` are what Claude Code gave
+// the StopFailure hook (the error type and the rendered error text). Unlike the
+// transcript they are final at receipt, so a cause they name is recorded right
+// away (the login-required banner appears without waiting for the timer) and is
+// what the timer acts on.
 export function handleSessionStalled(body: {
   cc_session_id?: string;
   transcript_path?: string;
   reason?: string;
   reset_at?: number | null;
+  error?: string;
+  error_details?: string;
+  last_assistant_message?: string;
 }): { ok: boolean } {
   if (!body.cc_session_id) return { ok: false };
   const sessionId = lookupAliveSessionByCcId(body.cc_session_id);
   if (!sessionId) return { ok: false };
-  setSessionStalledStmt.run(new Date().toISOString(), sessionId);
+  const text = [body.last_assistant_message, body.error_details]
+    .filter((s): s is string => typeof s === "string" && s.length > 0)
+    .join("\n");
+  const hintReason = classifyStopFailure(body.error, text);
+  stallHints.set(sessionId, { reason: hintReason, text });
+  setSessionStalledStmt.run(
+    new Date().toISOString(),
+    hintReason === "transient" ? null : hintReason,
+    sessionId,
+  );
   // A stalled session is NOT working. StopFailure fires instead of Stop, so the
   // normal clear path (handleClearToolActivity) never runs and the last
   // PreToolUse heartbeat would leave a "working" badge spinning next to the
@@ -358,6 +395,45 @@ export function handleSessionStalled(body: {
     body.reset_at ?? null,
   );
   return { ok: true };
+}
+
+// The cause the StopFailure hook reported for the current stall episode, kept
+// for the auto-continue timer. Cleared with the stall.
+const stallHints = new Map<string, { reason: StallReason; text: string }>();
+
+// Store the cause the timer settled on, so /api/sessions and the login-required
+// banner can show it. Broadcast only when it newly marks a login stop (the one
+// cause with its own banner); the stall badge itself was broadcast on receipt.
+function recordStallReason(sessionId: string, reason: StallReason): void {
+  const before = (
+    db.prepare("SELECT stall_reason FROM sessions WHERE id = ?").get(sessionId) as
+      | { stall_reason: string | null }
+      | null
+  )?.stall_reason;
+  setSessionStallReasonStmt.run(reason, sessionId);
+  if (reason === "login" && before !== "login") {
+    broadcastToAll({ type: "session-stall-update" });
+  }
+}
+
+// Alive sessions currently stopped because only a human sign-in can fix them —
+// what the login-required banner lists. Derived from the sessions table (no
+// separate state to keep in sync): stall_reason lives and dies with stalled_at.
+export function loginRequiredSessions(): LoginRequiredSession[] {
+  return db
+    .prepare(
+      `SELECT id AS session_id, name, stalled_at AS since FROM sessions
+       WHERE alive = 1 AND stalled_at IS NOT NULL AND stall_reason = 'login'
+       ORDER BY stalled_at`,
+    )
+    .all() as LoginRequiredSession[];
+}
+
+export function handleGetLoginRequired(): {
+  ok: true;
+  sessions: LoginRequiredSession[];
+} {
+  return { ok: true, sessions: loginRequiredSessions() };
 }
 
 // Sessions we've already dropped a "login expired" notice into for the current
@@ -440,6 +516,7 @@ export function clearStall(sessionId: string): void {
     // A recovered session can raise a fresh login notice next time it expires.
     loginNoticeSent.delete(sessionId);
     creditsNoticeSent.delete(sessionId);
+    stallHints.delete(sessionId);
     broadcastToAll({ type: "session-stall-update" });
   }
 }
@@ -453,6 +530,7 @@ export function clearStallBefore(sessionId: string, pushedAt: string): void {
   const res = clearSessionStalledBeforeStmt.run(sessionId, pushedAt);
   if (res.changes > 0) {
     cancelAutoContinue(sessionId);
+    stallHints.delete(sessionId);
     broadcastToAll({ type: "session-stall-update" });
   }
 }
@@ -1029,6 +1107,7 @@ export const routes = {
   "/clear-tool-activity": handleClearToolActivity,
   "/clear-working-activity": handleClearWorkingActivity,
   "/session-stalled": handleSessionStalled,
+  "/get-login-required": handleGetLoginRequired,
   "/session-compacting": handleSessionCompacting,
   "/session-compacting-done": handleSessionCompactingDone,
   "/session-reattached": handleSessionReattached,

@@ -10,7 +10,7 @@
   "mcpServers": {
     "discussion-tree": {
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/mcp-node.mjs", "--build", "68ee8d62ac19"]
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/mcp-node.mjs", "--build", "05ae03091f1c"]
     }
   },
   "skills": ["./skills/"]

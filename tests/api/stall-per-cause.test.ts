@@ -249,3 +249,89 @@ describe("stall auto-continue classifies at fire time (from the transcript)", ()
     expect(await nudgeCount(sessionId)).toBe(1);
   });
 });
+
+// The StopFailure hook's own error info. A session on another machine reports a
+// transcript path the broker cannot read; before this, every such stop failed
+// open to "transient" and a logged-out Mac session got "continue" every ~30s.
+describe("stall classification from the hook's error info", () => {
+  type LoginList = { sessions: Array<{ session_id: string; since: string }> };
+  const loginList = async () =>
+    (await post<LoginList>(`${broker.url}/get-login-required`, {})).json.sessions;
+  const REMOTE_PATH = "/Users/someone/.claude/projects/x/abc.jsonl";
+
+  test("authentication_failed with an unreadable path → NO nudge, listed as login-required", async () => {
+    const { sessionId, ccId } = await freshSession();
+    await post(`${broker.url}/session-stalled`, {
+      cc_session_id: ccId,
+      transcript_path: REMOTE_PATH,
+      error: "authentication_failed",
+      last_assistant_message: "Login reached its time limit · Please run /login",
+    });
+    // Listed at receipt, before the timer fires.
+    expect((await loginList()).map((s) => s.session_id)).toContain(sessionId);
+    await sleep(220);
+    expect(await nudgeCount(sessionId)).toBe(0);
+    expect((await loginList()).map((s) => s.session_id)).toContain(sessionId);
+  });
+
+  test("the login-required entry clears when the session shows life again", async () => {
+    const { sessionId, ccId } = await freshSession();
+    await post(`${broker.url}/session-stalled`, {
+      cc_session_id: ccId,
+      error: "authentication_failed",
+    });
+    expect((await loginList()).map((s) => s.session_id)).toContain(sessionId);
+    // A tool heartbeat = genuine life (the user ran /login and it works again).
+    await post(`${broker.url}/heartbeat-tool`, { cc_session_id: ccId });
+    expect((await loginList()).map((s) => s.session_id)).not.toContain(sessionId);
+  });
+
+  test("a login phrase in the text alone (error unknown) → NO nudge", async () => {
+    const { sessionId, ccId } = await freshSession();
+    await post(`${broker.url}/session-stalled`, {
+      cc_session_id: ccId,
+      transcript_path: REMOTE_PATH,
+      error: "unknown",
+      last_assistant_message: "Please run /login",
+    });
+    await sleep(220);
+    expect(await nudgeCount(sessionId)).toBe(0);
+  });
+
+  test("billing_error with an unreadable path → NO nudge, not login-required", async () => {
+    const { sessionId, ccId } = await freshSession();
+    await post(`${broker.url}/session-stalled`, {
+      cc_session_id: ccId,
+      transcript_path: REMOTE_PATH,
+      error: "billing_error",
+      last_assistant_message: "You're out of usage credits.",
+    });
+    await sleep(220);
+    expect(await nudgeCount(sessionId)).toBe(0);
+    expect((await loginList()).map((s) => s.session_id)).not.toContain(sessionId);
+  });
+
+  test("a usage cap named in the text → NO immediate nudge", async () => {
+    const { sessionId, ccId } = await freshSession();
+    await post(`${broker.url}/session-stalled`, {
+      cc_session_id: ccId,
+      transcript_path: REMOTE_PATH,
+      error: "rate_limit",
+      last_assistant_message: "You've hit your session limit · resets 10:50pm",
+    });
+    await sleep(220);
+    expect(await nudgeCount(sessionId)).toBe(0);
+  });
+
+  test("a passing server error → still one nudge", async () => {
+    const { sessionId, ccId } = await freshSession();
+    await post(`${broker.url}/session-stalled`, {
+      cc_session_id: ccId,
+      transcript_path: REMOTE_PATH,
+      error: "server_error",
+      last_assistant_message: "API Error: 500 Internal Server Error",
+    });
+    await sleep(220);
+    expect(await nudgeCount(sessionId)).toBe(1);
+  });
+});

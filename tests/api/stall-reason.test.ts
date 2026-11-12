@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   classifyStallText,
+  classifyStopFailure,
   classifyStallFromTranscript,
   classifyStall,
   parseResetAt,
@@ -367,5 +368,53 @@ describe("parseResetAt", () => {
     expect(parseResetAt("everything is fine, carry on")).toBeNull();
     expect(parseResetAt("the window resets soon")).toBeNull(); // no time
     expect(parseResetAt("resets 3pm (Not/AZone)", Date.UTC(2026, 8, 16, 0, 0))).toBeNull();
+  });
+});
+
+describe("classifyStopFailure (the StopFailure hook's error type + text)", () => {
+  test("the observed login expiry → login", () => {
+    expect(
+      classifyStopFailure(
+        "authentication_failed",
+        "Login reached its time limit · Please run /login",
+      ),
+    ).toBe("login");
+  });
+
+  test("every account error a human must fix → login", () => {
+    for (const e of [
+      "authentication_failed",
+      "oauth_org_not_allowed",
+      "account_on_hold",
+      "cloud_credential_error",
+    ]) {
+      expect(classifyStopFailure(e, "")).toBe("login");
+    }
+  });
+
+  test("billing_error → credits, unless its text names a reset time", () => {
+    expect(classifyStopFailure("billing_error", "")).toBe("credits");
+    expect(
+      classifyStopFailure("billing_error", "You're out of extra usage · resets 3pm"),
+    ).toBe("rate_limit");
+  });
+
+  test("rate_limit naming a cap → rate_limit; a bare 429 → transient", () => {
+    expect(
+      classifyStopFailure("rate_limit", "You've hit your session limit · resets 10:50pm"),
+    ).toBe("rate_limit");
+    expect(classifyStopFailure("rate_limit", "API Error: Rate limit reached")).toBe(
+      "transient",
+    );
+  });
+
+  test("an unknown type falls back to the text", () => {
+    expect(classifyStopFailure("unknown", "Please run /login")).toBe("login");
+    expect(classifyStopFailure("server_error", "API Error: 500")).toBe("transient");
+  });
+
+  test("absent or non-string input → transient", () => {
+    expect(classifyStopFailure(undefined, undefined)).toBe("transient");
+    expect(classifyStopFailure(42, { a: 1 })).toBe("transient");
   });
 });

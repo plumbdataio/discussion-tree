@@ -327,6 +327,15 @@ export interface GlobalBanner {
 // separate from GlobalBanner. "none" = no status file (backup not set up on
 // this machine) → nothing is shown. prune_errors > 0 only ever accompanies
 // "ok" (a mild warning: today's snapshot is fine, old ones were not removed).
+// One alive session stopped because its login expired (stall_reason 'login'),
+// as listed by /get-login-required for the login-required banner. `since` is
+// the stall's ISO time.
+export interface LoginRequiredSession {
+  session_id: string;
+  name: string | null;
+  since: string;
+}
+
 export type BackupHealthState = "none" | "ok" | "failed" | "stale" | "unreadable";
 export interface BackupHealth {
   state: BackupHealthState;

@@ -203,6 +203,44 @@ describe("stop-failure-hook", () => {
     });
   });
 
+  test("forwards the error type, details and rendered error text", async () => {
+    installFetch();
+    await runStopFailure(
+      {
+        session_id: "sf-3",
+        transcript_path: "/x/t.jsonl",
+        error: "authentication_failed",
+        error_details: "401",
+        last_assistant_message: "Login reached its time limit · Please run /login",
+      },
+      ENV,
+    );
+    expect(callTo("/session-stalled")!.body).toEqual({
+      cc_session_id: "sf-3",
+      transcript_path: "/x/t.jsonl",
+      error: "authentication_failed",
+      error_details: "401",
+      last_assistant_message: "Login reached its time limit · Please run /login",
+    });
+  });
+
+  test("drops non-string error fields and caps long text", async () => {
+    installFetch();
+    await runStopFailure(
+      {
+        session_id: "sf-4",
+        error: 7,
+        error_details: { code: 1 },
+        last_assistant_message: "x".repeat(5000),
+      },
+      ENV,
+    );
+    const body = callTo("/session-stalled")!.body;
+    expect(body.error).toBeUndefined();
+    expect(body.error_details).toBeUndefined();
+    expect(body.last_assistant_message.length).toBe(2000);
+  });
+
   test("missing transcript_path is sent as empty string", async () => {
     installFetch();
     await runStopFailure({ session_id: "sf-2" }, ENV);
