@@ -1,0 +1,10 @@
+# discussion-tree daily DB backup (run by dt-backup.timer). The snapshot is made
+# and integrity-checked locally, then copied into BACKUP_DIR (a Google Drive
+# folder mounted by rclone on pd-003; SQLite is never opened on the mount).
+[Unit]
+Description=discussion-tree DB backup
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Codes/plumbdata/discussion-tree
+ExecStart=%h/.bun/bin/bun %h/Codes/plumbdata/discussion-tree/scripts/backup-db.ts --home %h/.discussion-tree --backup-dir %h/GoogleDrive/plumbdata/Internal/Apps/discussion-tree/db-backups

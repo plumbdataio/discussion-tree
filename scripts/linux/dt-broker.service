@@ -1,0 +1,20 @@
+# discussion-tree broker supervisor (Linux, systemd user unit).
+# The Linux counterpart of the Windows "discussion-tree-broker" task
+# (scripts/windows/dt-tasks.ps1): keeps one broker serving 127.0.0.1:7898 even
+# with no Claude Code session open. Needs `loginctl enable-linger <user>` so it
+# runs without a login. Logs: ~/.discussion-tree/supervisor.log, broker.log.
+#   install: ln -s <repo>/scripts/linux/dt-broker.service ~/.config/systemd/user/
+#            systemctl --user daemon-reload && systemctl --user enable --now dt-broker
+#   restart the broker after a pull: kill the bun broker; the supervisor respawns it.
+[Unit]
+Description=discussion-tree broker supervisor
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/Codes/plumbdata/discussion-tree
+ExecStart=%h/.bun/bin/bun %h/Codes/plumbdata/discussion-tree/scripts/broker-supervisor.ts
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,11 @@
+# Daily at 11:30 local time, like the Windows task; Persistent runs a missed
+# backup at the next boot.
+[Unit]
+Description=discussion-tree daily DB backup
+
+[Timer]
+OnCalendar=*-*-* 11:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

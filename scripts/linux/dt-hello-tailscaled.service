@@ -1,0 +1,19 @@
+# A second tailscaled that joins the tailnet as "hello" and serves the broker at
+# https://hello.tailc809ec.ts.net, so every client keeps one fixed URL whichever
+# machine runs the broker (the Windows counterpart is the dt-hello-tailscaled
+# task). Userspace networking: no root, no TUN device, no clash with the
+# machine's own tailscaled.
+#   first run: tailscale --socket=%h/.local/share/dt-hello/tailscaled.sock up --hostname=hello
+#              (open the printed login URL), then
+#              tailscale --socket=... serve --bg http://127.0.0.1:7898
+[Unit]
+Description=tailscaled for the discussion-tree "hello" node
+After=network-online.target
+
+[Service]
+ExecStart=/usr/sbin/tailscaled --tun=userspace-networking --port=0 --statedir=%h/.local/share/dt-hello --socket=%h/.local/share/dt-hello/tailscaled.sock
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
