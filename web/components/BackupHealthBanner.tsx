@@ -4,7 +4,8 @@ import { X } from "lucide-react";
 import type { BackupHealth } from "../../shared/types.ts";
 import { formatShortLocalDateTime } from "../utils/format.ts";
 
-// Banner row for a failed / overdue DB backup. Data comes from GlobalBanner,
+// Banner row for a failed / overdue backup: dt's DB backup (label null) or
+// another job reporting through <home>/backup-status.d/ (named by its label). Data comes from GlobalBanner,
 // which owns the always-on socket and fetches /get-backup-health; this only
 // decides what (if anything) to show.
 //
@@ -21,6 +22,7 @@ export function BackupHealthBanner({ health }: { health: BackupHealth | null }) 
   if (!health || health.state === "none") return null;
   if (health.state === "ok" && health.prune_errors <= 0) return null;
   const key = dismissKey(health);
+  const what = health.label ?? t("backup.db");
   if (dismissed === key) return null;
 
   const time = health.finished_at
@@ -33,18 +35,18 @@ export function BackupHealthBanner({ health }: { health: BackupHealth | null }) 
     case "failed":
       tone = "error";
       message = time
-        ? t("backup.failed", { time })
-        : t("backup.failed_no_time");
+        ? t("backup.failed", { time, what })
+        : t("backup.failed_no_time", { what });
       detail = health.error;
       break;
     case "unreadable":
       tone = "error";
-      message = t("backup.unreadable");
+      message = t("backup.unreadable", { what });
       detail = health.error;
       break;
     case "stale":
       tone = "warn";
-      message = t("backup.stale", { hours: health.stale_after_hours });
+      message = t("backup.stale", { hours: health.stale_after_hours, what });
       // Label + value as their own small spans, not glued into the sentence.
       detail = time ? (
         <>

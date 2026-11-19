@@ -9,6 +9,12 @@
 // external tools (cc-usage etc.) overwrite at will, and a backup failure must
 // not be erased by an unrelated announcement.
 //
+// Other backup jobs on the broker's machine (e.g. a nightly copy of the Claude
+// Code session folders) report through the same banner by writing their own
+// status file into <home>/backup-status.d/<name>.json, in the same shape plus
+// an optional `label` (shown in the banner; defaults to <name>) and `log`
+// (hover hint). Each file is judged on its own; dt does not run those jobs.
+//
 // Polling, not fs.watch: watch events are unreliable on Windows and on
 // cloud-synced folders, and staleness (the task silently stopped running)
 // changes the verdict with no file change at all. The GET route recomputes
@@ -27,10 +33,12 @@ export const BACKUP_HEALTH_POLL_MS = 5 * 60_000;
 
 const STATUS_FILE = "backup-status.json";
 const LOG_FILE = "backup.log";
+const EXTRA_DIR = "backup-status.d";
 
 function base(): BackupHealth {
   return {
     state: "none",
+    label: null,
     finished_at: null,
     error: null,
     dest: null,
@@ -84,34 +92,76 @@ export function evaluateBackupHealth(
 let homeDir: string | null = null;
 let lastJson: string | null = null;
 let current: BackupHealth = base();
+let currentExtra: BackupHealth[] = [];
 let timer: ReturnType<typeof setInterval> | null = null;
 
-function readStatus(dir: string): string | null | { readError: string } {
+function readStatus(
+  dir: string,
+  file: string,
+): string | null | { readError: string } {
   try {
-    return fs.readFileSync(path.join(dir, STATUS_FILE), "utf8");
+    return fs.readFileSync(path.join(dir, file), "utf8");
   } catch (e: any) {
     if (e?.code === "ENOENT") return null;
     return { readError: e?.message ?? String(e) };
   }
 }
 
-// Re-read the file, and broadcast only when the verdict actually changed.
+function judge(dir: string, file: string, now: Date): BackupHealth {
+  const raw = readStatus(dir, file);
+  return raw !== null && typeof raw === "object"
+    ? { ...base(), state: "unreadable" as const, error: raw.readError }
+    : evaluateBackupHealth(raw, now);
+}
+
+// One verdict per <home>/backup-status.d/*.json, sorted by file name. A file
+// that cannot be read or parsed still gets a row ("unreadable"), so a broken
+// job is never silently dropped.
+export function evaluateExtraBackups(home: string, now: Date): BackupHealth[] {
+  const dir = path.join(home, EXTRA_DIR);
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir).filter((n) => n.endsWith(".json")).sort();
+  } catch {
+    return [];
+  }
+  return names.map((name) => {
+    const h = judge(dir, name, now);
+    let meta: any = null;
+    try {
+      meta = JSON.parse(fs.readFileSync(path.join(dir, name), "utf8"));
+    } catch {
+      /* already judged unreadable */
+    }
+    const label =
+      typeof meta?.label === "string" && meta.label.trim()
+        ? meta.label.trim()
+        : name.slice(0, -".json".length);
+    const log =
+      typeof meta?.log === "string" && meta.log ? meta.log : path.join(dir, name);
+    return { ...h, label, log_path: log };
+  });
+}
+
+// Re-read the files, and broadcast only when a verdict actually changed.
 export function refreshBackupHealth(now: Date = new Date()): BackupHealth {
   if (!homeDir) return current;
-  const raw = readStatus(homeDir);
-  const next =
-    raw !== null && typeof raw === "object"
-      ? { ...base(), state: "unreadable" as const, error: raw.readError }
-      : evaluateBackupHealth(raw, now);
+  const next = judge(homeDir, STATUS_FILE, now);
   next.log_path = next.state === "none" ? null : path.join(homeDir, LOG_FILE);
   current = next;
-  const json = JSON.stringify(next);
+  currentExtra = evaluateExtraBackups(homeDir, now);
+  const json = JSON.stringify([next, currentExtra]);
   if (json !== lastJson) {
     // The first evaluation only seeds lastJson — no client has fetched yet, and
     // every client pulls via /get-backup-health on (re)connect anyway.
     const first = lastJson === null;
     lastJson = json;
-    if (!first) broadcastToAll({ type: "backup-health-update", health: next });
+    if (!first)
+      broadcastToAll({
+        type: "backup-health-update",
+        health: next,
+        extra: currentExtra,
+      });
   }
   return next;
 }
@@ -125,8 +175,13 @@ export function startBackupHealthPoller(dir: string): void {
   (timer as any).unref?.();
 }
 
-export function handleGetBackupHealth(): { ok: true; health: BackupHealth } {
-  return { ok: true, health: refreshBackupHealth() };
+export function handleGetBackupHealth(): {
+  ok: true;
+  health: BackupHealth;
+  extra: BackupHealth[];
+} {
+  const health = refreshBackupHealth();
+  return { ok: true, health, extra: currentExtra };
 }
 
 export const routes = {

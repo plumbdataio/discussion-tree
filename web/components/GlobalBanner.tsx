@@ -43,6 +43,8 @@ export function GlobalBanner() {
   const [banner, setBanner] = useState<GlobalBannerData | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [backupHealth, setBackupHealth] = useState<BackupHealth | null>(null);
+  // Other backup jobs reporting through <home>/backup-status.d/ (one row each).
+  const [extraBackups, setExtraBackups] = useState<BackupHealth[]>([]);
   const [loginRequired, setLoginRequired] = useState<LoginRequiredSession[]>(
     [],
   );
@@ -90,6 +92,7 @@ export function GlobalBanner() {
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         if (j?.health) setBackupHealth(j.health);
+        setExtraBackups(Array.isArray(j?.extra) ? j.extra : []);
       })
       .catch(() => {
         /* tolerate — the 5-minute broker poll pushes the next change */
@@ -122,6 +125,7 @@ export function GlobalBanner() {
         );
       } else if (msg?.type === "backup-health-update") {
         setBackupHealth(msg.health ?? null);
+        setExtraBackups(Array.isArray(msg.extra) ? msg.extra : []);
       } else if (
         msg?.type === "session-reattached" &&
         typeof msg.session_id === "string"
@@ -207,6 +211,9 @@ export function GlobalBanner() {
     <div className="global-banner-stack">
       <LoginRequiredBanner sessions={loginRequired} />
       <BackupHealthBanner health={backupHealth} />
+      {extraBackups.map((h) => (
+        <BackupHealthBanner key={h.label ?? ""} health={h} />
+      ))}
       {showBanner && (
         <div
           className={`global-banner global-banner-${banner.tone}`}

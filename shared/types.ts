@@ -339,6 +339,9 @@ export interface LoginRequiredSession {
 export type BackupHealthState = "none" | "ok" | "failed" | "stale" | "unreadable";
 export interface BackupHealth {
   state: BackupHealthState;
+  // null = dt's own DB backup (<home>/backup-status.json). Otherwise the name
+  // of another backup job that reports through <home>/backup-status.d/.
+  label: string | null;
   // ISO time the last run finished (success or failure). For "stale" this is
   // the last successful run.
   finished_at: string | null;
@@ -346,7 +349,8 @@ export interface BackupHealth {
   dest: string | null;
   prune_errors: number;
   stale_after_hours: number;
-  // <home>/backup.log, for a hover hint; null when state is "none".
+  // <home>/backup.log, for a hover hint; null when state is "none". For an
+  // extra job: its own `log` field, else its status file.
   log_path: string | null;
 }
 

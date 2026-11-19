@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { writeFileSync, rmSync } from "node:fs";
+import { writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   startBroker,
@@ -20,6 +20,12 @@ type Resp = {
     prune_errors: number;
     log_path: string | null;
   };
+  extra: {
+    state: string;
+    label: string | null;
+    error: string | null;
+    log_path: string | null;
+  }[];
 };
 
 beforeAll(async () => {
@@ -87,5 +93,56 @@ describe("backup health", () => {
   test("garbage → unreadable", async () => {
     writeFileSync(file(), "not json");
     expect((await get()).json.health.state).toBe("unreadable");
+  });
+});
+
+// Other backup jobs report through <home>/backup-status.d/<name>.json; each
+// file becomes its own row, and dt's own DB verdict is unaffected by them.
+describe("extra backup jobs (backup-status.d)", () => {
+  const dir = () => join(broker.homeDir, "backup-status.d");
+  const ok = (over: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      ok: true,
+      finished_at: new Date().toISOString(),
+      error: null,
+      ...over,
+    });
+
+  test("no directory → no extra rows", async () => {
+    rmSync(dir(), { recursive: true, force: true });
+    expect((await get()).json.extra).toEqual([]);
+  });
+
+  test("each file is judged on its own, sorted by name, with its label", async () => {
+    write({});
+    mkdirSync(dir(), { recursive: true });
+    writeFileSync(
+      join(dir(), "b-claude.json"),
+      ok({ ok: false, error: "drive gone", label: "~/.claude*", log: "/x/log" }),
+    );
+    writeFileSync(join(dir(), "a-other.json"), ok());
+    writeFileSync(join(dir(), "c-broken.json"), "not json");
+    writeFileSync(join(dir(), "ignored.txt"), "x");
+    const r = (await get()).json;
+    expect(r.health.state).toBe("ok");
+    expect(r.extra.map((h) => [h.label, h.state])).toEqual([
+      ["a-other", "ok"],
+      ["~/.claude*", "failed"],
+      ["c-broken", "unreadable"],
+    ]);
+    expect(r.extra[1].error).toBe("drive gone");
+    expect(r.extra[1].log_path).toBe("/x/log");
+    expect(r.extra[0].log_path).toBe(join(dir(), "a-other.json"));
+  });
+
+  test("an extra job going stale is reported", async () => {
+    rmSync(dir(), { recursive: true, force: true });
+    mkdirSync(dir(), { recursive: true });
+    writeFileSync(
+      join(dir(), "claude.json"),
+      ok({ finished_at: new Date(Date.now() - 48 * 3_600_000).toISOString() }),
+    );
+    expect((await get()).json.extra[0].state).toBe("stale");
+    rmSync(dir(), { recursive: true, force: true });
   });
 });
