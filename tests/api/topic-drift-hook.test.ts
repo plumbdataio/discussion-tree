@@ -59,9 +59,13 @@ async function runHook(
     session_id: opts.ccSessionId ?? CC_SESSION_ID,
     transcript_path: transcriptPath,
   };
+  // Drop the caller's DISCUSSION_TREE_BROKER_URL: when it is set (every remote
+  // client, e.g. the Mac) it overrides DISCUSSION_TREE_PORT, so the hook would
+  // ask the real broker instead of this test's one and never see its board.
+  const { DISCUSSION_TREE_BROKER_URL: _drop, ...env } = process.env;
   const proc = Bun.spawn(["bun", HOOK_SCRIPT], {
     env: {
-      ...process.env,
+      ...env,
       DISCUSSION_TREE_PORT: String(opts.brokerPort ?? broker.port),
     },
     stdin: "pipe",
