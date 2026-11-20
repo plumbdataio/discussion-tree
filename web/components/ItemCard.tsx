@@ -103,9 +103,13 @@ export function ItemCard({
   }, []);
 
   // Snap to the bottom on mount and when the user starts their own
-  // post. Following new messages / staying put on scroll-up is
-  // handled by column-reverse in CSS.
-  useSnapToBottom(threadRef, { reversed: true, deps: [tentativeText] });
+  // post. New messages are followed only when already at the bottom; a
+  // reader scrolled up is held in place (followCount).
+  useSnapToBottom(threadRef, {
+    reversed: true,
+    deps: [tentativeText],
+    followCount: myThread.length,
+  });
 
   // Confirm a live send while this session has an armed pending timer send.
   const confirmSend = () =>
@@ -191,7 +195,11 @@ export function ItemCard({
           )}
         </div>
       </div>
-      <ScrollToBottomButton scrollRef={threadRef} reversed />
+      <ScrollToBottomButton
+        scrollRef={threadRef}
+        reversed
+        itemCount={myThread.length}
+      />
 
       <ThreadComposer
         className="input-row"

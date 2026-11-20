@@ -39,6 +39,8 @@ import {
 } from "../utils/api.ts";
 import { showToast } from "./Toast.tsx";
 import { useDetachOnUnmount } from "../utils/useDetachOnUnmount.ts";
+import { lastOwnItemId, useSnapToBottom } from "../utils/useSnapToBottom.ts";
+import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
 
 // Synthetic node id for the diagram's chat thread (matches the broker's
 // DIAGRAM_CHAT_NODE so thread_items / read-state line up).
@@ -558,7 +560,6 @@ function DiagramChat({
   const [draft, setDraft, clearDraft] = useDraft(diagramId, DIAGRAM_CHAT_NODE);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   // Empty on unmount so a textarea kept by Chrome's autofill cannot keep
   // this content alive (see useDetachOnUnmount).
@@ -570,9 +571,12 @@ function DiagramChat({
   // Auto-read the chat's CC messages while the panel is on screen.
   useMarkReadOnVisible(bodyRef, thread);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [thread.length]);
+  // Own posts are brought into view; others' only when already at the
+  // bottom, so a reader scrolled up isn't jumped away (the ▼ lights up).
+  useSnapToBottom(bodyRef, {
+    deps: [lastOwnItemId(thread)],
+    followCount: thread.length,
+  });
 
   const appendImage = async (files: File[]) => {
     if (!files.length) return;
@@ -644,7 +648,7 @@ function DiagramChat({
             }}
           />
         ))}
-        <div ref={bottomRef} />
+        <ScrollToBottomButton scrollRef={bodyRef} itemCount={thread.length} />
       </div>
       <div className="map-chat-input">
         <ResizableTextarea

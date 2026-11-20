@@ -88,6 +88,8 @@ import {
 } from "../utils/api.ts";
 import { showToast } from "./Toast.tsx";
 import { useDetachOnUnmount } from "../utils/useDetachOnUnmount.ts";
+import { lastOwnItemId, useSnapToBottom } from "../utils/useSnapToBottom.ts";
+import { ScrollToBottomButton } from "./ScrollToBottomButton.tsx";
 
 const NODE_W_DEFAULT = 320;
 const NODE_H_DEFAULT = 340;
@@ -1192,7 +1194,6 @@ function MapGeneralChat({
   const [draft, setDraft, clearDraft] = useDraft(mapId, MAP_GENERAL_NODE);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   // Empty on unmount so a textarea kept by Chrome's autofill cannot keep
   // this content alive (see useDetachOnUnmount).
@@ -1205,9 +1206,12 @@ function MapGeneralChat({
   // (same visible-dwell as board cards; map messages are thread_items).
   useMarkReadOnVisible(bodyRef, thread);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [thread.length]);
+  // Own posts are brought into view; others' only when already at the
+  // bottom, so a reader scrolled up isn't jumped away (the ▼ lights up).
+  useSnapToBottom(bodyRef, {
+    deps: [lastOwnItemId(thread)],
+    followCount: thread.length,
+  });
 
   const appendImage = async (files: File[]) => {
     if (!files.length) return;
@@ -1281,7 +1285,7 @@ function MapGeneralChat({
             }}
           />
         ))}
-        <div ref={bottomRef} />
+        <ScrollToBottomButton scrollRef={bodyRef} itemCount={thread.length} />
       </div>
       <div className="map-chat-input">
         <ResizableTextarea

@@ -68,7 +68,9 @@ export function NodeModal({
   // the user's own submission scrolls into view even if they were
   // browsing higher up.
   useSnapToBottom(threadRef, {
-    deps: [threadItems.length, tentativeText],
+    deps: [tentativeText],
+    // New messages: followed only when already at the bottom.
+    followCount: threadItems.length,
     // Skip the bottom-snap when opening targeted at a specific message.
     enabled: !scrollToItemId,
   });
@@ -167,7 +169,10 @@ export function NodeModal({
               )}
             </div>
           )}
-          <ScrollToBottomButton scrollRef={threadRef} />
+          <ScrollToBottomButton
+            scrollRef={threadRef}
+            itemCount={threadItems.length}
+          />
         </div>
         <ThreadComposer
           className="node-modal-input"

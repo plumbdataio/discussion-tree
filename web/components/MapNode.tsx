@@ -439,7 +439,10 @@ function MapNodeImpl(props: NodeProps) {
           {/* Same "jump to latest" affordance as a board node — shows only when
               the bottom of the thread is scrolled out of view. Normal flow
               (newest at the bottom), so NOT reversed. */}
-          <ScrollToBottomButton scrollRef={bodyRef} />
+          <ScrollToBottomButton
+            scrollRef={bodyRef}
+            itemCount={data.messages.length}
+          />
         </div>
       )}
       {!isChecklist && <MapCardComposer nodeId={props.id} />}

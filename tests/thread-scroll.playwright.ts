@@ -37,6 +37,8 @@ let base: string;
 let defaultBoardId: string;
 let defaultNodeId: string;
 let itemBoardId: string;
+// Own board for the new-arrival tests, which add messages to it.
+let arrivalBoardId: string;
 let longBoardId: string;
 
 // Size of the long thread used by the typing-latency check. Large enough that
@@ -168,6 +170,24 @@ test.beforeAll(async () => {
     });
   }
 
+  const arrival = await post("/create-board", {
+    session_id: reg.session_id,
+    structure: {
+      title: "Arrival e2e",
+      concerns: [{ id: "c1", title: "C1", items: [{ id: "i1", title: "I1" }] }],
+    },
+  });
+  arrivalBoardId = arrival.board_id;
+  for (let i = 0; i < 12; i++) {
+    await post("/post-to-node", {
+      issue_ids: [],
+      board_id: arrivalBoardId,
+      node_id: "i1",
+      message: body(i),
+      status: "discussing",
+    });
+  }
+
   // A second session's default board with a long thread, for the typing
   // latency check. Posted a few at a time; order does not matter there.
   const reg2 = await post("/register", { pid: process.pid, cwd: home });
@@ -294,6 +314,111 @@ test.describe("chat thread", () => {
     await page.waitForTimeout(300);
     expect(Math.abs(await gapBelow(page, root, "LIVE-ARRIVAL"))).toBeLessThanOrEqual(8);
   });
+
+  // A reader scrolled up to an older message must not be moved when a new
+  // one arrives (it used to jump them to the bottom); the ▼ button lights up
+  // instead, and clears once they reach the bottom.
+  for (const surface of ["default board", "item card", "node modal"] as const) {
+    test(`${surface}: a new message does not move a reader who scrolled up`, async ({ page }) => {
+      let root: string;
+      let boardId: string;
+      let nodeId: string;
+      if (surface === "default board") {
+        await openDefaultBoard(page);
+        root = ".default-board-thread";
+        boardId = defaultBoardId;
+        nodeId = defaultNodeId;
+      } else {
+        await page.goto(`${base}/board/${arrivalBoardId}`);
+        await page.locator(".item-card > .thread").first().waitFor();
+        await page.getByText("MSG-011", { exact: false }).first().waitFor();
+        await page.waitForTimeout(500);
+        root = ".item-card > .thread";
+        boardId = arrivalBoardId;
+        nodeId = "i1";
+        if (surface === "node modal") {
+          await page.locator(".item-card .node-expand").first().click();
+          root = ".node-modal .node-modal-scroll";
+          await page.locator(root).waitFor();
+          await page.waitForTimeout(500);
+        }
+      }
+      const btn = surface === "node modal"
+        ? page.locator(".node-modal .scroll-to-bottom")
+        : page.locator(".scroll-to-bottom").first();
+      const needle = surface === "default board" ? "MSG-150" : "MSG-005";
+      // Distance from the scroller's bottom to the bottom of the newest row.
+      const gapToNewest = (tag: string) =>
+        page.evaluate(
+          ({ root, tag }) => {
+            const el = document.querySelector(root) as HTMLElement;
+            const row = Array.from(el.querySelectorAll(".thread-msg, .node-modal-msg")).find((m) =>
+              m.textContent?.includes(tag),
+            ) as HTMLElement;
+            return el.getBoundingClientRect().bottom - row.getBoundingClientRect().bottom;
+          },
+          { root, tag },
+        );
+      const tag = `ARRIVAL-${surface.replace(" ", "-")}`;
+
+      // Scroll up so an older row sits mid-view, then note where it is.
+      await page.evaluate(
+        ({ root, needle }) => {
+          const el = document.querySelector(root) as HTMLElement;
+          const row = Array.from(el.querySelectorAll(".thread-msg, .node-modal-msg")).find((m) =>
+            m.textContent?.includes(needle),
+          ) as HTMLElement;
+          row.scrollIntoView({ block: "center" });
+        },
+        { root, needle },
+      );
+      await page.waitForTimeout(300);
+      const topOf = () =>
+        page.evaluate(
+          ({ root, needle }) => {
+            const el = document.querySelector(root) as HTMLElement;
+            const row = Array.from(el.querySelectorAll(".thread-msg, .node-modal-msg")).find((m) =>
+              m.textContent?.includes(needle),
+            ) as HTMLElement;
+            return row.getBoundingClientRect().top;
+          },
+          { root, needle },
+        );
+      const before = await topOf();
+      await expect(btn).toBeVisible();
+      await expect(btn).not.toHaveClass(/has-new/);
+
+      await post("/post-to-node", {
+        issue_ids: [],
+        board_id: boardId,
+        node_id: nodeId,
+        message: `${tag}\n\n${"A long reply line. ".repeat(60)}`,
+        status: "discussing",
+      });
+      await page.getByText(tag).first().waitFor({ state: "attached" });
+      await page.waitForTimeout(300);
+      expect(Math.abs((await topOf()) - before)).toBeLessThanOrEqual(2);
+      await expect(btn).toHaveClass(/has-new/);
+
+      await btn.click();
+      await page.waitForTimeout(300);
+      expect(Math.abs(await gapToNewest(tag))).toBeLessThanOrEqual(40);
+      await expect(page.locator(".scroll-to-bottom.has-new")).toHaveCount(0);
+
+      // At the bottom, the next arrival is still followed.
+      const tag2 = `${tag}-pinned`;
+      await post("/post-to-node", {
+        issue_ids: [],
+        board_id: boardId,
+        node_id: nodeId,
+        message: tag2,
+        status: "discussing",
+      });
+      await page.getByText(tag2).first().waitFor({ state: "attached" });
+      await page.waitForTimeout(300);
+      expect(Math.abs(await gapToNewest(tag2))).toBeLessThanOrEqual(40);
+    });
+  }
 
   test("default board: drag selection across messages reads top-to-bottom", async ({ page }) => {
     await openDefaultBoard(page);

@@ -18,7 +18,7 @@ import { TimerSendButton } from "./TimerSendButton.tsx";
 import { renderSystemMessage } from "./SystemMessage.tsx";
 import { formatThreadTimestamp } from "../utils/format.ts";
 import { useDraft } from "../utils/drafts.ts";
-import { useSnapToBottom } from "../utils/useSnapToBottom.ts";
+import { lastOwnItemId, useSnapToBottom } from "../utils/useSnapToBottom.ts";
 import { useMarkReadOnVisible } from "../utils/useMarkReadOnVisible.ts";
 import { usePreviewModalLock } from "../utils/previewModalLock.ts";
 import {
@@ -86,7 +86,10 @@ export function MapNodeModal({
   }, [onClose]);
 
   useSnapToBottom(threadRef, {
-    deps: [messages.length],
+    // Own posts are brought into view; others' only when already at the
+    // bottom (followCount), so a reader scrolled up isn't jumped away.
+    deps: [lastOwnItemId(messages)],
+    followCount: messages.length,
     enabled: !scrollToItemId,
   });
 
@@ -227,7 +230,10 @@ export function MapNodeModal({
               })}
             </div>
           )}
-          <ScrollToBottomButton scrollRef={threadRef} />
+          <ScrollToBottomButton
+            scrollRef={threadRef}
+            itemCount={messages.length}
+          />
         </div>
         <div className="node-modal-input">
           <ResizableTextarea

@@ -5402,6 +5402,25 @@ button.secondary {
   transform: translateY(-1px);
 }
 
+/* New messages arrived below while the user was reading further up: the
+   thread holds still, and the button wears the unread card's warm thick
+   border + glow (.item-card.has-unread) until they reach the bottom, with
+   one blink on each arrival (remounted per arrival to replay it). */
+.scroll-to-bottom.has-new {
+  border: 3px solid #f97316;
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.45);
+  color: #f97316;
+  opacity: 1;
+  animation: scroll-to-bottom-new 1.6s ease-out;
+}
+@keyframes scroll-to-bottom-new {
+  0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.9); }
+  100% { box-shadow: 0 0 0 18px rgba(249, 115, 22, 0), 0 0 12px rgba(249, 115, 22, 0.45); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scroll-to-bottom.has-new { animation: none; }
+}
+
 /* Reversed variant: the default board's thread is column-reverse, so
    the button can't live inside the thread (it would land at the visual
    top, not the bottom). DefaultBoardLayout renders it as a sibling of

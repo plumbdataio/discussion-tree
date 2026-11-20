@@ -104,7 +104,11 @@ export const DefaultBoardLayout = memo(function DefaultBoardLayout({
   // post (tentativeText flip). Following incoming messages while at
   // the bottom, and staying put when scrolled up, is handled by
   // column-reverse in CSS — no JS follow loop needed.
-  useSnapToBottom(threadRef, { reversed: true, deps: [tentativeText] });
+  useSnapToBottom(threadRef, {
+    reversed: true,
+    deps: [tentativeText],
+    followCount: myThread.length,
+  });
 
   // Confirm a live send while this session has an armed pending timer send
   // (once — showing the confirm disarms it).
@@ -190,7 +194,11 @@ export const DefaultBoardLayout = memo(function DefaultBoardLayout({
           at the top of the visible column or fight the flex order.
           Positioned by the `.scroll-to-bottom.is-reversed` rule
           relative to .default-board (which is position: relative). */}
-      <ScrollToBottomButton scrollRef={threadRef} reversed />
+      <ScrollToBottomButton
+        scrollRef={threadRef}
+        reversed
+        itemCount={myThread.length}
+      />
 
       <ThreadComposer
         className="default-board-input"
